@@ -8,7 +8,7 @@ Deterministic applicability engine for sustainability regulatory programs. First
 
 ```bash
 npm install
-npm test                                              # 44 tests: golden profiles P-001..P-010 + semantics + pack integrity
+npm test                                              # 45 tests: golden profiles P-001..P-010 + semantics + pack integrity
 npm run assess -- examples/p001-eu-standalone.json    # cited scope report
 npm run assess -- examples/p008-protected-supplier.json
 ```

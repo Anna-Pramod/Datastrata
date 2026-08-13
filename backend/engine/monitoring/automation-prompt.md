@@ -1,7 +1,7 @@
 # DataStrata CSRD source watch — Claude scheduled-task prompt
 
 **Status: SPEC ONLY (not yet enabled).** To enable, tell Claude in a DataStrata Cowork session:
-*"Set up the scheduled task from monitoring/automation-prompt.md in the datastrata-engine repo."*
+*"Set up the scheduled task from backend/engine/monitoring/automation-prompt.md in the DataStrata repo."*
 
 ## Recommended settings
 
