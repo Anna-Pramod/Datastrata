@@ -1,0 +1,30 @@
+{
+  "context": {
+    "assessmentDate": "2026-07-26",
+    "financialYear": { "start": "2026-01-01", "end": "2026-12-31" },
+    "subjectId": "sup"
+  },
+  "profile": {
+    "scopeObjects": [
+      { "id": "sup", "type": "organization", "name": "Sundaram Textiles group" },
+      { "id": "e-in", "type": "legal_entity", "name": "Sundaram Textiles Pvt Ltd", "parentId": "sup" },
+      { "id": "buyer", "type": "counterparty", "name": "RheinMode AG (buyer)" },
+      { "id": "req", "type": "request", "name": "RheinMode 2026 supplier questionnaire", "parentId": "sup", "links": { "counterparty": "buyer" } }
+    ],
+    "facts": [
+      { "factType": "entity.incorporation_country", "scopeId": "e-in", "value": { "kind": "string", "value": "IN" }, "confirmed": true },
+      { "factType": "entity.legal_form", "scopeId": "e-in", "value": { "kind": "string", "value": "private_limited_company" }, "confirmed": true },
+      { "factType": "entity.is_parent_undertaking", "scopeId": "e-in", "value": { "kind": "boolean", "value": false }, "confirmed": true },
+      { "factType": "entity.is_subsidiary", "scopeId": "e-in", "value": { "kind": "boolean", "value": false }, "confirmed": true },
+      { "factType": "group.ultimate_parent_country", "scopeId": "sup", "value": { "kind": "string", "value": "IN" }, "confirmed": true },
+      { "factType": "third_country.eu_turnover_year_1_eur", "scopeId": "sup", "value": { "kind": "number", "value": 30000000 }, "confirmed": true, "source": { "kind": "document", "ref": "FY2024 EU segment revenue" } },
+      { "factType": "third_country.eu_turnover_year_2_eur", "scopeId": "sup", "value": { "kind": "number", "value": 34000000 }, "confirmed": true, "source": { "kind": "document", "ref": "FY2025 EU segment revenue" } },
+      { "factType": "value_chain.respondent_avg_employees", "scopeId": "sup", "value": { "kind": "number", "value": 250 }, "confirmed": true, "source": { "kind": "document", "ref": "FY2025 employee note" } },
+      { "factType": "value_chain.request_received", "scopeId": "req", "value": { "kind": "boolean", "value": true }, "confirmed": true },
+      { "factType": "value_chain.requestor_is_csrd_reporter", "scopeId": "buyer", "value": { "kind": "boolean", "value": true }, "confirmed": true, "source": { "kind": "document", "ref": "RheinMode FY2025 management report" } },
+      { "factType": "value_chain.request_purpose", "scopeId": "req", "value": { "kind": "string", "value": "CSRD_REPORTING" }, "confirmed": true, "source": { "kind": "document", "ref": "questionnaire cover email" } },
+      { "factType": "value_chain.request_items", "scopeId": "req", "value": { "kind": "list", "values": ["ghg_scope_1_2", "workforce_detail_by_site", "biodiversity_impact_study"] }, "confirmed": true },
+      { "factType": "value_chain.items_above_cap", "scopeId": "req", "value": { "kind": "list", "values": ["workforce_detail_by_site", "biodiversity_impact_study"] }, "confirmed": true, "source": { "kind": "derived", "ref": "cap mapping v0 — provisional until voluntary standard in force" } }
+    ]
+  }
+}

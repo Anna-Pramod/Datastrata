@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&family=Newsreader:opsz,wght@6..72,300;6..72,400;6..72,500;6..72,600&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* retro */
+  --r-bg:#f2e4c9; --r-cream:#faf3e0; --r-ink:#2c1e10; --r-brown:#5c4527; --r-orange:#d55e28; --r-mustard:#e7a821; --r-teal:#1f7d6d; --r-rust:#a8371c; --r-line:#d8c39a;
+  /* modern */
+  --m-bg:#f6f6f3; --m-surface:#ffffff; --m-ink:#12151a; --m-ink2:#565f68; --m-faint:#98a1a9; --m-line:#e7e8e3; --m-line2:#f0f1ec; --m-accent:#0f5b49; --m-accent2:#3fae8f; --m-gold:#b98a2e;
+  --rs:'DM Serif Display',Georgia,serif; --rb:'Space Grotesk',system-ui,sans-serif; --rm:'Space Mono',monospace;
+  --ms:'Newsreader',Georgia,serif; --mb:'Manrope',system-ui,sans-serif; --mm:'IBM Plex Mono',monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:#e4e2da;font-family:var(--mb)}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input{font-family:inherit}
+.dv-turn{padding:44px 48px 40px}
+.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 26px}
+.dv-tid{font:600 10px/1 var(--mm);padding:4px 8px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none}
+.dv-tname{font:600 13px/1.2 var(--mb);color:#1a1a1a}
+.dv-opts{display:flex;flex-wrap:wrap;gap:40px;align-items:flex-start}
+.dv-opt{flex:none;display:flex;flex-direction:column;gap:12px;scroll-margin-top:16px}
+.dv-olabel{display:flex;align-items:baseline;gap:9px;font:500 12px/1.3 var(--mb);color:#555}
+.dv-oid{font:600 11px/1 var(--mm);padding:3px 8px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none}
+.dv-opt:target .dv-oid{background:#0f5b49;color:#fff}
+.dv-card{width:1200px;max-width:100%;border-radius:16px;overflow:hidden;box-shadow:0 30px 70px rgba(20,30,25,.16),0 8px 20px rgba(20,30,25,.08)}
+.dv-next{margin:26px 0 0;font:13px/1.6 var(--mb);color:#555}
+.dv-next a{color:#0f5b49}
+@keyframes lp-fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes lp-bar{from{width:0}}
+@keyframes lp-spin{to{transform:rotate(360deg)}}
+@keyframes lp-draw{from{stroke-dashoffset:var(--len)}to{stroke-dashoffset:0}}
+@keyframes lp-pulse{0%,100%{opacity:.4}50%{opacity:1}}
+@keyframes lp-rise{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+.lp-key:focus-visible{outline:2px solid currentColor;outline-offset:2px}
+</style>
+</helmet>
+
+<section class="dv-turn" id="t1">
+  <div class="dv-thd"><a class="dv-tid" href="#t1">1</a><span class="dv-tname">DataStrata landing page · two directions</span></div>
+  <div class="dv-opts">
+
+    <!-- ============================================================ 1a · RETRO ============================================================ -->
+    <div class="dv-opt" id="1a">
+      <div class="dv-olabel"><a class="dv-oid" href="#1a">1a</a>Retro — vibrant period palette, chunky editorial, warm &amp; confident</div>
+      <div class="dv-card" style="background:var(--r-bg);font-family:var(--rb);color:var(--r-ink)">
+
+        <!-- nav -->
+        <div style="display:flex;align-items:center;gap:26px;padding:20px 40px;background:var(--r-cream);border-bottom:3px solid var(--r-ink)">
+          <div style="display:flex;align-items:center;gap:11px">
+            <span style="width:26px;height:26px;border:3px solid var(--r-orange);border-radius:50%;display:flex;align-items:center;justify-content:center"><span style="width:9px;height:9px;background:var(--r-orange);border-radius:50%"></span></span>
+            <span style="font:400 24px/1 var(--rs);letter-spacing:.01em">DataStrata</span>
+          </div>
+          <div style="flex:1;display:flex;gap:24px;justify-content:center;font:600 13px/1 var(--rb);letter-spacing:.02em">
+            <span>What it does</span><span>Free checker</span><span>Pricing</span><span>The factory</span>
+          </div>
+          <button class="lp-key" onclick="{{ aRunTop }}" style="font:700 13px/1 var(--rb);background:var(--r-orange);color:var(--r-cream);padding:11px 18px;border-radius:30px;border:2px solid var(--r-ink);box-shadow:3px 3px 0 var(--r-ink)" style-hover="transform:translate(1px,1px);box-shadow:2px 2px 0 var(--r-ink)">Try the free check →</button>
+        </div>
+
+        <!-- hero -->
+        <div style="position:relative;padding:56px 40px 48px;overflow:hidden">
+          <div style="position:absolute;top:-70px;right:-40px;width:340px;height:340px;border-radius:50%;background:radial-gradient(circle at 40% 40%,var(--r-mustard),var(--r-orange));opacity:.9"></div>
+          <div style="position:absolute;top:150px;right:210px;width:120px;height:120px;border-radius:50%;background:var(--r-teal);opacity:.85"></div>
+          <div style="position:relative;max-width:640px">
+            <span style="display:inline-block;font:700 11px/1 var(--rm);letter-spacing:.14em;text-transform:uppercase;background:var(--r-teal);color:var(--r-cream);padding:7px 12px;border-radius:20px;margin-bottom:20px">EU sustainability market access</span>
+            <h1 style="font:400 58px/1.02 var(--rs);margin:0 0 18px;letter-spacing:-.01em">Know what applies, what changed, and what to do <span style="font-style:italic;color:var(--r-orange)">by when.</span></h1>
+            <p style="font:500 17px/1.55 var(--rb);color:var(--r-brown);margin:0 0 26px;max-width:520px">DataStrata watches the rules for your business, turns obligations into owned work, and keeps a replayable evidence trail. Start with a free 60-second check — no account needed.</p>
+            <div style="display:flex;gap:14px;align-items:center">
+              <button class="lp-key" onclick="{{ aRunTop }}" style="font:700 15px/1 var(--rb);background:var(--r-ink);color:var(--r-mustard);padding:15px 24px;border-radius:32px;box-shadow:4px 4px 0 var(--r-orange)" style-hover="transform:translate(1px,1px);box-shadow:3px 3px 0 var(--r-orange)">Run my free check</button>
+              <span style="font:600 13px/1.4 var(--rm);color:var(--r-brown)">214 sources watched<br>updated daily</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- free checker -->
+        <div style="padding:8px 40px 44px">
+          <div style="background:var(--r-ink);border-radius:20px;padding:34px 36px;color:var(--r-cream)">
+            <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:6px">
+              <span style="font:700 11px/1 var(--rm);letter-spacing:.14em;text-transform:uppercase;color:var(--r-mustard)">Free checker</span>
+              <span style="font:600 12px/1 var(--rb);color:#c9b48f">no sign-up · instant</span>
+            </div>
+            <h2 style="font:400 30px/1.1 var(--rs);margin:0 0 22px;color:var(--r-cream)">What do you export into the EU?</h2>
+            <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:22px">
+              <sc-for list="{{ aSectors }}" as="s" hint-placeholder-count="6">
+                <button onclick="{{ s.pick }}" class="lp-key" style="font:700 13px/1 var(--rb);padding:11px 16px;border-radius:24px;border:2px solid {{ s.bd }};background:{{ s.bg }};color:{{ s.fg }}" style-hover="border-color:var(--r-mustard)">{{ s.label }}</button>
+              </sc-for>
+            </div>
+            <sc-if value="{{ aNotRun }}" hint-placeholder-val="{{ true }}">
+              <button onclick="{{ aRun }}" class="lp-key" style="font:700 15px/1 var(--rb);background:var(--r-orange);color:var(--r-cream);padding:15px 26px;border-radius:30px;box-shadow:4px 4px 0 var(--r-mustard)" style-hover="transform:translate(1px,1px);box-shadow:3px 3px 0 var(--r-mustard)">Run free check →</button>
+            </sc-if>
+            <sc-if value="{{ aRan }}" hint-placeholder-val="{{ false }}">
+              <div style="animation:lp-fade .35s ease both">
+                <div style="font:600 13px/1.4 var(--rb);color:#c9b48f;margin-bottom:14px">Preliminary result for <span style="color:var(--r-mustard)">{{ aSectorName }}</span> → EU · exact applicability follows confirmation</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:18px">
+                  <sc-for list="{{ aResults }}" as="r" hint-placeholder-count="3">
+                    <div style="background:var(--r-cream);border-radius:14px;padding:16px;color:var(--r-ink)">
+                      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px">
+                        <span style="font:700 15px/1 var(--rb)">{{ r.program }}</span>
+                        <span style="width:14px;height:14px;border-radius:50%;background:{{ r.dot }}"></span>
+                      </div>
+                      <div style="font:700 11px/1 var(--rm);letter-spacing:.06em;text-transform:uppercase;color:{{ r.dot }};margin-bottom:7px">{{ r.verdict }}</div>
+                      <div style="font:500 12px/1.4 var(--rb);color:var(--r-brown)">{{ r.why }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+                  <button onclick="{{ aReset }}" class="lp-key" style="font:700 14px/1 var(--rb);background:var(--r-mustard);color:var(--r-ink);padding:13px 22px;border-radius:28px">Confirm with a profile →</button>
+                  <span style="font:600 12px/1.4 var(--rm);color:#c9b48f">2 facts would turn this into a definitive, cited answer.</span>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+
+        <!-- pdf upload + what it does -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;padding:0 40px 44px">
+          <div style="background:var(--r-cream);border:2px solid var(--r-ink);border-radius:18px;padding:28px 30px">
+            <span style="font:700 11px/1 var(--rm);letter-spacing:.14em;text-transform:uppercase;color:var(--r-rust)">Build your profile faster</span>
+            <h3 style="font:400 26px/1.1 var(--rs);margin:12px 0 8px">Upload a document — we read it for you</h3>
+            <p style="font:500 13.5px/1.5 var(--rb);color:var(--r-brown);margin:0 0 18px">Drop an annual report or product catalogue. OCR proposes facts — you confirm every one before it counts.</p>
+            <button onclick="{{ aUpload }}" class="lp-key" style="width:100%;border:3px dashed var(--r-orange);background:#fff;border-radius:14px;padding:26px;text-align:center" style-hover="background:#fff7ea">
+              <sc-if value="{{ aUpIdle }}" hint-placeholder-val="{{ true }}">
+                <div style="font-size:28px;color:var(--r-orange)">⇪</div>
+                <div style="font:700 14px/1.3 var(--rb);margin-top:8px">Drop a PDF, or click to upload</div>
+                <div style="font:600 11px/1 var(--rm);color:var(--r-brown);margin-top:6px">annual report · catalogue · certificate</div>
+              </sc-if>
+              <sc-if value="{{ aUpProcessing }}" hint-placeholder-val="{{ false }}">
+                <div style="width:26px;height:26px;border:3px solid var(--r-mustard);border-top-color:var(--r-orange);border-radius:50%;margin:0 auto;animation:lp-spin .8s linear infinite"></div>
+                <div style="font:700 14px/1.3 var(--rb);margin-top:10px">Reading document…</div>
+                <div style="font:600 11px/1 var(--rm);color:var(--r-brown);margin-top:6px">extracting sourced facts</div>
+              </sc-if>
+              <sc-if value="{{ aUpDone }}" hint-placeholder-val="{{ false }}">
+                <div style="font-size:26px;color:var(--r-teal)">✓</div>
+                <div style="font:700 14px/1.3 var(--rb);margin-top:8px">5 facts found — ready to review</div>
+                <div style="font:600 11px/1 var(--rm);color:var(--r-teal);margin-top:6px">nothing is assumed true until you confirm</div>
+              </sc-if>
+            </button>
+          </div>
+          <div style="background:var(--r-teal);border-radius:18px;padding:28px 30px;color:var(--r-cream)">
+            <span style="font:700 11px/1 var(--rm);letter-spacing:.14em;text-transform:uppercase;color:#a9e0d5">What DataStrata does</span>
+            <h3 style="font:400 26px/1.1 var(--rs);margin:12px 0 16px;color:var(--r-cream)">Six questions, answered &amp; maintained</h3>
+            <div style="display:flex;flex-direction:column;gap:2px">
+              <sc-for list="{{ sixQ }}" as="q" hint-placeholder-count="6">
+                <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid rgba(250,243,224,.2)">
+                  <span style="font:700 12px/1 var(--rm);color:var(--r-mustard);width:22px">{{ q.n }}</span>
+                  <span style="font:600 14px/1.3 var(--rb)">{{ q.q }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+
+        <!-- retro data viz -->
+        <div style="padding:0 40px 44px">
+          <div style="background:var(--r-cream);border:2px solid var(--r-ink);border-radius:18px;padding:30px 34px">
+            <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:24px">
+              <div><span style="font:700 11px/1 var(--rm);letter-spacing:.14em;text-transform:uppercase;color:var(--r-rust)">This week, watched for you</span><h3 style="font:400 26px/1.05 var(--rs);margin:10px 0 0">11 changes reviewed · 1 affected you</h3></div>
+              <div style="font:400 46px/.9 var(--rs);color:var(--r-orange)">214<span style="font:700 13px/1 var(--rm);color:var(--r-brown);display:block;text-align:right">sources</span></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:14px">
+              <sc-for list="{{ aBars }}" as="b" hint-placeholder-count="4">
+                <div style="display:flex;align-items:center;gap:14px">
+                  <span style="width:130px;font:700 13px/1 var(--rb);flex:none">{{ b.label }}</span>
+                  <div style="flex:1;height:26px;background:#e9d9b6;border-radius:13px;overflow:hidden"><div style="height:100%;width:{{ b.w }};background:{{ b.color }};border-radius:13px;animation:lp-bar 1.1s cubic-bezier(.2,.8,.2,1) both"></div></div>
+                  <span style="width:44px;font:700 13px/1 var(--rm);text-align:right;flex:none">{{ b.val }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+
+        <!-- pricing -->
+        <div style="padding:0 40px 48px">
+          <div style="text-align:center;margin-bottom:26px"><span style="font:700 11px/1 var(--rm);letter-spacing:.14em;text-transform:uppercase;color:var(--r-rust)">Pricing</span><h2 style="font:400 34px/1.05 var(--rs);margin:12px 0 0">Start at the wedge, grow into the whole spine</h2></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px">
+            <sc-for list="{{ tiers }}" as="t" hint-placeholder-count="3">
+              <div style="background:{{ t.rBg }};border:2px solid var(--r-ink);border-radius:18px;padding:26px 24px;box-shadow:{{ t.rShadow }};color:{{ t.rFg }}">
+                <div style="font:700 11px/1 var(--rm);letter-spacing:.1em;text-transform:uppercase;color:{{ t.rAccent }}">{{ t.stage }}</div>
+                <h3 style="font:400 24px/1.05 var(--rs);margin:11px 0 4px">{{ t.name }}</h3>
+                <div style="font:400 34px/1 var(--rs);margin:12px 0 3px">{{ t.price }}<span style="font:700 12px/1 var(--rm);opacity:.7">{{ t.per }}</span></div>
+                <div style="font:600 12px/1.4 var(--rb);opacity:.8;margin-bottom:16px">{{ t.tagline }}</div>
+                <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px">
+                  <sc-for list="{{ t.features }}" as="f" hint-placeholder-count="4"><div style="display:flex;gap:8px;font:600 12.5px/1.35 var(--rb)"><span style="color:{{ t.rAccent }}">◆</span>{{ f }}</div></sc-for>
+                </div>
+                <button class="lp-key" style="width:100%;font:700 13px/1 var(--rb);padding:13px;border-radius:26px;background:{{ t.rCta }};color:{{ t.rCtaFg }};border:2px solid var(--r-ink)">{{ t.cta }}</button>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <!-- footer -->
+        <div style="background:var(--r-ink);color:var(--r-cream);padding:34px 40px;display:flex;align-items:center;justify-content:space-between">
+          <div style="font:400 22px/1 var(--rs)">DataStrata</div>
+          <div style="font:600 12px/1 var(--rm);color:#c9b48f">Identifies duties, methods, proof &amp; decisions · not legal advice · calculation &amp; advisory partnered</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================ 1b · MODERN ============================================================ -->
+    <div class="dv-opt" id="1b">
+      <div class="dv-olabel"><a class="dv-oid" href="#1b">1b</a>Ultra-modern — elegant, restrained, data-visualisation led</div>
+      <div class="dv-card" style="background:var(--m-bg);font-family:var(--mb);color:var(--m-ink)">
+
+        <!-- nav -->
+        <div style="display:flex;align-items:center;gap:28px;padding:22px 44px;border-bottom:1px solid var(--m-line)">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="width:20px;height:20px;border:1.5px solid var(--m-accent);border-radius:50%;display:flex;align-items:center;justify-content:center"><span style="width:7px;height:7px;background:var(--m-accent);border-radius:50%"></span></span>
+            <span style="font:600 18px/1 var(--mb);letter-spacing:-.01em">DataStrata</span>
+          </div>
+          <div style="flex:1;display:flex;gap:26px;justify-content:center;font:500 13px/1 var(--mb);color:var(--m-ink2)">
+            <span>Product</span><span>Free checker</span><span>Pricing</span><span>How it works</span>
+          </div>
+          <button class="lp-key" onclick="{{ bRunTop }}" style="font:600 13px/1 var(--mb);background:var(--m-ink);color:#fff;padding:11px 18px;border-radius:9px" style-hover="background:#000">Run free check</button>
+        </div>
+
+        <!-- hero -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;padding:56px 44px 48px;align-items:center">
+          <div>
+            <span style="display:inline-flex;align-items:center;gap:7px;font:500 11px/1 var(--mm);letter-spacing:.06em;color:var(--m-accent);background:#e7f0ec;padding:7px 11px;border-radius:20px;margin-bottom:22px"><span style="width:6px;height:6px;border-radius:50%;background:var(--m-accent2);animation:lp-pulse 2s infinite"></span>WATCHING 214 SOURCES</span>
+            <h1 style="font:300 52px/1.08 var(--ms);letter-spacing:-.015em;margin:0 0 20px">Regulatory intelligence that stays <span style="font-style:italic;color:var(--m-accent)">current.</span></h1>
+            <p style="font:400 16px/1.6 var(--mb);color:var(--m-ink2);margin:0 0 28px;max-width:440px">DataStrata determines what sustainability rules apply to your business, explains why with sources, and maintains the answer through every change — so audits replay a record instead of triggering a fire drill.</p>
+            <div style="display:flex;gap:12px;align-items:center">
+              <button class="lp-key" onclick="{{ bRunTop }}" style="font:600 14px/1 var(--mb);background:var(--m-accent);color:#fff;padding:14px 22px;border-radius:10px" style-hover="background:var(--m-accent2)">Run the free check</button>
+              <button class="lp-key" style="font:600 14px/1 var(--mb);color:var(--m-ink);padding:14px 18px;border-radius:10px;border:1px solid var(--m-line)" style-hover="background:var(--m-surface)">See how it works</button>
+            </div>
+          </div>
+          <!-- hero data-viz -->
+          <div style="background:var(--m-surface);border:1px solid var(--m-line);border-radius:16px;padding:22px 24px;box-shadow:0 14px 40px rgba(15,30,25,.06)">
+            <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px">
+              <span style="font:600 11px/1 var(--mm);letter-spacing:.05em;color:var(--m-faint);text-transform:uppercase">Changes watched vs. affecting you</span>
+              <span style="font:600 11px/1 var(--mm);color:var(--m-accent)">2026</span>
+            </div>
+            <div style="margin:6px 0 12px">{{ bLineChart }}</div>
+            <div style="display:flex;gap:20px;margin-bottom:16px">
+              <div><div style="font:300 30px/1 var(--ms);color:var(--m-ink)">214</div><div style="font:500 10.5px/1.3 var(--mm);color:var(--m-faint)">watched YTD</div></div>
+              <div><div style="font:300 30px/1 var(--ms);color:var(--m-accent)">19</div><div style="font:500 10.5px/1.3 var(--mm);color:var(--m-faint)">affected you</div></div>
+              <div><div style="font:300 30px/1 var(--ms);color:var(--m-ink)">4s</div><div style="font:500 10.5px/1.3 var(--mm);color:var(--m-faint)">to know where you stand</div></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:14px;border-top:1px solid var(--m-line2);padding-top:14px">
+              <div style="flex:none">{{ bDonut }}</div>
+              <div style="flex:1;display:flex;flex-direction:column;gap:6px">
+                <sc-for list="{{ bDonutLegend }}" as="l" hint-placeholder-count="4"><div style="display:flex;align-items:center;gap:8px;font:500 11.5px/1 var(--mb);color:var(--m-ink2)"><span style="width:9px;height:9px;border-radius:2px;background:{{ l.color }}"></span><span style="flex:1">{{ l.label }}</span><span style="font-family:var(--mm);color:var(--m-ink)">{{ l.val }}</span></div></sc-for>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- free checker -->
+        <div style="padding:8px 44px 46px">
+          <div style="background:var(--m-surface);border:1px solid var(--m-line);border-radius:18px;overflow:hidden;box-shadow:0 14px 40px rgba(15,30,25,.05)">
+            <div style="display:grid;grid-template-columns:1fr 1fr">
+              <div style="padding:32px 34px;border-right:1px solid var(--m-line2)">
+                <span style="font:600 11px/1 var(--mm);letter-spacing:.08em;text-transform:uppercase;color:var(--m-accent)">Free checker · no sign-up</span>
+                <h2 style="font:300 30px/1.12 var(--ms);margin:12px 0 20px">What do you place on the EU market?</h2>
+                <div style="display:flex;flex-wrap:wrap;gap:9px;margin-bottom:22px">
+                  <sc-for list="{{ bSectors }}" as="s" hint-placeholder-count="6">
+                    <button onclick="{{ s.pick }}" class="lp-key" style="font:600 12.5px/1 var(--mb);padding:10px 14px;border-radius:9px;border:1px solid {{ s.bd }};background:{{ s.bg }};color:{{ s.fg }}" style-hover="border-color:var(--m-accent)">{{ s.label }}</button>
+                  </sc-for>
+                </div>
+                <sc-if value="{{ bNotRun }}" hint-placeholder-val="{{ true }}">
+                  <button onclick="{{ bRun }}" class="lp-key" style="font:600 14px/1 var(--mb);background:var(--m-ink);color:#fff;padding:13px 22px;border-radius:10px" style-hover="background:#000">Run free check →</button>
+                </sc-if>
+                <sc-if value="{{ bRan }}" hint-placeholder-val="{{ false }}">
+                  <button onclick="{{ bReset }}" class="lp-key" style="font:600 13px/1 var(--mb);color:var(--m-ink2);padding:11px 0" style-hover="color:var(--m-ink)">← Check a different sector</button>
+                </sc-if>
+              </div>
+              <div style="padding:32px 34px;background:var(--m-bg)">
+                <sc-if value="{{ bNotRun2 }}" hint-placeholder-val="{{ true }}">
+                  <div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;min-height:220px">
+                    <div style="width:44px;height:44px;border:1.5px dashed var(--m-line);border-radius:50%;margin-bottom:14px"></div>
+                    <div style="font:400 14px/1.5 var(--mb);color:var(--m-faint);max-width:240px">Pick a sector and run the check to see a preliminary, cited universe — including what does <em>not</em> apply.</div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ bRan2 }}" hint-placeholder-val="{{ false }}">
+                  <div style="animation:lp-fade .35s ease both">
+                    <div style="font:500 12px/1.4 var(--mm);color:var(--m-faint);margin-bottom:14px">Preliminary · {{ bSectorName }} → EU</div>
+                    <div style="display:flex;flex-direction:column;gap:10px">
+                      <sc-for list="{{ bResults }}" as="r" hint-placeholder-count="3">
+                        <div style="display:flex;align-items:center;gap:12px;background:var(--m-surface);border:1px solid var(--m-line);border-radius:11px;padding:13px 15px">
+                          <span style="width:10px;height:10px;border-radius:50%;background:{{ r.dot }};flex:none"></span>
+                          <div style="flex:1"><div style="font:600 13.5px/1.2 var(--mb)">{{ r.program }}</div><div style="font:400 11.5px/1.4 var(--mb);color:var(--m-ink2)">{{ r.why }}</div></div>
+                          <span style="font:600 10px/1 var(--mm);letter-spacing:.04em;text-transform:uppercase;color:{{ r.dot }}">{{ r.verdict }}</span>
+                        </div>
+                      </sc-for>
+                    </div>
+                    <div style="font:400 11.5px/1.5 var(--mb);color:var(--m-ink2);margin-top:14px">Confirm 2 facts to turn this into a definitive determination with sources.</div>
+                  </div>
+                </sc-if>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- pdf upload + what it does -->
+        <div style="display:grid;grid-template-columns:.9fr 1.1fr;gap:24px;padding:0 44px 46px">
+          <div style="background:var(--m-surface);border:1px solid var(--m-line);border-radius:16px;padding:28px 30px">
+            <span style="font:600 11px/1 var(--mm);letter-spacing:.08em;text-transform:uppercase;color:var(--m-accent)">Document-assisted profile</span>
+            <h3 style="font:300 24px/1.15 var(--ms);margin:12px 0 8px">Upload a PDF — OCR proposes, you confirm</h3>
+            <p style="font:400 13px/1.55 var(--mb);color:var(--m-ink2);margin:0 0 18px">Facts are extracted with a page citation and confidence. Nothing enters your record until you accept it.</p>
+            <button onclick="{{ bUpload }}" class="lp-key" style="width:100%;border:1.5px dashed var(--m-line);background:var(--m-bg);border-radius:12px;padding:24px;text-align:center" style-hover="border-color:var(--m-accent)">
+              <sc-if value="{{ bUpIdle }}" hint-placeholder-val="{{ true }}">
+                <div style="font-size:24px;color:var(--m-faint)">↑</div>
+                <div style="font:600 13.5px/1.3 var(--mb);margin-top:8px">Drop a PDF or click to upload</div>
+                <div style="font:500 11px/1 var(--mm);color:var(--m-faint);margin-top:6px">annual report · catalogue · certificate</div>
+              </sc-if>
+              <sc-if value="{{ bUpProcessing }}" hint-placeholder-val="{{ false }}">
+                <div style="width:24px;height:24px;border:2px solid var(--m-line);border-top-color:var(--m-accent);border-radius:50%;margin:0 auto;animation:lp-spin .8s linear infinite"></div>
+                <div style="font:600 13.5px/1.3 var(--mb);margin-top:10px">Reading document…</div>
+                <div style="font:500 11px/1 var(--mm);color:var(--m-faint);margin-top:6px">extracting sourced facts</div>
+              </sc-if>
+              <sc-if value="{{ bUpDone }}" hint-placeholder-val="{{ false }}">
+                <div style="font-size:22px;color:var(--m-accent)">✓</div>
+                <div style="font:600 13.5px/1.3 var(--mb);margin-top:8px">5 facts found · ready to review</div>
+                <div style="font:500 11px/1 var(--mm);color:var(--m-accent);margin-top:6px">each with a page citation &amp; confidence</div>
+              </sc-if>
+            </button>
+          </div>
+          <div style="background:linear-gradient(135deg,#0e2b24,#0f5b49);border-radius:16px;padding:30px 32px;color:#eaf3ef">
+            <span style="font:600 11px/1 var(--mm);letter-spacing:.08em;text-transform:uppercase;color:#7fd3bd">Two graphs, one join</span>
+            <h3 style="font:300 26px/1.12 var(--ms);margin:12px 0 18px;color:#fff">The product spine, activated in stages</h3>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+              <sc-for list="{{ mFeatures }}" as="f" hint-placeholder-count="4">
+                <div style="border-top:1px solid rgba(255,255,255,.16);padding-top:12px">
+                  <div style="font:600 13.5px/1.25 var(--mb);color:#fff;margin-bottom:5px">{{ f.title }}</div>
+                  <div style="font:400 11.5px/1.5 var(--mb);color:#b6d3ca">{{ f.body }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+
+        <!-- data viz strip -->
+        <div style="padding:0 44px 46px">
+          <div style="background:var(--m-surface);border:1px solid var(--m-line);border-radius:16px;padding:30px 34px">
+            <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:22px">
+              <div><span style="font:600 11px/1 var(--mm);letter-spacing:.08em;text-transform:uppercase;color:var(--m-faint)">Reliance, not engagement</span><h3 style="font:300 26px/1.1 var(--ms);margin:10px 0 0">A calm signal every week</h3></div>
+              <span style="font:400 13px/1.5 var(--mb);color:var(--m-ink2);max-width:300px;text-align:right">Weekly all-clears and change absorption — designed for quiet weeks, not daily active use.</span>
+            </div>
+            <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:22px;align-items:center">
+              <div>
+                <div style="font:500 11px/1 var(--mm);color:var(--m-faint);margin-bottom:10px">Weekly changes · 26-week trace</div>
+                <div style="display:flex;align-items:flex-end;gap:4px;height:88px">
+                  <sc-for list="{{ mSpark }}" as="s" hint-placeholder-count="26"><div style="flex:1;background:{{ s.color }};height:{{ s.h }};border-radius:2px 2px 0 0;transform-origin:bottom;animation:lp-rise .7s cubic-bezier(.2,.8,.2,1) both"></div></sc-for>
+                </div>
+              </div>
+              <div style="text-align:center;border-left:1px solid var(--m-line2);padding-left:22px"><div style="font:300 44px/1 var(--ms);color:var(--m-accent)">96<span style="font-size:20px;color:var(--m-faint)">%</span></div><div style="font:500 11px/1.4 var(--mm);color:var(--m-faint);margin-top:6px">weeks with a clean<br>all-clear</div></div>
+              <div style="text-align:center;border-left:1px solid var(--m-line2);padding-left:22px"><div style="font:300 44px/1 var(--ms);color:var(--m-ink)">0</div><div style="font:500 11px/1.4 var(--mm);color:var(--m-faint);margin-top:6px">unsourced facts ·<br>every answer cited</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- pricing -->
+        <div style="padding:0 44px 48px">
+          <div style="text-align:center;margin-bottom:28px"><span style="font:600 11px/1 var(--mm);letter-spacing:.08em;text-transform:uppercase;color:var(--m-faint)">Pricing</span><h2 style="font:300 34px/1.08 var(--ms);margin:12px 0 0">One spine. Pay for the stage you're in.</h2></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px">
+            <sc-for list="{{ tiers }}" as="t" hint-placeholder-count="3">
+              <div style="background:{{ t.mBg }};border:1px solid {{ t.mBd }};border-radius:16px;padding:28px 26px;color:{{ t.mFg }};position:relative">
+                <sc-if value="{{ t.featured }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:16px;right:16px;font:600 9px/1 var(--mm);letter-spacing:.06em;text-transform:uppercase;background:var(--m-accent2);color:#053; padding:4px 7px;border-radius:20px">Most teams</span></sc-if>
+                <div style="font:600 11px/1 var(--mm);letter-spacing:.08em;text-transform:uppercase;color:{{ t.mAccent }}">{{ t.stage }}</div>
+                <h3 style="font:300 24px/1.1 var(--ms);margin:11px 0 3px">{{ t.name }}</h3>
+                <div style="font:300 36px/1 var(--ms);margin:14px 0 3px">{{ t.price }}<span style="font:500 12px/1 var(--mm);opacity:.65">{{ t.per }}</span></div>
+                <div style="font:400 12px/1.4 var(--mb);opacity:.75;margin-bottom:18px">{{ t.tagline }}</div>
+                <div style="display:flex;flex-direction:column;gap:9px;margin-bottom:22px">
+                  <sc-for list="{{ t.features }}" as="f" hint-placeholder-count="4"><div style="display:flex;gap:9px;font:500 12.5px/1.4 var(--mb)"><span style="color:{{ t.mAccent }}">✓</span>{{ f }}</div></sc-for>
+                </div>
+                <button class="lp-key" style="width:100%;font:600 13px/1 var(--mb);padding:13px;border-radius:10px;background:{{ t.mCta }};color:{{ t.mCtaFg }};border:1px solid {{ t.mCtaBd }}">{{ t.cta }}</button>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <!-- footer -->
+        <div style="border-top:1px solid var(--m-line);padding:32px 44px;display:flex;align-items:center;justify-content:space-between">
+          <div style="display:flex;align-items:center;gap:9px"><span style="width:16px;height:16px;border:1.5px solid var(--m-accent);border-radius:50%"></span><span style="font:600 15px/1 var(--mb)">DataStrata</span></div>
+          <div style="font:500 11px/1.5 var(--mm);color:var(--m-faint);text-align:right">Identifies duties, methods, proof &amp; decisions — not legal advice.<br>A cited lens over a warranted record, never an ungrounded oracle.</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <p class="dv-next">Try next: "merge — <a class="dv-oid" href="#1b">1b</a> layout with <a class="dv-oid" href="#1a">1a</a> warmth" · "make <a class="dv-oid" href="#1b">1b</a> dark-mode" · "add a testimonials + logos band" · "wire the checker CTA into the onboarding flow"</p>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:2500,&quot;height&quot;:1700}}">
+class Component extends DCLogic {
+  state = { aSector:'steel', aRan:false, aUp:'idle', bSector:'steel', bRan:false, bUp:'idle' };
+
+  sectorList(){ return [
+    {id:'steel',label:'Steel & metals'},{id:'timber',label:'Timber & wood'},{id:'textiles',label:'Textiles'},
+    {id:'electronics',label:'Electronics'},{id:'food',label:'Food & agri'},{id:'chemicals',label:'Chemicals'},
+  ]; }
+  sectorName(id){ return (this.sectorList().find(s=>s.id===id)||{}).label; }
+  resultsFor(id){
+    const cbam={program:'CBAM',dot:'#1f7d6d',mdot:'#0f5b49'};
+    const eudr={program:'EUDR',dot:'#d55e28',mdot:'#b98a2e'};
+    const csrd={program:'CSRD',dot:'#e7a821',mdot:'#565f68'};
+    const steel=[{...cbam,verdict:'Likely applies',why:'HS codes within CBAM Annex I iron & steel.'},{...csrd,verdict:'Possible',why:'Depends on your EU-generated turnover.'},{program:'EUDR',dot:'#98a1a9',mdot:'#98a1a9',verdict:'Unlikely',why:'No relevant commodities detected.'}];
+    const timber=[{...eudr,program:'EUDR',dot:'#d55e28',verdict:'Likely applies',why:'Wood is an EUDR relevant commodity.'},{...csrd,verdict:'Possible',why:'Depends on your EU-generated turnover.'},{program:'CBAM',dot:'#98a1a9',mdot:'#98a1a9',verdict:'Unlikely',why:'No Annex I goods detected.'}];
+    const generic=[{...csrd,verdict:'Possible',why:'Depends on your EU-generated turnover.'},{program:'CBAM',dot:'#98a1a9',mdot:'#98a1a9',verdict:'Unlikely',why:'No Annex I goods detected.'},{program:'EUDR',dot:'#98a1a9',mdot:'#98a1a9',verdict:'Unlikely',why:'No relevant commodities detected.'}];
+    return id==='steel'?steel:id==='timber'?timber:generic;
+  }
+
+  pickA(id){ this.setState({aSector:id, aRan:false}); }
+  pickB(id){ this.setState({bSector:id, bRan:false}); }
+  runUpload(which){
+    const key=which+'Up';
+    this.setState({[key]:'processing'});
+    clearTimeout(this['_u'+which]);
+    this['_u'+which]=setTimeout(()=>this.setState({[key]:'done'}),1500);
+  }
+
+  tiers(){
+    return [
+      {stage:'Stage 1 · Wedge',name:'Market Access',price:'£490',per:'/mo',tagline:'For a single exporter reaching a first cited answer.',
+        features:['Document-assisted profile & checker','Applicability, determinations & universe map','Weekly briefing & change loop','Obligation register & gap ledger','Calendar / email export'],
+        cta:'Start free check',featured:false,
+        rBg:'var(--r-cream)',rFg:'var(--r-ink)',rAccent:'var(--r-teal)',rShadow:'4px 4px 0 var(--r-teal)',rCta:'var(--r-cream)',rCtaFg:'var(--r-ink)',
+        mBg:'var(--m-surface)',mBd:'var(--m-line)',mFg:'var(--m-ink)',mAccent:'var(--m-accent)',mCta:'var(--m-surface)',mCtaFg:'var(--m-ink)',mCtaBd:'var(--m-line)'},
+      {stage:'Stage 2 · Operations',name:'Compliance Ops',price:'£1,900',per:'/mo',tagline:'When the whole team holds operational state.',
+        features:['Everything in Market Access','Native tasks, approvals & SLAs','Full evidence registry & controls','Assurance readiness & quarterly reports','Integrations & delegated ownership'],
+        cta:'Talk to sales',featured:true,
+        rBg:'var(--r-orange)',rFg:'var(--r-cream)',rAccent:'var(--r-mustard)',rShadow:'5px 5px 0 var(--r-ink)',rCta:'var(--r-mustard)',rCtaFg:'var(--r-ink)',
+        mBg:'#0e2b24',mBd:'#0e2b24',mFg:'#eaf3ef',mAccent:'#7fd3bd',mCta:'#3fae8f',mCtaFg:'#053',mCtaBd:'#3fae8f'},
+      {stage:'Stage 3 · Assurance',name:'Assurance & Ecosystem',price:'Custom',per:'',tagline:'Buyer portals, findings loop and shared lanes.',
+        features:['Everything in Compliance Ops','Auditor / buyer read-only portals','Findings loop & shared-lane data','Optional managed evidence custody','Public API / MCP access'],
+        cta:'Contact us',featured:false,
+        rBg:'var(--r-teal)',rFg:'var(--r-cream)',rAccent:'var(--r-mustard)',rShadow:'4px 4px 0 var(--r-ink)',rCta:'var(--r-cream)',rCtaFg:'var(--r-ink)',
+        mBg:'var(--m-surface)',mBd:'var(--m-line)',mFg:'var(--m-ink)',mAccent:'var(--m-gold)',mCta:'var(--m-ink)',mCtaFg:'#fff',mCtaBd:'var(--m-ink)'},
+    ];
+  }
+
+  // ---- modern data-viz elements ----
+  lineChart(){
+    const W=340,H=120,P=6;
+    const watched=[8,11,9,14,12,17,13,11,15,10,12,11];
+    const affected=[1,2,1,3,2,4,1,2,1,1,2,1];
+    const max=18, n=watched.length;
+    const xy=(arr)=>arr.map((v,i)=>[P+i*((W-2*P)/(n-1)), H-8-(v/max)*(H-24)]);
+    const path=(pts)=>pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+    const wp=xy(watched), ap=xy(affected);
+    const area=path(wp)+` L ${W-P} ${H-8} L ${P} ${H-8} Z`;
+    return React.createElement('svg',{width:'100%',viewBox:`0 0 ${W} ${H}`,style:{display:'block'}},
+      React.createElement('defs',null,React.createElement('linearGradient',{id:'lpga',x1:0,y1:0,x2:0,y2:1},
+        React.createElement('stop',{offset:'0%',stopColor:'#0f5b49',stopOpacity:.16}),
+        React.createElement('stop',{offset:'100%',stopColor:'#0f5b49',stopOpacity:0}))),
+      React.createElement('path',{d:area,fill:'url(#lpga)'}),
+      React.createElement('path',{d:path(wp),fill:'none',stroke:'#0f5b49',strokeWidth:2,strokeLinejoin:'round',strokeLinecap:'round'}),
+      React.createElement('path',{d:path(ap),fill:'none',stroke:'#b98a2e',strokeWidth:1.75,strokeDasharray:'3 3',strokeLinecap:'round'}),
+      ...ap.map((p,i)=>React.createElement('circle',{key:i,cx:p[0],cy:p[1],r:2,fill:'#b98a2e'})),
+    );
+  }
+  donut(){
+    const segs=[['#0f5b49',52],['#b98a2e',18],['#3fae8f',22],['#cfd4d2',8]];
+    const C=2*Math.PI*20; let off=0;
+    return React.createElement('svg',{width:70,height:70,viewBox:'0 0 52 52'},
+      React.createElement('circle',{cx:26,cy:26,r:20,fill:'none',stroke:'#eef0ec',strokeWidth:7}),
+      ...segs.map(([c,pct],i)=>{const el=React.createElement('circle',{key:i,cx:26,cy:26,r:20,fill:'none',stroke:c,strokeWidth:7,strokeDasharray:`${(pct/100*C).toFixed(1)} ${C}`,strokeDashoffset:(-off/100*C).toFixed(1),transform:'rotate(-90 26 26)',strokeLinecap:'butt'});off+=pct;return el;}),
+    );
+  }
+
+  renderVals(){
+    const s=this.state;
+    const chipsA=this.sectorList().map(x=>{const on=s.aSector===x.id;return{...x,pick:()=>this.pickA(x.id),
+      bg:on?'var(--r-mustard)':'transparent',fg:on?'var(--r-ink)':'var(--r-cream)',bd:on?'var(--r-mustard)':'#6f5a37'};});
+    const chipsB=this.sectorList().map(x=>{const on=s.bSector===x.id;return{...x,pick:()=>this.pickB(x.id),
+      bg:on?'#e7f0ec':'var(--m-surface)',fg:on?'var(--m-accent)':'var(--m-ink2)',bd:on?'var(--m-accent)':'var(--m-line)'};});
+    const resA=this.resultsFor(s.aSector);
+    const resB=this.resultsFor(s.bSector).map(r=>({...r,dot:r.mdot||r.dot}));
+
+    return {
+      // retro checker
+      aSectors:chipsA, aNotRun:!s.aRan, aRan:s.aRan, aSectorName:this.sectorName(s.aSector),
+      aResults:resA, aRun:()=>this.setState({aRan:true}), aReset:()=>this.setState({aRan:false}),
+      aRunTop:()=>{this.setState({aRan:true});},
+      aUpload:()=>this.runUpload('a'), aUpIdle:s.aUp==='idle', aUpProcessing:s.aUp==='processing', aUpDone:s.aUp==='done',
+      aBars:[
+        {label:'CBAM',val:'86',w:'86%',color:'var(--r-orange)'},
+        {label:'EUDR',val:'54',w:'54%',color:'var(--r-teal)'},
+        {label:'CSRD',val:'41',w:'41%',color:'var(--r-mustard)'},
+        {label:'Other',val:'33',w:'33%',color:'var(--r-rust)'},
+      ],
+      // modern checker
+      bSectors:chipsB, bNotRun:!s.bRan, bNotRun2:!s.bRan, bRan:s.bRan, bRan2:s.bRan, bSectorName:this.sectorName(s.bSector),
+      bResults:resB, bRun:()=>this.setState({bRan:true}), bReset:()=>this.setState({bRan:false}),
+      bRunTop:()=>{this.setState({bRan:true});},
+      bUpload:()=>this.runUpload('b'), bUpIdle:s.bUp==='idle', bUpProcessing:s.bUp==='processing', bUpDone:s.bUp==='done',
+      bLineChart:this.lineChart(), bDonut:this.donut(),
+      bDonutLegend:[{label:'Applies',val:'52%',color:'#0f5b49'},{label:'Requires judgment',val:'22%',color:'#3fae8f'},{label:'Does not apply',val:'18%',color:'#b98a2e'},{label:'Missing fact',val:'8%',color:'#cfd4d2'}],
+      mSpark:[6,9,7,12,8,15,10,9,13,7,11,9,14,8,12,10,16,9,7,11,8,13,9,10,7,12].map((v,i)=>({h:(v/16*100).toFixed(0)+'%',color:v>=13?'#0f5b49':'#cfe0da'})),
+      // shared
+      sixQ:[
+        {n:'01',q:'What applies to us?'},{n:'02',q:'What just changed?'},{n:'03',q:'What must we do, by when?'},
+        {n:'04',q:'What evidence is required?'},{n:'05',q:'What if we do nothing?'},{n:'06',q:'Are we ready to be checked?'},
+      ],
+      mFeatures:[
+        {title:'Shared knowledge graph',body:'Sources, rules and conditions — built once, maintained once, used by every customer.'},
+        {title:'Private compliance graph',body:'Your entities, facts, obligations and evidence — isolated and fully exportable.'},
+        {title:'The obligation join',body:'A shared requirement meets your facts and becomes owned, traceable work.'},
+        {title:'Deterministic core',body:'Status is derived or human-signed. AI drafts and explains — it never publishes.'},
+      ],
+      tiers:this.tiers(),
+    };
+  }
+}
+</script>
+</body>
+</html>

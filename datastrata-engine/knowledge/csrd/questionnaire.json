@@ -1,0 +1,421 @@
+[
+  {
+    "id": "Q-001",
+    "order": 1,
+    "module": "Universal",
+    "text": "Which legal entity or parent group should DataStrata assess?",
+    "factTypes": [],
+    "showWhen": { "always": true },
+    "inputPath": "Manual",
+    "whyAsked": "Creates the legal scope anchor; internal business units cannot substitute."
+  },
+  {
+    "id": "Q-002",
+    "order": 2,
+    "module": "Document-assisted intake",
+    "text": "Upload the latest annual report, audited financial statements and — if relevant — group chart. You may continue manually.",
+    "factTypes": [],
+    "showWhen": { "always": true },
+    "inputPath": "OCR/document extraction (candidate facts only; confirmation required)",
+    "whyAsked": "Pre-fills high-value facts but keeps them unconfirmed until reviewed."
+  },
+  {
+    "id": "Q-003",
+    "order": 3,
+    "module": "Universal",
+    "text": "Where is the entity incorporated, and what is its legal form?",
+    "factTypes": ["entity.incorporation_country", "entity.legal_form"],
+    "showWhen": { "always": true },
+    "inputPath": "Manual or OCR + confirmation",
+    "whyAsked": "Routes EU/non-EU scope and the legal-form perimeter."
+  },
+  {
+    "id": "Q-004",
+    "order": 4,
+    "module": "Universal",
+    "text": "What financial year are you assessing?",
+    "factTypes": ["entity.financial_year_start", "entity.financial_year_end"],
+    "showWhen": { "always": true },
+    "inputPath": "Manual or OCR",
+    "whyAsked": "Determines threshold period, wave and deadlines."
+  },
+  {
+    "id": "Q-005",
+    "order": 5,
+    "module": "Group structure",
+    "text": "Is the entity standalone, a parent undertaking, a subsidiary, a branch, or both a parent and a subsidiary?",
+    "factTypes": ["entity.is_parent_undertaking", "entity.is_subsidiary", "entity.is_branch"],
+    "showWhen": { "always": true },
+    "inputPath": "Manual or OCR",
+    "whyAsked": "Selects the individual, consolidated, exemption and third-country modules."
+  },
+  {
+    "id": "Q-006",
+    "order": 6,
+    "module": "Group structure",
+    "text": "What is the ultimate parent's country and which EU legal entities or branches are in the group?",
+    "factTypes": ["group.ultimate_parent_country", "group.reporting_perimeter_entities"],
+    "showWhen": {
+      "anyOf": [
+        { "factEquals": { "fact": "entity.is_parent_undertaking", "value": true } },
+        { "factEquals": { "fact": "entity.is_subsidiary", "value": true } },
+        { "factEquals": { "fact": "entity.is_branch", "value": true } }
+      ]
+    },
+    "inputPath": "OCR group chart + confirmation",
+    "whyAsked": "Distinguishes EU-parent, non-EU-parent and gateway paths."
+  },
+  {
+    "id": "Q-007",
+    "order": 7,
+    "module": "Individual scope",
+    "text": "What was this entity's net turnover for the relevant financial year? (Exact value or range.)",
+    "factTypes": ["entity.net_turnover_eur"],
+    "showWhen": { "requirementIs": { "requirement": "CSRD-S-001", "truth": "INDETERMINATE" } },
+    "inputPath": "Exact value or range; OCR",
+    "whyAsked": "Tests the EUR 450m individual threshold."
+  },
+  {
+    "id": "Q-008",
+    "order": 8,
+    "module": "Individual scope",
+    "text": "What was the entity's average employee count during the financial year? (Exact value or range.)",
+    "factTypes": ["entity.avg_employees"],
+    "showWhen": { "requirementIs": { "requirement": "CSRD-S-001", "truth": "INDETERMINATE" } },
+    "inputPath": "Exact value or range; OCR",
+    "whyAsked": "Tests the 1,000-employee threshold."
+  },
+  {
+    "id": "Q-009",
+    "order": 9,
+    "module": "Consolidated scope",
+    "text": "What was the group's consolidated net turnover?",
+    "factTypes": ["group.consolidated_net_turnover_eur"],
+    "showWhen": { "factEquals": { "fact": "entity.is_parent_undertaking", "value": true } },
+    "inputPath": "Exact value or range; OCR",
+    "whyAsked": "Tests consolidated turnover scope."
+  },
+  {
+    "id": "Q-010",
+    "order": 10,
+    "module": "Consolidated scope",
+    "text": "What was the group's average employee count on a consolidated basis?",
+    "factTypes": ["group.avg_employees"],
+    "showWhen": { "factEquals": { "fact": "entity.is_parent_undertaking", "value": true } },
+    "inputPath": "Exact value or range; OCR",
+    "whyAsked": "Tests consolidated employee scope."
+  },
+  {
+    "id": "Q-011",
+    "order": 11,
+    "module": "Wave history",
+    "text": "Was this entity required to report under CSRD for financial year 2024?",
+    "factTypes": ["entity.reported_csrd_fy2024"],
+    "showWhen": { "factInSet": { "fact": "entity.incorporation_country", "set": ["AT","BE","BG","HR","CY","CZ","DK","EE","FI","FR","DE","GR","HU","IE","IT","LV","LT","LU","MT","NL","PL","PT","RO","SK","SI","ES","SE"] } },
+    "inputPath": "Yes/no/unknown + report upload",
+    "whyAsked": "Identifies first-wave status and FY2025–26 transition questions."
+  },
+  {
+    "id": "Q-012",
+    "order": 12,
+    "module": "National law",
+    "text": "Which Member State's accounting/reporting law governs this entity?",
+    "factTypes": ["entity.governing_member_state"],
+    "showWhen": { "factInSet": { "fact": "entity.incorporation_country", "set": ["AT","BE","BG","HR","CY","CZ","DK","EE","FI","FR","DE","GR","HU","IE","IT","LV","LT","LU","MT","NL","PL","PT","RO","SK","SI","ES","SE"] } },
+    "inputPath": "Derived + confirmation",
+    "whyAsked": "Selects national transposition, options, filing and publication rules."
+  },
+  {
+    "id": "Q-013",
+    "order": 13,
+    "module": "National law",
+    "text": "Has the relevant Member State implemented the amended CSRD rules, and any FY2025–26 relief?",
+    "factTypes": ["entity.member_state_transposition_status", "entity.member_state_transition_option"],
+    "showWhen": {
+      "anyOf": [
+        { "requirementResolved": { "requirement": "CSRD-S-001" } },
+        { "requirementResolved": { "requirement": "CSRD-S-002" } }
+      ]
+    },
+    "inputPath": "System lookup (country pack) / analyst review — not a customer guess",
+    "whyAsked": "Prevents an EU-level screen from becoming a false final legal conclusion."
+  },
+  {
+    "id": "Q-014",
+    "order": 14,
+    "module": "Subsidiary exemption",
+    "text": "Is the entity included in a parent's qualifying consolidated sustainability report?",
+    "factTypes": ["parent.report_includes_entity"],
+    "showWhen": {
+      "allOf": [
+        { "factEquals": { "fact": "entity.is_subsidiary", "value": true } },
+        {
+          "anyOf": [
+            { "requirementIs": { "requirement": "CSRD-S-001", "truth": "APPLIES" } },
+            { "requirementIs": { "requirement": "CSRD-S-002", "truth": "APPLIES" } }
+          ]
+        }
+      ]
+    },
+    "inputPath": "Manual/OCR + parent report",
+    "whyAsked": "Tests the central exemption condition."
+  },
+  {
+    "id": "Q-015",
+    "order": 15,
+    "module": "Subsidiary exemption",
+    "text": "Under which standard is the parent report prepared, and is it publicly available?",
+    "factTypes": ["parent.report_standard", "parent.report_public_url"],
+    "showWhen": { "factEquals": { "fact": "parent.report_includes_entity", "value": true } },
+    "inputPath": "OCR + URL confirmation",
+    "whyAsked": "Tests standard and publication conditions."
+  },
+  {
+    "id": "Q-016",
+    "order": 16,
+    "module": "Subsidiary exemption",
+    "text": "If the parent is outside the EU: is the parent report assured, and are the required EU Taxonomy disclosures available?",
+    "factTypes": ["parent.assurance_opinion_available", "parent.taxonomy_information_included"],
+    "showWhen": {
+      "allOf": [
+        { "factEquals": { "fact": "parent.report_includes_entity", "value": true } },
+        { "factInSet": { "fact": "group.ultimate_parent_country", "set": ["AT","BE","BG","HR","CY","CZ","DK","EE","FI","FR","DE","GR","HU","IE","IT","LV","LT","LU","MT","NL","PL","PT","RO","SK","SI","ES","SE"], "negate": true } }
+      ]
+    },
+    "inputPath": "Document upload/OCR",
+    "whyAsked": "Completes the non-EU-parent exemption path."
+  },
+  {
+    "id": "Q-017",
+    "order": 17,
+    "module": "Higher-parent exemption",
+    "text": "If this entity is itself a parent: is it included in a qualifying higher-parent consolidated report?",
+    "factTypes": ["parent.report_includes_entity"],
+    "showWhen": {
+      "allOf": [
+        { "factEquals": { "fact": "entity.is_parent_undertaking", "value": true } },
+        { "factEquals": { "fact": "entity.is_subsidiary", "value": true } },
+        { "requirementIs": { "requirement": "CSRD-S-002", "truth": "APPLIES" } }
+      ]
+    },
+    "inputPath": "Manual/OCR",
+    "whyAsked": "Tests the consolidated-duty exemption separately from the individual one."
+  },
+  {
+    "id": "Q-018",
+    "order": 18,
+    "module": "Third-country scope",
+    "text": "Did the ultimate non-EU parent generate more than EUR 450m net turnover in the EU in each of the last two consecutive financial years? (Two separate values — never averaged.)",
+    "factTypes": ["third_country.eu_turnover_year_1_eur", "third_country.eu_turnover_year_2_eur"],
+    "showWhen": { "factInSet": { "fact": "group.ultimate_parent_country", "set": ["AT","BE","BG","HR","CY","CZ","DK","EE","FI","FR","DE","GR","HU","IE","IT","LV","LT","LU","MT","NL","PL","PT","RO","SK","SI","ES","SE"], "negate": true } },
+    "inputPath": "Two values/ranges + source",
+    "whyAsked": "Tests the Article 40a group gate."
+  },
+  {
+    "id": "Q-019",
+    "order": 19,
+    "module": "Third-country scope",
+    "text": "Does the group have an EU subsidiary with more than EUR 200m net turnover in the preceding financial year?",
+    "factTypes": ["third_country.eu_subsidiary_turnover_eur"],
+    "showWhen": { "requirementIs": { "requirement": "CSRD-S-007", "truth": "APPLIES" } },
+    "inputPath": "Value/range + OCR",
+    "whyAsked": "Tests the subsidiary gateway."
+  },
+  {
+    "id": "Q-020",
+    "order": 20,
+    "module": "Third-country scope",
+    "text": "If no qualifying subsidiary exists: is there an EU branch with more than EUR 200m net turnover?",
+    "factTypes": ["third_country.qualifying_eu_subsidiary_exists", "third_country.eu_branch_turnover_eur"],
+    "showWhen": { "requirementIs": { "requirement": "CSRD-S-007", "truth": "APPLIES" } },
+    "inputPath": "Value/range + OCR",
+    "whyAsked": "Tests the secondary branch gateway."
+  },
+  {
+    "id": "Q-021",
+    "order": 21,
+    "module": "Value-chain router",
+    "text": "Have you received a sustainability-information request from a customer, lender or other counterparty?",
+    "factTypes": ["value_chain.request_received"],
+    "showWhen": { "requirementIs": { "requirement": "CSRD-S-014", "truth": "DOES_NOT_APPLY" } },
+    "inputPath": "Yes/no + upload",
+    "whyAsked": "Activates the indirect/value-chain module for entities outside direct scope."
+  },
+  {
+    "id": "Q-022",
+    "order": 22,
+    "module": "Value-chain",
+    "text": "Is the requestor subject to CSRD, and is the request specifically for its CSRD reporting?",
+    "factTypes": ["value_chain.requestor_is_csrd_reporter", "value_chain.request_purpose"],
+    "showWhen": { "factEquals": { "fact": "value_chain.request_received", "value": true } },
+    "inputPath": "Manual + system research + OCR",
+    "whyAsked": "The value-chain cap is purpose-limited."
+  },
+  {
+    "id": "Q-023",
+    "order": 23,
+    "module": "Value-chain",
+    "text": "What was your average employee count in the preceding financial year?",
+    "factTypes": ["value_chain.respondent_avg_employees"],
+    "showWhen": { "factEquals": { "fact": "value_chain.request_received", "value": true } },
+    "inputPath": "Reuse profile fact or ask range/value",
+    "whyAsked": "Tests protected-undertaking status (≤1,000 employees)."
+  },
+  {
+    "id": "Q-024",
+    "order": 24,
+    "module": "Value-chain",
+    "text": "Upload the questionnaire or list the requested information items.",
+    "factTypes": ["value_chain.request_items", "value_chain.items_above_cap"],
+    "showWhen": { "factEquals": { "fact": "value_chain.request_received", "value": true } },
+    "inputPath": "OCR/LLM draft mapping + human confirmation against the versioned cap catalogue",
+    "whyAsked": "Compares each item to the current versioned cap catalogue. GHG emissions metrics are outside the cap protection."
+  },
+  {
+    "id": "Q-025",
+    "order": 25,
+    "module": "Value-chain",
+    "text": "Did the request identify above-cap items and explain your right to decline?",
+    "factTypes": [],
+    "showWhen": { "requirementIs": { "requirement": "CSRD-S-011", "truth": "APPLIES" } },
+    "inputPath": "OCR/manual",
+    "whyAsked": "Creates the requestor-side notice gap (G-014)."
+  },
+  {
+    "id": "Q-026",
+    "order": 26,
+    "module": "Readiness router",
+    "text": "Would you like DataStrata to assess readiness against the obligations that apply?",
+    "factTypes": ["readiness.module_enabled"],
+    "showWhen": {
+      "anyOf": [
+        { "requirementIs": { "requirement": "CSRD-S-014", "truth": "APPLIES" } },
+        { "requirementIs": { "requirement": "CSRD-S-008", "truth": "APPLIES" } },
+        { "requirementIs": { "requirement": "CSRD-S-009", "truth": "APPLIES" } },
+        { "requirementIs": { "requirement": "CSRD-S-010", "truth": "APPLIES" } }
+      ]
+    },
+    "inputPath": "Manual",
+    "whyAsked": "Keeps applicability and execution separate."
+  },
+  {
+    "id": "Q-027",
+    "order": 27,
+    "module": "Readiness",
+    "text": "Is the legal reporting perimeter documented and approved?",
+    "factTypes": ["readiness.reporting_perimeter_documented"],
+    "showWhen": { "allOf": [ { "factEquals": { "fact": "readiness.module_enabled", "value": true } }, { "requirementIs": { "requirement": "CSRD-S-014", "truth": "APPLIES" } } ] },
+    "inputPath": "Status + upload",
+    "whyAsked": "Creates the perimeter evidence gap."
+  },
+  {
+    "id": "Q-028",
+    "order": 28,
+    "module": "Readiness",
+    "text": "Has the double-materiality process been designed, performed, approved and scheduled for refresh?",
+    "factTypes": ["readiness.double_materiality_status"],
+    "showWhen": { "allOf": [ { "factEquals": { "fact": "readiness.module_enabled", "value": true } }, { "requirementIs": { "requirement": "CSRD-S-014", "truth": "APPLIES" } } ] },
+    "inputPath": "Status + upload",
+    "whyAsked": "Creates a process-level materiality gap — never an AI materiality judgment."
+  },
+  {
+    "id": "Q-029",
+    "order": 29,
+    "module": "Readiness",
+    "text": "Are board, management and data-owner roles documented with named accountability?",
+    "factTypes": ["readiness.governance_roles_documented"],
+    "showWhen": { "allOf": [ { "factEquals": { "fact": "readiness.module_enabled", "value": true } }, { "requirementIs": { "requirement": "CSRD-S-014", "truth": "APPLIES" } } ] },
+    "inputPath": "Status + evidence",
+    "whyAsked": "Creates the governance/ownership gap."
+  },
+  {
+    "id": "Q-030",
+    "order": 30,
+    "module": "Readiness",
+    "text": "Is there an applicable process to consult workers' representatives and communicate their opinion?",
+    "factTypes": ["readiness.worker_consultation_status"],
+    "showWhen": { "allOf": [ { "factEquals": { "fact": "readiness.module_enabled", "value": true } }, { "requirementIs": { "requirement": "CSRD-S-014", "truth": "APPLIES" } } ] },
+    "inputPath": "Status + evidence",
+    "whyAsked": "Creates the consultation process gap."
+  },
+  {
+    "id": "Q-031",
+    "order": 31,
+    "module": "Readiness",
+    "text": "Do you have an inventory of sustainability policies, actions, targets, metrics and source owners?",
+    "factTypes": ["readiness.policy_metric_inventory_status"],
+    "showWhen": { "allOf": [ { "factEquals": { "fact": "readiness.module_enabled", "value": true } }, { "requirementIs": { "requirement": "CSRD-S-014", "truth": "APPLIES" } } ] },
+    "inputPath": "Status + document-assisted baseline",
+    "whyAsked": "Credits existing work and identifies missing ownership."
+  },
+  {
+    "id": "Q-032",
+    "order": 32,
+    "module": "Readiness",
+    "text": "How will material value-chain information be obtained or estimated?",
+    "factTypes": ["readiness.value_chain_data_method"],
+    "showWhen": { "allOf": [ { "factEquals": { "fact": "readiness.module_enabled", "value": true } }, { "anyOf": [ { "requirementIs": { "requirement": "CSRD-S-014", "truth": "APPLIES" } }, { "requirementIs": { "requirement": "CSRD-S-016", "truth": "APPLIES" } } ] } ] },
+    "inputPath": "Status + methodology",
+    "whyAsked": "Tests transition and steady-state data method."
+  },
+  {
+    "id": "Q-033",
+    "order": 33,
+    "module": "Readiness",
+    "text": "Is the linked EU Taxonomy Article 8 workstream applicable and ready?",
+    "factTypes": ["readiness.taxonomy_status"],
+    "showWhen": { "allOf": [ { "factEquals": { "fact": "readiness.module_enabled", "value": true } }, { "requirementIs": { "requirement": "CSRD-S-014", "truth": "APPLIES" } } ] },
+    "inputPath": "Status + evidence",
+    "whyAsked": "Routes to the linked Taxonomy module rather than hiding it."
+  },
+  {
+    "id": "Q-034",
+    "order": 34,
+    "module": "Readiness",
+    "text": "Has an eligible assurance provider been appointed, and has the limited-assurance scope been agreed?",
+    "factTypes": ["readiness.assurance_provider_appointed"],
+    "showWhen": { "allOf": [ { "factEquals": { "fact": "readiness.module_enabled", "value": true } }, { "requirementIs": { "requirement": "CSRD-S-015", "truth": "APPLIES" } } ] },
+    "inputPath": "Yes/no + engagement letter",
+    "whyAsked": "Creates the assurance runway gap."
+  },
+  {
+    "id": "Q-035",
+    "order": 35,
+    "module": "Readiness",
+    "text": "Are sustainability evidence controls, review procedures and owners documented and tested?",
+    "factTypes": ["readiness.evidence_controls_status"],
+    "showWhen": { "allOf": [ { "factEquals": { "fact": "readiness.module_enabled", "value": true } }, { "requirementIs": { "requirement": "CSRD-S-014", "truth": "APPLIES" } } ] },
+    "inputPath": "Maturity + registry evidence",
+    "whyAsked": "Distinguishes a drafted report from an assurance-ready record."
+  },
+  {
+    "id": "Q-036",
+    "order": 36,
+    "module": "Readiness",
+    "text": "Is a dedicated sustainability section incorporated into the statutory management-report template?",
+    "factTypes": ["readiness.management_report_section_ready"],
+    "showWhen": { "allOf": [ { "factEquals": { "fact": "readiness.module_enabled", "value": true } }, { "requirementIs": { "requirement": "CSRD-S-014", "truth": "APPLIES" } } ] },
+    "inputPath": "Yes/no + template",
+    "whyAsked": "Creates the report-structure gap."
+  },
+  {
+    "id": "Q-037",
+    "order": 37,
+    "module": "Readiness",
+    "text": "Can the report be produced in the currently required electronic format?",
+    "factTypes": ["readiness.digital_format_ready"],
+    "showWhen": { "allOf": [ { "factEquals": { "fact": "readiness.module_enabled", "value": true } }, { "requirementIs": { "requirement": "CSRD-S-014", "truth": "APPLIES" } } ] },
+    "inputPath": "Yes/no + test",
+    "whyAsked": "Creates the digital-format gap without inventing premature tagging obligations."
+  },
+  {
+    "id": "Q-038",
+    "order": 38,
+    "module": "Readiness",
+    "text": "Is the national filing, publication, language, approval and assurance calendar documented?",
+    "factTypes": ["readiness.publication_calendar_ready"],
+    "showWhen": { "allOf": [ { "factEquals": { "fact": "readiness.module_enabled", "value": true } }, { "requirementIs": { "requirement": "CSRD-S-014", "truth": "APPLIES" } } ] },
+    "inputPath": "Country pack + confirmation",
+    "whyAsked": "Creates dated actions from national law."
+  }
+]

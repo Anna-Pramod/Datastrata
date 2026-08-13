@@ -1,0 +1,20 @@
+{
+  "memberState": "IE",
+  "ratification": { "status": "draft", "by": null, "date": null },
+  "transposition": {
+    "originalCsrd": {
+      "status": "requires_research",
+      "instruments": ["S.I. No. 336/2024 — European Union (Corporate Sustainability Reporting) Regulations 2024 (verify current amended state)"],
+      "notes": "Ireland transposed the original CSRD in 2024; subsequent amending SIs and the Omnibus response must be verified before any reliance."
+    },
+    "omnibus2026_470": { "status": "requires_research", "deadline": "2027-03-19", "instruments": [], "notes": "Check EUR-Lex NIM and the Irish Statute Book for implementing measures and the FY2025–26 transition option." }
+  },
+  "options": { "fy2025_26_transition_relief": "unknown", "notes": "" },
+  "legalFormsCovered": { "status": "requires_research", "mapping": { "ltd": "private_limited_company", "plc": "public_limited_company" } },
+  "filingCalendar": { "reportDeadline": null, "publicationRules": "CRO filing regime — verify", "languages": ["en"] },
+  "assuranceProviderRules": { "status": "requires_research" },
+  "penaltiesAndEnforcement": { "authority": "IAASA / CEA — verify current allocation", "notes": "" },
+  "sources": [],
+  "monitor": "https://eur-lex.europa.eu/legal-content/EN/NIM/?uri=CELEX:32026L0470",
+  "_workflow": "NOT RATIFIED — S-013 correctly returns national_law_unresolved for IE until this pack is completed, golden-tested and ratified."
+}

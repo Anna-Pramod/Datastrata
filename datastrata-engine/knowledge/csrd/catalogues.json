@@ -1,0 +1,36 @@
+{
+  "eu_member_states": {
+    "entries": {
+      "AT": true, "BE": true, "BG": true, "HR": true, "CY": true, "CZ": true, "DK": true,
+      "EE": true, "FI": true, "FR": true, "DE": true, "GR": true, "HU": true, "IE": true,
+      "IT": true, "LV": true, "LT": true, "LU": true, "MT": true, "NL": true, "PL": true,
+      "PT": true, "RO": true, "SK": true, "SI": true, "ES": true, "SE": true,
+      "GB": false, "US": false, "IN": false, "CN": false, "JP": false, "CH": false,
+      "NO": false, "IS": false, "LI": false, "TR": false, "BR": false, "VN": false,
+      "KR": false, "CA": false, "AU": false, "UA": false, "RS": false, "MX": false,
+      "ZA": false, "ID": false, "TH": false, "MY": false, "SG": false, "AE": false,
+      "SA": false, "EG": false, "NG": false, "KE": false, "NZ": false, "IL": false
+    },
+    "missReason": "catalogue_unknown",
+    "note": "ISO 3166-1 alpha-2. A code absent from this catalogue yields INDETERMINATE (never a silent 'not EU'). EEA treatment (NO/IS/LI) is deliberately false for CSRD direct scope; their national regimes belong in country packs."
+  },
+  "accounting_directive_forms": {
+    "entries": {
+      "private_limited_company": true,
+      "public_limited_company": true,
+      "listed_company": true,
+      "partnership_all_members_limited": true,
+      "credit_institution": true,
+      "insurance_undertaking": true,
+      "sole_trader": false,
+      "partnership_natural_persons_unlimited": false
+    },
+    "missReason": "catalogue_unknown",
+    "note": "Coarse v0 perimeter for Accounting Directive Annex I/II legal forms + Art. 1 extensions. Member-state-specific form mapping (GmbH, SAS, BV…) belongs in country packs; an unmapped form must route to analyst review, never silently out of scope."
+  },
+  "ratified_country_packs": {
+    "entries": {},
+    "missReason": "national_law_unresolved",
+    "note": "A Member State appears here (value true) ONLY after its country pack is expert-ratified. Until then S-013 keeps every final legal status at 'requires national review'. IE and DE stub packs exist under country-packs/ but are NOT ratified."
+  }
+}

@@ -1,0 +1,127 @@
+{
+  "program": "CSRD",
+  "stateDoc": "monitoring/csrd-watch-state.md (DataStrata project doc — the automation reads/writes it there)",
+  "sources": [
+    {
+      "priority": 1,
+      "id": "W-001",
+      "site": "EUR-Lex — Directive (EU) 2026/470 (Omnibus I)",
+      "authority": "EU Publications Office",
+      "track": "Legal status, corrigenda and relationships",
+      "cadence": "weekly",
+      "eventWhen": "An official amendment/corrigendum affects encoded requirements",
+      "url": "https://eur-lex.europa.eu/eli/dir/2026/470/oj/eng",
+      "linkedSources": ["SRC-004"],
+      "affectsRequirements": ["CSRD-S-001", "CSRD-S-002", "CSRD-S-004", "CSRD-S-007", "CSRD-S-008", "CSRD-S-009", "CSRD-S-010", "CSRD-S-011", "CSRD-S-014"]
+    },
+    {
+      "priority": 2,
+      "id": "W-002",
+      "site": "EUR-Lex — National Transposition Measures for 2026/470",
+      "authority": "EU / Member States",
+      "track": "Each country's implementing law and options",
+      "cadence": "weekly",
+      "eventWhen": "A pilot-country measure is published or amended",
+      "url": "https://eur-lex.europa.eu/legal-content/EN/NIM/?uri=CELEX:32026L0470",
+      "linkedSources": ["SRC-015"],
+      "affectsRequirements": ["CSRD-S-004", "CSRD-S-005", "CSRD-S-013", "CSRD-S-014"]
+    },
+    {
+      "priority": 3,
+      "id": "W-003",
+      "site": "European Commission — CSRD policy hub",
+      "authority": "European Commission",
+      "track": "Policy timeline, legal initiatives, consultations, official news",
+      "cadence": "daily",
+      "eventWhen": "A linked official act or guidance changes the regulatory record",
+      "url": "https://finance.ec.europa.eu/financial-markets/company-reporting-and-auditing/company-reporting/corporate-sustainability-reporting_en",
+      "linkedSources": ["SRC-011"],
+      "affectsRequirements": []
+    },
+    {
+      "priority": 4,
+      "id": "W-004",
+      "site": "European Commission — CSRD delegated acts (revised ESRS + voluntary standard)",
+      "authority": "European Commission",
+      "track": "Scrutiny end, OJ publication, entry into force",
+      "cadence": "daily_until_effective",
+      "eventWhen": "Scrutiny ends, OJ publication occurs, or entry into force changes",
+      "url": "https://finance.ec.europa.eu/regulation-and-supervision/financial-services-legislation/implementing-and-delegated-acts/corporate-sustainability-reporting-directive_en",
+      "linkedSources": ["SRC-007", "SRC-008"],
+      "affectsRequirements": ["CSRD-S-012", "CSRD-S-011"],
+      "onEvent": "Set packFlags.revised_esrs_in_force / voluntary_standard_in_force, bump pack version, run golden profiles, propose re-evaluation"
+    },
+    {
+      "priority": 5,
+      "id": "W-005",
+      "site": "EUR-Lex Official Journal — L series (daily view)",
+      "authority": "EU Publications Office",
+      "track": "Publication of delegated acts",
+      "cadence": "daily_until_effective",
+      "eventWhen": "A new ELI/CELEX record relevant to CSRD becomes legally effective",
+      "url": "https://eur-lex.europa.eu/oj/daily-view/L-series/default.html",
+      "linkedSources": ["SRC-007", "SRC-008"],
+      "affectsRequirements": ["CSRD-S-012"]
+    },
+    {
+      "priority": 6,
+      "id": "W-006",
+      "site": "EFRAG Knowledge Hub",
+      "authority": "EFRAG",
+      "track": "Technical ESRS versions, explanations, Q&A",
+      "cadence": "weekly",
+      "eventWhen": "Ratified technical guidance changes interpretation or mapping",
+      "url": "https://knowledgehub.efrag.org/eng",
+      "linkedSources": ["SRC-013"],
+      "affectsRequirements": ["CSRD-S-012"]
+    },
+    {
+      "priority": 7,
+      "id": "W-007",
+      "site": "EFRAG implementation support",
+      "authority": "EFRAG",
+      "track": "Materiality, value-chain and datapoint guidance",
+      "cadence": "weekly",
+      "eventWhen": "New or revised implementation guidance is published",
+      "url": "https://www.efrag.org/en/sustainability-reporting/esrs-workstreams/implementation-support",
+      "linkedSources": ["SRC-012"],
+      "affectsRequirements": []
+    },
+    {
+      "priority": 8,
+      "id": "W-008",
+      "site": "EFRAG Article 40a / non-EU groups project",
+      "authority": "EFRAG",
+      "track": "N-ESRS exposure drafts, consultation, technical advice",
+      "cadence": "weekly",
+      "eventWhen": "A formal draft/advice or Commission act advances",
+      "url": "https://www.efrag.org/en/projects/noneu-groups-standard-setting/research-phase",
+      "linkedSources": ["SRC-014"],
+      "affectsRequirements": ["CSRD-S-008", "CSRD-S-009"]
+    },
+    {
+      "priority": 9,
+      "id": "W-009",
+      "site": "Commission value-chain-cap explanatory page",
+      "authority": "European Commission",
+      "track": "Official clarification and final cap implementation",
+      "cadence": "weekly",
+      "eventWhen": "Explanation or final voluntary standard changes item mapping",
+      "url": "https://finance.ec.europa.eu/news/feedback-sustainability-reporting-standards-additional-explanatory-information-regarding-value-chain-2026-05-06_en",
+      "linkedSources": ["SRC-010"],
+      "affectsRequirements": ["CSRD-S-010", "CSRD-S-011"]
+    },
+    {
+      "priority": 10,
+      "id": "W-010",
+      "site": "Commission / EUR-Lex Taxonomy delegated acts",
+      "authority": "European Commission / EU Publications Office",
+      "track": "Article 8 disclosure changes linked to CSRD",
+      "cadence": "monthly",
+      "eventWhen": "An effective Taxonomy amendment changes linked obligations",
+      "url": "https://finance.ec.europa.eu/regulation-and-supervision/financial-services-legislation/implementing-and-delegated-acts/taxonomy-regulation_en",
+      "linkedSources": ["SRC-016", "SRC-017"],
+      "affectsRequirements": []
+    }
+  ]
+}

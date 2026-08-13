@@ -1,0 +1,167 @@
+[
+  {
+    "id": "SRC-001",
+    "title": "Directive 2013/34/EU — Accounting Directive (host instrument)",
+    "legalType": "EU Directive",
+    "statusAtSnapshot": "In force, as amended",
+    "usedFor": "Core individual, consolidated, publication and third-country reporting objects",
+    "keyProvisions": "Arts. 19a, 29a, 29b, 29d, 30, 33, 34, 40a–40d",
+    "url": "https://eur-lex.europa.eu/eli/dir/2013/34/oj/eng",
+    "monitor": "Consolidated text / amendments"
+  },
+  {
+    "id": "SRC-002",
+    "title": "Directive (EU) 2022/2464 — CSRD",
+    "legalType": "EU Directive",
+    "statusAtSnapshot": "In force, as amended",
+    "usedFor": "Original CSRD framework, reporting content, exemptions and application provisions",
+    "keyProvisions": "Amendments to Accounting, Audit and Transparency Directives; Art. 5",
+    "url": "https://eur-lex.europa.eu/eli/dir/2022/2464/oj/eng",
+    "monitor": "Corrigenda / consolidated relationships"
+  },
+  {
+    "id": "SRC-003",
+    "title": "Directive (EU) 2025/794 — stop-the-clock",
+    "legalType": "EU Directive",
+    "statusAtSnapshot": "In force",
+    "usedFor": "Postponed application timetable for later reporting waves",
+    "keyProvisions": "Art. 1 and related amended application dates",
+    "url": "https://eur-lex.europa.eu/eli/dir/2025/794/oj/eng",
+    "monitor": "Further timing amendments / national implementation"
+  },
+  {
+    "id": "SRC-004",
+    "title": "Directive (EU) 2026/470 — Omnibus I",
+    "legalType": "EU Directive",
+    "statusAtSnapshot": "In force; national transposition due 19 Mar 2027",
+    "usedFor": "Current thresholds, third-country scope, value-chain cap, exemptions and transitional options",
+    "keyProvisions": "Amendments to Arts. 19a, 29a, 40a and application provisions",
+    "url": "https://eur-lex.europa.eu/eli/dir/2026/470/oj/eng",
+    "monitor": "National transposition / corrigenda"
+  },
+  {
+    "id": "SRC-005",
+    "title": "Commission Delegated Regulation (EU) 2023/2772 — ESRS Set 1",
+    "legalType": "EU Delegated Regulation",
+    "statusAtSnapshot": "In force baseline at snapshot",
+    "usedFor": "Current reporting-standard obligations until the revised act becomes legally effective",
+    "keyProvisions": "ESRS 1, ESRS 2 and topical standards",
+    "url": "https://eur-lex.europa.eu/eli/reg_del/2023/2772/oj/eng",
+    "monitor": "Replacement / amendment"
+  },
+  {
+    "id": "SRC-006",
+    "title": "Commission Delegated Regulation (EU) 2025/1416 — ESRS quick-fix",
+    "legalType": "EU Delegated Regulation",
+    "statusAtSnapshot": "In force",
+    "usedFor": "Wave-one phase-in relief for FY2025 and FY2026",
+    "keyProvisions": "Targeted amendments to phase-in provisions",
+    "url": "https://eur-lex.europa.eu/eli/reg_del/2025/1416/oj/eng",
+    "monitor": "Expiry / replacement"
+  },
+  {
+    "id": "SRC-007",
+    "title": "Commission revised ESRS delegated act, adopted 3 Jul 2026",
+    "legalType": "Delegated act",
+    "statusAtSnapshot": "Adopted; scrutiny/publication pending — NOT in force at snapshot",
+    "usedFor": "Future standard version and FY2026 early-adoption branch of S-012",
+    "keyProvisions": "Revised ESRS annexes and application clauses",
+    "url": "https://finance.ec.europa.eu/regulation-and-supervision/financial-services-legislation/implementing-and-delegated-acts/corporate-sustainability-reporting-directive_en",
+    "monitor": "Daily until entry into force"
+  },
+  {
+    "id": "SRC-008",
+    "title": "Commission voluntary sustainability standard delegated act, adopted 3 Jul 2026",
+    "legalType": "Delegated act",
+    "statusAtSnapshot": "Adopted; not in force at snapshot",
+    "usedFor": "Value-chain-cap catalogue and voluntary reporting option",
+    "keyProvisions": "Voluntary standard and cap annex",
+    "url": "https://finance.ec.europa.eu/regulation-and-supervision/financial-services-legislation/implementing-and-delegated-acts/corporate-sustainability-reporting-directive_en",
+    "monitor": "Daily until entry into force"
+  },
+  {
+    "id": "SRC-009",
+    "title": "Commission Notice C/2024/6792 — CSRD FAQs",
+    "legalType": "Official Commission guidance",
+    "statusAtSnapshot": "Current guidance; not legislation; pre-Omnibus in parts",
+    "usedFor": "Interpretation of scope, exemptions, assurance and third-country questions",
+    "keyProvisions": "Official Q&A",
+    "url": "https://eur-lex.europa.eu/eli/C/2024/6792/oj/eng",
+    "monitor": "New FAQ / conflict with amended law"
+  },
+  {
+    "id": "SRC-010",
+    "title": "Commission explanatory information on the value-chain cap, 6 May 2026",
+    "legalType": "Official Commission explanation",
+    "statusAtSnapshot": "Current explanation",
+    "usedFor": "Purpose limitation, protected-undertaking threshold, excess-request labelling and decline right",
+    "keyProvisions": "Q&A on value-chain cap",
+    "url": "https://finance.ec.europa.eu/news/feedback-sustainability-reporting-standards-additional-explanatory-information-regarding-value-chain-2026-05-06_en",
+    "monitor": "Final voluntary standard / updated explanation"
+  },
+  {
+    "id": "SRC-011",
+    "title": "European Commission corporate sustainability reporting policy hub",
+    "legalType": "Official policy/source hub",
+    "statusAtSnapshot": "Continuously updated",
+    "usedFor": "Timeline, legal acts, consultations and policy announcements",
+    "url": "https://finance.ec.europa.eu/financial-markets/company-reporting-and-auditing/company-reporting/corporate-sustainability-reporting_en",
+    "monitor": "Daily"
+  },
+  {
+    "id": "SRC-012",
+    "title": "EFRAG implementation support",
+    "legalType": "Official technical-adviser guidance",
+    "statusAtSnapshot": "Guidance primarily for 2023 ESRS",
+    "usedFor": "Materiality, value-chain and datapoint implementation support",
+    "keyProvisions": "IG1, IG2, IG3 and explanations",
+    "url": "https://www.efrag.org/en/sustainability-reporting/esrs-workstreams/implementation-support",
+    "monitor": "Weekly"
+  },
+  {
+    "id": "SRC-013",
+    "title": "EFRAG Knowledge Hub",
+    "legalType": "Official technical knowledge hub",
+    "statusAtSnapshot": "Continuously updated",
+    "usedFor": "Interactive standards, explanations and version history",
+    "url": "https://knowledgehub.efrag.org/eng",
+    "monitor": "Weekly"
+  },
+  {
+    "id": "SRC-014",
+    "title": "EFRAG Article 40a / non-EU groups standard-setting project",
+    "legalType": "Official standard-setting project",
+    "statusAtSnapshot": "Active; standard pending",
+    "usedFor": "Third-country reporting-standard change watch",
+    "url": "https://www.efrag.org/en/projects/noneu-groups-standard-setting/research-phase",
+    "monitor": "Weekly"
+  },
+  {
+    "id": "SRC-015",
+    "title": "EUR-Lex National Transposition Measures for Directive (EU) 2026/470",
+    "legalType": "Official national-law tracker",
+    "statusAtSnapshot": "Country-specific and evolving",
+    "usedFor": "Member-State implementation, transitional options and legal enforceability",
+    "url": "https://eur-lex.europa.eu/legal-content/EN/NIM/?uri=CELEX:32026L0470",
+    "monitor": "Weekly"
+  },
+  {
+    "id": "SRC-016",
+    "title": "Regulation (EU) 2020/852 — EU Taxonomy Regulation",
+    "legalType": "EU Regulation",
+    "statusAtSnapshot": "In force",
+    "usedFor": "Linked Article 8 disclosure obligations",
+    "keyProvisions": "Art. 8",
+    "url": "https://eur-lex.europa.eu/eli/reg/2020/852/oj/eng",
+    "monitor": "Amendments"
+  },
+  {
+    "id": "SRC-017",
+    "title": "Commission Delegated Regulation (EU) 2021/2178 — Taxonomy Article 8 disclosures",
+    "legalType": "EU Delegated Regulation",
+    "statusAtSnapshot": "In force, as amended",
+    "usedFor": "Content and presentation of Article 8 disclosures",
+    "url": "https://eur-lex.europa.eu/eli/reg_del/2021/2178/oj/eng",
+    "monitor": "Amendments / simplification"
+  }
+]

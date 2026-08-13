@@ -1,0 +1,19 @@
+{
+  "context": {
+    "assessmentDate": "2026-07-26",
+    "financialYear": { "start": "2027-01-01", "end": "2027-12-31" },
+    "subjectId": "e1"
+  },
+  "profile": {
+    "scopeObjects": [{ "id": "e1", "type": "legal_entity", "name": "Alpine Industrie SAS" }],
+    "facts": [
+      { "factType": "entity.incorporation_country", "scopeId": "e1", "value": { "kind": "string", "value": "FR" }, "confirmed": true, "source": { "kind": "registry", "ref": "RCS Lyon extract" } },
+      { "factType": "entity.legal_form", "scopeId": "e1", "value": { "kind": "string", "value": "private_limited_company" }, "confirmed": true, "source": { "kind": "registry", "ref": "RCS Lyon extract" } },
+      { "factType": "entity.is_parent_undertaking", "scopeId": "e1", "value": { "kind": "boolean", "value": false }, "confirmed": true, "source": { "kind": "customer_statement", "ref": "onboarding call 2026-07-20" } },
+      { "factType": "entity.is_subsidiary", "scopeId": "e1", "value": { "kind": "boolean", "value": false }, "confirmed": true, "source": { "kind": "customer_statement", "ref": "onboarding call 2026-07-20" } },
+      { "factType": "entity.net_turnover_eur", "scopeId": "e1", "value": { "kind": "number", "value": 520000000 }, "confirmed": true, "source": { "kind": "document", "ref": "Annual Report 2025", "page": "41" } },
+      { "factType": "entity.avg_employees", "scopeId": "e1", "value": { "kind": "number", "value": 1350 }, "confirmed": true, "source": { "kind": "document", "ref": "Annual Report 2025", "page": "83" } },
+      { "factType": "entity.governing_member_state", "scopeId": "e1", "value": { "kind": "string", "value": "FR" }, "confirmed": true, "source": { "kind": "derived", "ref": "incorporation country" } }
+    ]
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "memberState": "XX",
+  "ratification": { "status": "draft", "by": null, "date": null },
+  "transposition": {
+    "originalCsrd": { "status": "requires_research", "instruments": [], "notes": "" },
+    "omnibus2026_470": { "status": "requires_research", "deadline": "2027-03-19", "instruments": [], "notes": "" }
+  },
+  "options": {
+    "fy2025_26_transition_relief": "unknown",
+    "notes": "Directive (EU) 2026/470 allows Member States to relieve undertakings below either amended threshold for FY beginning 1 Jan 2025 – 31 Dec 2026. Record the national choice with its instrument citation."
+  },
+  "legalFormsCovered": { "status": "requires_research", "mapping": {} },
+  "filingCalendar": { "reportDeadline": null, "publicationRules": null, "languages": [] },
+  "assuranceProviderRules": { "status": "requires_research" },
+  "penaltiesAndEnforcement": { "authority": null, "notes": "" },
+  "sources": [],
+  "monitor": "https://eur-lex.europa.eu/legal-content/EN/NIM/?uri=CELEX:32026L0470",
+  "_workflow": "A country pack becomes usable ONLY when: (1) every requires_research field is resolved with an official citation, (2) golden profiles for the country pass, (3) an expert ratifies it, and (4) the member state is added to catalogues.json → ratified_country_packs with value true. Until then S-013 keeps final legal status at 'requires national review' for this country — that behaviour is deliberate."
+}

@@ -1,0 +1,172 @@
+[
+  {
+    "id": "O-001",
+    "obligation": "Prepare a clearly identifiable sustainability section in the statutory management report.",
+    "actor": "Reporting legal entity",
+    "trigger": { "allOf": ["CSRD-S-014"] },
+    "defaultOwnerRole": "Financial reporting lead",
+    "deadlineLogic": "National annual-report calendar (country pack)",
+    "evidenceExpectation": "Approved management-report template and published section",
+    "completionCriterion": "Section approved, assured where required, and included in the statutory report."
+  },
+  {
+    "id": "O-002",
+    "obligation": "Apply the legally applicable ESRS version and maintain a versioned requirement-to-disclosure mapping.",
+    "actor": "Reporting organization",
+    "trigger": { "allOf": ["CSRD-S-014", "CSRD-S-012"] },
+    "defaultOwnerRole": "Sustainability reporting lead",
+    "deadlineLogic": "At reporting-cycle start and on standard change (see CSRD-S-012 selection)",
+    "evidenceExpectation": "Basis-of-preparation memo and disclosure index",
+    "completionCriterion": "Applicable standard version and mapping approved."
+  },
+  {
+    "id": "O-003",
+    "obligation": "Perform and approve the double-materiality process.",
+    "actor": "Reporting organization",
+    "trigger": { "allOf": ["CSRD-S-014"] },
+    "defaultOwnerRole": "Sustainability lead",
+    "deadlineLogic": "Before detailed disclosure build",
+    "evidenceExpectation": "DMA methodology, evidence, results and approvals",
+    "completionCriterion": "Process approved and decision trail complete."
+  },
+  {
+    "id": "O-004",
+    "obligation": "Document governance roles and an owned inventory of policies, actions, targets, metrics and data sources.",
+    "actor": "Reporting organization",
+    "trigger": { "allOf": ["CSRD-S-014"] },
+    "defaultOwnerRole": "Company secretary / sustainability",
+    "deadlineLogic": "Before reporting close",
+    "evidenceExpectation": "RACI, board materials and policy/KPI inventory",
+    "completionCriterion": "Named owners and source links exist."
+  },
+  {
+    "id": "O-005",
+    "obligation": "Prepare linked EU Taxonomy Article 8 disclosures.",
+    "actor": "Reporting organization",
+    "trigger": { "allOf": ["CSRD-S-014"] },
+    "defaultOwnerRole": "Finance / taxonomy lead",
+    "deadlineLogic": "Same reporting cycle",
+    "evidenceExpectation": "Taxonomy workbook and report section",
+    "completionCriterion": "Linked module complete and reconciled."
+  },
+  {
+    "id": "O-006",
+    "obligation": "Appoint an eligible assurance provider, prepare evidence and obtain limited assurance.",
+    "actor": "Reporting legal entity",
+    "trigger": { "allOf": ["CSRD-S-015"] },
+    "defaultOwnerRole": "Audit committee / finance",
+    "deadlineLogic": "Country-specific runway before the publication deadline",
+    "evidenceExpectation": "Engagement letter, control evidence and assurance opinion",
+    "completionCriterion": "Opinion issued and published."
+  },
+  {
+    "id": "O-007",
+    "obligation": "Inform and consult workers' representatives and communicate their opinion where applicable.",
+    "actor": "Management",
+    "trigger": { "allOf": ["CSRD-S-014"] },
+    "defaultOwnerRole": "HR / company secretary",
+    "deadlineLogic": "Before final governance approval",
+    "evidenceExpectation": "Notices, minutes and opinion",
+    "completionCriterion": "Consultation evidence accepted; a recorded basis exists where the provision is not applicable."
+  },
+  {
+    "id": "O-008",
+    "obligation": "Prepare the management report in the applicable electronic format.",
+    "actor": "Reporting legal entity",
+    "trigger": { "allOf": ["CSRD-S-014"] },
+    "defaultOwnerRole": "Financial reporting IT",
+    "deadlineLogic": "By publication",
+    "evidenceExpectation": "Validated digital output; do not assume sustainability tagging before the relevant tagging rules exist",
+    "completionCriterion": "Required file passes validation."
+  },
+  {
+    "id": "O-009",
+    "obligation": "Complete governance approval, filing, publication, language and accessibility steps.",
+    "actor": "Reporting legal entity",
+    "trigger": { "allOf": ["CSRD-S-014"] },
+    "defaultOwnerRole": "Company secretary",
+    "deadlineLogic": "Member-State deadline (country pack)",
+    "evidenceExpectation": "Board minutes, filing receipt and public URL",
+    "completionCriterion": "Report filed and accessible."
+  },
+  {
+    "id": "O-010",
+    "obligation": "Document the FY2025–26 national transition determination and what work may safely stop or continue.",
+    "actor": "Potentially descoped legal entity",
+    "trigger": { "anyOf": ["CSRD-S-004"] },
+    "defaultOwnerRole": "Legal / finance",
+    "deadlineLogic": "Before the reporting-budget decision",
+    "evidenceExpectation": "Signed national-law scope memo",
+    "completionCriterion": "Current cited decision communicated to stakeholders."
+  },
+  {
+    "id": "O-011",
+    "obligation": "Maintain annual evidence supporting the subsidiary or higher-parent reporting exemption.",
+    "actor": "Exempt legal entity",
+    "trigger": { "anyOf": ["CSRD-S-005", "CSRD-S-006"] },
+    "defaultOwnerRole": "Company secretary",
+    "deadlineLogic": "Each reporting year",
+    "evidenceExpectation": "Parent report, inclusion evidence, URL, assurance, taxonomy and language evidence",
+    "completionCriterion": "Every exemption condition remains current."
+  },
+  {
+    "id": "O-012",
+    "obligation": "Prepare the Article 40a third-country sustainability report under the applicable standard.",
+    "actor": "Ultimate non-EU organization",
+    "trigger": { "anyOf": ["CSRD-S-008", "CSRD-S-009"] },
+    "defaultOwnerRole": "Group sustainability lead",
+    "deadlineLogic": "Financial years beginning on/after 1 Jan 2028 and the applicable national calendar",
+    "evidenceExpectation": "Group report and assurance evidence (N-ESRS under development — see CW-004)",
+    "completionCriterion": "Compliant report supplied to the gateway."
+  },
+  {
+    "id": "O-013",
+    "obligation": "Publish and make accessible the third-country report through the qualifying EU subsidiary or branch.",
+    "actor": "EU gateway entity/branch",
+    "trigger": { "anyOf": ["CSRD-S-008", "CSRD-S-009"] },
+    "defaultOwnerRole": "EU entity director / company secretary",
+    "deadlineLogic": "National publication deadline",
+    "evidenceExpectation": "Publication record and URL",
+    "completionCriterion": "Report accessible and filing evidenced."
+  },
+  {
+    "id": "O-014",
+    "obligation": "Map and respond to the CSRD value-chain information request item by item.",
+    "actor": "Protected value-chain organization",
+    "trigger": { "anyOf": ["CSRD-S-010"] },
+    "defaultOwnerRole": "Commercial / sustainability lead",
+    "deadlineLogic": "Customer request deadline",
+    "evidenceExpectation": "Request mapping and approved response basis",
+    "completionCriterion": "Response sent with voluntary/declined items recorded."
+  },
+  {
+    "id": "O-015",
+    "obligation": "Identify above-cap items and notify the protected undertaking of its right to decline (requestor-side duty).",
+    "actor": "CSRD-reporting requestor (counterparty)",
+    "trigger": { "anyOf": ["CSRD-S-011"] },
+    "defaultOwnerRole": "Procurement / sustainability (requestor)",
+    "deadlineLogic": "When the request is issued",
+    "evidenceExpectation": "Request labels and rights notice",
+    "completionCriterion": "Request contains the required notice."
+  },
+  {
+    "id": "O-016",
+    "obligation": "Explain unavailable value-chain information, efforts and future plans during the transition period.",
+    "actor": "Reporting organization",
+    "trigger": { "anyOf": ["CSRD-S-016"] },
+    "defaultOwnerRole": "Sustainability reporting lead",
+    "deadlineLogic": "Each affected report",
+    "evidenceExpectation": "Transition disclosure and improvement plan",
+    "completionCriterion": "Disclosure approved and plan owned."
+  },
+  {
+    "id": "O-017",
+    "obligation": "Operate an evidence registry linking obligations to proof, owners, source locations, freshness and acceptance.",
+    "actor": "Reporting organization",
+    "trigger": { "anyOf": ["CSRD-S-014", "CSRD-S-008", "CSRD-S-009"] },
+    "defaultOwnerRole": "Financial control / sustainability",
+    "deadlineLogic": "Continuous; quarterly review",
+    "evidenceExpectation": "Evidence registry records — never mandatory file custody",
+    "completionCriterion": "Critical evidence is current and accepted."
+  }
+]

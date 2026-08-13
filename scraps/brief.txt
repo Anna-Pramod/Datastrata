@@ -1,0 +1,476 @@
+[Eyebrow] UI/UX MOCKUP BRIEF
+[Title] DataStrata Regulatory Intelligence Platform
+[Subtitle] A complete design brief for a high-fidelity, clickable product mockup covering the wedge, compliance-operations and assurance phases.
+
+
+[Callout] Design outcome: make a complex, high-stakes regulatory system feel calm, bounded and continuously maintained. The user should understand where they stand, what changed and what to do next within four seconds.
+
+[Heading1] 1. Product context and mockup objective
+Product promise. DataStrata watches sustainability market-access rules for a specific organisation, determines what applies, explains why, converts obligations into owned work, maintains the evidence trail and makes assurance replayable.
+Mockup objective. Create a coherent desktop-first experience demonstrating the complete product spine without implying that every subsystem launches at once. Stage 1 screens must feel fully usable; Stage 2 and Stage 3 screens must use the same objects, status logic and navigation so the product visibly expands rather than changes identity.
+[Heading1] 2. Primary users, roles and permissions
+[TableHeader] Role
+[TableHeader] Primary job
+[TableHeader] Default altitude
+[TableHeader] Key permissions
+[TableText] Executive / MD / Export Director
+[TableText] Protect regulated revenue and approve priorities.
+[TableText] Programs, posture, exposure, horizon and decisions.
+[TableText] View all; approve plans and risk decisions; export executive reports.
+[TableText] Compliance / Sustainability Lead
+[TableText] Maintain applicability, obligations, actions and readiness.
+[TableText] Obligations and operational state.
+[TableText] Manage profile, owners, evidence links, controls, plans and reports.
+[TableText] Contributor / Evidence Owner
+[TableText] Complete assigned work and maintain proof.
+[TableText] My tasks and evidence.
+[TableText] Edit assigned tasks; add evidence pointers; request review.
+[TableText] DataStrata Analyst
+[TableText] Resolve ambiguity and maintain the regulatory record.
+[TableText] Determinations and knowledge workbench.
+[TableText] Review/ratify extracted requirements; sign interpretations; publish changes.
+[TableText] Auditor / Buyer Reviewer
+[TableText] Inspect a scoped, dated record.
+[TableText] Assurance workspace.
+[TableText] Read-only access to approved scope; raise findings/questions.
+[TableText] Tenant Admin
+[TableText] Manage users, roles, entity access and integrations.
+[TableText] Administration.
+[TableText] Invite users; assign roles; configure SSO, reminders and data retention.
+
+[Heading1] 3. Experience principles
+1. Never start empty. Show a checker-fed preliminary universe or begin the guided profile flow immediately; do not display a blank analytics dashboard.
+2. Every answer has a visible “Why?” path to facts, conditions, sources, versions and sign-offs.
+3. State certainty explicitly. Separate Deterministic, Expert-signed and Requires judgment; never disguise missing facts as low confidence.
+4. Give negative determinations equal weight. “Does not apply” is a valuable, exportable result, not an omitted row.
+5. Use urgency sparingly. Red is reserved for blocked or materially late states; ordinary work is presented through runway and ownership.
+6. Bound the user’s attention. The inbox ends with “You are current”; information and demands are never mixed.
+7. No insight without a handle. Every gap/change links to an owner, deadline, decision or next step.
+8. Optimise for reliance, not engagement. Weekly all-clear and change absorption matter more than daily active use.
+[Heading1] 4. Information architecture and global navigation
+[TableHeader] Navigation item
+[TableHeader] Purpose
+[TableHeader] Stage
+[TableText] Home
+[TableText] Standing answers: posture, change, demands, horizon, evidence health, exposure and readiness.
+[TableText] 1
+[TableText] Regulatory Universe
+[TableText] List and interactive map of applicable, non-applicable and judgment items by program/entity/product/lane.
+[TableText] 1
+[TableText] Obligations
+[TableText] Owned register, gap ledger and determination details.
+[TableText] 1
+[TableText] Changes
+[TableText] Weekly briefing archive, change ledger, impact analysis and explicit all-clears.
+[TableText] 1
+[TableText] Actions & Calendar
+[TableText] Plans, tasks, deadlines, .ics/email export; native assignment and escalation later.
+[TableText] 1 -> 2
+[TableText] Evidence & Controls
+[TableText] Evidence expectations/registry, policies, controls, freshness and attestations.
+[TableText] 1 lite -> 2 full
+[TableText] Assurance
+[TableText] Readiness, scoped reviews, auditor/buyer access, exports and findings.
+[TableText] 2 -> 3
+[TableText] Reports
+[TableText] Executive, buyer-facing and assurance projections at a selected date.
+[TableText] 1 summary -> 2/3
+[TableText] Company Profile
+[TableText] Entities, products, facilities, trade lanes, sources, refresh cadence and business-change entry.
+[TableText] 1
+[TableText] Ask DataStrata
+[TableText] Citation-bearing natural-language access to warranted records.
+[TableText] 1 limited -> mature
+[TableText] Admin
+[TableText] Users, roles, reminder policies, integrations and audit log.
+[TableText] 1 basic -> 2
+
+Separate internal application: Regulatory Workbench for source monitoring, AI-assisted extraction, condition authoring, simulation, expert ratification and publication. It is not exposed in customer navigation.
+[Heading1] 5. End-to-end customer flows
+[TableHeader] Flow
+[TableHeader] Entry
+[TableHeader] Critical steps
+[TableHeader] Success state
+[TableText] A. New customer to first answer
+[TableText] Free checker result or purchase confirmation.
+[TableText] Choose profile method -> upload suggested documents / add public link / manual entry -> review extracted facts -> answer unresolved questions -> run applicability -> review Applies / Does not apply / Requires judgment.
+[TableText] Confirmed regulatory universe with reasons and next actions.
+[TableText] B. Weekly regulatory change
+[TableText] Email/notification or Home “What changed”.
+[TableText] Open briefing -> view change summary -> inspect customer impact -> open affected obligation -> accept or assign generated action -> export/sync deadline.
+[TableText] Change absorbed; audit trail and owner recorded.
+[TableText] C. Internal business change / what-if
+[TableText] Persistent “Something changed” button.
+[TableText] Choose actual change or scenario -> add product, lane, entity, buyer or fact -> show provisional applicability delta -> confirm actual change or save scenario.
+[TableText] New obligations/actions added without disturbing historic state.
+[TableText] D. Evidence expiry / readiness
+[TableText] Home evidence-health or assurance event.
+[TableText] Open missing/expiring item -> view expectation -> add storage pointer/upload metadata -> reviewer accepts -> posture/readiness recomputes.
+[TableText] Blocker removed with provenance.
+[TableText] E. Assurance replay
+[TableText] Upcoming audit/buyer request.
+[TableText] Define scope/date -> preview included objects -> create read-only portal or export -> reviewer raises finding -> finding enters gap ledger.
+[TableText] Assurance completed from the maintained record.
+
+[Heading1] 6. Customer journey phases: screen-by-screen requirements
+[Heading2] Phase 0 - Arrival
+[TableHeader] Screen
+[TableHeader] Required components
+[TableHeader] Primary interaction / acceptance criteria
+[TableText] Welcome / Resume setup
+[TableText] Customer name; “Someone is now watching for you” statement; progress; checker results if available; two CTAs: Complete profile / View preliminary universe.
+[TableText] No blank dashboard. Returning users resume at the exact unresolved step.
+[TableText] Preliminary universe
+[TableText] Programs likely relevant; confidence/preliminary badge; missing-fact counter; explanation that exact applicability follows confirmation.
+[TableText] Each preliminary item links directly to the fact needed to resolve it.
+
+[Heading2] Phase 1 - Declare: profile creation
+Input strategy. The profile flow must support document-assisted, link-assisted and manual entry in one path. OCR/AI proposes facts but cannot commit them; users confirm or amend every extracted fact before it becomes sourced profile data.
+[TableHeader] Screen
+[TableHeader] Required components
+[TableHeader] Key behaviour
+[TableText] Choose profile method
+[TableText] Cards: Upload public documents; Add public document/website link; Enter manually. Suggested document checklist by company type.
+[TableText] Multiple methods may be combined. Explain privacy and that uploaded files are used for fact extraction, not assumed true.
+[TableText] Document intake
+[TableText] Drag/drop; URL field; document type; financial year; public/private toggle; processing state; replacement option.
+[TableText] Suggested documents: annual report, audited accounts, sustainability report, product catalogue, certifications and export/product list.
+[TableText] Extraction review
+[TableText] Split view: document/page preview and extracted facts; source citation; confidence; exact/range selector; confirm/edit/reject; bulk confirm only for non-critical facts.
+[TableText] Threshold-critical facts cannot be bulk-confirmed. A fact is not active until confirmed.
+[TableText] Guided interview
+[TableText] One question at a time; reason for asking; “use a range” option; “I do not know”; source attachment; progress based on determinations resolved, not question count.
+[TableText] Questions are generated from unresolved applicability conditions. Do not ask irrelevant feature-driven questions.
+[TableText] Profile review
+[TableText] Entity tree; products/HS codes; facilities; trade lanes; buyers; commitments; sourced facts; missing/expiring items.
+[TableText] Business Units cannot be used as legal scope anchors. Legal Entity, Product and Trade Lane are prominent.
+[TableText] Refresh schedule
+[TableText] For each recurring source: publication month/date, reminder lead time, owner and preferred channel.
+[TableText] Automatically create annual refresh reminders; new document triggers backend extraction and a review queue, not silent overwrite.
+
+[Callout] Range rule: ranges are acceptable for preliminary screening when the law uses broad thresholds. Exact sourced values are required when the customer sits near a threshold or when a definitive determination, filing or assurance statement depends on the number.
+
+[Heading2] Phase 2 - Discover: applicability
+[TableHeader] Screen
+[TableHeader] Required components
+[TableHeader] Key behaviour
+[TableText] Applicability run
+[TableText] Programs checked; facts consumed; progress; count of resolved/missing/judgment items; no artificial spinner.
+[TableText] Show that the engine is evaluating specific requirements, not “AI thinking.” Results are stored as determination records.
+[TableText] Universe results - list
+[TableText] Four tabs: Applies, Does not apply, Missing fact, Requires judgment; filters by entity/program/product/lane; reason summary; effective date; owner.
+[TableText] Negative results are exportable. Judgment items show analyst status and expected next step without promising certainty.
+[TableText] Determination detail drawer
+[TableText] Result badge; plain-language explanation; condition tree; profile facts; legal provisions; versions; evaluation time; sign-off; history.
+[TableText] Universal “Why?” affordance. Users can confirm, contest or submit missing fact; every action creates a DecisionRecord.
+[TableText] Regulatory Universe Map
+[TableText] Interactive program-centred map; nodes for program, requirement, obligation, action/evidence; status/uncertainty coding; zoom, filter, search, expand/collapse, mini-map and list sync.
+[TableText] Secondary view, not home. Clicking a node opens cited detail. Export current view to PDF/PNG and data to CSV; Stage 2 adds saved layouts and deeper customisation.
+
+[Heading3] Regulatory Universe Map interaction specification
+• Default graph is curated and shallow: Program -> customer scope -> applicable requirement/obligation. Do not expose every source/provision/cross-reference until the user expands a node.
+• Map and list are two views of the same filtered state. Selecting or filtering in one updates the other.
+• Node states: Applies, Does not apply, Missing fact, Requires judgment; obligation posture is shown only after instantiation.
+• Click opens a side panel with summary, “why”, source, effective dates, affected entity/product/lane and related actions/evidence.
+• Custom export: title, date, selected programs, selected node depth, legend, confidential watermark and orientation. Export must preserve citations or append a source register.
+• Never use the map as a decorative “complexity theatre” visual. Its jobs are orientation, impact tracing, explanation and export.
+[Heading2] Phase 3 - Commit: obligations, baseline and gaps
+[TableHeader] Screen
+[TableHeader] Required components
+[TableHeader] Key behaviour
+[TableText] Obligation register
+[TableText] Table/card toggle; obligation, scope, program, effective/deadline, owner, evidence expectation, posture, blockers; saved filters and export.
+[TableText] Every obligation links back to its determination and forward to actions/evidence. Status cannot be manually edited.
+[TableText] Baseline existing reality
+[TableText] Add existing policy, certification, control or evidence pointer; suggested mappings; reviewer acceptance.
+[TableText] Start from credit, not zero. Suggestions are non-binding until accepted.
+[TableText] Gap ledger
+[TableText] Open obligation gaps; consequence in commercial terms; runway; likely cost/market-access effect; remediation status; owner.
+[TableText] No naked risk. Every gap has a “Create plan”, “Accept risk” or “Request judgment” handle.
+[TableText] Risk decision
+[TableText] Exposure summary, alternatives, approver, expiry/review date and rationale.
+[TableText] Risk acceptance is a signed DecisionRecord and never makes an obligation compliant.
+
+[Heading2] Phase 4 - Mobilise: actions and calendar
+[TableHeader] Screen
+[TableHeader] Required components
+[TableHeader] Key behaviour
+[TableText] Plan builder
+[TableText] Gap context; outcome; suggested task sequence; owner; milestones; dependencies; approval.
+[TableText] AI may draft a plan from warranted objects, but the user approves ownership and dates.
+[TableText] Task detail
+[TableText] Task, owner, due date, related obligation/gap/finding, evidence expected, comments and activity.
+[TableText] Closing a task alone cannot change compliance posture if proof is missing.
+[TableText] Calendar / horizon
+[TableText] 90-day timeline, month view, program/entity filters, runway, evidence expiries, audits and recurring obligations.
+[TableText] Export .ics and email digest in Stage 1; native assignment, escalation and SLA controls in Stage 2.
+[TableText] Needs you inbox
+[TableText] Only approvals, decisions and personally owned actions; zero informational alerts.
+[TableText] A designed terminal state reads “You are current. Next action due [date].”
+
+[Heading2] Phase 5 - Operate: maintained answer
+[TableHeader] Screen
+[TableHeader] Required components
+[TableHeader] Key behaviour
+[TableText] Home dashboard
+[TableText] Posture; What changed; Needs you; Horizon; Evidence/controls health; Exposure; Assurance readiness; Ask; business-change action.
+[TableText] Four-second glance reveals where the organisation stands and whether anything changed. No generic chart gallery.
+[TableText] Weekly briefing
+[TableText] Executive summary; affects-you items; reviewed no-impact items; all-clear; generated tasks; analyst note; sources.
+[TableText] The highest-value sentence - “nothing this week affects you” - is deterministically derived or human confirmed, never probabilistically suppressed.
+[TableText] Change Centre
+[TableText] Event ledger; impact status; affected determinations/obligations; before/after versions; action status; briefing archive.
+[TableText] A change can be traced end-to-end from source snapshot to customer action.
+[TableText] Something changed
+[TableText] Actual vs scenario; change type; guided fact entry; applicability delta preview; confirm or discard.
+[TableText] External and internal change use the same re-evaluation machinery. History is appended, not overwritten.
+[TableText] What-if comparison
+[TableText] Current vs scenario universes; new/removed obligations; deadlines, evidence and exposure delta.
+[TableText] Scenario output is clearly marked non-operative until confirmed as an actual business change.
+
+[Heading2] Phase 6 - Prove: evidence and assurance
+[TableHeader] Screen
+[TableHeader] Required components
+[TableHeader] Key behaviour
+[TableText] Evidence registry
+[TableText] Evidence item, pointer/location, content hash, owner, scope, validity window, linked expectations/obligations, acceptance and expiry.
+[TableText] Registry-first, not storage-first. Optional managed custody can appear later behind the same object model.
+[TableText] Controls and policies
+[TableText] Control/policy catalogue; obligations satisfied; owner; cadence; last/next attestation; effectiveness; evidence.
+[TableText] Controls compress many obligations; failed/missed attestation affects derived posture.
+[TableText] Readiness view
+[TableText] Upcoming assurance events; readiness state/percentage with named blockers; evidence and control coverage; open findings.
+[TableText] A number is permitted only with visible derivation and blockers; Home headline remains a state, not an aggregate score.
+[TableText] Assurance workspace
+[TableText] Create scope by program/entity/date; preview record; access expiry; recipient; audit log; portal/export choice.
+[TableText] Customer controls the aperture. Reviewer has read-only access and cannot mutate the operational record.
+[TableText] Finding detail
+[TableText] Source audit/reviewer; severity; evidence; owner; response; due date; linked gap/plan/tasks.
+[TableText] Findings re-enter the standard gap/action spine rather than creating a parallel workflow.
+[TableText] Report builder
+[TableText] Template, date, scope, sections, audience, preview, source register, export.
+[TableText] Every report is a reproducible projection of the graph at a date; no manual “board version” of truth.
+
+[Heading1] 7. Home dashboard composition
+[TableHeader] Order
+[TableHeader] Region
+[TableHeader] Content and interaction
+[TableText] 1
+[TableText] Posture header
+[TableText] Program x entity states: Current, Attention, At Risk, Blocked. Show trend and one-line named blocker. Click drills to derivation.
+[TableText] 2
+[TableText] What changed
+[TableText] Affected changes first; then reviewed/no impact. Dated all-clear and annual counters such as “214 watched, 19 affected you”.
+[TableText] 3
+[TableText] Needs you
+[TableText] Personal decisions and actions only, ordered by runway. Designed bottom state.
+[TableText] 4
+[TableText] Horizon
+[TableText] Next 90 days: deadlines, evidence expiry, certificate windows, audits and filings.
+[TableText] 5
+[TableText] Evidence and controls health
+[TableText] Missing/expiring proof, unaccepted evidence and unattended controls; reduced buyer-data readiness at the wedge.
+[TableText] 6
+[TableText] Exposure
+[TableText] Open gaps ranked by commercial consequence with plan status.
+[TableText] 7
+[TableText] Assurance readiness
+[TableText] Upcoming events with named blockers; collapse if no event, but show a dated no-event all-clear.
+
+[Callout] Do not create a single “Compliance score” as the main dashboard metric. A high percentage can hide the one missing authorisation or data item that blocks a shipment. Use states with named blockers; percentages may appear only inside a specific readiness calculation with transparent derivation.
+
+[Heading1] 8. Status, certainty and visual language
+[TableHeader] System
+[TableHeader] Values
+[TableHeader] Usage rule
+[TableText] Applicability
+[TableText] Applies; Does not apply; Missing fact; Requires judgment
+[TableText] Use explicit words plus icon/shape. Never rely on colour alone.
+[TableText] Posture
+[TableText] Current; Attention; At Risk; Blocked
+[TableText] Derived only. Every non-current state names the blocker and runway.
+[TableText] Warranty / answer tier
+[TableText] Deterministic; Expert-signed; Requires counsel
+[TableText] Badge near the assertion, not hidden in metadata.
+[TableText] Evidence state
+[TableText] Missing; Submitted; Under review; Accepted; Expiring; Expired; Rejected
+[TableText] Acceptance is human-authorised; freshness is deterministic.
+[TableText] Task runway
+[TableText] Planned; Due soon; Due; Overdue; Blocked
+[TableText] Use dates and days remaining; reserve alarm colour for actual risk.
+[TableText] Change impact
+[TableText] Affected; No impact; Under review
+[TableText] No-impact requires derivation or analyst confirmation.
+
+Visual direction. Calm, editorial and evidence-led: generous white space; strong typographic hierarchy; restrained navy/teal foundation; amber/red used sparingly; citations and derivation available in side drawers; tables designed for scanability. Avoid ESG stock imagery, greenwashing motifs, gamification and alarm-count widgets.
+[Heading1] 9. Ask DataStrata interaction
+[TableHeader] Element
+[TableHeader] Requirement
+[TableText] Prompt entry
+[TableText] Persistent question bar with suggested questions derived from the user’s role and current state.
+[TableText] Answer format
+[TableText] Direct answer first; then affected entity/program; source citations; answer tier; “Open underlying record” links.
+[TableText] Scope control
+[TableText] Visible scope chips for entity, program and date. The assistant must not silently broaden scope.
+[TableText] No-record behaviour
+[TableText] State that the warranted record cannot answer; offer a profile fact request, analyst question or source search workflow. Never fill the gap from ungrounded model memory.
+[TableText] Action handoff
+[TableText] From an answer, create/open task, determination, report or scenario; AI does not commit the record.
+[TableText] Auditability
+[TableText] Save questions and answers as composed assistance with timestamp and cited object versions, distinct from authoritative determinations.
+
+[Heading1] 10. Internal Regulatory Workbench
+The mockup must include at least a representative internal analyst flow because the customer experience depends on the factory being credible.
+[TableHeader] Workbench screen
+[TableHeader] Core components / interactions
+[TableText] Source monitor queue
+[TableText] Detected source change; source authority; diff size; programs/requirements touched; customer blast radius; priority; assignment.
+[TableText] Extraction bench
+[TableText] Source text and diff beside AI-drafted event, requirements, conditions, deadlines and evidence expectations; ratify, amend, reject or escalate.
+[TableText] Condition authoring
+[TableText] Human-readable predicate builder, FactType picker, legal source anchor, effective dates and validation errors.
+[TableText] Simulator
+[TableText] Run drafted rule against golden synthetic profiles and affected customer profiles; show expected/unexpected flips and missing facts.
+[TableText] Publication gate
+[TableText] Review checklist; named ratifier; effective/known dates; impact summary; publish/supersede; no AI self-publication.
+[TableText] Incident / latency view
+[TableText] Change-to-briefing SLO, queue age, unreviewed high-blast changes and customers pending re-determination.
+
+[Heading1] 11. Product activation by phase
+[TableHeader] Subsystem
+[TableHeader] Stage 1: wedge
+[TableHeader] Stage 2: operations
+[TableHeader] Stage 3+: assurance/ecosystem
+[TableText] Profile and facts
+[TableText] Checker-fed; document/link/manual input; extraction review; refresh reminders.
+[TableText] Integration-fed facts and delegated ownership.
+[TableText] Cross-organisation lane data where permissioned.
+[TableText] Applicability / determinations
+[TableText] Full core with list, map and three-valued results.
+[TableText] Same core; broader programs and entities.
+[TableText] Exposed via buyer views/API where approved.
+[TableText] Obligations
+[TableText] Full register and gap ledger.
+[TableText] Control/policy mappings mature.
+[TableText] Buyer-side/shared-lane projections.
+[TableText] Briefing / change
+[TableText] Full weekly briefing and change centre.
+[TableText] Role-aware routing and escalation.
+[TableText] Channel/API distribution.
+[TableText] Tasks / calendar
+[TableText] Email and .ics export.
+[TableText] Native tasks, approvals, SLAs and integrations.
+[TableText] Cross-party requests where permissioned.
+[TableText] Evidence
+[TableText] Expectations and registry-lite.
+[TableText] Full registry, freshness and acceptance.
+[TableText] Optional custody, scoped sharing and reuse.
+[TableText] Controls / policies
+[TableText] Schema present, surface minimal.
+[TableText] Full catalogue and attestations.
+[TableText] Assurance-facing projection.
+[TableText] Assurance
+[TableText] Not active beyond basic readiness indicators.
+[TableText] Readiness and event planning.
+[TableText] Auditor/buyer portals and findings loop.
+[TableText] Reports
+[TableText] Briefing/posture summary.
+[TableText] Quarterly executive projections.
+[TableText] Board, buyer and assurance packs.
+[TableText] API / MCP
+[TableText] Internal interfaces only.
+[TableText] Selected integrations.
+[TableText] Public unveiling after graph is referenceable.
+
+[Heading1] 12. Prototype scenarios to build in Figma
+[TableHeader] Scenario
+[TableHeader] Required clickable path
+[TableHeader] What the prototype must prove
+[TableText] 1. Exporter onboarding
+[TableText] Welcome -> upload annual report -> extraction review -> range question -> exact-value request near threshold -> applicability results -> map -> obligation register.
+[TableText] Value arrives quickly; hard facts are sourced; preliminary and definitive answers are distinct.
+[TableText] 2. Weekly all-clear plus one impact
+[TableText] Home -> briefing -> two no-impact events -> one affected CBAM change -> determination delta -> generated task -> calendar export.
+[TableText] The product watches broadly but demands attention narrowly.
+[TableText] 3. New trade lane what-if
+[TableText] Something changed -> add product/lane -> scenario delta -> map comparison -> commercial consequence -> save scenario.
+[TableText] DataStrata supports market-entry decisions, not only compliance administration.
+[TableText] 4. Evidence expiry
+[TableText] Home health card -> evidence item -> add pointer -> reviewer accepts -> posture/readiness recomputes.
+[TableText] Task completion and compliance proof are distinct; status is derived.
+[TableText] 5. Assurance replay
+[TableText] Assurance -> create buyer review scope -> preview -> portal view -> reviewer finding -> gap -> plan.
+[TableText] The record is reusable and findings re-enter the same spine.
+[TableText] 6. Analyst publication
+[TableText] Workbench queue -> diff/extraction -> condition simulator -> ratification -> publish -> customer impact briefing.
+[TableText] The trust and maintenance factory is operable, not hand-waved.
+
+[Heading1] 13. Component inventory
+• Global shell: left navigation, entity/program scope switcher, search, notifications, help, user menu and persistent business-change action.
+• State components: posture chip, applicability badge, warranty badge, impact badge, evidence state, runway indicator and blocker list.
+• Trust components: source citation, version/effective-date block, “Why?” drawer, derivation tree, sign-off record and history timeline.
+• Work components: owner picker, task card, plan timeline, calendar item, approval request, decision record and risk-acceptance form.
+• Data components: filterable register, saved view, side drawer, comparison view, diff panel, source-document viewer and graph-map node.
+• Communication components: weekly briefing card, explicit all-clear, analyst note, email preview and report/export configuration.
+• Assurance components: scope builder, readiness blocker list, access boundary, reviewer portal, finding card and source register.
+[Heading1] 14. Responsive, accessibility and trust requirements
+• Desktop-first at 1440 px for the full operational product; responsive tablet at 1024 px; mobile focuses on briefing, all-clear, Needs you, task completion and evidence capture rather than graph/table administration.
+• Meet WCAG 2.2 AA: keyboard navigation, visible focus, semantic headings, table alternatives, 4.5:1 text contrast, non-colour state indicators, accessible graph fallback and readable export output.
+• All dates show timezone and unambiguous format; regulatory effective dates and customer due dates must not be visually conflated.
+• Every destructive or scope-changing action has preview and confirmation. Historical records are superseded, not deleted.
+• Customer-private and shared-knowledge data are visually distinguishable where relevant. Any external sharing screen shows exactly what the recipient will see and when access expires.
+• Loading and error states must preserve truth: if AI composition is unavailable, show structured record data; if source freshness is delayed, show the last warranted state and the latency issue explicitly.
+[Heading1] 15. Content and microcopy guidance
+[TableHeader] Use
+[TableHeader] Example
+[TableText] Promise
+[TableText] “Know exactly what applies to you, what just changed, and what to do by when.”
+[TableText] All-clear
+[TableText] “We reviewed 11 regulatory changes this week. None changes your current obligations.”
+[TableText] Missing fact
+[TableText] “We need your consolidated EU turnover band to resolve CSRD applicability.”
+[TableText] Judgment
+[TableText] “This requirement depends on how the buyer contract defines ‘supplier group’. A DataStrata analyst is reviewing it.”
+[TableText] Negative determination
+[TableText] “CBAM does not apply to this trade lane because the product code is outside Annex I. Determined 21 July 2026.”
+[TableText] Blocked posture
+[TableText] “CBAM: Blocked - authorised declarant status is not confirmed for the EU importer.”
+[TableText] Bounded inbox
+[TableText] “You are current. Your next action is due 12 August.”
+[TableText] AI boundary
+[TableText] “This explanation is composed from your confirmed record. Open the determination for the authoritative reasoning.”
+
+[Heading1] 16. Designer deliverables
+1. Sitemap and role-based navigation model.
+2. Service blueprint showing the customer-facing spine, regulatory factory and the two permanent loops.
+3. Low-fidelity wireframes for all screens listed in Sections 6 and 10.
+4. High-fidelity desktop designs for the six Figma scenarios, plus tablet/mobile briefing and Needs-you views.
+5. Clickable prototype with realistic seeded data for a mid-sized exporter with CBAM and EUDR exposure.
+6. Design system covering typography, spacing, colour, state badges, tables, drawers, timeline, graph map, citations and decision records.
+7. Interaction annotations for derivation, uncertainty, version history, document extraction, exports, permissions and all stage-gated features.
+8. Accessibility notes and a content specification for every state, empty state, error state and all-clear.
+[Heading1] 17. Acceptance criteria for the mockup
+• A new user can reach a preliminary regulatory universe without entering exact values for every fact, while understanding which results remain preliminary.
+• The document-assisted profile flow visibly requires user confirmation before extracted facts become authoritative.
+• The map, list and determination detail show the same result and can explain every node/row with sources and versions.
+• The Home screen answers “where do we stand?” and “what changed?” within four seconds without a single aggregate compliance score.
+• A regulatory change can be traced from source event to changed determination, obligation, task and briefing.
+• A business change can be evaluated as a scenario and then confirmed without overwriting history.
+• A completed task without accepted evidence does not falsely improve compliance posture.
+• An assurance package can be scoped and shared without exposing unrelated customer data.
+• Stage 1 feels complete, while Stage 2 and Stage 3 additions visibly reuse the same objects and workflows.
+• The internal workbench demonstrates that AI drafts and humans ratify; no AI action publishes directly into the warranted record.
+[Heading1] 18. Do not imply in the mockup
+• DataStrata calculates emissions, completes questionnaires as a service, or replaces legal counsel. It identifies duties, methods, proof and decisions; adjacent calculation/advisory work is partnered.
+• The product is a document vault. Evidence is represented as a registry with provenance and pointers; managed custody is optional and late.
+• A generic chatbot is the source of truth. Ask DataStrata is a cited lens over warranted records, not an open-ended regulatory oracle.
+• The transformation map is the main dashboard or a decorative network visual. It is a secondary orientation and impact-analysis tool.
+• Stage 1 includes public API/MCP, enterprise integration theatre, supplier networks or fully native GRC workflow. These remain visibly stage-gated.
+[Heading1] 19. Questions for prototype testing
+• Do users understand the difference between preliminary range-based screening and a definitive sourced determination?
+• Does “Requires judgment” increase trust, or does it feel like incomplete service? What response-time promise is required?
+• Does the Regulatory Universe Map improve orientation and explanation compared with the list, and what default depth is comprehensible?
+• Is a weekly explicit all-clear sufficiently tangible to support renewal in quiet periods?
+• Can executives and operators share one navigation model with role-based defaults, or do they need distinct home variants?
+• Will customers confirm extracted facts confidently when the source page and threshold consequence are shown side by side?
+[Small] Source basis: DataStrata Product Strategy - Pass 1; DataStrata Product Design - Pass 2; and all four embedded review comments. The brief resolves the comments inside the product laws rather than treating them as separate feature requests.

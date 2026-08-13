@@ -1,0 +1,166 @@
+[
+  {
+    "id": "G-001",
+    "obligationTemplate": "O-001",
+    "readinessTest": "Dedicated statutory management-report section exists.",
+    "readinessFact": "readiness.management_report_section_ready",
+    "satisfiedWhen": ["yes"],
+    "existingEvidenceToCredit": "Current report template / prior report",
+    "priority": "high",
+    "firstAction": "Create statutory-report template and assign an editor.",
+    "consequence": "The report can be structurally non-compliant even if a standalone ESG report exists."
+  },
+  {
+    "id": "G-002",
+    "obligationTemplate": "O-002",
+    "readinessTest": "Applicable ESRS version and requirement mapping are approved.",
+    "readinessFact": "readiness.policy_metric_inventory_status",
+    "satisfiedWhen": ["approved", "current"],
+    "existingEvidenceToCredit": "Basis-of-preparation memo / ESRS index",
+    "priority": "critical",
+    "firstAction": "Issue a dated standard-version determination (from CSRD-S-012).",
+    "consequence": "The wrong standard version causes extensive rework and assurance findings."
+  },
+  {
+    "id": "G-003",
+    "obligationTemplate": "O-003",
+    "readinessTest": "Double-materiality process is documented, performed, approved and current.",
+    "readinessFact": "readiness.double_materiality_status",
+    "satisfiedWhen": ["approved", "current"],
+    "existingEvidenceToCredit": "DMA methodology and results",
+    "priority": "critical",
+    "firstAction": "Complete the process and record governance decisions.",
+    "consequence": "Material disclosure scope may be unsupported."
+  },
+  {
+    "id": "G-004",
+    "obligationTemplate": "O-004",
+    "readinessTest": "Governance and disclosure ownership are named.",
+    "readinessFact": "readiness.governance_roles_documented",
+    "satisfiedWhen": ["yes"],
+    "existingEvidenceToCredit": "Board charter, RACI, policy/KPI register",
+    "priority": "high",
+    "firstAction": "Baseline existing records, then fill ownership gaps.",
+    "consequence": "Work remains unowned and evidence cannot be assured."
+  },
+  {
+    "id": "G-005",
+    "obligationTemplate": "O-005",
+    "readinessTest": "Taxonomy Article 8 workstream is operational.",
+    "readinessFact": "readiness.taxonomy_status",
+    "satisfiedWhen": ["operational", "current"],
+    "existingEvidenceToCredit": "Prior Taxonomy report/workbook",
+    "priority": "high",
+    "firstAction": "Run the linked Taxonomy module.",
+    "consequence": "The statutory sustainability package may be incomplete."
+  },
+  {
+    "id": "G-006",
+    "obligationTemplate": "O-006",
+    "readinessTest": "Assurance provider, scope, controls and evidence runway exist.",
+    "readinessFact": "readiness.assurance_provider_appointed",
+    "satisfiedWhen": ["yes"],
+    "existingEvidenceToCredit": "Engagement letter and control matrix",
+    "priority": "critical",
+    "firstAction": "Start provider appointment and evidence-control mapping.",
+    "consequence": "An assurance bottleneck can delay or qualify the report."
+  },
+  {
+    "id": "G-007",
+    "obligationTemplate": "O-007",
+    "readinessTest": "Worker consultation process is applicable and completed.",
+    "readinessFact": "readiness.worker_consultation_status",
+    "satisfiedWhen": ["completed", "not_applicable_recorded"],
+    "existingEvidenceToCredit": "Minutes / consultation plan",
+    "priority": "medium",
+    "firstAction": "Schedule consultation before governance approval.",
+    "consequence": "A process obligation remains open."
+  },
+  {
+    "id": "G-008",
+    "obligationTemplate": "O-008",
+    "readinessTest": "Electronic output is configured and tested.",
+    "readinessFact": "readiness.digital_format_ready",
+    "satisfiedWhen": ["yes"],
+    "existingEvidenceToCredit": "System validation / sample file",
+    "priority": "medium",
+    "firstAction": "Create and validate a sample output.",
+    "consequence": "Publication-format failure near the deadline."
+  },
+  {
+    "id": "G-009",
+    "obligationTemplate": "O-009",
+    "readinessTest": "Country-specific approval, filing, language and publication calendar is loaded.",
+    "readinessFact": "readiness.publication_calendar_ready",
+    "satisfiedWhen": ["yes"],
+    "existingEvidenceToCredit": "Country calendar and prior filing workflow",
+    "priority": "critical",
+    "firstAction": "Load pilot-country rules and create dated tasks.",
+    "consequence": "A correct report may still be filed late or incorrectly."
+  },
+  {
+    "id": "G-010",
+    "obligationTemplate": "O-010",
+    "readinessTest": "National transition exemption is supported by a current legal source.",
+    "existingEvidenceToCredit": "National measure / signed scope memo",
+    "priority": "critical",
+    "firstAction": "Obtain country-law review before stopping work.",
+    "consequence": "False all-clear or unnecessary reporting expenditure."
+  },
+  {
+    "id": "G-011",
+    "obligationTemplate": "O-011",
+    "readinessTest": "All exemption conditions remain complete and current.",
+    "existingEvidenceToCredit": "Parent report, public link, assurance and inclusion evidence",
+    "priority": "critical",
+    "firstAction": "Refresh the exemption evidence package.",
+    "consequence": "The subsidiary may unexpectedly need its own report."
+  },
+  {
+    "id": "G-012",
+    "obligationTemplate": "O-012",
+    "readinessTest": "Third-country standard and EU gateway publication plan are ready.",
+    "existingEvidenceToCredit": "Group reporting plan and gateway calendar",
+    "priority": "high",
+    "firstAction": "Track N-ESRS development and assign gateway owners.",
+    "consequence": "The future reporting programme starts too late."
+  },
+  {
+    "id": "G-013",
+    "obligationTemplate": "O-014",
+    "readinessTest": "Customer request is mapped to purpose, cap and voluntary response decision.",
+    "existingEvidenceToCredit": "Questionnaire/email and mapping table",
+    "priority": "high",
+    "firstAction": "Map items and approve the response strategy.",
+    "consequence": "The supplier may over-disclose, under-respond or damage the relationship."
+  },
+  {
+    "id": "G-014",
+    "obligationTemplate": "O-015",
+    "readinessTest": "Above-cap request contains required labelling and rights notice.",
+    "existingEvidenceToCredit": "Request cover note / field labels",
+    "priority": "high",
+    "firstAction": "Amend the request before sending.",
+    "consequence": "Requestor-side statutory gap."
+  },
+  {
+    "id": "G-015",
+    "obligationTemplate": "O-016",
+    "readinessTest": "Missing value-chain information explanation and improvement plan exist.",
+    "existingEvidenceToCredit": "Draft disclosure / supplier-data plan",
+    "priority": "medium",
+    "firstAction": "Document efforts, reasons and future plan.",
+    "consequence": "Value-chain disclosure incomplete."
+  },
+  {
+    "id": "G-016",
+    "obligationTemplate": "O-017",
+    "readinessTest": "Evidence registry records owner, pointer, freshness and acceptance.",
+    "readinessFact": "readiness.evidence_controls_status",
+    "satisfiedWhen": ["operational", "current"],
+    "existingEvidenceToCredit": "Existing DMS links / control register",
+    "priority": "high",
+    "firstAction": "Create registry entries without forcing file migration.",
+    "consequence": "Assurance becomes a fire drill and posture is unsupported."
+  }
+]

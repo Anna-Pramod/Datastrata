@@ -1,0 +1,48 @@
+{
+  "id": "csrd",
+  "version": "0.1.0",
+  "program": "CSRD",
+  "legalSnapshot": "2026-07-26",
+  "packFlags": {
+    "revised_esrs_in_force": false,
+    "voluntary_standard_in_force": false
+  },
+  "changeWatch": [
+    {
+      "id": "CW-001",
+      "title": "Revised ESRS delegated act (adopted 3 Jul 2026) — scrutiny pending",
+      "status": "adopted_not_effective",
+      "expected": "Entry into force expected 20 Nov 2026 subject to Parliament/Council scrutiny and OJ publication; applies to FY beginning on/after 1 Jan 2027, FY2026 early adoption once in force",
+      "affectsRequirements": ["CSRD-S-012"],
+      "sources": ["SRC-007"],
+      "note": "On entry into force: set packFlags.revised_esrs_in_force=true, bump pack version, re-run golden profiles, then re-evaluate customer determinations. Until then this act must not change any current determination."
+    },
+    {
+      "id": "CW-002",
+      "title": "Voluntary sustainability standard delegated act — value-chain cap catalogue",
+      "status": "adopted_not_effective",
+      "expected": "Same scrutiny track as the revised ESRS; the cap item catalogue for S-011 mappings versions against this act",
+      "affectsRequirements": ["CSRD-S-011"],
+      "sources": ["SRC-008", "SRC-010"],
+      "note": "Caution: the cap protection does not extend to GHG emissions metrics — an above-cap analysis must not tell a supplier it can decline emissions data requests."
+    },
+    {
+      "id": "CW-003",
+      "title": "Omnibus I national transpositions (deadline 19 Mar 2027)",
+      "status": "in_progress",
+      "expected": "Member-State implementing measures and FY2025–26 transitional options land country by country",
+      "affectsRequirements": ["CSRD-S-004", "CSRD-S-005", "CSRD-S-013", "CSRD-S-014"],
+      "sources": ["SRC-015"],
+      "note": "Each published national measure feeds a country pack; a country enters the ratified_country_packs catalogue only after expert ratification."
+    },
+    {
+      "id": "CW-004",
+      "title": "EFRAG standard for non-EU groups (Art. 40a N-ESRS)",
+      "status": "in_development",
+      "expected": "Standard-setting active; Art. 40a reporting starts for FY beginning on/after 1 Jan 2028",
+      "affectsRequirements": ["CSRD-S-008", "CSRD-S-009"],
+      "sources": ["SRC-014"],
+      "note": "Third-country obligations O-012/O-013 reference the applicable standard; keep versioned."
+    }
+  ]
+}
