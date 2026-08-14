@@ -7,6 +7,7 @@
  */
 
 import { z } from 'zod';
+import type { KnowledgePack } from '../types';
 import type { RegisterSource, SourceRegister, SourceTier, TierPolicy } from './types';
 
 export const TIER_POLICY: Record<SourceTier, TierPolicy> = {
@@ -78,6 +79,27 @@ export function parseSourceRegister(raw: unknown): SourceRegister {
 
   if (problems.length > 0) throw new RegisterIntegrityError(problems);
   return reg;
+}
+
+/**
+ * Cross-validate the register against a loaded pack. Separate from parsing
+ * because the register is meaningful on its own; only these checks need a pack.
+ */
+export function verifyRegisterIntegrity(register: SourceRegister, pack: KnowledgePack): void {
+  const problems: string[] = [];
+  const reqIds = new Set(pack.requirements.map((r) => r.id));
+  const srcIds = new Set(pack.sources.map((s) => s.id));
+
+  for (const s of register.sources) {
+    for (const r of s.affectsRequirements) {
+      if (!reqIds.has(r)) problems.push(`${s.id}: affects unknown requirement ${r}`);
+    }
+    for (const p of s.expectedProvenance) {
+      if (!srcIds.has(p)) problems.push(`${s.id}: expectedProvenance cites unknown source ${p}`);
+    }
+  }
+
+  if (problems.length > 0) throw new RegisterIntegrityError(problems);
 }
 
 export type { RegisterSource, SourceRegister, SourceTier, TierPolicy };

@@ -5,8 +5,9 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { parseSourceRegister, RegisterIntegrityError } from '../src/monitoring/register';
+import { parseSourceRegister, RegisterIntegrityError, verifyRegisterIntegrity } from '../src/monitoring/register';
 import type { RegisterSource } from '../src/monitoring/types';
+import { csrdPack } from './helpers';
 
 /** A minimal valid row. Tests override single fields to isolate one failure. */
 function row(over: Partial<RegisterSource> = {}): RegisterSource {
@@ -91,6 +92,39 @@ describe('tier corroboration policy', () => {
     } catch (e) {
       expect((e as RegisterIntegrityError).problems[0]).toContain('W-042');
       expect((e as RegisterIntegrityError).problems[0]).toContain('legal_record');
+    }
+  });
+});
+
+describe('register ↔ pack referential integrity', () => {
+  const pack = csrdPack();
+
+  it('accepts references that resolve against the pack', () => {
+    const reg = parseSourceRegister(
+      register([row({ affectsRequirements: ['CSRD-S-001'], expectedProvenance: ['SRC-004'] })]),
+    );
+    expect(() => verifyRegisterIntegrity(reg, pack)).not.toThrow();
+  });
+
+  it('rejects a reference to a requirement that does not exist', () => {
+    const reg = parseSourceRegister(register([row({ affectsRequirements: ['CSRD-S-999'] })]));
+    expect(() => verifyRegisterIntegrity(reg, pack)).toThrow(/CSRD-S-999/);
+  });
+
+  it('rejects provenance pointing at a source that does not exist', () => {
+    const reg = parseSourceRegister(register([row({ expectedProvenance: ['SRC-999'] })]));
+    expect(() => verifyRegisterIntegrity(reg, pack)).toThrow(/SRC-999/);
+  });
+
+  it('reports every problem at once rather than stopping at the first', () => {
+    const reg = parseSourceRegister(
+      register([row({ affectsRequirements: ['CSRD-S-998'], expectedProvenance: ['SRC-997'] })]),
+    );
+    try {
+      verifyRegisterIntegrity(reg, pack);
+      expect.unreachable('should have thrown');
+    } catch (e) {
+      expect((e as RegisterIntegrityError).problems).toHaveLength(2);
     }
   });
 });
