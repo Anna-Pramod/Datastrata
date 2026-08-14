@@ -33,7 +33,7 @@ Start with `docs/briefs/product-architecture-pass2.txt` for the product, then `b
 |---|---|
 | Applicability engine | Working library + CLI. 45 tests, green. CSRD pack encoded, all content `draft` (unratified). |
 | Country packs | Stubs only — no ratified country, so every result correctly ends "national-law status requires review". |
-| Frontend | Design prototypes only. No React app, no build, no API calls. |
+| Frontend | Landing page built for real (Next.js, `frontend/web`) with the free checker wired to the engine. The other 13 screens are still prototypes. |
 | Persistence / API / tenancy | Not built — deliberate. The engine is a pure library until concierge volume justifies wrapping it. |
 | Change monitoring | Spec written (`backend/engine/monitoring/`), automation not enabled. |
 
@@ -46,7 +46,12 @@ npm install
 npm test
 npm run assess -- examples/p001-eu-standalone.json
 
-# Frontend
+# Frontend — the real site
+cd frontend/web
+npm install
+npm run dev                                    # http://localhost:3000
+
+# Frontend — the remaining screens, still prototypes
 open frontend/prototypes/app-modern.dc.html    # any modern browser
 ```
 

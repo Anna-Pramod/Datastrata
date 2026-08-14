@@ -1,0 +1,10 @@
+# Next.js build output
+/.next/
+/out/
+
+# Generated — recreated by `next dev` / `next build`
+next-env.d.ts
+*.tsbuildinfo
+
+# Deployment
+.vercel

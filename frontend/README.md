@@ -1,8 +1,8 @@
 # Frontend
 
-**Status: design prototypes only.** There is no application code yet — no framework, no build step, no API calls. Every file here is a self-contained clickable mockup that runs by opening it in a browser.
-
 ```
+web/                   The real site. Next.js 15 + React 19. Landing page is live and
+                       its free checker runs the actual applicability engine.
 prototypes/
   landing.dc.html      Marketing page + free checker, in two visual directions (retro / modern)
   app-modern.dc.html   The full product, restrained navy-teal editorial direction
@@ -12,7 +12,14 @@ prototypes/
 screenshots/           Rendered stills of the above (numbered by iteration)
 ```
 
-Each `.dc.html` loads `./support.js` from the same folder — keep them together.
+**What is real and what is not.** `web/` is production code — see `web/README.md`. The
+`prototypes/` are still design artefacts: self-contained clickable mockups with invented
+data, opened directly in a browser. They remain the reference for the thirteen screens not
+yet built. Each `.dc.html` loads `./support.js` from the same folder — keep them together.
+
+The landing page has now been built for real in `web/`, in the retro direction. Where the
+prototype and the engine disagreed, the engine won — `web/README.md` lists each departure
+and why.
 
 ## Screens covered by the app prototypes
 
