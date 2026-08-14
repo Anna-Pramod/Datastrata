@@ -63,6 +63,17 @@ export function parseSourceRegister(raw: unknown): SourceRegister {
   for (const s of reg.sources) {
     if (seen.has(s.id)) problems.push(`${s.id}: duplicate source id`);
     seen.add(s.id);
+
+    // mustCorroborateWith is stored per row so it is visible when reading the
+    // register, but it is not a free choice — the tier decides it.
+    const expected = TIER_POLICY[s.tier].mustCorroborateWith;
+    const actual = s.mustCorroborateWith;
+    const same = expected.length === actual.length && expected.every((t) => actual.includes(t));
+    if (!same) {
+      problems.push(
+        `${s.id}: tier ${s.tier} requires mustCorroborateWith [${expected.join(', ')}], found [${actual.join(', ')}]`,
+      );
+    }
   }
 
   if (problems.length > 0) throw new RegisterIntegrityError(problems);

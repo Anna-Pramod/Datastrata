@@ -57,3 +57,40 @@ describe('source register schema', () => {
     expect(() => parseSourceRegister(register([row({ tierRationale: '' })]))).toThrow();
   });
 });
+
+describe('tier corroboration policy', () => {
+  it('accepts a tracker row that declares it must corroborate with the legal record', () => {
+    const parsed = parseSourceRegister(
+      register([row({ tier: 'tracker', mustCorroborateWith: ['legal_record'] })]),
+    );
+    expect(parsed.sources[0]?.mustCorroborateWith).toEqual(['legal_record']);
+  });
+
+  it('rejects a tracker row that claims it needs no corroboration', () => {
+    expect(() =>
+      parseSourceRegister(register([row({ tier: 'tracker', mustCorroborateWith: [] })])),
+    ).toThrow(RegisterIntegrityError);
+  });
+
+  it('rejects a news row that claims it needs no corroboration', () => {
+    expect(() =>
+      parseSourceRegister(register([row({ tier: 'news', mustCorroborateWith: [] })])),
+    ).toThrow(RegisterIntegrityError);
+  });
+
+  it('rejects a legal_record row that claims it needs corroboration', () => {
+    expect(() =>
+      parseSourceRegister(register([row({ tier: 'legal_record', mustCorroborateWith: ['legal_record'] })])),
+    ).toThrow(RegisterIntegrityError);
+  });
+
+  it('names the offending source and both tiers in the error', () => {
+    try {
+      parseSourceRegister(register([row({ id: 'W-042', tier: 'news', mustCorroborateWith: [] })]));
+      expect.unreachable('should have thrown');
+    } catch (e) {
+      expect((e as RegisterIntegrityError).problems[0]).toContain('W-042');
+      expect((e as RegisterIntegrityError).problems[0]).toContain('legal_record');
+    }
+  });
+});
