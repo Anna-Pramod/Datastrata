@@ -313,6 +313,8 @@ Each is planned and executed separately. Plan A must complete before B, because 
 
 ## 10. Open items carried into implementation
 
-- Resolve finding #1 (`CSRD-S-001` two-of-three vs cumulative, and whether a balance-sheet-total fact is missing). This may add a fact type, a question, and a golden profile.
+- ~~Resolve finding #1 (`CSRD-S-001` two-of-three vs cumulative, and whether a balance-sheet-total fact is missing).~~ **Resolved 2026-08-14: encoding correct.** Omnibus I Art. 1(4)(a) replaced Art. 19a(1)'s "large undertakings" formulation with a direct cumulative test; Art. 3(4) no longer applies to this rule. No balance-sheet-total fact needed; no `at_least_n_of` primitive needed. Full record in `backend/engine/verification/CSRD-S-001.md`.
+  - **New, carried forward:** the operative wording is *"on their balance sheet **dates**"* (plural), and Art. 3(10) generally requires criteria to be exceeded on two consecutive balance sheet dates. The encoding tests a single year and the pack holds no prior-year facts. Unresolved — must be settled before `CSRD-S-001` can be signed.
+  - **New, carried forward:** `CSRD-S-002` (Art. 29a) is a separate provision and is **not** settled by the Art. 19a check. Verify separately.
 - Decide `CSRD-S-006` and `CSRD-S-016`: write golden profiles, or list them as untested with a reason.
 - Choose the pilot country for the first encoded country pack (`IE` and `DE` stubs exist). Not needed before step 5.
