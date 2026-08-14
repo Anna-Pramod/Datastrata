@@ -5,7 +5,9 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { parseSourceRegister, RegisterIntegrityError, verifyRegisterIntegrity } from '../src/monitoring/register';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { loadSourceRegister, parseSourceRegister, RegisterIntegrityError, verifyRegisterIntegrity } from '../src/monitoring/register';
 import type { RegisterSource } from '../src/monitoring/types';
 import { csrdPack } from './helpers';
 
@@ -190,5 +192,39 @@ describe('citation firewall', () => {
       ]),
     );
     expect(() => verifyRegisterIntegrity(reg, pack)).toThrow(/W-092/);
+  });
+});
+
+describe('the real CSRD source register', () => {
+  const pack = csrdPack();
+  const here = dirname(fileURLToPath(import.meta.url));
+  const reg = loadSourceRegister(join(here, '..', 'monitoring'));
+
+  it('loads, validates and cross-references cleanly', () => {
+    expect(() => verifyRegisterIntegrity(reg, pack)).not.toThrow();
+    expect(reg.program).toBe('CSRD');
+  });
+
+  it('carries every surface migrated from the watchlist', () => {
+    expect(reg.sources).toHaveLength(10);
+    const ids = reg.sources.map((s) => s.id);
+    expect(ids).toContain('W-001');
+    expect(ids).toContain('W-010');
+  });
+
+  it('states a tier rationale and a feed note for every surface', () => {
+    for (const s of reg.sources) {
+      expect(s.tierRationale.length, s.id).toBeGreaterThan(0);
+      expect(s.feedNote.length, s.id).toBeGreaterThan(0);
+    }
+  });
+
+  it('holds no tracker or news surface yet — those arrive with the first map sweep', () => {
+    expect(reg.sources.every((s) => s.tier === 'legal_record' || s.tier === 'official_body')).toBe(true);
+  });
+
+  it('marks the Official Journal and EUR-Lex records as the legal record', () => {
+    const legal = reg.sources.filter((s) => s.tier === 'legal_record').map((s) => s.id);
+    expect(legal).toEqual(expect.arrayContaining(['W-001', 'W-002', 'W-005']));
   });
 });

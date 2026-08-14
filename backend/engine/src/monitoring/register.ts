@@ -6,6 +6,8 @@
  * surface that may not be. Nobody has to remember the rule.
  */
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { z } from 'zod';
 import type { KnowledgePack } from '../types';
 import type { RegisterSource, SourceRegister, SourceTier, TierPolicy } from './types';
@@ -124,6 +126,11 @@ export function verifyRegisterIntegrity(register: SourceRegister, pack: Knowledg
   }
 
   if (problems.length > 0) throw new RegisterIntegrityError(problems);
+}
+
+/** Read and validate `source-register.json` from a directory. */
+export function loadSourceRegister(dir: string): SourceRegister {
+  return parseSourceRegister(JSON.parse(readFileSync(join(dir, 'source-register.json'), 'utf8')));
 }
 
 export type { RegisterSource, SourceRegister, SourceTier, TierPolicy };
