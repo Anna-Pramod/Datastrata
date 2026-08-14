@@ -101,6 +101,12 @@ export function verifyRegisterIntegrity(register: SourceRegister, pack: Knowledg
   const reqIds = new Set(pack.requirements.map((r) => r.id));
   const srcIds = new Set(pack.sources.map((s) => s.id));
 
+  if (register.program !== pack.program) {
+    problems.push(
+      `register program ${register.program} does not match pack program ${pack.program} — this register cannot be cross-validated against this pack`,
+    );
+  }
+
   for (const s of register.sources) {
     for (const r of s.affectsRequirements) {
       if (!reqIds.has(r)) problems.push(`${s.id}: affects unknown requirement ${r}`);
@@ -128,9 +134,38 @@ export function verifyRegisterIntegrity(register: SourceRegister, pack: Knowledg
   if (problems.length > 0) throw new RegisterIntegrityError(problems);
 }
 
-/** Read and validate `source-register.json` from a directory. */
-export function loadSourceRegister(dir: string): SourceRegister {
-  return parseSourceRegister(JSON.parse(readFileSync(join(dir, 'source-register.json'), 'utf8')));
+/**
+ * Every host the pack cites must be a registered, citable surface.
+ *
+ * The firewall in verifyRegisterIntegrity is a blacklist — it catches a pack
+ * citing a host the register already knows is a tracker. This is the whitelist
+ * half: a cited host the register has never heard of is also a failure, which
+ * is what makes product law 9 true rather than aspirational.
+ */
+export function verifyCitationCoverage(register: SourceRegister, pack: KnowledgePack): void {
+  const citable = new Set(
+    register.sources.filter((s) => TIER_POLICY[s.tier].citable).map((s) => hostOf(s.url)),
+  );
+  const problems = pack.sources
+    .filter((ps) => !citable.has(hostOf(ps.url)))
+    .map((ps) => `${ps.id} cites ${hostOf(ps.url)}, which is not a citable surface in the register`);
+  if (problems.length > 0) throw new RegisterIntegrityError(problems);
+}
+
+/**
+ * Read and validate `source-register.json` from a directory. When a pack is
+ * supplied, also cross-validate the register against it (referential
+ * integrity, the citation firewall, and citation coverage) before returning —
+ * the same discipline `loadPack` already applies unconditionally, made the
+ * default here rather than something a caller has to remember to opt into.
+ */
+export function loadSourceRegister(dir: string, pack?: KnowledgePack): SourceRegister {
+  const reg = parseSourceRegister(JSON.parse(readFileSync(join(dir, 'source-register.json'), 'utf8')));
+  if (pack) {
+    verifyRegisterIntegrity(reg, pack);
+    verifyCitationCoverage(reg, pack);
+  }
+  return reg;
 }
 
 export type { RegisterSource, SourceRegister, SourceTier, TierPolicy };

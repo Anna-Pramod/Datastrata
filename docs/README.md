@@ -10,6 +10,6 @@ The specification both halves of the repo are built against.
 
 Engineering-side documentation lives with the code it describes:
 
-- `backend/engine/CLAUDE.md` — the eight product laws and working conventions
+- `backend/engine/CLAUDE.md` — the nine product laws and working conventions
 - `backend/engine/docs/architecture.md` — schema v0, Kleene semantics, condition language, deliberate deviations from the pack workbook
 - `backend/engine/monitoring/automation-prompt.md` — the source-watcher spec
