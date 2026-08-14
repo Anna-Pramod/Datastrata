@@ -14,6 +14,11 @@ Strategy context lives in the DataStrata Claude project: `strategy/pass-1-produc
 6. **Closed condition language.** Do not add free-form expressions, script hooks, or model calls to conditions. A new primitive is allowed only if it is reusable across ≥2 programs — document it in `docs/architecture.md` and add unit tests. One special-case function for a single regulation is a failed gate.
 7. **Everything cites.** Every requirement carries `sources` (IDs into `sources.json`) and every content edit must state its legal justification in the commit message.
 8. **Draft vs ratified.** All content starts `ratification.status: "draft"`. Only Anna (or a named expert) flips to `ratified` after review. Customer-facing output from draft content must carry the prototype banner (the CLI does this automatically).
+9. **Tiered sources, structural corroboration.** `monitoring/source-register.json`
+   tiers every surface as `legal_record | official_body | tracker | news`. A
+   `tracker` or `news` surface may never appear in a pack's `sources.json` — the
+   test suite enforces it — so a non-official claim has no path into a citation
+   except through an official record.
 
 ## Commands
 
@@ -37,7 +42,10 @@ src/engine/summary.ts        program summary — a projection, never the authori
 src/knowledge/loader.ts      zod validation + referential integrity (the content firewall)
 knowledge/csrd/              the CSRD knowledge pack (ALL regulatory content is data here)
 knowledge/csrd/country-packs national overlays; ratified ones are listed in catalogues.json
-monitoring/                  source watchlist + scheduled-task prompt (spec; not yet enabled)
+src/monitoring/register.ts   source-register schema, tier policy, citation firewall
+monitoring/source-register.json  every surface watched, tiered; corroboration rules are data
+monitoring/automation-prompt.md  draft watch-sweep prompt (Plan C; not yet enabled)
+monitoring/proposals/        /sweep map output awaiting human acceptance
 test/golden-profiles.test.ts P-001..P-010 — regression testing for law. Never weaken an assertion
                              without a written legal justification.
 ```

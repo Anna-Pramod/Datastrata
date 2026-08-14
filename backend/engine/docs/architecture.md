@@ -46,7 +46,7 @@ Each FactType declares the scope type it attaches to. Evaluating a requirement o
 ## What is NOT built yet (deliberately — Pass 3 build order)
 
 - OCR/candidate-fact extraction pipeline (schema supports it: `confirmed=false` + `source.kind='extraction'`).
-- RegulatoryEvent → selective re-evaluation → delta briefing (step 7). The pack's `changeWatch` + monitoring watchlist prepare it; determinations are pure functions, so diffing two runs is trivial.
+- RegulatoryEvent → selective re-evaluation → delta briefing (step 7). The pack's `changeWatch` + the monitoring source register prepare it; determinations are pure functions, so diffing two runs is trivial.
 - Country packs with content (stubs + the S-013 gate exist; encoding a pilot country is a content sprint, not engine work).
 - Persistence/tenancy/API. The engine is a pure library on purpose — Postgres + thin API wrap it when concierge volume justifies it (Pass 2 §8 build honesty).
 

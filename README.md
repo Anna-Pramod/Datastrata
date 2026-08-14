@@ -31,11 +31,11 @@ Start with `docs/briefs/product-architecture-pass2.txt` for the product, then `b
 
 | Piece | Status |
 |---|---|
-| Applicability engine | Working library + CLI. 45 tests, green. CSRD pack encoded, all content `draft` (unratified). |
+| Applicability engine | Working library + CLI. 68 tests, green. CSRD pack encoded, all content `draft` (unratified). |
 | Country packs | Stubs only — no ratified country, so every result correctly ends "national-law status requires review". |
 | Frontend | Landing page built for real (Next.js, `frontend/web`) with the free checker wired to the engine. The other 13 screens are still prototypes. |
 | Persistence / API / tenancy | Not built — deliberate. The engine is a pure library until concierge volume justifies wrapping it. |
-| Change monitoring | Spec written (`backend/engine/monitoring/`), automation not enabled. |
+| Change monitoring | Tiered source register (`backend/engine/monitoring/`) built, schema-validated, cross-checked against the pack, and tested; `/sweep map` discovers candidates. Watch sweep + scheduling not built, automation not enabled. |
 
 ## Running things
 

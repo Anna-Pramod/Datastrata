@@ -32,12 +32,12 @@ Internal layout:
 | `src/engine/nextQuestion.ts` | Ranks unresolved facts by how many determinations they unblock |
 | `src/knowledge/loader.ts` | Zod validation + referential integrity — the content firewall |
 | `knowledge/csrd/` | The CSRD knowledge pack. **All regulatory content lives here as data.** |
-| `monitoring/` | Source watchlist + scheduled-watcher prompt (spec, not enabled) |
+| `monitoring/` | Tiered source register + watch-sweep prompt (Plan C; not yet enabled) |
 | `test/golden-profiles.test.ts` | P-001..P-010 — regression tests for law, not for code |
 
 **The standing architecture gate:** adding CBAM must mean a new `knowledge/cbam/` folder and zero program-specific branches under `src/`. Grep for "CSRD" in `src/` should only hit comments.
 
-Read `engine/CLAUDE.md` before changing anything — it carries the eight product laws the tests enforce.
+Read `engine/CLAUDE.md` before changing anything — it carries the nine product laws the tests enforce.
 
 ## Not built yet (in build order)
 
