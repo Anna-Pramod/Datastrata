@@ -128,3 +128,67 @@ describe('register ↔ pack referential integrity', () => {
     }
   });
 });
+
+describe('citation firewall', () => {
+  const pack = csrdPack();
+
+  it('allows an official_body surface to share a host with a cited source', () => {
+    // SRC-011 is a finance.ec.europa.eu page; the Commission is citable.
+    const reg = parseSourceRegister(
+      register([
+        row({
+          tier: 'official_body',
+          url: 'https://finance.ec.europa.eu/some/other/page_en',
+          tierRationale: 'European Commission, authoritative but not the legal record',
+        }),
+      ]),
+    );
+    expect(() => verifyRegisterIntegrity(reg, pack)).not.toThrow();
+  });
+
+  it('rejects a pack citing a host registered as a tracker', () => {
+    const reg = parseSourceRegister(
+      register([
+        row({
+          id: 'W-090',
+          tier: 'tracker',
+          // Deliberately a host the CSRD pack really cites.
+          url: 'https://eur-lex.europa.eu/some/commentary',
+          mustCorroborateWith: ['legal_record'],
+          tierRationale: 'Fixture: pretend commentary to prove the firewall fires',
+        }),
+      ]),
+    );
+    expect(() => verifyRegisterIntegrity(reg, pack)).toThrow(/W-090/);
+  });
+
+  it('rejects a pack citing a host registered as news', () => {
+    const reg = parseSourceRegister(
+      register([
+        row({
+          id: 'W-091',
+          tier: 'news',
+          url: 'https://www.efrag.org/newsroom',
+          mustCorroborateWith: ['legal_record'],
+          tierRationale: 'Fixture: pretend press surface to prove the firewall fires',
+        }),
+      ]),
+    );
+    expect(() => verifyRegisterIntegrity(reg, pack)).toThrow(/W-091/);
+  });
+
+  it('ignores a www. prefix when matching hosts', () => {
+    const reg = parseSourceRegister(
+      register([
+        row({
+          id: 'W-092',
+          tier: 'tracker',
+          url: 'https://www.eur-lex.europa.eu/commentary',
+          mustCorroborateWith: ['legal_record'],
+          tierRationale: 'Fixture: same host as SRC-001 with a www prefix',
+        }),
+      ]),
+    );
+    expect(() => verifyRegisterIntegrity(reg, pack)).toThrow(/W-092/);
+  });
+});

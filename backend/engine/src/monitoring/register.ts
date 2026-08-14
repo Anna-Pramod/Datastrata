@@ -82,6 +82,15 @@ export function parseSourceRegister(raw: unknown): SourceRegister {
 }
 
 /**
+ * Host comparison is deliberately coarse. A tracker hosted on a domain that
+ * also serves citable content will trip this check — which is the intended
+ * outcome: a human adjudicates rather than the tool guessing.
+ */
+function hostOf(url: string): string {
+  return new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+}
+
+/**
  * Cross-validate the register against a loaded pack. Separate from parsing
  * because the register is meaningful on its own; only these checks need a pack.
  */
@@ -96,6 +105,21 @@ export function verifyRegisterIntegrity(register: SourceRegister, pack: Knowledg
     }
     for (const p of s.expectedProvenance) {
       if (!srcIds.has(p)) problems.push(`${s.id}: expectedProvenance cites unknown source ${p}`);
+    }
+  }
+
+  // The firewall. sources.json is the citation record; a surface that may not
+  // be cited must not appear there, or corroboration could be bypassed.
+  const uncitable = new Map<string, string>();
+  for (const s of register.sources) {
+    if (!TIER_POLICY[s.tier].citable) uncitable.set(hostOf(s.url), `${s.id} (${s.tier})`);
+  }
+  for (const ps of pack.sources) {
+    const owner = uncitable.get(hostOf(ps.url));
+    if (owner) {
+      problems.push(
+        `${ps.id} cites ${hostOf(ps.url)}, which the register lists as ${owner} — a non-citable tier must never appear in sources.json`,
+      );
     }
   }
 
