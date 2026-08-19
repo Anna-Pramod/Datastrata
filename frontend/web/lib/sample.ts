@@ -13,7 +13,7 @@ import { assess } from '@datastrata/engine';
 import type { AssessmentContext, Profile } from '@datastrata/engine';
 import { csrdPack } from '@/lib/pack';
 
-export const SAMPLE_ORG = 'Meridian Steelworks — EU lanes';
+export const SAMPLE_ORG = 'Meridian Steelworks, EU lanes';
 
 const ORG = 'org';
 
@@ -70,7 +70,7 @@ function sampleProfile(): Profile {
     fact('entity.is_parent_undertaking', 'e-fr', { kind: 'boolean', value: false }, 'Group structure'),
     fact('entity.is_subsidiary', 'e-fr', { kind: 'boolean', value: true }, 'Group structure'),
     fact('entity.governing_member_state', 'e-fr', { kind: 'string', value: 'FR' }, 'Siège social'),
-    fact('entity.net_turnover_eur', 'e-fr', { kind: 'range', min: 400_000_000, max: 600_000_000 }, 'Management estimate — exact figure requested'),
+    fact('entity.net_turnover_eur', 'e-fr', { kind: 'range', min: 400_000_000, max: 600_000_000 }, 'Management estimate, exact figure requested'),
     fact('entity.avg_employees', 'e-fr', { kind: 'number', value: 1_460 }, 'Employee note 2025'),
 
     // Pune — non-EU, and headcount deliberately absent.

@@ -18,7 +18,7 @@ import { COMPANY, MISSION, NEXT, ORIGIN, PRINCIPLES, TEAM } from '@/lib/company'
 import { ENCODED, WATCHED } from '@/lib/regimes';
 
 export const metadata: Metadata = {
-  title: 'Company — DataStrata',
+  title: 'Company · DataStrata',
   description:
     'Why DataStrata exists, the principles the product is built to, and what we are building next.',
 };
@@ -39,7 +39,7 @@ export default function CompanyPage() {
           </h1>
           <p className="ds-body-lg" style={{ maxWidth: '60ch', marginBottom: 32 }}>{MISSION}</p>
           <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-            <Link className="ds-btn ds-btn-primary" href="/check">Check what applies to you — free</Link>
+            <Link className="ds-btn ds-btn-primary" href="/check">Check what applies to you - free</Link>
             <Link className="ds-btn ds-btn-secondary" href="/contact">Talk to us</Link>
           </div>
         </section>
@@ -48,7 +48,7 @@ export default function CompanyPage() {
         <section className="ds-gutter ds-section" style={{ borderTop: '1px solid var(--ds-hairline-1)' }}>
           <div className="ds-company-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 5fr) 7fr', gap: 'clamp(24px, 5vw, 64px)' }}>
             <div>
-              <p className="ds-label" style={{ marginBottom: 18 }}>01 — WHY WE EXIST</p>
+              <p className="ds-label" style={{ marginBottom: 18 }}>01 · WHY WE EXIST</p>
               <h2 className="ds-h2" style={{ maxWidth: '18ch' }}>Answers that survive the next amendment.</h2>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
@@ -64,7 +64,7 @@ export default function CompanyPage() {
 
         {/* principles */}
         <section className="ds-gutter ds-panel" style={{ borderTop: '1px solid var(--ds-ink)', borderBottom: '1px solid var(--ds-ink)', paddingBlock: 88 }}>
-          <p className="ds-label" style={{ marginBottom: 18 }}>02 — HOW WE BUILD</p>
+          <p className="ds-label" style={{ marginBottom: 18 }}>02 · HOW WE BUILD</p>
           <h2 className="ds-h2" style={{ maxWidth: '22ch', marginBottom: 12 }}>Six rules the product is held to.</h2>
           <p className="ds-body-lg" style={{ maxWidth: '60ch', marginBottom: 40 }}>
             These are not values on a wall. They are enforced by the test suite, and a change that breaks
@@ -83,10 +83,10 @@ export default function CompanyPage() {
 
         {/* what we read — the honest substitute for a logo wall */}
         <section className="ds-gutter ds-section">
-          <p className="ds-label" style={{ marginBottom: 18 }}>03 — WHAT WE READ</p>
+          <p className="ds-label" style={{ marginBottom: 18 }}>03 · WHAT WE READ</p>
           <h2 className="ds-h2" style={{ maxWidth: '22ch', marginBottom: 12 }}>Built on the official record, not on secondary reporting.</h2>
           <p className="ds-body-lg" style={{ maxWidth: '62ch', marginBottom: 36 }}>
-            We have no customer logos to show you — we are early, and we would rather say so. What we can
+            We have no customer logos to show you; we are early, and we would rather say so. What we can
             show you is whose record every determination is built on. {stats.sources} sources, all primary.
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 20 }}>
@@ -100,13 +100,13 @@ export default function CompanyPage() {
           </div>
           <p className="ds-micro" style={{ marginTop: 20, maxWidth: '70ch' }}>
             {ENCODED.length} REGIME ENCODED · {WATCHED.length} WATCHED · {stats.requirements} REQUIREMENTS ·
-            {' '}{stats.ratified} OF {stats.requirements} EXPERT-RATIFIED — THE GATE WE HAVE NOT YET PASSED.
+            {' '}{stats.ratified} OF {stats.requirements} EXPERT-RATIFIED · THE GATE WE HAVE NOT YET PASSED.
           </p>
         </section>
 
         {/* team */}
         <section className="ds-gutter ds-section" style={{ borderTop: '1px solid var(--ds-hairline-1)' }}>
-          <p className="ds-label" style={{ marginBottom: 18 }}>04 — WHO</p>
+          <p className="ds-label" style={{ marginBottom: 18 }}>04 · WHO</p>
           <h2 className="ds-h2" style={{ maxWidth: '20ch', marginBottom: 36 }}>Two people, both accountable.</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 24, maxWidth: 900 }}>
             {TEAM.map((person, i) => (
@@ -125,10 +125,10 @@ export default function CompanyPage() {
 
         {/* what's next */}
         <section className="ds-gutter ds-section" style={{ borderTop: '1px solid var(--ds-hairline-1)' }}>
-          <p className="ds-label" style={{ marginBottom: 18 }}>05 — WHAT IS NEXT</p>
+          <p className="ds-label" style={{ marginBottom: 18 }}>05 · WHAT IS NEXT</p>
           <h2 className="ds-h2" style={{ maxWidth: '22ch', marginBottom: 12 }}>The order we are building in.</h2>
           <p className="ds-body-lg" style={{ maxWidth: '60ch', marginBottom: 36 }}>
-            Not a roadmap of promises — the next four things that have to be true before anyone should
+            Not a roadmap of promises: the next four things that have to be true before anyone should
             rely on this.
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 24 }}>

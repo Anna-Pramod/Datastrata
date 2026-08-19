@@ -44,7 +44,7 @@ export const REGIMES: Regime[] = [
   },
   {
     id: 'ifrs',
-    short: 'IFRS S1–S2',
+    short: 'IFRS S1-S2',
     name: 'ISSB sustainability and climate disclosure standards',
     status: 'watched',
     decides: 'Which jurisdictional adoption of the global baseline binds you, and from which reporting period.',

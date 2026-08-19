@@ -88,16 +88,16 @@ export interface BandOption extends Option { value?: FactValueInput }
 
 export const TURNOVER_BANDS: BandOption[] = [
   { id: 'lt50', label: 'Under €50m', value: { kind: 'range', min: 0, max: 50_000_000 } },
-  { id: '50-450', label: '€50m – €450m', value: { kind: 'range', min: 50_000_000, max: 450_000_000 } },
-  { id: '400-600', label: '€400m – €600m', hint: 'crosses the threshold', value: { kind: 'range', min: 400_000_000, max: 600_000_000 } },
+  { id: '50-450', label: '€50m - €450m', value: { kind: 'range', min: 50_000_000, max: 450_000_000 } },
+  { id: '400-600', label: '€400m - €600m', hint: 'crosses the threshold', value: { kind: 'range', min: 400_000_000, max: 600_000_000 } },
   { id: 'gt600', label: 'Over €600m', value: { kind: 'range', min: 600_000_000, max: 100_000_000_000 } },
   { id: 'unknown', label: "I'm not sure" },
 ];
 
 export const EMPLOYEE_BANDS: BandOption[] = [
   { id: 'lt250', label: 'Under 250', value: { kind: 'range', min: 0, max: 250 } },
-  { id: '250-1000', label: '250 – 1,000', value: { kind: 'range', min: 250, max: 1_000 } },
-  { id: '800-1500', label: '800 – 1,500', hint: 'crosses the threshold', value: { kind: 'range', min: 800, max: 1_500 } },
+  { id: '250-1000', label: '250 - 1,000', value: { kind: 'range', min: 250, max: 1_000 } },
+  { id: '800-1500', label: '800 - 1,500', hint: 'crosses the threshold', value: { kind: 'range', min: 800, max: 1_500 } },
   { id: 'gt1500', label: 'Over 1,500', value: { kind: 'range', min: 1_500, max: 5_000_000 } },
   { id: 'unknown', label: "I'm not sure" },
 ];
@@ -114,9 +114,9 @@ export const GOVERNING_CHOICES: Option[] = [
  * missing fact. The options make that distinction available.
  */
 export const EU_TURNOVER_OPTIONS: BandOption[] = [
-  { id: 'both', label: 'Yes — in both of the last two years' },
+  { id: 'both', label: 'Yes, in both of the last two years' },
   { id: 'one', label: 'In one year only', hint: 'the test needs both' },
-  { id: 'neither', label: 'No — under €450m' },
+  { id: 'neither', label: 'No, under €450m' },
   { id: 'unknown', label: "I'm not sure" },
 ];
 

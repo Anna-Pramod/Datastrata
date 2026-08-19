@@ -61,7 +61,7 @@ export function CrossSectionChart({ rows, columns }: { rows: ChartRow[]; columns
                 {r.cells.map((c) => (
                   <td key={c.entity} style={{ padding: 3 }}>
                     <span
-                      title={`${r.regime} × ${c.entity}: ${glyph(c.state)}${c.note ? ` — ${c.note}` : ''}`}
+                      title={`${r.regime} × ${c.entity}: ${glyph(c.state)}${c.note ? ` · ${c.note}` : ''}`}
                       style={{ display: 'block', height: 34, ...cellStyle(c.state) }}
                     />
                     <span className="ds-vh">{`${r.regime}, ${c.entity}: ${glyph(c.state)}`}</span>
@@ -76,7 +76,7 @@ export function CrossSectionChart({ rows, columns }: { rows: ChartRow[]; columns
         <LegendChip swatch="solid">Applies</LegendChip>
         <LegendChip swatch="blank">Does not apply</LegendChip>
         <LegendChip swatch="hatch">Requires judgment</LegendChip>
-        <LegendChip swatch="outline">Not encoded — neither included nor excluded</LegendChip>
+        <LegendChip swatch="outline">Not encoded: neither included nor excluded</LegendChip>
       </div>
     </div>
   );

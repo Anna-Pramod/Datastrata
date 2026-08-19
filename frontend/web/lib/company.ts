@@ -21,7 +21,7 @@ export const COMPANY = {
 };
 
 export const MISSION =
-  'Sustainability rules now decide who is allowed to sell. We exist so that a company can know exactly what applies to it, what just changed, and what to do by when — with every answer cited, dated and defensible.';
+  'Sustainability rules now decide who is allowed to sell. We exist so that a company can know exactly what applies to it, what just changed, and what to do by when, with every answer cited, dated and defensible.';
 
 export const ORIGIN = [
   'DataStrata started from a specific frustration: the rules that decide market access change faster than the people responsible for them can read. Consultancies answer once and invoice. Software mostly collects datapoints for a report that has already been scoped by someone else. Neither maintains the answer.',
@@ -43,7 +43,7 @@ export const PRINCIPLES = [
   {
     n: '03',
     h: 'Nothing counts until a human confirms it',
-    p: 'Extracted facts are candidates. They are structurally invisible to the engine until someone confirms them — a boundary in the data flow, not a line in a policy.',
+    p: 'Extracted facts are candidates. They are structurally invisible to the engine until someone confirms them: a boundary in the data flow, not a line in a policy.',
   },
   {
     n: '04',

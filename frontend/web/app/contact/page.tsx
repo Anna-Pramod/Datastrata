@@ -6,7 +6,7 @@ import { COMPANY } from '@/lib/company';
 import { packStats } from '@/lib/pack';
 
 export const metadata: Metadata = {
-  title: 'Contact — DataStrata',
+  title: 'Contact · DataStrata',
   description: 'Talk to the people who build and maintain the record.',
 };
 
@@ -22,7 +22,7 @@ export default function ContactPage() {
         </h1>
         <p className="ds-body-lg" style={{ maxWidth: '58ch', marginBottom: 44 }}>
           {COMPANY.scale} Whoever replies to you is the same person who encodes the requirements and
-          signs them off — there is no sales layer between you and the record.
+          signs them off; there is no sales layer between you and the record.
         </p>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 560px) 1fr', gap: 'clamp(32px, 6vw, 80px)', alignItems: 'start' }} className="ds-contact-grid">
@@ -38,7 +38,7 @@ export default function ContactPage() {
             <p className="ds-label" style={{ marginBottom: 12 }}>Good reasons to write</p>
             <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 28 }}>
               <li className="ds-body-sm">You want a regime encoded that we only watch today.</li>
-              <li className="ds-body-sm">You think one of our determinations is wrong. Tell us which and why — that is the most useful message we can get.</li>
+              <li className="ds-body-sm">You think one of our determinations is wrong. Tell us which and why; that is the most useful message we can get.</li>
               <li className="ds-body-sm">You are an expert who could ratify content in a jurisdiction we have not covered.</li>
               <li className="ds-body-sm">You ran the free check and want the answer built on sourced documents instead of stated facts.</li>
             </ul>

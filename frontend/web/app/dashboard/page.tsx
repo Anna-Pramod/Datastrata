@@ -17,7 +17,7 @@ import { SAMPLE_ENTITIES, SAMPLE_ORG, sampleAssessment, SAMPLE_CONTEXT } from '@
 import { REGIMES } from '@/lib/regimes';
 
 export const metadata: Metadata = {
-  title: 'Sample report — DataStrata',
+  title: 'Sample report · DataStrata',
   description: 'A maintained regulatory record, rendered from a real engine assessment over a sample group.',
 };
 
@@ -70,11 +70,11 @@ export default function DashboardPage() {
         <main id="main" className="ds-app-main" style={{ flex: 1, display: 'flex', minWidth: 0 }}>
           <div style={{ flex: 1, minWidth: 0, padding: 24 }}>
             <h1 className="ds-h4" style={{ marginBottom: 16 }}>
-              Home — {SAMPLE_ORG}
+              Home · {SAMPLE_ORG}
             </h1>
             <p style={{ border: '1px solid var(--ds-oxide)', background: 'var(--ds-oxide-wash)', padding: '12px 14px', fontSize: 13, lineHeight: 1.55, marginBottom: 22, maxWidth: '86ch' }}>
               <strong>Sample record.</strong> Meridian Steelworks is a made-up group. Every determination,
-              count and citation below is real — the profile is fed to the applicability engine and this page
+              count and citation below is real: the profile is fed to the applicability engine and this page
               renders what came back. Requirement content is draft and unratified.
             </p>
 
@@ -104,7 +104,7 @@ export default function DashboardPage() {
             <div className="ds-card" style={{ padding: 20, marginBottom: 22 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 18 }}>
                 <div>
-                  <h2 className="ds-h4">Regulatory Universe — cross-section view</h2>
+                  <h2 className="ds-h4">Regulatory Universe: cross-section view</h2>
                   <p className="ds-micro" style={{ marginTop: 4 }}>
                     CSRD ROW = REPORTING-DUTY DETERMINATION PER ENTITY (CSRD-S-014)
                   </p>
@@ -129,7 +129,7 @@ export default function DashboardPage() {
               ))}
               {result.obligations.length > 6 ? (
                 <p className="ds-micro" style={{ borderTop: '1px solid var(--ds-hairline-1)', paddingTop: 12 }}>
-                  + {result.obligations.length - 6} MORE — EACH TRACING BACK TO THE DETERMINATION THAT CREATED IT
+                  + {result.obligations.length - 6} MORE · EACH TRACING BACK TO THE DETERMINATION THAT CREATED IT
                 </p>
               ) : null}
             </div>
@@ -141,7 +141,7 @@ export default function DashboardPage() {
             style={{ width: 320, flex: 'none', borderLeft: '1px solid var(--ds-ink)', background: 'var(--ds-panel)', padding: 20 }}
             aria-label="This week's briefing"
           >
-            <p className="ds-label" style={{ marginBottom: 14 }}>Watch list — pending acts</p>
+            <p className="ds-label" style={{ marginBottom: 14 }}>Watch list · pending acts</p>
             {pack.changeWatch.map((c, i) => (
               <div key={c.id} style={{ borderTop: i === 0 ? '1px solid var(--ds-hairline-2)' : undefined, borderBottom: '1px solid var(--ds-hairline-3)', padding: '13px 0' }}>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', marginBottom: 5 }}>
@@ -156,7 +156,7 @@ export default function DashboardPage() {
             {datedText ? (
               <div style={{ marginTop: 20 }}>
                 <p className="ds-label" style={{ marginBottom: 10 }}>Next dated expectation</p>
-                <DeadlineChip>{`REVISED ESRS — EXPECTED ${datedText.toUpperCase()}`}</DeadlineChip>
+                <DeadlineChip>{`REVISED ESRS · EXPECTED ${datedText.toUpperCase()}`}</DeadlineChip>
                 <p className="ds-micro" style={{ marginTop: 8 }}>
                   PENDING. IT CHANGES NOTHING UNTIL IT IS IN FORCE.
                 </p>
@@ -170,12 +170,12 @@ export default function DashboardPage() {
               <EvidenceBar
                 label="Expert ratification"
                 value={Math.round((stats.ratified / stats.requirements) * 100)}
-                note={`${stats.ratified} OF ${stats.requirements} — THE PROTOTYPE GATE`}
+                note={`${stats.ratified} OF ${stats.requirements} · THE PROTOTYPE GATE`}
               />
               <EvidenceBar
                 label="Country packs ratified"
                 value={0}
-                note={`${stats.ratifiedCountryPacks} — NATIONAL LAW STILL REQUIRES REVIEW`}
+                note={`${stats.ratifiedCountryPacks} · NATIONAL LAW STILL REQUIRES REVIEW`}
               />
             </div>
 

@@ -138,7 +138,7 @@ export function traceSeries(): { acts: ActMark[]; pending: PendingMark[] } {
 export function sourceInstitutions(): { name: string; detail: string; count: number }[] {
   const pack = csrdPack();
   const buckets: Record<string, { name: string; detail: string; count: number }> = {
-    eurlex: { name: 'EUR-Lex', detail: 'The Official Journal — the legal record itself', count: 0 },
+    eurlex: { name: 'EUR-Lex', detail: 'The Official Journal, the legal record itself', count: 0 },
     commission: { name: 'European Commission', detail: 'Delegated acts, notices and explanatory information', count: 0 },
     efrag: { name: 'EFRAG', detail: 'Standard-setting and implementation guidance', count: 0 },
   };

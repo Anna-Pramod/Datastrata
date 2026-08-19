@@ -36,13 +36,13 @@ export function Sidebar() {
               }}
             >
               {n}
-              {!active ? <span className="ds-micro" style={{ color: 'var(--ds-text-ghost)' }}>—</span> : null}
+              {!active ? <span className="ds-micro" style={{ color: 'var(--ds-text-ghost)' }}>-</span> : null}
             </span>
           );
         })}
       </nav>
       <p className="ds-micro" style={{ padding: '14px 16px', marginTop: 'auto' }}>
-        Home is the only screen built. The rest are designed, not shipped — they are not links yet.
+        Home is the only screen built. The rest are designed, not shipped; they are not links yet.
       </p>
     </aside>
   );

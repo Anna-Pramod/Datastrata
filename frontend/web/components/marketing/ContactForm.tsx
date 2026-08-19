@@ -14,7 +14,7 @@ export function ContactForm() {
   const emailError = submitted && !form.email.includes('@') ? 'A valid email is required.' : undefined;
   const messageError = submitted && form.message.trim().length < 10 ? 'Tell us a little more than that.' : undefined;
 
-  const mailto = `mailto:${COMPANY.email}?subject=${encodeURIComponent(`Enquiry from ${form.name || 'the website'}`)}&body=${encodeURIComponent(`${form.message}\n\n— ${form.name}${form.company ? `, ${form.company}` : ''}\n${form.email}`)}`;
+  const mailto = `mailto:${COMPANY.email}?subject=${encodeURIComponent(`Enquiry from ${form.name || 'the website'}`)}&body=${encodeURIComponent(`${form.message}\n\n${form.name}${form.company ? `, ${form.company}` : ''}\n${form.email}`)}`;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -39,7 +39,7 @@ export function ContactForm() {
       <div className="ds-card" style={{ padding: 28, maxWidth: 560 }}>
         <p className="ds-h4" style={{ marginBottom: 8 }}>Message received.</p>
         <p className="ds-body-sm" style={{ color: 'var(--ds-text-muted)' }}>
-          We read everything ourselves — there is no queue and no auto-responder. Expect a reply from a person.
+          We read everything ourselves; there is no queue and no auto-responder. Expect a reply from a person.
         </p>
       </div>
     );
@@ -72,8 +72,7 @@ export function ContactForm() {
           {state.message}{' '}
           <a href={mailto} style={{ color: 'var(--ds-oxide)', borderBottom: '1px solid rgba(169,59,42,.4)' }}>
             Send it by email instead
-          </a>{' '}
-          — your message is carried across.
+          </a>; your message is carried across.
         </p>
       ) : null}
 

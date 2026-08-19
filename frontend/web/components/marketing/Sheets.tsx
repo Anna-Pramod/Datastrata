@@ -33,7 +33,7 @@ export function SheetApplicability() {
     { mark: '✓', text: 'AVERAGE EMPLOYEES > 1,000', state: 'true' },
   ];
   return (
-    <Frame label="SHEET 01 — APPLICABILITY">
+    <Frame label="SHEET 01 · APPLICABILITY">
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="A four-condition test in which one condition cannot be resolved from a range.">
         {rows.map((r, i) => {
           const y = 20 + i * 38;
@@ -59,7 +59,7 @@ export function SheetApplicability() {
 /** Sheet 02 — a detected act, deposited but not binding. */
 export function SheetChange() {
   return (
-    <Frame label="SHEET 02 — CHANGE EVENT, SETTLING">
+    <Frame label="SHEET 02 · CHANGE EVENT, SETTLING">
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="A detected act shown resting above the record, not yet part of it.">
         {[0, 1, 2, 3].map((i) => (
           <line key={i} x1="0" x2={W} y1={60 + i * 24} y2={60 + i * 24} stroke="var(--ds-hairline-1)" />
@@ -69,9 +69,9 @@ export function SheetChange() {
         <text x="172" y="36" fontFamily="var(--ds-font-mono)" fontSize="10" fill="var(--ds-ink)">ACT DETECTED</text>
         <text x="172" y="49" fontFamily="var(--ds-font-mono)" fontSize="8.5" fill="var(--ds-text-ghost)">scoped to the requirements it would move</text>
         <line x1="0" x2={W} y1="156" y2="156" stroke="var(--ds-oxide)" strokeWidth="1.8" />
-        <text x="0" y="180" fontFamily="var(--ds-font-mono)" fontSize="9" letterSpacing="0.16em" fill="var(--ds-text-faint)">THE RECORD — UNCHANGED</text>
+        <text x="0" y="180" fontFamily="var(--ds-font-mono)" fontSize="9" letterSpacing="0.16em" fill="var(--ds-text-faint)">THE RECORD · UNCHANGED</text>
         <text x="0" y="206" fontFamily="var(--ds-font-mono)" fontSize="10" letterSpacing="0.06em" fill="var(--ds-text-nav)">YOU ARE CURRENT</text>
-        <text x="0" y="222" fontFamily="var(--ds-font-mono)" fontSize="8.5" fill="var(--ds-text-ghost)">pending law never binds — it waits above the line</text>
+        <text x="0" y="222" fontFamily="var(--ds-font-mono)" fontSize="8.5" fill="var(--ds-text-ghost)">pending law never binds; it waits above the line</text>
       </svg>
     </Frame>
   );
@@ -81,7 +81,7 @@ export function SheetChange() {
 export function SheetSchedule() {
   const rows = ['SUSTAINABILITY STATEMENT', 'LIMITED ASSURANCE ENGAGEMENT', 'DIGITAL TAGGING · ESEF'];
   return (
-    <Frame label="SHEET 03 — SCHEDULE">
+    <Frame label="SHEET 03 · SCHEDULE">
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="Obligations laid out as owned, dated work.">
         {rows.map((r, i) => {
           const y = 30 + i * 52;

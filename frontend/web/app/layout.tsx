@@ -7,11 +7,11 @@ const ui = Inter({ weight: ['400', '500', '700'], subsets: ['latin'], variable: 
 const mono = JetBrains_Mono({ weight: ['400', '500', '700'], subsets: ['latin'], variable: '--font-mono', display: 'swap' });
 
 export const metadata: Metadata = {
-  title: 'DataStrata — know what applies, what changed, and what to do by when',
+  title: 'DataStrata: know what applies, what changed, and what to do by when',
   description:
     'Sustainability regulation accumulates like sediment. DataStrata reads every layer for your company and returns one clear, cited, continuously maintained answer.',
   openGraph: {
-    title: 'DataStrata — regulatory intelligence for market access',
+    title: 'DataStrata: regulatory intelligence for market access',
     description: 'One clear, cited, continuously maintained answer to what applies to you.',
     type: 'website',
   },

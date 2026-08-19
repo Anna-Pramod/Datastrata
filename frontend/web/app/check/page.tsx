@@ -5,7 +5,7 @@ import { CheckFlow } from '@/components/marketing/CheckFlow';
 import { packStats } from '@/lib/pack';
 
 export const metadata: Metadata = {
-  title: 'Free check — DataStrata',
+  title: 'Free check · DataStrata',
   description: 'Eight questions, each one a fact the law turns on. A cited, three-valued CSRD result from the real applicability engine.',
 };
 

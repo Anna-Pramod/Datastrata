@@ -85,7 +85,7 @@ export function LiveTrace({
   return (
     <svg
       viewBox={`0 0 ${d.w} ${d.h}`} width="100%" role="img"
-      aria-label={`The encoded record accumulating: ${acts.map((a) => a.name).join(', ')} — ${acts.length} instruments in force carrying ${requirements} requirements. ${pending.length} further acts are adopted but not in force and do not change what binds today.`}
+      aria-label={`The encoded record accumulating: ${acts.map((a) => a.name).join(', ')}; ${acts.length} instruments in force carrying ${requirements} requirements. ${pending.length} further acts are adopted but not in force and do not change what binds today.`}
       style={{ display: 'block', maxWidth: '100%', height: 'auto' }}
     >
       <defs>
@@ -145,7 +145,7 @@ export function LiveTrace({
             const y = yAt(n) - 30;
             return (
               <g key={p.id}>
-                <title>{`${p.title} — adopted, not in force (${p.note})`}</title>
+                <title>{`${p.title}: adopted, not in force (${p.note})`}</title>
                 <line x1={x} x2={x} y1={y + 7} y2={yAt(n) - 3} stroke="var(--ds-orange)" strokeWidth="1.2" strokeDasharray="2 3" opacity="0.75" />
                 <rect x={x - 3.5} y={y} width="7" height="7" fill="none" stroke="var(--ds-orange)" strokeWidth="1.4" />
               </g>

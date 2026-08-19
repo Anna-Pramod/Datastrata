@@ -67,7 +67,7 @@ export function LoginCard() {
           }}
         >
           <span aria-hidden="true" style={{ display: 'inline-block', width: 8, height: 8, background: 'var(--ds-oxide)', transform: 'rotate(45deg)', marginRight: 8 }} />
-          Accounts are not live yet. This screen is the designed shell — authentication, tenancy and the
+          Accounts are not live yet. This screen is the designed shell. Authentication, tenancy and the
           private customer record are the next thing to be built, not something we will pretend at.
         </p>
       ) : null}

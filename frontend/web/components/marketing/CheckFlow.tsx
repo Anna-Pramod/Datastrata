@@ -121,7 +121,7 @@ export function CheckFlow() {
     },
     {
       q: 'Net turnover for that financial year',
-      why: 'Q-007 · Article 19a turns on EUR 450 million. A band that crosses it stays unresolved — deliberately.',
+      why: 'Q-007 · Article 19a turns on EUR 450 million. A band that crosses it stays unresolved, deliberately.',
       answered: Boolean(a.turnover),
       node: <Chips name="Net turnover" options={TURNOVER_BANDS} value={a.turnover} onPick={(id) => setA((p) => ({ ...p, turnover: id }))} />,
     },
@@ -133,7 +133,7 @@ export function CheckFlow() {
     },
     {
       q: 'Did this entity report under CSRD for financial year 2024?',
-      why: 'Q-011 · identifies first-wave status and the FY2025–26 transition questions.',
+      why: 'Q-011 · identifies first-wave status and the FY2025-26 transition questions.',
       answered: Boolean(a.reportedFy2024),
       node: <Chips name="FY2024 reporting" options={YES_NO_UNSURE} value={a.reportedFy2024} onPick={(id) => setA((p) => ({ ...p, reportedFy2024: id }))} />,
     },
@@ -182,7 +182,7 @@ export function CheckFlow() {
         }
       : {
           q: 'Does the group generate more than €450 million of turnover inside the EU?',
-          why: 'Q-016 · Article 40a. A non-EU group comes into scope through EU turnover, not through this entity\'s own thresholds — and the test must be met in each of the last two financial years.',
+          why: 'Q-016 · Article 40a. A non-EU group comes into scope through EU turnover, not through this entity\'s own thresholds, and the test must be met in each of the last two financial years.',
           answered: Boolean(a.euTurnover),
           node: (
             <>
@@ -211,7 +211,7 @@ export function CheckFlow() {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e) {
       setError(e instanceof Error
-        ? `${e.message} No determination was produced — nothing below should be read as an answer.`
+        ? `${e.message} No determination was produced; nothing below should be read as an answer.`
         : 'The check could not be completed.');
     } finally { setRunning(false); }
   }
@@ -289,7 +289,7 @@ function Group({ title, items }: { title: string; items: Verdict[] }) {
                     {s.url ? <a href={s.url} target="_blank" rel="noreferrer" style={{ color: 'var(--ds-oxide)' }}>{s.id}</a> : s.id}
                   </span>
                 ))}
-                {v.provisions ? ` — ${v.provisions}` : ''}
+                {v.provisions ? ` · ${v.provisions}` : ''}
               </p>
             </div>
           </article>
@@ -308,7 +308,7 @@ function Report({ data, onRestart }: { data: CheckResponse; onRestart: () => voi
 
       {data.containsDraftContent ? (
         <p style={{ border: '1px solid var(--ds-oxide)', background: 'var(--ds-oxide-wash)', padding: '14px 16px', maxWidth: '74ch', marginBottom: 28, fontSize: 13.5, lineHeight: 1.6, color: 'var(--ds-text-body)' }}>
-          <strong>Prototype — unratified content.</strong> These determinations run on draft requirement
+          <strong>Prototype: unratified content.</strong> These determinations run on draft requirement
           records that have not been expert-ratified, from answers you stated rather than documents we
           sourced. Not for reliance.
         </p>

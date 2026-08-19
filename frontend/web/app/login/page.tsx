@@ -6,7 +6,7 @@ import { Wordmark } from '@/components/ui/primitives';
 import { packStats, traceSeries } from '@/lib/pack';
 
 export const metadata: Metadata = {
-  title: 'Sign in — DataStrata',
+  title: 'Sign in · DataStrata',
   description: 'Sign in to DataStrata.',
 };
 
