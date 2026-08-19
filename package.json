@@ -1,0 +1,19 @@
+{
+  "name": "datastrata",
+  "version": "0.0.0",
+  "private": true,
+  "description": "DataStrata monorepo: the applicability engine and the public site.",
+  "workspaces": [
+    "frontend/web",
+    "backend/engine"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "npm run dev --workspace @datastrata/web",
+    "build": "npm run build --workspace @datastrata/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm test --workspace @datastrata/engine"
+  }
+}
