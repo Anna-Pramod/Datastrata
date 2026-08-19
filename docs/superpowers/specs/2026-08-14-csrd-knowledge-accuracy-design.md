@@ -148,6 +148,16 @@ verification/review-sheet.md         generated review document (new, §4; git-ig
 
 ## 4. The verification pass
 
+> **Superseded 2026-08-20** by `2026-08-20-verification-factory-design.md`, which
+> replaces this section with an agent-driven, program-agnostic pipeline: a
+> snapshotted legal corpus, a blind independent reading, adversarial prosecution,
+> evidence-bound adjudication, an immutable signature ledger with derived status
+> and staleness, and a measured benchmark gate. The section is retained for the
+> reasoning behind the review sheet, the adversarial check and the three-level
+> status, all of which carry forward. Two details here are now stale: the test
+> count (74, not 45) and the "six public requirements" ordering — the rebuilt
+> site runs `assess()` over the whole pack.
+
 ### Parts
 
 **1. Review sheet, generated from the pack.** One page per requirement containing:
