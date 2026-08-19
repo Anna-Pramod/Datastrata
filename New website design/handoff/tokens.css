@@ -1,0 +1,96 @@
+/* ============================================================
+   SEISMOGRAPH / OXIDE — design tokens
+   Source of truth: "DataStrata Directions.dc.html" option 5a + 7a live trace.
+   Usage (Next.js): import in app/globals.css. Tailwind maps to these
+   vars — see handoff/design-system.md.
+   ============================================================ */
+:root {
+  /* ---- color · surfaces ---- */
+  --ds-paper: #FFFFFF;            /* page + card ground */
+  --ds-panel: #F7F3EE;            /* warm panel: sidebar, rails, trust strip, record section */
+  --ds-panel-input: #FAF7F3;      /* readonly / loading input fill */
+  --ds-ink: #14181D;              /* text ink + frame borders (1px solid) */
+
+  /* ---- color · hairlines (3 weights, warm) ---- */
+  --ds-hairline-1: #F0EAE4;       /* internal dividers, paper grid lines */
+  --ds-hairline-2: #D9CFC9;       /* input borders, legend chips, quiet cards */
+  --ds-hairline-3: #E8E2DA;       /* rail dividers, progress tracks */
+
+  /* ---- color · text ---- */
+  --ds-text: #14181D;             /* headings, primary copy */
+  --ds-text-body: #3A4149;        /* long-form body */
+  --ds-text-muted: #5B5648;       /* secondary copy, stat sublabels */
+  --ds-text-faint: #8A8272;       /* mono labels, captions, meta */
+  --ds-text-ghost: #A39B87;       /* glosses, footnotes (lowercase mono) */
+  --ds-text-placeholder: #B9AF9F;
+  --ds-text-nav: #4A4640;         /* nav links, sidebar items */
+
+  /* ---- color · brand + semantic ---- */
+  --ds-oxide: #A93B2A;            /* PRIMARY. spent generously. also = error (the brand ink doing its second job — never introduce a separate red) */
+  --ds-oxide-hover: #8E2F20;
+  --ds-oxide-tint: #F3E4E0;       /* hovered nav-item bg */
+  --ds-oxide-wash: #F7ECE9;       /* error banner bg, judgment-cell bg */
+  --ds-orange: #FF4D00;           /* BUDGETED: change-event marks (risers, deposits, spikes) + the deadline chip. NOWHERE ELSE. */
+  --ds-mark-neutral: #D6CCC2;     /* dashed leaders, neutral chart marks, disabled strokes */
+  --ds-disabled-bg: #EDE5DC;
+  --ds-disabled-text: #A39B87;
+  --ds-success: var(--ds-text-nav); /* "you are current" is stated in neutral ink, never green */
+
+  /* ---- focus / elevation ---- */
+  --ds-ring-focus: 0 0 0 3px rgba(169, 59, 42, 0.22);
+  --ds-ring-error: 0 0 0 3px rgba(169, 59, 42, 0.18);
+  --ds-shadow-none: none;                              /* default: the system is flat */
+  --ds-shadow-popover: 0 10px 30px rgba(20, 24, 29, 0.16); /* ONLY floating popovers/menus */
+
+  /* ---- type · families ---- */
+  --ds-font-display: 'Archivo', system-ui, sans-serif;    /* 700/800, tight tracking */
+  --ds-font-ui: 'Inter', system-ui, sans-serif;            /* 400/500/700 */
+  --ds-font-mono: 'JetBrains Mono', ui-monospace, monospace; /* 400/500/700 — labels, data, nav; ALWAYS tabular-nums */
+
+  /* ---- type · scale (size / line-height / tracking) ---- */
+  --ds-fs-display-1: 62px;  --ds-lh-display-1: 1.03; --ds-ls-display-1: -0.029em;
+  --ds-fs-display-2: 52px;  --ds-lh-display-2: 1.05; --ds-ls-display-2: -0.027em;
+  --ds-fs-h2: 37px;         --ds-lh-h2: 1.12;        --ds-ls-h2: -0.022em;
+  --ds-fs-h3: 30px;         --ds-lh-h3: 1.14;        --ds-ls-h3: -0.017em;
+  --ds-fs-h4: 20px;         --ds-lh-h4: 1.3;         --ds-ls-h4: -0.015em;
+  --ds-fs-body-lg: 17px;    --ds-lh-body-lg: 1.65;
+  --ds-fs-body: 15.5px;     --ds-lh-body: 1.6;
+  --ds-fs-body-sm: 13px;    --ds-lh-body-sm: 1.5;
+  --ds-fs-caption: 11.5px;  --ds-lh-caption: 1.5;    --ds-ls-caption: 0.05em;  /* mono */
+  --ds-fs-label: 10px;      --ds-lh-label: 1.4;      --ds-ls-label: 0.18em;    /* mono, uppercase */
+  --ds-fs-micro: 9px;       --ds-lh-micro: 1.4;      --ds-ls-micro: 0.09em;    /* mono */
+  --ds-fs-stat-lg: 72px;    /* mono 700, tabular */
+  --ds-fs-stat: 38px;       /* mono 700, tabular */
+
+  /* ---- space (8px base; 24px baseline "paper grid") ---- */
+  --ds-space-1: 4px;
+  --ds-space-2: 8px;
+  --ds-space-3: 12px;
+  --ds-space-4: 16px;
+  --ds-space-5: 24px;
+  --ds-space-6: 32px;
+  --ds-space-7: 48px;
+  --ds-space-8: 64px;
+  --ds-space-9: 96px;   /* page gutter + section rhythm */
+  --ds-grid-baseline: 24px;
+
+  /* ---- radii (the system is square) ---- */
+  --ds-radius: 0;
+  --ds-radius-sm: 0;    /* reserved; never exceed 2px if a rounding is ever forced */
+
+  /* ---- borders ---- */
+  --ds-border-frame: 1px solid var(--ds-ink);        /* every screen/card frame */
+  --ds-border-input: 1px solid var(--ds-hairline-2);
+  --ds-border-rule-strong: 2px solid var(--ds-ink);  /* footer top, section starts */
+
+  /* ---- motion ---- */
+  --ds-motion-fast: 150ms;          /* all UI state changes */
+  --ds-ease-ui: linear;             /* no easing theatre on UI */
+  --ds-ease-entry: ease-out;        /* one-shot entries only */
+  --ds-draw-tread: 1000ms;          /* live trace: baseline tread draw */
+  --ds-draw-riser: 300ms;           /* live trace: orange riser strike */
+  --ds-drop-deposit: 450ms;         /* live trace: deposit square settle */
+  --ds-fade-register: 500ms;        /* live trace: register entry fade */
+  --ds-pulse-endpoint: 3000ms;      /* live trace: endpoint pulse, infinite */
+  --ds-sequence-total: 3500ms;      /* live trace: one pass, never loops */
+}

@@ -1,14 +1,15 @@
 /**
- * The free checker's question set, and the translation from answers to an
- * engine Profile.
+ * The free check — eight questions, each one a fact the CSRD pack actually
+ * consumes, and the translation from answers to an engine Profile.
  *
- * Every option here maps to a fact the CSRD pack actually consumes. Nothing is
- * asked that cannot change a determination, and nothing is invented: an "I'm not
- * sure" answer omits the fact entirely so the engine reports `missing_fact`
- * rather than guessing. The deliberately-straddling bands (€400m–€600m,
- * 800–1,500 employees) exist so the engine can demonstrate the behaviour that
- * defines the product — an honest INDETERMINATE with the exact fact that would
- * resolve it.
+ * Nothing is asked that cannot move a determination, and nothing is invented:
+ * an "I'm not sure" answer omits the fact entirely, so the engine reports
+ * `missing_fact` rather than guessing. The straddling bands (€400m–€600m,
+ * 800–1,500) exist so the evaluator can demonstrate the behaviour that defines
+ * the product — an honest INDETERMINATE naming the fact that would resolve it.
+ *
+ * Question numbering follows the pack's own questionnaire: Q-003, Q-004, Q-005,
+ * Q-007, Q-008, Q-011, Q-014 / Q-012.
  */
 
 export type FactValueInput =
@@ -17,19 +18,26 @@ export type FactValueInput =
   | { kind: 'boolean'; value: boolean }
   | { kind: 'string'; value: string };
 
+export type GroupPosition = 'standalone' | 'parent' | 'subsidiary' | 'parent_and_subsidiary';
+
 export interface CheckerAnswers {
   country?: string;
   legalForm?: string;
-  groupPosition?: 'standalone' | 'parent' | 'subsidiary' | 'parent_and_subsidiary';
+  financialYear?: string;
+  groupPosition?: GroupPosition;
   turnover?: string;
   employees?: string;
+  reportedFy2024?: string;
+  parentReport?: string;
+  /** EU entities: whether the governing Member State is the country of incorporation. */
+  governingChoice?: 'same' | 'other' | 'unknown';
+  /** Only meaningful when governingChoice === 'other'. */
+  governingState?: string;
+  /** Non-EU entities: the Article 40a EU-turnover test over the last two financial years. */
+  euTurnover?: 'both' | 'one' | 'neither' | 'unknown';
 }
 
-export interface Option {
-  id: string;
-  label: string;
-  hint?: string;
-}
+export interface Option { id: string; label: string; hint?: string }
 
 export const EU_COUNTRIES: Option[] = [
   { id: 'AT', label: 'Austria' }, { id: 'BE', label: 'Belgium' }, { id: 'BG', label: 'Bulgaria' },
@@ -45,22 +53,28 @@ export const EU_COUNTRIES: Option[] = [
 
 export const NON_EU_COUNTRIES: Option[] = [
   { id: 'GB', label: 'United Kingdom' }, { id: 'US', label: 'United States' },
-  { id: 'CH', label: 'Switzerland' }, { id: 'NO', label: 'Norway' },
-  { id: 'IN', label: 'India' }, { id: 'CN', label: 'China' },
-  { id: 'JP', label: 'Japan' }, { id: 'TR', label: 'Türkiye' },
-  { id: 'BR', label: 'Brazil' }, { id: 'CA', label: 'Canada' },
-  { id: 'AU', label: 'Australia' }, { id: 'ZA', label: 'South Africa' },
+  { id: 'CH', label: 'Switzerland' }, { id: 'NO', label: 'Norway' }, { id: 'IN', label: 'India' },
+  { id: 'CN', label: 'China' }, { id: 'JP', label: 'Japan' }, { id: 'TR', label: 'Türkiye' },
+  { id: 'BR', label: 'Brazil' }, { id: 'CA', label: 'Canada' }, { id: 'AU', label: 'Australia' },
+  { id: 'ZA', label: 'South Africa' }, { id: 'KR', label: 'South Korea' }, { id: 'AE', label: 'United Arab Emirates' },
 ];
 
 export const LEGAL_FORMS: Option[] = [
-  { id: 'private_limited_company', label: 'Private limited company', hint: 'Ltd, GmbH, BV, SARL, SAS…' },
-  { id: 'public_limited_company', label: 'Public limited company', hint: 'PLC, AG, NV, SA…' },
-  { id: 'listed_company', label: 'Listed company', hint: 'securities admitted to an EU regulated market' },
+  { id: 'private_limited_company', label: 'Private limited company', hint: 'Ltd · GmbH · BV · SARL · SAS' },
+  { id: 'public_limited_company', label: 'Public limited company', hint: 'PLC · AG · NV · SA' },
+  { id: 'listed_company', label: 'Listed company', hint: 'admitted to an EU regulated market' },
   { id: 'partnership_all_members_limited', label: 'Partnership, all members limited' },
   { id: 'credit_institution', label: 'Bank or credit institution' },
   { id: 'insurance_undertaking', label: 'Insurance undertaking' },
   { id: 'sole_trader', label: 'Sole trader' },
   { id: 'other', label: 'Something else', hint: 'routes to analyst review, never silently out of scope' },
+];
+
+export const FINANCIAL_YEARS: Option[] = [
+  { id: '2025', label: 'FY 2025' },
+  { id: '2026', label: 'FY 2026' },
+  { id: '2027', label: 'FY 2027' },
+  { id: '2028', label: 'FY 2028' },
 ];
 
 export const GROUP_POSITIONS: Option[] = [
@@ -70,10 +84,7 @@ export const GROUP_POSITIONS: Option[] = [
   { id: 'parent_and_subsidiary', label: 'Both', hint: 'an intermediate parent' },
 ];
 
-export interface BandOption extends Option {
-  /** Omitted entirely when the user says they do not know. */
-  value?: FactValueInput;
-}
+export interface BandOption extends Option { value?: FactValueInput }
 
 export const TURNOVER_BANDS: BandOption[] = [
   { id: 'lt50', label: 'Under €50m', value: { kind: 'range', min: 0, max: 50_000_000 } },
@@ -91,8 +102,38 @@ export const EMPLOYEE_BANDS: BandOption[] = [
   { id: 'unknown', label: "I'm not sure" },
 ];
 
-/** The financial year the free check assesses. Stated on the result, never hidden. */
-export const CHECK_FINANCIAL_YEAR = { start: '2027-01-01', end: '2027-12-31' };
+export const GOVERNING_CHOICES: Option[] = [
+  { id: 'same', label: 'The country it is incorporated in', hint: 'the usual case' },
+  { id: 'other', label: 'A different Member State' },
+  { id: 'unknown', label: "I'm not sure" },
+];
+
+/**
+ * Article 40a turns on EU turnover exceeding EUR 450m in EACH of the last two
+ * financial years, so "only one year" is a genuine, definitive no — not a
+ * missing fact. The options make that distinction available.
+ */
+export const EU_TURNOVER_OPTIONS: BandOption[] = [
+  { id: 'both', label: 'Yes — in both of the last two years' },
+  { id: 'one', label: 'In one year only', hint: 'the test needs both' },
+  { id: 'neither', label: 'No — under €450m' },
+  { id: 'unknown', label: "I'm not sure" },
+];
+
+export const YES_NO_UNSURE: Option[] = [
+  { id: 'yes', label: 'Yes' },
+  { id: 'no', label: 'No' },
+  { id: 'unknown', label: "I'm not sure" },
+];
+
+export const isEu = (code?: string) => Boolean(code && EU_COUNTRIES.some((c) => c.id === code));
+
+/** Step 8 changes shape for a subsidiary — the exemption route is the live question. */
+export const stepEightIsParentReport = (a: CheckerAnswers) =>
+  a.groupPosition === 'subsidiary' || a.groupPosition === 'parent_and_subsidiary';
+
+const OVER_450M = { kind: 'range', min: 450_000_001, max: 100_000_000_000 } as const;
+const UNDER_450M = { kind: 'range', min: 0, max: 450_000_000 } as const;
 
 interface FactInput {
   factType: string;
@@ -107,55 +148,86 @@ const stated = (factType: string, scopeId: string, value: FactValueInput): FactI
   scopeId,
   value,
   // Answers typed into a public checker are customer statements, not sourced
-  // documents. They are confirmed (the user asserted them) but the result is
-  // labelled preliminary because nothing here is evidenced.
+  // documents. Confirmed (the user asserted them), but the report says plainly
+  // that nothing here is evidenced.
   confirmed: true,
-  source: { kind: 'customer_statement', ref: 'Free checker answer' },
+  source: { kind: 'customer_statement', ref: 'Free check answer' },
 });
 
-/**
- * Build the minimal scope graph + facts the CSRD pack needs. Unanswered
- * questions contribute no facts at all — that is what makes the engine say
- * `missing_fact` instead of assuming a value.
- */
 export function buildAssessmentInput(answers: CheckerAnswers, assessmentDate: string) {
   const entityId = 'e1';
   const orgId = 'org1';
   const facts: FactInput[] = [];
+  const isGroupParent = answers.groupPosition === 'parent' || answers.groupPosition === 'parent_and_subsidiary';
 
   if (answers.country) {
     facts.push(stated('entity.incorporation_country', entityId, { kind: 'string', value: answers.country }));
-    facts.push(stated('entity.governing_member_state', entityId, { kind: 'string', value: answers.country }));
+    // Q-012, asked properly at step 8 for an EU entity. "Not sure" contributes no
+    // fact at all, so the engine reports it as unresolved rather than assuming
+    // the country of incorporation.
+    const governing =
+      answers.governingChoice === 'other' ? answers.governingState
+      : answers.governingChoice === 'unknown' ? undefined
+      : answers.governingChoice === 'same' ? answers.country
+      : undefined;
+    if (governing && isEu(governing)) {
+      facts.push(stated('entity.governing_member_state', entityId, { kind: 'string', value: governing }));
+    }
   }
   if (answers.legalForm) {
     facts.push(stated('entity.legal_form', entityId, { kind: 'string', value: answers.legalForm }));
   }
   if (answers.groupPosition) {
-    const isParent = answers.groupPosition === 'parent' || answers.groupPosition === 'parent_and_subsidiary';
-    const isSubsidiary = answers.groupPosition === 'subsidiary' || answers.groupPosition === 'parent_and_subsidiary';
-    facts.push(stated('entity.is_parent_undertaking', entityId, { kind: 'boolean', value: isParent }));
-    facts.push(stated('entity.is_subsidiary', entityId, { kind: 'boolean', value: isSubsidiary }));
+    facts.push(stated('entity.is_parent_undertaking', entityId, { kind: 'boolean', value: isGroupParent }));
+    facts.push(stated('entity.is_subsidiary', entityId, {
+      kind: 'boolean',
+      value: answers.groupPosition === 'subsidiary' || answers.groupPosition === 'parent_and_subsidiary',
+    }));
   }
 
   const turnover = TURNOVER_BANDS.find((b) => b.id === answers.turnover)?.value;
   if (turnover) {
     facts.push(stated('entity.net_turnover_eur', entityId, turnover));
-    // A parent's consolidated threshold runs on group figures; the checker only
-    // has the one number, so it is applied at group level too and the result
-    // says so rather than pretending the two were measured separately.
-    if (answers.groupPosition === 'parent' || answers.groupPosition === 'parent_and_subsidiary') {
-      facts.push(stated('group.consolidated_net_turnover_eur', orgId, turnover));
-    }
+    // A parent's consolidated route runs on group figures. The check has one
+    // number, so it is applied at group level too — and the report says that.
+    if (isGroupParent) facts.push(stated('group.consolidated_net_turnover_eur', orgId, turnover));
   }
 
   const employees = EMPLOYEE_BANDS.find((b) => b.id === answers.employees)?.value;
   if (employees) {
     facts.push(stated('entity.avg_employees', entityId, employees));
-    if (answers.groupPosition === 'parent' || answers.groupPosition === 'parent_and_subsidiary') {
-      facts.push(stated('group.avg_employees', orgId, employees));
+    if (isGroupParent) facts.push(stated('group.avg_employees', orgId, employees));
+  }
+
+  // Article 40a route, for a non-EU entity (step 8 on that path).
+  if (answers.country && !isEu(answers.country)) {
+    // The entity is the top of its own group in these two cases, so its country
+    // IS the ultimate parent's. For a subsidiary we genuinely do not know, and
+    // the engine correctly reports that as a missing fact.
+    if (answers.groupPosition === 'standalone' || answers.groupPosition === 'parent') {
+      facts.push(stated('group.ultimate_parent_country', orgId, { kind: 'string', value: answers.country }));
+    }
+    const t = answers.euTurnover;
+    if (t === 'both') {
+      facts.push(stated('third_country.eu_turnover_year_1_eur', orgId, OVER_450M));
+      facts.push(stated('third_country.eu_turnover_year_2_eur', orgId, OVER_450M));
+    } else if (t === 'one') {
+      facts.push(stated('third_country.eu_turnover_year_1_eur', orgId, OVER_450M));
+      facts.push(stated('third_country.eu_turnover_year_2_eur', orgId, UNDER_450M));
+    } else if (t === 'neither') {
+      facts.push(stated('third_country.eu_turnover_year_1_eur', orgId, UNDER_450M));
+      facts.push(stated('third_country.eu_turnover_year_2_eur', orgId, UNDER_450M));
     }
   }
 
+  if (answers.reportedFy2024 === 'yes' || answers.reportedFy2024 === 'no') {
+    facts.push(stated('entity.reported_csrd_fy2024', entityId, { kind: 'boolean', value: answers.reportedFy2024 === 'yes' }));
+  }
+  if (answers.parentReport === 'yes' || answers.parentReport === 'no') {
+    facts.push(stated('parent.report_includes_entity', entityId, { kind: 'boolean', value: answers.parentReport === 'yes' }));
+  }
+
+  const year = Number(answers.financialYear ?? '2027');
   return {
     profile: {
       scopeObjects: [
@@ -166,28 +238,10 @@ export function buildAssessmentInput(answers: CheckerAnswers, assessmentDate: st
     },
     context: {
       assessmentDate,
-      financialYear: CHECK_FINANCIAL_YEAR,
+      financialYear: { start: `${year}-01-01`, end: `${year}-12-31` },
       subjectId: entityId,
     },
   };
-}
-
-/**
- * Requirements the checker surfaces, in the order a reader should meet them.
- *
- * The Article 40a third-country gate (S-007) is added for a non-EU entity.
- * Without it such an entity reads a clean "does not apply" on every row, when
- * the route that actually catches non-EU groups is the one the free check never
- * asked about — a silent negative in all but name. Shown, the engine states it
- * plainly: unresolved, and here are the facts that would settle it. For an EU
- * entity the gate is genuinely not its route, so it stays off the card list.
- */
-const BASE_REQUIREMENTS = ['CSRD-S-014', 'CSRD-S-001', 'CSRD-S-002', 'CSRD-S-015', 'CSRD-S-013'];
-
-export function headlineRequirements(answers: CheckerAnswers): string[] {
-  const isEu = Boolean(answers.country && EU_COUNTRIES.some((c) => c.id === answers.country));
-  if (isEu) return BASE_REQUIREMENTS;
-  return [...BASE_REQUIREMENTS.slice(0, 3), 'CSRD-S-007', ...BASE_REQUIREMENTS.slice(3)];
 }
 
 export const REASON_COPY: Record<string, string> = {
@@ -212,18 +266,25 @@ export const FACT_COPY: Record<string, string> = {
   'entity.is_parent_undertaking': 'Whether the entity is a parent',
   'entity.is_subsidiary': 'Whether the entity is a subsidiary',
   'entity.reported_csrd_fy2024': 'Whether you reported for FY2024',
+  'entity.member_state_transposition_status': 'National transposition status',
+  'entity.member_state_transition_option': 'National transition option',
+  'entity.national_publication_conditions_met': 'National publication conditions',
   'group.consolidated_net_turnover_eur': 'Consolidated group turnover',
   'group.avg_employees': 'Group average headcount',
   'group.ultimate_parent_country': "Ultimate parent's country",
-  'entity.member_state_transposition_status': 'National transposition status',
-  'entity.member_state_transition_option': 'National transition option',
+  'group.reporting_perimeter_entities': 'Group reporting perimeter',
   'parent.report_includes_entity': 'Whether the parent report covers you',
   'parent.report_standard': 'Which standard the parent reports under',
+  'parent.report_public_url': "The parent report's publication URL",
+  'parent.assurance_opinion_available': 'Parent assurance opinion',
+  'parent.taxonomy_information_included': 'Parent taxonomy information',
   'third_country.eu_turnover_year_1_eur': 'Group EU turnover, prior year',
   'third_country.eu_turnover_year_2_eur': 'Group EU turnover, year before that',
   'third_country.eu_subsidiary_turnover_eur': 'EU subsidiary turnover',
   'third_country.qualifying_eu_subsidiary_exists': 'Whether a qualifying EU subsidiary exists',
   'third_country.eu_branch_turnover_eur': 'EU branch turnover',
+  'reporting.first_reporting_year': 'First reporting year',
+  'reporting.value_chain_info_unavailable': 'Value-chain data availability',
 };
 
 export const factLabel = (id: string) => FACT_COPY[id] ?? id.split('.').pop()!.replace(/_/g, ' ');

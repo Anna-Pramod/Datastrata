@@ -1,9 +1,10 @@
 # Frontend
 
 ```
-web/                   The real site. Next.js 15 + React 19. Landing page is live and
-                       its free checker runs the actual applicability engine.
-prototypes/
+web/                   The real site. Next.js 15 + React 19, Seismograph/Oxide.
+                       Landing, 8-step check, sample dashboard and login shell.
+                       The check and the dashboard run the actual engine.
+prototypes/            Superseded exploration (retro / modern directions).
   landing.dc.html      Marketing page + free checker, in two visual directions (retro / modern)
   app-modern.dc.html   The full product, restrained navy-teal editorial direction
   app-retro.dc.html    The same product, warm period palette — plus the landing page inline
@@ -17,9 +18,13 @@ screenshots/           Rendered stills of the above (numbered by iteration)
 data, opened directly in a browser. They remain the reference for the thirteen screens not
 yet built. Each `.dc.html` loads `./support.js` from the same folder — keep them together.
 
-The landing page has now been built for real in `web/`, in the retro direction. Where the
-prototype and the engine disagreed, the engine won — `web/README.md` lists each departure
-and why.
+**The current design direction is Seismograph / Oxide**, from `New website design/`
+(option 5a + the 7a live trace), with its handoff in `New website design/handoff/`. That is
+what `web/` implements. The retro and modern `.dc.html` prototypes here are earlier
+exploration, kept for reference only — they are no longer the target.
+
+Where the mockup and the engine disagreed, the engine won. `web/README.md` lists every
+departure and why.
 
 ## Screens covered by the app prototypes
 

@@ -17,12 +17,16 @@ backend/        The deterministic core — runs the law
   engine/       Applicability engine v0.1 (TypeScript). Knowledge packs as data.
 
 frontend/       The product surface — shows the answer
-  prototypes/   Clickable high-fidelity mockups (.dc.html) + runtime
-  screenshots/  Rendered stills of those mockups
+  web/          The real site (Next.js). Seismograph/Oxide.
+  prototypes/   Superseded .dc.html exploration + runtime
+  screenshots/  Rendered stills of those prototypes
 
 docs/           The specification the code is built against
   briefs/       Product architecture (Pass 2) + UI/UX mockup brief
   source-documents/  Original .docx of the above
+
+New website design/   The current design direction (Seismograph/Oxide) and its
+                      token + component handoff. This is what frontend/web implements.
 ```
 
 Start with `docs/briefs/product-architecture-pass2.txt` for the product, then `backend/engine/CLAUDE.md` for the engineering laws.
@@ -31,9 +35,9 @@ Start with `docs/briefs/product-architecture-pass2.txt` for the product, then `b
 
 | Piece | Status |
 |---|---|
-| Applicability engine | Working library + CLI. 68 tests, green. CSRD pack encoded, all content `draft` (unratified). |
+| Applicability engine | Working library + CLI. 74 tests, green. CSRD pack encoded, all content `draft` (unratified). |
 | Country packs | Stubs only — no ratified country, so every result correctly ends "national-law status requires review". |
-| Frontend | Landing page built for real (Next.js, `frontend/web`) with the free checker wired to the engine. The other 13 screens are still prototypes. |
+| Frontend | Landing, 8-step check, sample dashboard and login shell built for real (Next.js, `frontend/web`) in the Seismograph/Oxide language. Check and dashboard run the engine. |
 | Persistence / API / tenancy | Not built — deliberate. The engine is a pure library until concierge volume justifies wrapping it. |
 | Change monitoring | Tiered source register (`backend/engine/monitoring/`) built, schema-validated, cross-checked against the pack, and tested; `/sweep map` discovers candidates. Watch sweep + scheduling not built, automation not enabled. |
 
