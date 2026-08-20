@@ -54,6 +54,7 @@ function ctx(factTypes: FactType[] = FACT_TYPES): RenderContext {
 function requirement(id: string, shape: { condition?: Condition; cases?: Requirement['cases']; defaultValue?: string }): Requirement {
   return {
     id,
+    version: 1,
     title: `Test requirement ${id}`,
     program: 'CSRD',
     decisionArea: 'Test area',

@@ -14,6 +14,7 @@
  * sole evidence for a conclusion.
  */
 
+import { z } from 'zod';
 import { amendmentDirection } from './schema';
 import type { LoadedCorpus } from './store';
 import { normalizeWhitespace } from './normalize';
@@ -49,6 +50,72 @@ export type EvidenceItem =
   | AmendmentChainEvidence
   | CrossReferenceEvidence
   | AbsenceEvidence;
+
+/**
+ * The runtime schema for `EvidenceItem`, and the only one.
+ *
+ * The interfaces above describe an evidence item to the compiler; this
+ * describes the same item to a validator at runtime, and it lives here beside
+ * them rather than in whichever module happens to need validation first. A
+ * verification result carries evidence, and defining a second evidence schema
+ * there would be two definitions of one data contract — which diverge the
+ * first time a field is added to one of them, silently, because neither side
+ * has any reason to look at the other.
+ *
+ * The distinction worth holding is between a shared *contract* and a shared
+ * *derivation*. Competing derivations must stay independent, which is why the
+ * renderer and its feature checker are separate implementations. Nothing here
+ * derives anything from evidence; it only says what an evidence item is. There
+ * is no independence to preserve, so a mirror would buy nothing but drift.
+ *
+ * The `z.ZodType<EvidenceItem>` annotation is what makes that a compiler-
+ * enforced claim rather than a comment: adding a field to an interface without
+ * adding it here, or the reverse, fails `tsc`.
+ *
+ * `.strict()` throughout, so an unrecognised key is a validation failure
+ * rather than a silently dropped one. A field nobody declared and nobody
+ * checks is how `in_catalogue.missReason` survived three modules and a
+ * specification all agreeing about it, all wrong.
+ *
+ * This schema answers "is this well-formed evidence?". `checkEvidenceSet`
+ * below answers "is it true?" — it re-reads the corpus and re-finds every
+ * quote. Neither substitutes for the other, and neither answers whether
+ * evidence *exists at all*: `checkEvidenceSet([])` has nothing to reject and
+ * returns clean, so cardinality is the caller's obligation.
+ */
+const quoteEvidenceSchema = z
+  .object({
+    kind: z.literal('quote'),
+    docId: z.string(),
+    sha256Normalized: z.string(),
+    text: z.string(),
+  })
+  .strict() satisfies z.ZodType<QuoteEvidence>;
+
+export const evidenceItemSchema: z.ZodType<EvidenceItem> = z.discriminatedUnion('kind', [
+  quoteEvidenceSchema,
+  z
+    .object({
+      kind: z.literal('amendment_chain'),
+      hops: z.array(z.object({ edgeId: z.string(), quote: quoteEvidenceSchema }).strict()),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('cross_reference'),
+      edgeId: z.string(),
+      from: quoteEvidenceSchema,
+      to: quoteEvidenceSchema,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('absence'),
+      docIds: z.array(z.string()),
+      term: z.string(),
+    })
+    .strict(),
+]);
 
 export interface EvidenceCheckResult {
   ok: boolean;

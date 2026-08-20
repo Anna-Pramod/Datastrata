@@ -15,175 +15,20 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
-import type { Condition, KnowledgePack, QuestionShowWhen } from '../types';
+import type { Condition, KnowledgePack } from '../types';
 import { assertFactVocabularyCoverage } from '../verification/vocabulary';
-
-const truth = z.enum(['APPLIES', 'DOES_NOT_APPLY', 'INDETERMINATE']);
-const reason = z.enum([
-  'missing_fact',
-  'range_crosses_threshold',
-  'catalogue_unknown',
-  'source_conflict',
-  'legal_ambiguity',
-  'customer_scope_ambiguity',
-  'national_law_unresolved',
-  'upstream_indeterminate',
-  'source_status_unresolved',
-  'not_yet_effective',
-]);
-const scopeType = z.enum(['organization', 'legal_entity', 'branch', 'facility', 'product', 'trade_lane', 'supplier', 'request', 'counterparty']);
-const cmpOp = z.enum(['gt', 'gte', 'lt', 'lte']);
-
-const condition: z.ZodType<Condition> = z.lazy(() =>
-  z.discriminatedUnion('op', [
-    z.object({ op: z.literal('all'), of: z.array(condition).min(1) }),
-    z.object({ op: z.literal('any'), of: z.array(condition).min(1) }),
-    z.object({ op: z.literal('not'), of: condition }),
-    z.object({ op: z.literal('cmp'), fact: z.string(), cmp: cmpOp, value: z.number() }),
-    z.object({ op: z.literal('eq'), fact: z.string(), value: z.union([z.string(), z.number(), z.boolean()]) }),
-    z.object({ op: z.literal('in_set'), fact: z.string(), set: z.array(z.union([z.string(), z.number()])).min(1) }),
-    z.object({ op: z.literal('in_catalogue'), fact: z.string(), catalogue: z.string(), missReason: reason.optional() }),
-    z.object({ op: z.literal('prefix_in'), fact: z.string(), prefixes: z.array(z.string()).min(1) }),
-    z.object({ op: z.literal('exists'), fact: z.string() }),
-    z.object({ op: z.literal('count_cmp'), fact: z.string(), cmp: cmpOp, value: z.number() }),
-    z.object({ op: z.literal('quantifier_any'), scopeType, where: condition }),
-    z.object({ op: z.literal('sum_cmp'), scopeType, fact: z.string(), cmp: cmpOp, value: z.number() }),
-    z.object({ op: z.literal('fy_starts_on_or_after'), date: z.string() }),
-    z.object({ op: z.literal('fy_start_year_in'), years: z.array(z.number()).min(1) }),
-    z.object({ op: z.literal('year_diff_lt'), fromFact: z.string(), years: z.number() }),
-    z.object({ op: z.literal('requirement_ref'), requirement: z.string(), expect: truth }),
-    z.object({ op: z.literal('pack_flag'), flag: z.string() }),
-  ]),
-) as z.ZodType<Condition>;
-
-const showWhen: z.ZodType<QuestionShowWhen> = z.lazy(() =>
-  z
-    .object({
-      always: z.boolean().optional(),
-      allOf: z.array(showWhen).optional(),
-      anyOf: z.array(showWhen).optional(),
-      factEquals: z.object({ fact: z.string(), value: z.union([z.string(), z.number(), z.boolean()]) }).optional(),
-      factExists: z.object({ fact: z.string() }).optional(),
-      factInSet: z.object({ fact: z.string(), set: z.array(z.string()), negate: z.boolean().optional() }).optional(),
-      requirementIs: z.object({ requirement: z.string(), truth }).optional(),
-      requirementResolved: z.object({ requirement: z.string() }).optional(),
-    })
-    .strict(),
-) as z.ZodType<QuestionShowWhen>;
-
-const sourceRecord = z.object({
-  id: z.string(),
-  title: z.string(),
-  legalType: z.string(),
-  statusAtSnapshot: z.string(),
-  usedFor: z.string(),
-  keyProvisions: z.string().optional(),
-  url: z.string().url(),
-  monitor: z.string().optional(),
-});
-
-const factType = z.object({
-  id: z.string(),
-  scopeType,
-  dataType: z.enum(['number_or_range', 'boolean', 'boolean_or_unknown', 'enum', 'country', 'date', 'year', 'url', 'entity_list', 'item_list', 'status']),
-  module: z.string(),
-  reusableAcrossPrograms: z.enum(['yes', 'no', 'potentially']),
-  typicalSource: z.string().optional(),
-  reviewCadence: z.string().optional(),
-  missingReason: reason.optional(),
-  enumValues: z.array(z.string()).optional(),
-  notes: z.string().optional(),
-  label: z.string().optional(),
-  unit: z.string().optional(),
-  labelNote: z.string().optional(),
-});
-
-const requirement = z.object({
-  id: z.string(),
-  ruleRef: z.string().optional(),
-  title: z.string(),
-  program: z.string(),
-  decisionArea: z.string(),
-  plainEnglish: z.string(),
-  scopeType,
-  relationshipClass: z.enum([
-    'direct_legal',
-    'direct_legal_exemption',
-    'indirect_operational',
-    'voluntary_commitment',
-    'contractual',
-    'advisory_readiness',
-    'standard_selection',
-    'timing_context',
-    'legal_status_gate',
-  ]),
-  severity: z.enum(['critical', 'high', 'medium', 'low']),
-  kind: z.enum(['boolean', 'selection']),
-  condition: condition.optional(),
-  cases: z.array(z.object({ when: condition, value: z.string(), label: z.string().optional() })).optional(),
-  defaultValue: z.string().optional(),
-  legalStatus: z.enum(['in_force', 'adopted_not_effective', 'proposed', 'superseded']),
-  ratification: z.object({ status: z.enum(['draft', 'ratified']), by: z.string().optional(), date: z.string().optional() }),
-  sources: z.array(z.string()).min(1),
-  provisions: z.string().optional(),
-  caution: z.string().optional(),
-  obligationTemplates: z.array(z.string()).optional(),
-});
-
-const obligationTemplate = z.object({
-  id: z.string(),
-  obligation: z.string(),
-  actor: z.string(),
-  trigger: z.object({ allOf: z.array(z.string()).optional(), anyOf: z.array(z.string()).optional() }),
-  defaultOwnerRole: z.string(),
-  deadlineLogic: z.string(),
-  evidenceExpectation: z.string(),
-  completionCriterion: z.string(),
-});
-
-const gapTest = z.object({
-  id: z.string(),
-  obligationTemplate: z.string(),
-  readinessTest: z.string(),
-  readinessFact: z.string().optional(),
-  satisfiedWhen: z.array(z.string()).optional(),
-  existingEvidenceToCredit: z.string(),
-  priority: z.enum(['critical', 'high', 'medium', 'low']),
-  firstAction: z.string(),
-  consequence: z.string(),
-});
-
-const question = z.object({
-  id: z.string(),
-  order: z.number(),
-  module: z.string(),
-  text: z.string(),
-  factTypes: z.array(z.string()),
-  showWhen,
-  inputPath: z.string(),
-  whyAsked: z.string(),
-});
-
-const catalogue = z.object({ entries: z.record(z.boolean()), missReason: reason, note: z.string().optional() });
-
-const changeWatchItem = z.object({
-  id: z.string(),
-  title: z.string(),
-  status: z.string(),
-  expected: z.string().optional(),
-  affectsRequirements: z.array(z.string()),
-  sources: z.array(z.string()),
-  note: z.string().optional(),
-});
-
-const manifest = z.object({
-  id: z.string(),
-  version: z.string(),
-  program: z.string(),
-  legalSnapshot: z.string(),
-  packFlags: z.record(z.boolean()),
-  changeWatch: z.array(changeWatchItem),
-});
+import { requirementSha256 } from '../verification/canonical';
+import { assertVersionIntegrity, parseVersionRegistry, VersionIntegrityError } from '../verification/registry';
+import {
+  catalogueSchema,
+  factTypeSchema,
+  gapTestSchema,
+  manifestSchema,
+  obligationTemplateSchema,
+  questionSchema,
+  requirementSchema,
+  sourceRecordSchema,
+} from './schema';
 
 export class PackIntegrityError extends Error {
   constructor(public problems: string[]) {
@@ -237,22 +82,64 @@ function collectCatalogueRefs(c: Condition, into: Set<string>): void {
   else if (c.op === 'in_catalogue') into.add(c.catalogue);
 }
 
-export function loadPack(dir: string): KnowledgePack {
+/**
+ * Where the version registry lives, relative to a pack directory.
+ *
+ * The registry sits under `verification/`, not beside the authored content it
+ * polices — a hash file shelved next to regulatory knowledge invites being
+ * read as knowledge. Packs live at `<engine>/knowledge/<packId>`, so the
+ * registry is two levels up. The convention is expressed once, here, and can
+ * be overridden per call rather than being re-derived at each call site.
+ */
+function defaultVersionRegistryDir(packDir: string): string {
+  return join(packDir, '..', '..', 'verification', 'requirement-versions');
+}
+
+export interface LoadPackOptions {
+  /** Overrides the directory holding `<packId>.json`. Defaults to the convention above. */
+  versionRegistryDir?: string;
+}
+
+/**
+ * Reads the registry and asserts every requirement still hashes to the digest
+ * recorded against its declared `version`.
+ *
+ * A missing registry file is a failure rather than a skipped check. Treating
+ * absence as "nothing to verify" would mean the one action that disables
+ * version integrity everywhere — deleting a file — is also the one action
+ * that produces no complaint, and an integrity check that can be switched off
+ * by accident is not an integrity check.
+ */
+function assertRequirementVersions(pack: KnowledgePack, registryDir: string): void {
+  const path = join(registryDir, `${pack.id}.json`);
+  let raw: string;
+  try {
+    raw = readFileSync(path, 'utf8');
+  } catch {
+    throw new VersionIntegrityError([
+      `no version registry for pack ${pack.id} at ${path} — every requirement's version is unverifiable without it`,
+    ]);
+  }
+  assertVersionIntegrity(pack.requirements, parseVersionRegistry(JSON.parse(raw)), requirementSha256);
+}
+
+export function loadPack(dir: string, options: LoadPackOptions = {}): KnowledgePack {
   const read = (name: string) => JSON.parse(readFileSync(join(dir, name), 'utf8'));
 
-  const m = manifest.parse(read('pack.json'));
+  const m = manifestSchema.parse(read('pack.json'));
   const pack: KnowledgePack = {
     ...m,
-    sources: z.array(sourceRecord).parse(read('sources.json')),
-    factTypes: z.array(factType).parse(read('fact-types.json')),
-    requirements: z.array(requirement).parse(read('requirements.json')),
-    obligationTemplates: z.array(obligationTemplate).parse(read('obligation-templates.json')),
-    gapTests: z.array(gapTest).parse(read('gap-tests.json')),
-    questions: z.array(question).parse(read('questionnaire.json')),
-    catalogues: z.record(catalogue).parse(read('catalogues.json')),
+    sources: z.array(sourceRecordSchema).parse(read('sources.json')),
+    factTypes: z.array(factTypeSchema).parse(read('fact-types.json')),
+    requirements: z.array(requirementSchema).parse(read('requirements.json')),
+    obligationTemplates: z.array(obligationTemplateSchema).parse(read('obligation-templates.json')),
+    gapTests: z.array(gapTestSchema).parse(read('gap-tests.json')),
+    questions: z.array(questionSchema).parse(read('questionnaire.json')),
+    catalogues: z.record(catalogueSchema).parse(read('catalogues.json')),
   };
   verifyIntegrity(pack);
   assertFactVocabularyCoverage(pack);
+  assertRequirementVersions(pack, options.versionRegistryDir ?? defaultVersionRegistryDir(dir));
   return pack;
 }
 

@@ -38,6 +38,7 @@ function factType(id: string, overrides: Partial<FactType> = {}): FactType {
 function requirement(id: string, shape: { condition?: Condition; cases?: Requirement['cases'] }): Requirement {
   return {
     id,
+    version: 1,
     title: `Test requirement ${id}`,
     program: 'CSRD',
     decisionArea: 'Test area',

@@ -130,6 +130,7 @@ function miniPack(legalStatus: 'in_force' | 'adopted_not_effective' = 'in_force'
     requirements: [
       {
         id: 'T-001',
+        version: 1,
         title: 'Test requirement',
         program: 'TEST',
         decisionArea: 'Test',

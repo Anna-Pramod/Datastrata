@@ -34,6 +34,7 @@
 
 import type { Condition, Requirement } from '../types';
 import { sha256Hex } from '../corpus/hash';
+import { requirementSchema } from '../knowledge/schema';
 
 /** The subset of JSON values this module ever produces. */
 type Canonical = null | boolean | number | string | Canonical[] | { [key: string]: Canonical };
@@ -65,13 +66,36 @@ function canonicalize(value: unknown): Canonical {
 }
 
 /**
+ * The one canonical serialisation in this system: key-sorted, array-order-
+ * preserving, JSON-escaped text for any JSON-shaped value.
+ *
+ * Every hash below is `sha256Hex(canonicalJson(...))` of something, and the
+ * ledger's `entryId` and the verification result's `resultSha256` join them.
+ * That is deliberate and worth stating, because the alternative is not
+ * hypothetical: this module previously reached for the private `canonicalize`
+ * helper and called `JSON.stringify` at each site, which is a serialiser
+ * defined four times over. Two canonical serialisers that disagree by one
+ * character are two different answers to "is this still what was signed", and
+ * the disagreement surfaces as a signature that mysteriously fails to verify
+ * rather than as a diff anyone can read.
+ *
+ * `undefined` is dropped from objects and rendered as `null` elsewhere,
+ * matching `JSON.stringify`'s own handling — so an absent optional field and
+ * one explicitly set to `undefined` produce identical text, and a logical
+ * value has exactly one canonical encoding.
+ */
+export function canonicalJson(value: unknown): string {
+  return JSON.stringify(canonicalize(value));
+}
+
+/**
  * Canonical text for a `Condition` tree: key-sorted, array-order-preserving
  * JSON. Two conditions differing only in JSON key order produce identical
  * text; two differing only in the order of an `of`/`set`/`prefixes`/`years`
  * array do not.
  */
 export function canonicalizeCondition(condition: Condition): string {
-  return JSON.stringify(canonicalize(condition));
+  return canonicalJson(condition);
 }
 
 /** SHA-256 of `canonicalizeCondition(condition)`. */
@@ -95,15 +119,15 @@ export function conditionSha256(condition: Condition): string {
  * shape by coincidence of structure.
  */
 export function logicalPayloadSha256(requirement: Requirement): string {
-  const payload: Canonical =
+  const payload =
     requirement.kind === 'boolean'
-      ? canonicalize({ kind: 'boolean', condition: requirement.condition })
-      : canonicalize({
+      ? { kind: 'boolean', condition: requirement.condition }
+      : {
           kind: 'selection',
           cases: (requirement.cases ?? []).map((c) => ({ when: c.when, value: c.value })),
           defaultValue: requirement.defaultValue,
-        });
-  return sha256Hex(JSON.stringify(payload));
+        };
+  return sha256Hex(canonicalJson(payload));
 }
 
 /**
@@ -113,10 +137,42 @@ export function logicalPayloadSha256(requirement: Requirement): string {
  * unrelated field (e.g. `caution`) is edited.
  */
 export function requirementInputSha256(requirement: Requirement): string {
-  const payload = canonicalize({
-    provisions: requirement.provisions,
-    sources: requirement.sources,
-    logicalPayloadSha256: logicalPayloadSha256(requirement),
-  });
-  return sha256Hex(JSON.stringify(payload));
+  return sha256Hex(
+    canonicalJson({
+      provisions: requirement.provisions,
+      sources: requirement.sources,
+      logicalPayloadSha256: logicalPayloadSha256(requirement),
+    }),
+  );
+}
+
+/**
+ * Covers the *whole authored requirement*, and is the hash the version
+ * registry binds a `version` to. It answers a different question from its
+ * sibling above: `requirementInputSha256` asks "did the verification input
+ * move?", and deliberately ignores `caution` so that editing a warning does
+ * not invalidate a signature over logic that never changed. This one asks
+ * "did anything the author wrote change without a version bump?", so the
+ * warning counts. Both exist; neither replaces the other.
+ *
+ * The domain is `requirementSchema.parse()`'s output, never a hand-written
+ * list of field names. That one choice buys both properties the registry
+ * needs, and a whitelist buys neither:
+ *
+ *  - A field added to the authored schema enters the hash automatically. A
+ *    list would keep producing the old digest, and a hash that fails to move
+ *    is indistinguishable from content that did not change — so the omission
+ *    would never announce itself.
+ *  - A field the loader attaches after validation (`derivedStatus`,
+ *    `statusReasons`) can never enter it, because zod strips undeclared keys
+ *    before this function sees them. Were they covered, recomputing a derived
+ *    status would read as a requirement revision and trip version integrity
+ *    on every status change.
+ *
+ * Parsing rather than trusting also normalises the value: an absent optional
+ * and one explicitly set to `undefined` hash alike, as does the same record
+ * read from two different JSON encodings.
+ */
+export function requirementSha256(requirement: Requirement): string {
+  return sha256Hex(canonicalJson(requirementSchema.parse(requirement)));
 }

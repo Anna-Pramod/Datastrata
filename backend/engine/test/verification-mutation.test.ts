@@ -336,6 +336,7 @@ const syntheticCtx: RenderContext = { factTypes: SYNTHETIC_FACT_TYPES, catalogue
 function syntheticRequirement(id: string, condition: Condition): Requirement {
   return {
     id,
+    version: 1,
     title: 'Synthetic fixture',
     program: 'TEST',
     decisionArea: 'Synthetic',

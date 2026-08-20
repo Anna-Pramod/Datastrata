@@ -202,6 +202,15 @@ export interface SelectionCase {
 
 export interface Requirement {
   id: string;
+  /**
+   * Content revision of this requirement, an integer >= 1 bumped by hand as
+   * part of any content edit. It is what a signature's `requirementVersion`
+   * pins, and `verification/requirement-versions/<packId>.json` binds each
+   * version to the content hash it named — so an edit without a bump, or a
+   * bump without a registration, fails the load. Generated versions were
+   * rejected deliberately: they cannot tell a revision from a reformat.
+   */
+  version: number;
   /** Plain-English rule this executes (02_Regulatory_Rules row). */
   ruleRef?: string;
   title: string;

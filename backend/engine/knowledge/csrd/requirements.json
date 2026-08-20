@@ -1,6 +1,7 @@
 [
   {
     "id": "CSRD-S-001",
+    "version": 1,
     "ruleRef": "R-001",
     "title": "Individual Article 19a threshold scope",
     "program": "CSRD",
@@ -27,6 +28,7 @@
   },
   {
     "id": "CSRD-S-002",
+    "version": 1,
     "ruleRef": "R-002",
     "title": "Consolidated Article 29a threshold scope",
     "program": "CSRD",
@@ -54,6 +56,7 @@
   },
   {
     "id": "CSRD-S-003",
+    "version": 1,
     "ruleRef": "R-004",
     "title": "First-wave (FY2024) reporting history",
     "program": "CSRD",
@@ -71,6 +74,7 @@
   },
   {
     "id": "CSRD-S-004",
+    "version": 1,
     "ruleRef": "R-006",
     "title": "FY2025–26 national transition exemption",
     "program": "CSRD",
@@ -102,6 +106,7 @@
   },
   {
     "id": "CSRD-S-005",
+    "version": 1,
     "ruleRef": "R-007",
     "title": "Subsidiary exemption via qualifying EU-parent consolidated report",
     "program": "CSRD",
@@ -129,6 +134,7 @@
   },
   {
     "id": "CSRD-S-006",
+    "version": 1,
     "ruleRef": "R-007",
     "title": "Subsidiary exemption via qualifying non-EU parent report",
     "program": "CSRD",
@@ -157,6 +163,7 @@
   },
   {
     "id": "CSRD-S-007",
+    "version": 1,
     "ruleRef": "R-009",
     "title": "Article 40a third-country group gate",
     "program": "CSRD",
@@ -181,6 +188,7 @@
   },
   {
     "id": "CSRD-S-008",
+    "version": 1,
     "ruleRef": "R-010",
     "title": "Article 40a subsidiary gateway",
     "program": "CSRD",
@@ -206,6 +214,7 @@
   },
   {
     "id": "CSRD-S-009",
+    "version": 1,
     "ruleRef": "R-011",
     "title": "Article 40a branch gateway",
     "program": "CSRD",
@@ -230,6 +239,7 @@
   },
   {
     "id": "CSRD-S-010",
+    "version": 1,
     "ruleRef": "R-013",
     "title": "Protected value-chain undertaking",
     "program": "CSRD",
@@ -254,6 +264,7 @@
   },
   {
     "id": "CSRD-S-011",
+    "version": 1,
     "ruleRef": "R-014",
     "title": "Above-cap request with decline right",
     "program": "CSRD",
@@ -277,6 +288,7 @@
   },
   {
     "id": "CSRD-S-012",
+    "version": 1,
     "ruleRef": "R-018",
     "title": "Applicable ESRS version",
     "program": "CSRD",
@@ -317,6 +329,7 @@
   },
   {
     "id": "CSRD-S-013",
+    "version": 1,
     "ruleRef": "R-024",
     "title": "National-law completeness gate",
     "program": "CSRD",
@@ -341,6 +354,7 @@
   },
   {
     "id": "CSRD-S-014",
+    "version": 1,
     "ruleRef": "R-017",
     "title": "Reporting duty (post-exemption)",
     "program": "CSRD",
@@ -380,6 +394,7 @@
   },
   {
     "id": "CSRD-S-015",
+    "version": 1,
     "ruleRef": "R-020",
     "title": "Limited assurance over sustainability reporting",
     "program": "CSRD",
@@ -397,6 +412,7 @@
   },
   {
     "id": "CSRD-S-016",
+    "version": 1,
     "ruleRef": "R-023",
     "title": "First-three-years value-chain transition relief",
     "program": "CSRD",

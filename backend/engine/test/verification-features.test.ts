@@ -78,6 +78,7 @@ function requirement(
 ): Requirement {
   return {
     id,
+    version: 1,
     title: 'Example requirement',
     program: 'TEST',
     decisionArea: 'Test area',

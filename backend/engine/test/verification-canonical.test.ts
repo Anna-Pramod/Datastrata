@@ -10,17 +10,22 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import {
   canonicalizeCondition,
+  canonicalJson,
   conditionSha256,
   logicalPayloadSha256,
   requirementInputSha256,
+  requirementSha256,
 } from '../src/verification/canonical';
+import { requirementSchema } from '../src/knowledge/schema';
 import type { Condition, Requirement, SelectionCase } from '../src/types';
 
 function requirement(overrides: Partial<Requirement> = {}): Requirement {
   return {
     id: 'REQ-TEST',
+    version: 1,
     title: 'Test requirement',
     program: 'CSRD',
     decisionArea: 'Test area',
@@ -225,5 +230,223 @@ describe('requirementInputSha256', () => {
     const base = requirement({ provisions: 'Art. 5(1)' });
     const changed = requirement({ provisions: 'Art. 5(2)' });
     expect(requirementInputSha256(base)).not.toBe(requirementInputSha256(changed));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// requirementSha256
+//
+// This block characterises what the hash *covers*, and it exists because the
+// registry it feeds is unavoidably trust-on-first-use: a correct and an
+// incorrect digest look equally random, so reading `csrd.json` proves nothing
+// about it. What can be established independently is the domain — which edits
+// move the hash and which do not — and that is what these tests pin, before
+// any digest is written down.
+//
+// Two properties matter more than the individual cases. The hash must cover
+// the *authored* record only, so a field the loader attaches later cannot
+// masquerade as a content revision; and it must follow the pack's zod schema
+// rather than a hand-written list of field names, so a newly authored field
+// enters the hash without anybody remembering to add it.
+// ---------------------------------------------------------------------------
+
+/** Every authored field populated, so an edit to any one of them is testable. */
+function fullRequirement(overrides: Partial<Requirement> = {}): Requirement {
+  return requirement({
+    ruleRef: 'R-001',
+    condition: { op: 'exists', fact: 'entity.turnover' },
+    cases: [{ when: { op: 'exists', fact: 'entity.turnover' }, value: 'set_1', label: 'Set one' }],
+    defaultValue: 'set_0',
+    provisions: 'Art. 19a(1)',
+    caution: 'Handle with care.',
+    obligationTemplates: ['OT-001'],
+    ...overrides,
+  });
+}
+
+/**
+ * One content edit per field the authored schema declares. The list is checked
+ * against `requirementSchema.shape` below, so adding a field to the schema
+ * fails this suite until someone has decided what editing it should mean.
+ */
+const AUTHORED_EDITS: Array<[string, Partial<Requirement>]> = [
+  ['id', { id: 'REQ-OTHER' }],
+  ['version', { version: 2 }],
+  ['ruleRef', { ruleRef: 'R-002' }],
+  ['title', { title: 'A different requirement' }],
+  ['program', { program: 'OTHER' }],
+  ['decisionArea', { decisionArea: 'Another area' }],
+  ['plainEnglish', { plainEnglish: 'Different plain English.' }],
+  ['scopeType', { scopeType: 'organization' }],
+  ['relationshipClass', { relationshipClass: 'contractual' }],
+  ['severity', { severity: 'low' }],
+  ['kind', { kind: 'selection' }],
+  ['condition', { condition: { op: 'exists', fact: 'entity.employees' } }],
+  ['cases', { cases: [{ when: { op: 'exists', fact: 'entity.employees' }, value: 'set_2' }] }],
+  ['defaultValue', { defaultValue: 'set_9' }],
+  ['legalStatus', { legalStatus: 'proposed' }],
+  ['ratification', { ratification: { status: 'ratified' } }],
+  ['sources', { sources: ['SRC-OTHER'] }],
+  ['provisions', { provisions: 'Art. 19a(2)' }],
+  ['caution', { caution: 'A different caution.' }],
+  ['obligationTemplates', { obligationTemplates: ['OT-002'] }],
+];
+
+/**
+ * Rebuilds every plain object with its keys in reverse order, recursively,
+ * leaving array order alone. JSON promises no field order, so the same
+ * requirement read from two encodings must hash the same; array order is
+ * meaning and must not be touched by this helper.
+ *
+ * Deliberately not `JSON.stringify(value, keyList)` — the replacer-array form
+ * filters keys at *every* depth, so it silently strips nested objects rather
+ * than reordering them, and the resulting test would pass or fail for reasons
+ * having nothing to do with key order.
+ */
+function reverseKeyOrder(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(reverseKeyOrder);
+  if (value !== null && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const key of Object.keys(record).reverse()) out[key] = reverseKeyOrder(record[key]);
+    return out;
+  }
+  return value;
+}
+
+describe('requirementSha256', () => {
+  it('is a lowercase sha256 hex digest', () => {
+    expect(requirementSha256(fullRequirement())).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('is deterministic for the same content', () => {
+    expect(requirementSha256(fullRequirement())).toBe(requirementSha256(fullRequirement()));
+  });
+
+  it('has an edit case for every field the authored schema declares', () => {
+    // Derived from the schema, never a second hand-written list: this is what
+    // turns "someone added an authored field" into a red suite.
+    const declared = Object.keys(requirementSchema.shape).sort();
+    const covered = AUTHORED_EDITS.map(([name]) => name).sort();
+    expect(covered).toEqual(declared);
+  });
+
+  it.each(AUTHORED_EDITS)('moves when %s is edited', (_name, edit) => {
+    expect(requirementSha256(fullRequirement(edit))).not.toBe(requirementSha256(fullRequirement()));
+  });
+
+  it('is stable under JSON key reordering, at every level', () => {
+    const base = fullRequirement();
+    const reordered = reverseKeyOrder(base) as Requirement;
+    expect(Object.keys(reordered)).not.toEqual(Object.keys(base));
+    expect(reordered).toEqual(base); // same content, different key order
+    expect(requirementSha256(reordered)).toBe(requirementSha256(base));
+  });
+
+  it('is stable under whitespace and pretty-printing changes', () => {
+    const base = fullRequirement();
+    const compact = JSON.parse(JSON.stringify(base)) as Requirement;
+    const pretty = JSON.parse(JSON.stringify(base, null, 4)) as Requirement;
+    expect(requirementSha256(pretty)).toBe(requirementSha256(compact));
+  });
+
+  it('covers the whole authored record, unlike requirementInputSha256', () => {
+    // The two hashes answer different questions and must not be collapsed:
+    // editing `caution` is not a change to the verification input, but it is
+    // a change to what the author wrote.
+    const base = fullRequirement();
+    const edited = fullRequirement({ caution: 'A different caution.' });
+    expect(requirementInputSha256(edited)).toBe(requirementInputSha256(base));
+    expect(requirementSha256(edited)).not.toBe(requirementSha256(base));
+  });
+
+  it('ignores fields the loader attaches after validation', () => {
+    // `derivedStatus`/`statusReasons` are projections, not authored content.
+    // If they entered the hash, every status recomputation would read as a
+    // requirement revision and trip version integrity.
+    const base = fullRequirement();
+    const enriched = { ...base, derivedStatus: 'verified', statusReasons: ['stale_render'] } as unknown as Requirement;
+    expect(requirementSha256(enriched)).toBe(requirementSha256(base));
+  });
+
+  it('ignores any undeclared key, not merely the two the loader adds today', () => {
+    const base = fullRequirement();
+    const noisy = { ...base, someFutureProjection: { nested: [1, 2, 3] } } as unknown as Requirement;
+    expect(requirementSha256(noisy)).toBe(requirementSha256(base));
+  });
+
+  it('follows the schema, not a list of field names', () => {
+    // The discriminating test. A hand-written whitelist and a schema-derived
+    // hash agree on every case above; they disagree the moment the schema
+    // declares a field the list has never heard of. Declaring one at runtime
+    // is the only way to ask that question without waiting for the future
+    // edit that would otherwise ship silently wrong.
+    const base = fullRequirement();
+    const withExtra = { ...base, experimentalField: 'declared by the schema' } as unknown as Requirement;
+
+    // Undeclared, so stripped: identical hash.
+    expect(requirementSha256(withExtra)).toBe(requirementSha256(base));
+
+    // `_cached` memoises the shape zod parses against, so it has to be
+    // dropped alongside the shape itself or the redeclaration is ignored.
+    const cache = requirementSchema as unknown as { _cached: unknown };
+    const originalShape = requirementSchema._def.shape;
+    try {
+      requirementSchema._def.shape = () => ({ ...originalShape(), experimentalField: z.string().optional() });
+      cache._cached = null;
+      // Now declared, so hashed: the digest must move.
+      expect(requirementSha256(withExtra)).not.toBe(requirementSha256(base));
+    } finally {
+      requirementSchema._def.shape = originalShape;
+      cache._cached = null;
+    }
+
+    // Restored: back to stripping it.
+    expect(requirementSha256(withExtra)).toBe(requirementSha256(base));
+  });
+});
+
+describe('canonicalJson', () => {
+  it('sorts object keys and leaves array order alone', () => {
+    expect(canonicalJson({ b: 1, a: 2 })).toBe('{"a":2,"b":1}');
+    expect(canonicalJson([{ b: 1, a: 2 }, 'z', 'a'])).toBe('[{"a":2,"b":1},"z","a"]');
+  });
+
+  it('sorts recursively, at every depth', () => {
+    expect(canonicalJson({ outer: { z: { y: 1, x: 2 }, a: [{ q: 1, p: 2 }] } })).toBe(
+      '{"outer":{"a":[{"p":2,"q":1}],"z":{"x":2,"y":1}}}',
+    );
+  });
+
+  it('escapes string content rather than joining it, so a crafted value cannot shift a field boundary', () => {
+    // The B1a closure-hash defect: a delimiter-joined encoding lets a value
+    // containing the delimiter collide two structurally different records.
+    const a = canonicalJson({ one: 'x":"y', two: 'z' });
+    const b = canonicalJson({ one: 'x', two: '"y","two":"z' });
+    expect(a).not.toBe(b);
+  });
+
+  it('treats an absent optional and an explicit undefined identically', () => {
+    expect(canonicalJson({ a: 1 })).toBe(canonicalJson({ a: 1, b: undefined }));
+  });
+
+  it('handles the scalar and null cases', () => {
+    expect(canonicalJson('x')).toBe('"x"');
+    expect(canonicalJson(7)).toBe('7');
+    expect(canonicalJson(true)).toBe('true');
+    expect(canonicalJson(null)).toBe('null');
+  });
+
+  it('is the one serialiser the condition hash uses', () => {
+    // Not "produces the same answer as" — the same function. Two canonical
+    // serialisers are two definitions of what a signature covers.
+    const condition: Condition = {
+      op: 'all',
+      of: [
+        { op: 'exists', fact: 'entity.turnover' },
+        { op: 'cmp', fact: 'entity.turnover', cmp: 'gt', value: 50_000_000 },
+      ],
+    };
+    expect(canonicalizeCondition(condition)).toBe(canonicalJson(condition));
   });
 });
