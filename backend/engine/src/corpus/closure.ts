@@ -123,13 +123,29 @@ export function computeClosure(
 
   // Canonical serialisation. Every field that changes what the reader was
   // entitled to know, and nothing that does not.
+  //
+  // Fields are JSON-encoded rather than delimiter-joined. `provenance.source`
+  // is free text and `human` provenance is an expected input, so a tab or
+  // newline pasted into a citation would otherwise shift field boundaries and
+  // let two different edge sets serialise identically. A hash that can collide
+  // is a hash that silently fails to move when the entitlement basis changes,
+  // which is the exact failure this hash exists to prevent.
   const lines: string[] = [];
   for (const id of docIds) {
-    lines.push(`doc\t${id}\t${byId.get(id)?.sha256Normalized ?? ''}`);
+    lines.push(JSON.stringify(['doc', id, byId.get(id)?.sha256Normalized ?? '']));
   }
   for (const e of included) {
     lines.push(
-      `edge\t${e.edgeId}\t${e.kind}\t${e.from}\t${e.to}\t${e.provenance.type}\t${e.provenance.source}\t${e.provenance.recordedOn}`,
+      JSON.stringify([
+        'edge',
+        e.edgeId,
+        e.kind,
+        e.from,
+        e.to,
+        e.provenance.type,
+        e.provenance.source,
+        e.provenance.recordedOn,
+      ]),
     );
   }
 

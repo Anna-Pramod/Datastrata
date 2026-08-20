@@ -132,6 +132,58 @@ describe('computeClosure', () => {
     expect(computeClosure(idx, ['DOC-A']).docIds).toEqual(['DOC-A', 'DOC-B', 'DOC-C', 'DOC-D']);
   });
 
+  it('re-expands a document when a later, shorter path reaches it', () => {
+    // The discriminating case for relaxation: a document first reached at a
+    // costly reference depth, then reached again -- via a *different* entry
+    // arm and a zero-cost structural hop -- at a cheaper depth. At
+    // referenceDepth 2: DOC-C is first found via A -> B -> C at depth 2
+    // (B's own hop already spent the budget). DOC-C is then found again via
+    // A -> D -> C, where the D -> C leg is structural and costs nothing, so
+    // that path lands DOC-C at depth 1. Only the corrected depth 1 leaves
+    // budget for DOC-C's own reference hop to DOC-E (depth 1 + 1 = 2, within
+    // bound); the stale depth 2 would push DOC-E to depth 3 and exclude it.
+    // A naive "first path wins" traversal keeps the depth-2 reading and
+    // omits DOC-E; correct relaxation re-expands DOC-C and includes it.
+    // Order-independence of the closure -- and therefore the stability of
+    // its hash -- rests on this. (Verified by hand: disabling relaxation,
+    // i.e. skipping the update whenever the target has already been seen at
+    // all rather than only when the new depth is not strictly better, still
+    // passes every other test in this file but drops DOC-E from this one.)
+    const idx = index([
+      doc('DOC-A', [
+        edge('E1', 'references', 'DOC-A', 'DOC-B'),
+        edge('E2', 'references', 'DOC-A', 'DOC-D'),
+      ]),
+      doc('DOC-B', [edge('E3', 'references', 'DOC-B', 'DOC-C')]),
+      doc('DOC-D', [edge('E4', 'amendedBy', 'DOC-D', 'DOC-C')]),
+      doc('DOC-C', [edge('E5', 'references', 'DOC-C', 'DOC-E')]),
+      doc('DOC-E'),
+    ]);
+    const deeper = { ...CLOSURE_POLICY_V0, referenceDepth: 2 };
+    expect(computeClosure(idx, ['DOC-A'], deeper).docIds).toEqual([
+      'DOC-A',
+      'DOC-B',
+      'DOC-C',
+      'DOC-D',
+      'DOC-E',
+    ]);
+  });
+
+  it('does not let a free-text provenance source forge a field boundary', () => {
+    // provenance.source is free text and `human` provenance is expected, so a
+    // tab or newline in it must not be able to shift the serialisation's field
+    // boundaries and collide two different edge sets onto one hash.
+    const a = index([
+      doc('DOC-A', [edge('E1', 'amendedBy', 'DOC-A', 'DOC-B', 'x\ty')]),
+      doc('DOC-B'),
+    ]);
+    const b = index([
+      doc('DOC-A', [edge('E1', 'amendedBy', 'DOC-A', 'DOC-B', 'x')]),
+      doc('DOC-B'),
+    ]);
+    expect(computeClosure(a, ['DOC-A']).sha256).not.toBe(computeClosure(b, ['DOC-A']).sha256);
+  });
+
   it('lists edges whose endpoints are both inside the closure', () => {
     const idx = index([
       doc('DOC-A', [edge('E1', 'amendedBy', 'DOC-A', 'DOC-B')]),
