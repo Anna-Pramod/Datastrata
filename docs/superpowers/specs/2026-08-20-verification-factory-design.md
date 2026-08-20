@@ -288,6 +288,8 @@ Art. 19a ──references──▶ instrument Y        reference depth 1
 
 The closure hash covers the resulting `docId` set with their `sha256Normalized` values, plus the connecting edge set **including each edge's identity and provenance**.
 
+**Every field is escaped before it enters the digest** — JSON-encoded, not joined by a delimiter. `provenance.source` is free text, and `human` provenance is an expected input rather than a degenerate one, so a tab or newline pasted into a citation would otherwise shift field boundaries and let two genuinely different edge sets serialise to identical bytes. A hash that can collide is a hash that silently fails to move when the entitlement basis changes, which is the precise failure this hash exists to prevent.
+
 Hashing the edges' provenance rather than merely their existence closes a hole that documents alone cannot: an edge can be retyped, re-sourced, or silently switched from `celex_metadata` to `human` while every document in the closure remains byte-identical. The reader's entitlement would change, or the basis for its entitlement would change, and nothing else in the signature would move. With provenance in the hash, that edit is both auditable and staleness-producing — it lands as `stale_closure` (§4.3), which is the correct outcome, because the reading was produced under a relationship claim that no longer holds in the form it held.
 
 **Depth 1 is a v0 hypothesis, not a derived value.** It is part of `pipelineVersion`, so changing it is recorded rather than silent, and B3 measures both sides of the trade-off rather than only one:
