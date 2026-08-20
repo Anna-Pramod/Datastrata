@@ -50,32 +50,42 @@ Plus `cli/sign.ts` and `cli/review-sheet.ts` in B1b-ii-b.
 
 `verification/signatures.jsonl`, append-only, one JSON object per line, never rewritten.
 
-**Entry shape:**
+**The ledger is a discriminated union of two variants, not one shape with optional fields.**
 
 ```
-entryId            content hash of the entry's canonical form, excluding entryId itself
-kind               'verified' | 'ratified' | 'revoked'
-packId, packVersion
-requirementId, requirementVersion, requirementSha256
-requirementInputSha256, conditionSha256
-renderedConditionSha256, rendererVersion
-corpusClosureSha256
-corpus[]           { docId, versionLabel, sha256Raw, sha256Normalized, normalizerVersion }
-resultSha256, pipelineVersion
-by, on, note?
-revokes?           entryId of the signing event this withdraws — required when kind is 'revoked'
+SigningEntry
+  entryId            content hash of the entry's canonical form, excluding entryId
+  kind               'verified' | 'ratified'
+  packId, packVersion
+  requirementId, requirementVersion, requirementSha256
+  requirementInputSha256, conditionSha256
+  renderedConditionSha256, rendererVersion
+  corpusClosureSha256
+  corpus[]           { docId, versionLabel, sha256Raw, sha256Normalized, normalizerVersion }
+  resultSha256, pipelineVersion
+  by, on, note?
+
+RevocationEntry
+  entryId
+  kind               'revoked'
+  packId, requirementId
+  revokes            entryId of the SigningEntry being withdrawn
+  by, on, reason
 ```
 
-**Authority: the last line matching `(packId, requirementId)` governs.** Ordering is by **file position**, never by `on`. Dates collide, can be mistyped, and are supplied by the signer; position is a property of the append-only file itself. `on` is display and audit only, and §6 records that classification so nobody later "improves" the ordering to use it.
+**A revocation carries no verification pins, deliberately.** It means only *"a human withdraws the authority of signature X"*, and it must remain possible when the corpus is broken, the result file has been deleted, or the encoding has drifted — precisely the circumstances in which withdrawing a signature is most urgent. Requiring a fresh verification-shaped payload would make withdrawal depend on the thing being withdrawn.
+
+**Authority: the last line matching `(packId, requirementId)` governs**, whichever variant it is. Ordering is by **file position**, never by `on`. Dates collide, can be mistyped, and are supplied by the signer; position is a property of the append-only file itself. `on` is display and audit only, and §6 records that classification so nobody later "improves" the ordering to use it.
 
 **Revocation identifies its target.** File position already determines *what the current state is*. `revokes` answers a different question — *which historical decision did a human intend to withdraw* — and both are wanted for auditability. Validation, all enforced at load:
 
 - `revokes` must name an `entryId` appearing **earlier** in the ledger
 - the target must share the same `packId` and `requirementId`
-- the target must be a signing event (`verified` or `ratified`), **not another revocation** — un-revoking is expressed by appending a fresh signature, not by revoking a revocation
-- `revokes` is required when `kind` is `revoked` and forbidden otherwise
+- the target must be a `SigningEntry`, **not another revocation** — un-revoking is expressed by appending a fresh signature, not by revoking a revocation
 
 A `revoked` governing entry yields `derivedStatus: 'draft'` with reason `revoked`.
+
+**Revocation needs a sanctioned write path.** B1b-ii-b provides one — `verify revoke <packId> <requirementId> --revokes <entryId> --by <name> --reason <text>` — so appending by hand is never the only way to create the event. A ledger whose only supported mutation is one of its two variants invites the other to be produced by text editor, which is how a malformed line reaches an append-only file that nothing can rewrite.
 
 ---
 
@@ -129,6 +139,8 @@ The entry pins `resultSha256`, and without a corresponding validity rule that pi
 
 So: **`stale_result` fires when the current `verification-result.json` hash differs from the governing entry's `resultSha256`, and it blocks.** If the pinned result file is absent entirely, that is an `INTEGRITY_FAILURE`, exactly as a missing pinned corpus document is — a signed artefact cannot vanish through ordinary drift.
 
+**`resultSha256` is a canonical semantic hash, not a file-byte hash.** It is computed `parse → schema-validate → canonical key-sorted serialisation → SHA-256`. Hashing the raw file would make `{"a":1,"b":2}` and the same object pretty-printed with reordered keys invalidate a signature although the result did not change. That is the raw-versus-normalized lesson from the corpus applied one layer up: **cosmetic churn must not become a trust alarm**, or the alarm gets ignored and stops working.
+
 **This is why nested result fields do not each need their own freshness rule.** `challenges[].evidence[]` is `signability` — evidence validity is checked before signing — and `audit` thereafter. Any post-signing edit to it changes the enclosing `resultSha256` and surfaces as `stale_result`. One invalidation mechanism, rather than re-implementing freshness independently for every field inside the result.
 
 **Projection.** `derivedStatus` is `draft | verified | ratified`, with `statusReasons[]` attached. A blocking reason withholds `verified` and yields `draft` **carrying its reasons**, so every surface can say *why* rather than merely refusing. No ledger entry means `draft` with an empty reason set — status and staleness are two axes and they do not overlap.
@@ -142,10 +154,18 @@ So: **`stale_result` fires when the current `verification-result.json` hash diff
 **Then verify after write.** Re-read the ledger from disk and assert three things together:
 
 ```
-governingEntry.entryId === candidate.entryId
-staleness(governingEntry) is empty
-derivedStatus === candidate.kind
+verified | ratified:
+  governing.entryId === candidate.entryId
+  AND staleness(governing) is empty
+  AND derivedStatus === candidate.kind
+
+revoked:
+  governing.entryId === candidate.entryId
+  AND derivedStatus === 'draft'
+  AND statusReasons contains 'revoked'
 ```
+
+The check is variant-aware: a revocation has no freshness to assert and must not be measured against a status it never claims.
 
 Confirming freshness alone is not enough. Another signing event could become governing between the append and the check — today only through operator error, later through genuine concurrency — and a check that asked only "is the governing entry fresh?" would report success for someone else's entry. Asserting the governing entry **is the one just written** is what makes the report about this operation.
 
@@ -224,7 +244,7 @@ note                           audit
 
 ### 6.3 The guard
 
-**The completeness guard derives its path set from the runtime zod schemas, not from TypeScript interfaces.** TypeScript disappears at runtime and cannot be walked; zod schemas exist and can. The guard enumerates every leaf path across every variant of every schema and fails until each carries at least one role.
+**The completeness guard derives its path set from the runtime zod schemas, not from TypeScript interfaces.** TypeScript disappears at runtime and cannot be walked; zod schemas exist and can. The guard enumerates every leaf path across every variant of every schema and fails until each carries at least one role. The traversal must understand **arrays, optionals, discriminated unions and records**, descending with wildcard paths (`corpus[]`, `challenges[].evidence[]`) rather than stopping at the container — a walker that classifies a container and calls the job done reproduces the original hole at one remove.
 
 This is B1b-ii-a's hardest acceptance test, and the one that closes the class rather than the instance.
 
@@ -245,7 +265,7 @@ The second catches frontend behaviour the first cannot see.
 
 **The golden must not be regenerated by the migration.** Updating it requires an explicit, reviewed change — a migration that rewrites its own expected output proves nothing. The test compares against the recorded artifact, and a regeneration script, if one exists at all, is separate and never runs in CI.
 
-### 7.2 The invariant
+### 7.2 The invariant, and two different golden contracts
 
 With an empty ledger:
 
@@ -253,10 +273,21 @@ With an empty ledger:
 16 requirements       → all derivedStatus = draft
 minStatus = draft     → all 16 evaluated
 containsDraftContent  → true
-public checker        → observably identical result
 ```
 
-This is a hard acceptance test, not a cleanup step.
+This is a hard acceptance test, not a cleanup step. But the two goldens cannot hold themselves to the same standard, and saying they can would set an impossible bar.
+
+**Public golden — exact observable equality.** The rendered checker result for the fixed profile is byte-identical before and after. Nothing about the customer-visible surface is intended to change, so nothing may.
+
+**Engine golden — exact equality on every unchanged field, plus one named transformation.** The engine's output *is* intended to change shape: `ratificationStatus` becomes `derivedStatus`, and the type widens from two statuses to three. Demanding literal identity would be asking for a contradiction, and an implementer facing a contradiction is liable to resolve it by keeping a compatibility alias — which would defeat the compile-time migration this design chose precisely so that every consumer is visited.
+
+So the engine test carries a **small, explicitly named adapter** representing only the intentional change:
+
+```
+ratificationStatus: 'draft'   →   derivedStatus: 'draft', statusReasons: []
+```
+
+Every other field compares exactly. The adapter is written out in the test, not derived, and it must not grow: anything it needs to normalise beyond that single mapping is an unintended behaviour change, and the correct response is to investigate rather than to widen the adapter.
 
 ### 7.3 The filter
 
@@ -276,7 +307,7 @@ Separate tests prove `minStatus: 'verified'` yields verified plus ratified, and 
 
 **B1b-ii-a — The record.** Per-requirement `version` and its lockfile backstop → result schema → ledger → governing-entry resolution → staleness set → derived status → field accounting. Touches no product behaviour; every part is exercisable with fixtures.
 
-**B1b-ii-b — Signing, surfaces, migration.** Sign CLI → post-write verification → review sheet → `minStatus` migration → public-site migration → the pre/post golden.
+**B1b-ii-b — Signing, surfaces, migration.** Sign CLI → revoke CLI → post-write verification → review sheet → `minStatus` migration → public-site migration → the pre/post golden.
 
 The public migration lands *after* the derivation machinery exists and is tested. Reversing that order would make production semantics depend on unfinished infrastructure.
 
@@ -291,7 +322,7 @@ Beyond per-module unit tests:
 - **`stale_result`** — editing a verdict in the pinned result after signing, with condition, corpus and rendering untouched, withholds `verified`; a missing pinned result is an `INTEGRITY_FAILURE`, not a staleness reason
 - **Candidate consistency** — a stale existing signature does **not** block signing; a candidate whose pinned inputs no longer match current state **does**
 - **Post-write verification** — asserts the governing entry is the one just written, not merely that some governing entry is fresh
-- **Version registry** — re-using an old version number for new content fails against the historical record, not only against the latest pair
+- **Version registry** — re-using an old version number for new content fails against the historical record, not only against the latest pair; registering an existing `(requirementId, version)` with a different hash **fails rather than overwrites**, which makes "a version number has permanent meaning" an API property rather than documentation
 - **Field accounting** — a new field on any schema variant fails until classified; nested and union paths reached; roles derived from zod, not TypeScript
 - **Migration golden** — engine and public levels, compared against the recorded artifact, with regeneration explicitly excluded from CI
 - **`minStatus`** — one test per level
