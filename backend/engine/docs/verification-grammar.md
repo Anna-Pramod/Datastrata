@@ -197,6 +197,42 @@ standard used to prepare the parent's report is ESRS or EQUIVALENT
 standard used to prepare the parent's report is ESRS, EQUIVALENT, or OTHER
 ```
 
+**Numeric set items get the full §1 `<VALUE>` treatment, per item.** The
+worked examples above are all strings, which left the numeric case
+unspecified; pinned by rendering it and reading the string back. Each item
+is grouped in 3s *and* carries the fact type's unit, appended per item —
+not once at the end of the list:
+
+```
+net turnover is 1 000 EUR or 2 000 000 EUR
+chosen standard is 1 000 or 2 000 000
+```
+
+(second line: same set, on a fact type with no `unit`.)
+
+**Non-injectivity — `in_set` with one item is indistinguishable from `eq`.**
+A single-item `in_set` renders `<FACT_LABEL> is <VALUE>`, which is
+character-for-character the §4.2 string/number `eq` template. Rendering
+`{ op: 'in_set', fact, set: ['ESRS'] }` and `{ op: 'eq', fact, value: 'ESRS' }`
+against the same fact type produces the identical line:
+
+```
+chosen standard is ESRS
+```
+
+This is the one place in this grammar where the English does not determine
+the `Condition` op. A parser recovering structure from the text cannot tell
+the two apart and must not pretend to: it should report the op it read and
+let the comparison surface the ambiguity, rather than silently accepting
+either. No CSRD pack requirement contains a single-item `in_set`, so this
+does not arise on real content today.
+
+**`JOIN_OR` is not injective either**, for the same structural reason: an
+item whose own text contains `, ` or ` or ` cannot be told from an item
+boundary. Every `set`/`prefixes`/`years` value in the pack today is a bare
+token, so this is latent rather than live, but a parser splitting a
+`JOIN_OR` list is making an assumption the renderer does not guarantee.
+
 ### 4.4 `in_catalogue` — `{ fact, catalogue }`
 
 Template: `<FACT_LABEL> is listed in the '<DESLUG(catalogue)>' catalogue`
