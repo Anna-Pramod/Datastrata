@@ -4,7 +4,11 @@
  * Every pack is validated structurally (zod) and referentially before the
  * engine will touch it: unknown FactTypes, dangling source citations,
  * requirement_refs to nothing, obligation triggers pointing at missing
- * requirements — all are load-time errors, never runtime surprises.
+ * requirements — all are load-time errors, never runtime surprises. A
+ * referenced FactType with no human label, an unresolved `labelNote`, or
+ * (where it is compared numerically) no unit is the same kind of failure —
+ * see `assertFactVocabularyCoverage` — so it is gated here too, not left to
+ * surface downstream as a wrong-looking rendered sentence.
  * This is the first layer of "regression testing for law" (Pass 2 §4).
  */
 
@@ -12,6 +16,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
 import type { Condition, KnowledgePack, QuestionShowWhen } from '../types';
+import { assertFactVocabularyCoverage } from '../verification/vocabulary';
 
 const truth = z.enum(['APPLIES', 'DOES_NOT_APPLY', 'INDETERMINATE']);
 const reason = z.enum([
@@ -88,6 +93,9 @@ const factType = z.object({
   missingReason: reason.optional(),
   enumValues: z.array(z.string()).optional(),
   notes: z.string().optional(),
+  label: z.string().optional(),
+  unit: z.string().optional(),
+  labelNote: z.string().optional(),
 });
 
 const requirement = z.object({
@@ -244,6 +252,7 @@ export function loadPack(dir: string): KnowledgePack {
     catalogues: z.record(catalogue).parse(read('catalogues.json')),
   };
   verifyIntegrity(pack);
+  assertFactVocabularyCoverage(pack);
   return pack;
 }
 

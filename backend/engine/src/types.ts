@@ -138,6 +138,25 @@ export interface FactType {
   missingReason?: ReasonCode;
   enumValues?: string[];
   notes?: string;
+  /**
+   * Human-readable label for this fact, e.g. "net turnover". Source of truth
+   * for `factLabel` (verification/vocabulary.ts); a fact referenced by a
+   * requirement but missing this fails the coverage gate.
+   */
+  label?: string;
+  /**
+   * Unit for numeric values, e.g. "EUR" or "employees". Required by the
+   * coverage gate for any fact used in a `cmp`, `count_cmp` or `sum_cmp`
+   * comparison, since `dataType` alone cannot distinguish a currency
+   * threshold from a headcount threshold.
+   */
+  unit?: string;
+  /**
+   * Marks `label` as not yet resolved to confirmed legal wording. The value
+   * "requires review" fails the coverage gate by design — recording
+   * uncertainty is not the same as resolving it.
+   */
+  labelNote?: string;
 }
 
 // ---------------------------------------------------------------------------
