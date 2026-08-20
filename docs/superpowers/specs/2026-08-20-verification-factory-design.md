@@ -92,6 +92,14 @@ Four layers, in dependency order. Nothing in any of them names a program: identi
 
 **Both forms are stored, not just both hashes.** `rawPath` holds the bytes exactly as fetched and `normalizedPath` the text agents actually read. Retaining raw is what makes `normalizer_changed` (§4.3) recoverable: without the original bytes there is nothing to renormalise, and a normalizer upgrade would invalidate every signature with no way to tell whether the text had actually moved.
 
+**The normalizer is two layers, and the split is load-bearing.** Extraction (HTML to running text, entity decoding) runs exactly once, at ingest, over raw bytes — it cannot be idempotent, because decoding `&amp;lt;` yields `&lt;`, which a second pass would decode again. Whitespace normalisation (unicode NFC, whitespace) decodes nothing and is therefore idempotent by construction, which is what every *comparison* runs over: quote checking and absence search (§2.2) operate on text that has already been extracted, and re-running extraction over it would shift the haystack out from under the quote. Collapsing the two into one function makes the anti-hallucination control depend on a property it does not have. `normalizerVersion` covers both layers.
+
+Extraction also requires a tag-shaped opener — `<` followed by a letter or `/` — rather than matching any `<…>`. Legal text says *"turnover < 40 million"*, and a naive stripper deletes from that `<` to the next `>` silently, which is the worst available failure for a store whose entire purpose is that the words did not move. Declarations (`<!DOCTYPE …>`) and comments are removed explicitly rather than relying on the tag pass, since the tag-shaped-opener rule deliberately does not match them.
+
+**Each document records the region its text was taken from.** `contentSelector` names the element holding the legal text — EUR-Lex publishes it under `id="text"` — and extraction is scoped to it. Without that scope, site furniture (navigation, breadcrumbs, the table-of-contents toolbar) lands inside `sha256Normalized`, and a publisher's redesign then invalidates every signature over the document while the law sits untouched. That is precisely the alarm-fatigue failure the raw/normalized split and the non-blocking `source_reissued` state exist to prevent, so chrome inside the normalized text is a correctness problem rather than untidiness.
+
+The selector lives on the document entry rather than in the normalizer, because it is knowledge about one publisher's markup. National gazettes will each need their own, and a general-purpose normalizer that hardcodes one publisher's DOM would silently do nothing for the rest. A selector that fails to match is an error, never a fallback to the whole document: falling back would store chrome under a configuration claiming it was excluded, so the stored text would not be what the index says it is. `contentSelector` is not part of the closure hash — it is how the text was derived, and its effect is already fully captured by `sha256Normalized`.
+
 **Two hashes, deliberately.** `sha256Raw` covers the bytes as fetched; `sha256Normalized` covers whitespace- and encoding-normalised text under a named `normalizerVersion`. The split decides whether this system survives contact with EUR-Lex. A raw change with an identical normalized hash means the page was re-rendered and the words did not move — advisory, non-blocking. A normalized change means the legal text changed — blocking. Without the split, every cosmetic re-issue invalidates a signature, the operator learns to dismiss the alarm, and the alarm stops working.
 
 **Edges make the corpus a graph.** `amends`, `amendedBy`, `consolidates`, `references`, `definesTermsFor`. The blind reader (§3.1) traverses them, so the graph is part of the evidence surface and is pinned as such (§4.2).
@@ -107,7 +115,7 @@ Four layers, in dependency order. Nothing in any of them names a program: identi
 | Evidence kind | Contents | Deterministic check |
 |---|---|---|
 | `quote` | `docId`, `sha256Normalized`, verbatim span | The span is a literal substring of that exact document under its pinned normalizer |
-| `amendment_chain` | Ordered `docId` list plus the quotes at each hop | Every hop exists as an edge in the corpus graph; every quote checks |
+| `amendment_chain` | Ordered hops, each an amendment edge plus a quote | Every hop is an `amends`/`amendedBy` edge that exists in the graph; every quote sits on one of its own hop's endpoints; consecutive hops are **oriented**, not merely connected (see below); every quote checks |
 | `cross_reference` | Source and target `docId` + provision, with quotes at both ends | Both quotes check; a `references` edge connects them |
 | `absence` | Documents searched, the search performed, the term sought | **The search is re-run.** The claim fails if the term occurs |
 
@@ -283,6 +291,8 @@ Art. 19a ──references──▶ instrument Y        reference depth 1
 `Y′` is in the closure. Without that rule the reader would be entitled to `Y` only in an obsolete form, which is worse than not reaching it at all.
 
 The closure hash covers the resulting `docId` set with their `sha256Normalized` values, plus the connecting edge set **including each edge's identity and provenance**.
+
+**Every field is escaped before it enters the digest** — JSON-encoded, not joined by a delimiter. `provenance.source` is free text, and `human` provenance is an expected input rather than a degenerate one, so a tab or newline pasted into a citation would otherwise shift field boundaries and let two genuinely different edge sets serialise to identical bytes. A hash that can collide is a hash that silently fails to move when the entitlement basis changes, which is the precise failure this hash exists to prevent.
 
 Hashing the edges' provenance rather than merely their existence closes a hole that documents alone cannot: an edge can be retyped, re-sourced, or silently switched from `celex_metadata` to `human` while every document in the closure remains byte-identical. The reader's entitlement would change, or the basis for its entitlement would change, and nothing else in the signature would move. With provenance in the hash, that edit is both auditable and staleness-producing — it lands as `stale_closure` (§4.3), which is the correct outcome, because the reading was produced under a relationship claim that no longer holds in the form it held.
 
@@ -470,7 +480,7 @@ Text inside a fetched or corpus document is evidence about that document, never 
 Added to the existing 74:
 
 - **Renderer** — every v0 primitive; output stability across key reordering
-- **Evidence checker** — a fabricated quote must fail; an `absence` claim whose term is present must fail; an `absence` item standing as sole evidence must fail; an `amendment_chain` hop with no corresponding edge must fail
+- **Evidence checker** — a fabricated quote must fail; an `absence` claim whose term is present must fail; an `absence` item standing as sole evidence must fail; an `amendment_chain` hop with no corresponding edge must fail; a connected-but-unoriented chain must fail; a `cross_reference` on a non-`references` edge must fail
 - **Canonical hashing** — `conditionSha256` and `requirementInputSha256` stable under key reordering and whitespace
 - **Normalizer** — renormalising stored raw bytes reproduces `sha256Normalized`
 - **Loader** — a `verified` projection with no ledger entry fails; with open questions fails; when stale fails
