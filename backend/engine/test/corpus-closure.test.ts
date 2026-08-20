@@ -8,7 +8,13 @@
 
 import { describe, expect, it } from 'vitest';
 import { parseCorpusIndex } from '../src/corpus/schema';
-import { CLOSURE_POLICY_V0, computeClosure, docsForSources } from '../src/corpus/closure';
+import {
+  CLOSURE_POLICY_V0,
+  ClosureEntryNotFoundError,
+  computeClosure,
+  docsForSources,
+  STRUCTURAL_EDGE_KINDS,
+} from '../src/corpus/closure';
 import type { CorpusDocument, CorpusEdge, CorpusIndex } from '../src/corpus/types';
 
 let seq = 0;
@@ -72,6 +78,15 @@ describe('computeClosure', () => {
   it('includes the entry document', () => {
     const idx = index([doc('DOC-A')]);
     expect(computeClosure(idx, ['DOC-A']).docIds).toEqual(['DOC-A']);
+  });
+
+  it('rejects an entry document the corpus does not hold', () => {
+    // Seeding a phantom would return it in docIds and hash it as an empty
+    // digest, so a signature could pin an entitlement over a document that
+    // does not exist. Spec 4.2 keeps that as a distinct corpus_gap signal.
+    const idx = index([doc('DOC-A')]);
+    expect(() => computeClosure(idx, ['DOC-A', 'DOC-GHOST'])).toThrow(ClosureEntryNotFoundError);
+    expect(() => computeClosure(idx, ['DOC-GHOST'])).toThrow(/DOC-GHOST/);
   });
 
   it('follows structural edges to fixpoint', () => {
@@ -251,6 +266,16 @@ describe('closure hash', () => {
 });
 
 describe('closure policy', () => {
+  it('takes its structural kinds from the one declaration of them', () => {
+    expect(CLOSURE_POLICY_V0.structuralKinds).toBe(STRUCTURAL_EDGE_KINDS);
+    expect([...STRUCTURAL_EDGE_KINDS]).toEqual([
+      'amends',
+      'amendedBy',
+      'consolidates',
+      'definesTermsFor',
+    ]);
+  });
+
   it('bounds references at depth 1 by default', () => {
     expect(CLOSURE_POLICY_V0.referenceDepth).toBe(1);
   });

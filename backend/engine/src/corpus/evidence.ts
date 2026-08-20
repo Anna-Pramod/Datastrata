@@ -14,6 +14,7 @@
  * sole evidence for a conclusion.
  */
 
+import type { CorpusEdge } from './types';
 import type { LoadedCorpus } from './store';
 import { normalizeWhitespace } from './normalize';
 
@@ -106,6 +107,13 @@ function edgeById(corpus: LoadedCorpus, edgeId: string) {
  * Checks one evidence set — the items backing a single conclusion. Returns
  * every problem found rather than the first, so a result can be repaired in one
  * pass instead of one round trip per defect.
+ *
+ * Precondition: `corpus` came from `loadCorpus`, which re-derived every stored
+ * hash from the files on disk. That is why the document's recorded
+ * `sha256Normalized` is treated here as authoritative rather than re-derived
+ * per quote: this function checks that a quote pins the hash the corpus holds,
+ * and `loadCorpus` is what makes that hash a fact about the bytes. Handed a
+ * corpus assembled some other way, these checks are only as good as it is.
  */
 export function checkEvidenceSet(items: EvidenceItem[], corpus: LoadedCorpus): EvidenceCheckResult {
   const problems: string[] = [];
@@ -133,10 +141,41 @@ export function checkEvidenceSet(items: EvidenceItem[], corpus: LoadedCorpus): E
         problems.push(`${label}: amendment chain has no hops`);
         return;
       }
+      // A chain has to chain. Checking each hop in isolation would make this
+      // item a bag of unrelated (edge, quote) pairs: an agent could assert a
+      // chain A -> D out of a genuine A -> B edge and a genuine C -> D edge,
+      // with both quotes checking, and nothing would object.
+      //
+      // Consecutive hops must share a document. Sharing, not `previous.to ===
+      // current.from`: the same relation is recorded from either end
+      // (`amends` and `amendedBy`), so an edge's direction does not tell you
+      // which way the chain is being walked, and requiring a particular
+      // orientation would reject honest chains.
+      let previous: CorpusEdge | undefined;
       item.hops.forEach((hop, h) => {
         const hopLabel = `${label}.hops[${h}]`;
-        if (edgeById(corpus, hop.edgeId) === undefined) {
+        const edge = edgeById(corpus, hop.edgeId);
+        if (edge === undefined) {
           problems.push(`${hopLabel}: names edge ${hop.edgeId}, which the corpus does not hold`);
+        } else {
+          if (hop.quote.docId !== edge.from && hop.quote.docId !== edge.to) {
+            problems.push(
+              `${hopLabel}: quote is taken from ${hop.quote.docId}, which is neither endpoint of edge ${hop.edgeId} (${edge.from} -> ${edge.to})`,
+            );
+          }
+          if (previous !== undefined) {
+            const shares =
+              previous.from === edge.from ||
+              previous.from === edge.to ||
+              previous.to === edge.from ||
+              previous.to === edge.to;
+            if (!shares) {
+              problems.push(
+                `${hopLabel}: edge ${hop.edgeId} (${edge.from} -> ${edge.to}) does not continue the chain from ${previous.edgeId} (${previous.from} -> ${previous.to}): consecutive hops must share a document`,
+              );
+            }
+          }
+          previous = edge;
         }
         checkQuote(hop.quote, corpus, hopLabel, problems);
       });
@@ -147,10 +186,21 @@ export function checkEvidenceSet(items: EvidenceItem[], corpus: LoadedCorpus): E
       const edge = edgeById(corpus, item.edgeId);
       if (edge === undefined) {
         problems.push(`${label}: names edge ${item.edgeId}, which the corpus does not hold`);
-      } else if (edge.from !== item.from.docId || edge.to !== item.to.docId) {
-        problems.push(
-          `${label}: edge ${item.edgeId} does not connect ${item.from.docId} to ${item.to.docId}`,
-        );
+      } else {
+        // Spec 2.2: "Both quotes check; a `references` edge connects them."
+        // The kind is the claim. "X cites Y" and "X was amended by Y" are
+        // different legal relations, and an amendment edge does not establish
+        // that one provision cross-refers to another.
+        if (edge.kind !== 'references') {
+          problems.push(
+            `${label}: edge ${item.edgeId} is a ${edge.kind} edge; a cross_reference must rest on a references edge`,
+          );
+        }
+        if (edge.from !== item.from.docId || edge.to !== item.to.docId) {
+          problems.push(
+            `${label}: edge ${item.edgeId} does not connect ${item.from.docId} to ${item.to.docId}`,
+          );
+        }
       }
       checkQuote(item.from, corpus, `${label}.from`, problems);
       checkQuote(item.to, corpus, `${label}.to`, problems);

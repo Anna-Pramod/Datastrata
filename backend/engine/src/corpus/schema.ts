@@ -9,16 +9,9 @@
  */
 
 import { z } from 'zod';
-import type { CorpusIndex, EdgeKind } from './types';
+import type { KnowledgePack } from '../types';
+import type { CorpusIndex } from './types';
 import { CONTENT_SELECTOR_PATTERN } from './normalize';
-
-/** Kinds that lead to the same law in its currently governing form. */
-export const STRUCTURAL_EDGE_KINDS: readonly EdgeKind[] = [
-  'amends',
-  'amendedBy',
-  'consolidates',
-  'definesTermsFor',
-];
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'must be an ISO date (YYYY-MM-DD)');
 const docId = z.string().regex(/^DOC-[A-Za-z0-9._-]+$/, 'document id must be DOC-*');
@@ -85,6 +78,18 @@ const corpusIndex = z
   })
   .strict();
 
+/**
+ * types.ts and this schema describe the same record twice, and nothing else
+ * ties them together: `parseCorpusIndex` used to cast its result, so a field
+ * added to one and not the other was invisible. These two assertions make each
+ * type assignable to the other, so any drift is a compile error rather than a
+ * silent divergence. Compile-time only — they emit nothing.
+ */
+type Assignable<A extends B, B> = A;
+type _SchemaCoversType = Assignable<z.infer<typeof corpusIndex>, CorpusIndex>;
+type _TypeCoversSchema = Assignable<CorpusIndex, z.infer<typeof corpusIndex>>;
+export type { _SchemaCoversType, _TypeCoversSchema };
+
 export class CorpusIntegrityError extends Error {
   constructor(public problems: string[]) {
     super(`Corpus index failed integrity checks:\n - ${problems.join('\n - ')}`);
@@ -94,7 +99,7 @@ export class CorpusIntegrityError extends Error {
 
 /** Structural validation plus checks a single row can answer alone. */
 export function parseCorpusIndex(raw: unknown): CorpusIndex {
-  return corpusIndex.parse(raw) as CorpusIndex;
+  return corpusIndex.parse(raw);
 }
 
 /**
@@ -178,5 +183,30 @@ export function verifyCorpusIntegrity(index: CorpusIndex): void {
     problems.push('amendment graph contains a cycle: an instrument cannot transitively amend itself');
   }
 
+  if (problems.length > 0) throw new CorpusIntegrityError(problems);
+}
+
+/**
+ * Cross-validate `serves` against a pack's citation record. Separate from
+ * `verifyCorpusIntegrity` — and from `loadCorpus` — because the corpus is
+ * meaningful on its own and must not acquire pack knowledge; only this check
+ * needs a pack. Same split as `verifyCitationCoverage` in
+ * src/monitoring/register.ts.
+ *
+ * A document serving an SRC id the pack does not carry is not a harmless typo:
+ * `docsForSources` resolves entry documents by exactly that field, so the
+ * document simply never appears in any closure, and the requirement it was
+ * ingested for reads as having no text behind it.
+ */
+export function verifyCorpusServesCoverage(index: CorpusIndex, pack: KnowledgePack): void {
+  const known = new Set(pack.sources.map((s) => s.id));
+  const problems: string[] = [];
+  for (const d of index.documents) {
+    for (const s of d.serves) {
+      if (!known.has(s)) {
+        problems.push(`${d.docId}: serves ${s}, which pack ${pack.id} does not carry as a source`);
+      }
+    }
+  }
   if (problems.length > 0) throw new CorpusIntegrityError(problems);
 }

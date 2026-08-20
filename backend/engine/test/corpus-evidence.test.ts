@@ -14,9 +14,22 @@ import { sha256Hex } from '../src/corpus/hash';
 import { loadCorpus, type LoadedCorpus } from '../src/corpus/store';
 import { checkEvidenceSet, type EvidenceItem, type QuoteEvidence } from '../src/corpus/evidence';
 
+const prov = { type: 'celex_metadata', source: 'CELEX', recordedOn: '2026-08-20' } as const;
+
+const EDGES: Record<string, unknown[]> = {
+  'DOC-A': [
+    { edgeId: 'E1', kind: 'amendedBy', from: 'DOC-A', to: 'DOC-B', provenance: prov },
+    { edgeId: 'E3', kind: 'references', from: 'DOC-A', to: 'DOC-B', provenance: prov },
+  ],
+  'DOC-B': [{ edgeId: 'E2', kind: 'amendedBy', from: 'DOC-B', to: 'DOC-C', provenance: prov }],
+  'DOC-C': [{ edgeId: 'E4', kind: 'references', from: 'DOC-C', to: 'DOC-D', provenance: prov }],
+};
+
 const TEXT_A =
   'Article 19a\nUndertakings which, on their balance sheet dates, exceed a net turnover of EUR 450 000 000 and an average number of 1 000 employees during the financial year shall report.';
 const TEXT_B = 'Directive (EU) 2026/470\nArticle 1(4)(a) substitutes the opening words of Article 19a(1).';
+const TEXT_C = 'Directive (EU) 2027/999\nArticle 2 replaces the thresholds inserted by Directive (EU) 2026/470.';
+const TEXT_D = 'Regulation (EU) 2020/852\nArticle 8 concerns taxonomy-aligned turnover and is unrelated to the chain above.';
 
 let dir = '';
 let corpus: LoadedCorpus;
@@ -29,6 +42,8 @@ beforeEach(() => {
   const docs = [
     { id: 'DOC-A', slug: 'a', text: TEXT_A },
     { id: 'DOC-B', slug: 'b', text: TEXT_B },
+    { id: 'DOC-C', slug: 'c', text: TEXT_C },
+    { id: 'DOC-D', slug: 'd', text: TEXT_D },
   ];
 
   const documents = docs.map((d) => {
@@ -48,18 +63,10 @@ beforeEach(() => {
       sha256Normalized: sha256Hex(normalized),
       normalizerVersion: NORMALIZER_VERSION,
       contentSelector: null,
-      edges:
-        d.id === 'DOC-A'
-          ? [
-              {
-                edgeId: 'E1',
-                kind: 'amendedBy',
-                from: 'DOC-A',
-                to: 'DOC-B',
-                provenance: { type: 'celex_metadata', source: 'CELEX', recordedOn: '2026-08-20' },
-              },
-            ]
-          : [],
+      // E1/E2 chain A -> B -> C. E3 is the references edge a cross_reference
+      // needs. E4 hangs off DOC-C so a chain can be built out of two edges
+      // that share no endpoint.
+      edges: EDGES[d.id] ?? [],
     };
   });
 
@@ -214,6 +221,51 @@ describe('amendment chain evidence', () => {
     expect(checkEvidenceSet(items, corpus).ok).toBe(false);
   });
 
+  it('accepts a genuine multi-hop chain', () => {
+    // E1 links A to B, E2 links B to C: consecutive hops share a document, and
+    // each quote is taken from one of its own hop's endpoints.
+    const items: EvidenceItem[] = [
+      {
+        kind: 'amendment_chain',
+        hops: [
+          { edgeId: 'E1', quote: quote('substitutes the opening words', 'DOC-B') },
+          { edgeId: 'E2', quote: quote('replaces the thresholds', 'DOC-C') },
+        ],
+      },
+    ];
+    expect(checkEvidenceSet(items, corpus).ok).toBe(true);
+  });
+
+  it('rejects a chain whose hops do not connect', () => {
+    // E1 links A to B, E4 links C to D: two real edges, two checking quotes,
+    // and no chain at all. Without this the item is a bag of unrelated pairs,
+    // so an agent could assert A -> D from edges that never meet.
+    const items: EvidenceItem[] = [
+      {
+        kind: 'amendment_chain',
+        hops: [
+          { edgeId: 'E1', quote: quote('substitutes the opening words', 'DOC-B') },
+          { edgeId: 'E4', quote: quote('taxonomy-aligned turnover', 'DOC-D') },
+        ],
+      },
+    ];
+    const result = checkEvidenceSet(items, corpus);
+    expect(result.ok).toBe(false);
+    expect(result.problems.some((p) => /does not continue/.test(p))).toBe(true);
+  });
+
+  it('rejects a hop whose quote comes from neither endpoint of its own edge', () => {
+    const items: EvidenceItem[] = [
+      {
+        kind: 'amendment_chain',
+        hops: [{ edgeId: 'E1', quote: quote('taxonomy-aligned turnover', 'DOC-D') }],
+      },
+    ];
+    const result = checkEvidenceSet(items, corpus);
+    expect(result.ok).toBe(false);
+    expect(result.problems.some((p) => /neither endpoint/.test(p))).toBe(true);
+  });
+
   it('rejects an empty chain', () => {
     const items: EvidenceItem[] = [{ kind: 'amendment_chain', hops: [] }];
     const result = checkEvidenceSet(items, corpus);
@@ -223,7 +275,23 @@ describe('amendment chain evidence', () => {
 });
 
 describe('cross reference evidence', () => {
-  it('accepts a reference whose edge exists and whose quotes both check', () => {
+  it('accepts a reference carried by a references edge whose quotes both check', () => {
+    // Spec 2.2: "Both quotes check; a `references` edge connects them."
+    const items: EvidenceItem[] = [
+      {
+        kind: 'cross_reference',
+        edgeId: 'E3',
+        from: quote('Article 19a', 'DOC-A'),
+        to: quote('Article 1(4)(a)', 'DOC-B'),
+      },
+    ];
+    expect(checkEvidenceSet(items, corpus).ok).toBe(true);
+  });
+
+  it('rejects a reference resting on an edge that is not a references edge', () => {
+    // E1 connects the same two documents, but as an amendment. "X cites Y" and
+    // "X was amended by Y" are different legal claims, and only one of them is
+    // a cross-reference.
     const items: EvidenceItem[] = [
       {
         kind: 'cross_reference',
@@ -232,14 +300,16 @@ describe('cross reference evidence', () => {
         to: quote('Article 1(4)(a)', 'DOC-B'),
       },
     ];
-    expect(checkEvidenceSet(items, corpus).ok).toBe(true);
+    const result = checkEvidenceSet(items, corpus);
+    expect(result.ok).toBe(false);
+    expect(result.problems[0]).toMatch(/references/);
   });
 
   it('rejects a reference whose edge does not connect the quoted documents', () => {
     const items: EvidenceItem[] = [
       {
         kind: 'cross_reference',
-        edgeId: 'E1',
+        edgeId: 'E3',
         from: quote('Article 1(4)(a)', 'DOC-B'),
         to: quote('Article 19a', 'DOC-A'),
       },

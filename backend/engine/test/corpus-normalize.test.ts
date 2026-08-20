@@ -255,12 +255,4 @@ describe('hashing', () => {
     const text = 'EUR 450 000 000';
     expect(sha256Hex(new TextEncoder().encode(text))).toBe(sha256Hex(text));
   });
-
-  it('renormalising raw text reproduces the normalized hash', () => {
-    // This is the property that makes a normalizer upgrade recoverable: raw
-    // bytes plus a normalizer always reconstruct the normalized form.
-    const raw = '<p>EUR&nbsp;450   000</p>';
-    const normalized = normalize(raw);
-    expect(sha256Hex(normalize(raw))).toBe(sha256Hex(normalized));
-  });
 });

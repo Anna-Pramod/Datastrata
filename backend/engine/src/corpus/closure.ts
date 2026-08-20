@@ -32,11 +32,38 @@ export interface ClosurePolicy {
   referenceKinds: readonly EdgeKind[];
 }
 
+/**
+ * Kinds that lead to the same law in its currently governing form. Declared
+ * here, with the traversal policy that gives them their meaning, and nowhere
+ * else.
+ */
+export const STRUCTURAL_EDGE_KINDS: readonly EdgeKind[] = [
+  'amends',
+  'amendedBy',
+  'consolidates',
+  'definesTermsFor',
+];
+
 export const CLOSURE_POLICY_V0: ClosurePolicy = {
   referenceDepth: 1,
-  structuralKinds: ['amends', 'amendedBy', 'consolidates', 'definesTermsFor'],
+  structuralKinds: STRUCTURAL_EDGE_KINDS,
   referenceKinds: ['references'],
 };
+
+/**
+ * An entry document the corpus does not hold. Spec 4.2 files "the document does
+ * not exist locally at all" as `corpus_gap`, answered by ingesting it. Building
+ * a closure over it anyway would let a signature pin an entitlement over a
+ * document nobody has, under a hash covering an empty digest for it.
+ */
+export class ClosureEntryNotFoundError extends Error {
+  constructor(public docId: string) {
+    super(
+      `Closure entry ${docId} is not in the corpus: that is a corpus_gap — ingest the document rather than closing over it`,
+    );
+    this.name = 'ClosureEntryNotFoundError';
+  }
+}
 
 export interface Closure {
   /** Sorted. Every document the reader is entitled to open. */
@@ -74,11 +101,16 @@ export function computeClosure(
   const structural = new Set<EdgeKind>(policy.structuralKinds);
   const reference = new Set<EdgeKind>(policy.referenceKinds);
   const edges = allEdges(index);
+  const byId = new Map(index.documents.map((d) => [d.docId, d]));
 
   const bestDepth = new Map<string, number>();
   const queue: Array<{ docId: string; depth: number }> = [];
 
   for (const id of entryDocIds) {
+    // Membership is checked before seeding, not papered over at hash time: an
+    // entry the corpus does not hold is a corpus_gap, and swallowing it here
+    // would produce a closure naming a document that does not exist.
+    if (!byId.has(id)) throw new ClosureEntryNotFoundError(id);
     if (!bestDepth.has(id) || (bestDepth.get(id) ?? Infinity) > 0) {
       bestDepth.set(id, 0);
       queue.push({ docId: id, depth: 0 });
@@ -119,8 +151,6 @@ export function computeClosure(
     .filter((e) => inClosure.has(e.from) && inClosure.has(e.to))
     .sort((a, b) => (a.edgeId < b.edgeId ? -1 : a.edgeId > b.edgeId ? 1 : 0));
 
-  const byId = new Map(index.documents.map((d) => [d.docId, d]));
-
   // Canonical serialisation. Every field that changes what the reader was
   // entitled to know, and nothing that does not.
   //
@@ -132,7 +162,15 @@ export function computeClosure(
   // which is the exact failure this hash exists to prevent.
   const lines: string[] = [];
   for (const id of docIds) {
-    lines.push(JSON.stringify(['doc', id, byId.get(id)?.sha256Normalized ?? '']));
+    const doc = byId.get(id);
+    // Entries are checked above and every traversed node came from an edge
+    // endpoint the index resolves (verifyCorpusIntegrity enforces that), so
+    // this cannot be missing. If it ever is, the closure hash would silently
+    // cover an empty digest for a document — fail instead of defaulting.
+    if (doc === undefined) {
+      throw new Error(`Closure reached ${id}, which the index does not hold: closure is inconsistent`);
+    }
+    lines.push(JSON.stringify(['doc', id, doc.sha256Normalized]));
   }
   for (const e of included) {
     lines.push(

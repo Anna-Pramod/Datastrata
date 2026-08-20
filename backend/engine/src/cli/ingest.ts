@@ -30,7 +30,13 @@ export interface IngestInput {
   versionLabel: string;
   /** ISO date. Passed in, never read from the clock here. */
   retrievedOn: string;
-  rawText: string;
+  /**
+   * The bytes exactly as fetched. Bytes, not a decoded string: `sha256Raw`
+   * covers what the publisher served, and what lands under `rawPath` is what a
+   * future normalizer gets re-run over. Hashing and storing a decoded rendition
+   * would pin something the publisher never served.
+   */
+  rawBytes: Uint8Array;
   /** `#id` region to scope extraction to. Omitted means the whole document. */
   contentSelector?: string;
   edges: CorpusEdge[];
@@ -40,16 +46,20 @@ export interface IngestInput {
  * Bytes to a validated index entry. Throws if the result would not satisfy the
  * schema, so an invalid entry can never reach index.json. Also throws (via
  * `normalize`) when `contentSelector` is given but does not match anything in
- * `rawText` -- there is no silent fallback to the whole document, so nothing
- * downstream ever writes a document under a selector that does not describe
- * how its text was actually derived.
+ * the decoded text -- there is no silent fallback to the whole document, so
+ * nothing downstream ever writes a document under a selector that does not
+ * describe how its text was actually derived.
+ *
+ * The bytes are hashed as bytes and decoded separately for normalization, so
+ * the stored raw form and the hash over it are the fetched bytes themselves.
  */
 export function buildDocumentEntry(input: IngestInput): {
   entry: CorpusDocument;
-  rawText: string;
+  rawBytes: Uint8Array;
   normalizedText: string;
 } {
-  const normalizedText = normalize(input.rawText, input.contentSelector);
+  const decoded = new TextDecoder().decode(input.rawBytes);
+  const normalizedText = normalize(decoded, input.contentSelector);
 
   const entry: CorpusDocument = {
     docId: input.docId,
@@ -60,7 +70,7 @@ export function buildDocumentEntry(input: IngestInput): {
     retrievedOn: input.retrievedOn,
     rawPath: `raw/${input.slug}.html`,
     normalizedPath: `normalized/${input.slug}.txt`,
-    sha256Raw: sha256Hex(input.rawText),
+    sha256Raw: sha256Hex(input.rawBytes),
     sha256Normalized: sha256Hex(normalizedText),
     normalizerVersion: NORMALIZER_VERSION,
     contentSelector: input.contentSelector ?? null,
@@ -70,33 +80,43 @@ export function buildDocumentEntry(input: IngestInput): {
   // Validate the single entry immediately; a bad row never reaches the index.
   parseCorpusIndex({ updated: input.retrievedOn, documents: [entry] });
 
-  return { entry, rawText: input.rawText, normalizedText };
+  return { entry, rawBytes: input.rawBytes, normalizedText };
 }
 
-/** Adds or replaces a document, keeping the index sorted for clean diffs. */
+/**
+ * Adds or replaces a document, keeping the index sorted for clean diffs.
+ *
+ * `updated` only ever moves forward: re-ingesting a document with an earlier
+ * `--retrieved-on` than the index already carries must not rewind the
+ * index-level date, since the later retrieval genuinely happened.
+ */
 export function mergeIntoIndex(index: CorpusIndex, entry: CorpusDocument): CorpusIndex {
   const documents = index.documents.filter((d) => d.docId !== entry.docId);
   documents.push(entry);
   documents.sort((a, b) => (a.docId < b.docId ? -1 : a.docId > b.docId ? 1 : 0));
-  return { updated: entry.retrievedOn, documents };
+  // ISO dates order lexically, so a plain comparison is the date comparison.
+  const updated = index.updated > entry.retrievedOn ? index.updated : entry.retrievedOn;
+  return { updated, documents };
 }
 
 interface FetchOutcome {
   ok: boolean;
-  text: string;
+  bytes: Uint8Array;
   error?: string;
 }
 
 /** A failed fetch is recorded as unreachable. It is never treated as empty. */
 async function fetchDocument(url: string): Promise<FetchOutcome> {
+  const empty = new Uint8Array(0);
   try {
     const response = await fetch(url, { headers: { accept: 'text/html,text/plain' } });
     if (!response.ok) {
-      return { ok: false, text: '', error: `HTTP ${response.status} ${response.statusText}` };
+      return { ok: false, bytes: empty, error: `HTTP ${response.status} ${response.statusText}` };
     }
-    return { ok: true, text: await response.text() };
+    // arrayBuffer, not text: the store pins the bytes as served.
+    return { ok: true, bytes: Buffer.from(await response.arrayBuffer()) };
   } catch (err) {
-    return { ok: false, text: '', error: err instanceof Error ? err.message : String(err) };
+    return { ok: false, bytes: empty, error: err instanceof Error ? err.message : String(err) };
   }
 }
 
@@ -121,10 +141,19 @@ function usage(): never {
   process.exit(2);
 }
 
+/**
+ * A value that looks like another flag means this flag was given without one.
+ * `--version-label --retrieved-on 2026-08-20` would otherwise write
+ * `versionLabel: "--retrieved-on"` into index.json — and versionLabel is one of
+ * the five fields a signature pins (spec 4.2), with no downstream pattern to
+ * catch it the way `--doc-id` has. Treating it as missing sends it to usage().
+ */
 function arg(argv: string[], name: string): string | undefined {
   const i = argv.indexOf(`--${name}`);
   if (i === -1) return undefined;
-  return argv[i + 1];
+  const value = argv[i + 1];
+  if (value === undefined || value.startsWith('--')) return undefined;
+  return value;
 }
 
 export async function main(argv: string[]): Promise<void> {
@@ -160,7 +189,7 @@ export async function main(argv: string[]): Promise<void> {
       url,
       versionLabel,
       retrievedOn,
-      rawText: outcome.text,
+      rawBytes: outcome.bytes,
       contentSelector,
       edges,
     });
@@ -169,7 +198,7 @@ export async function main(argv: string[]): Promise<void> {
     console.error('Nothing was written.');
     process.exit(1);
   }
-  const { entry, rawText, normalizedText } = built;
+  const { entry, rawBytes, normalizedText } = built;
 
   const indexPath = join(corpusDir, 'index.json');
   let index: CorpusIndex;
@@ -182,13 +211,16 @@ export async function main(argv: string[]): Promise<void> {
   const merged = mergeIntoIndex(index, entry);
   verifyCorpusIntegrity(merged);
 
-  for (const [path, contents] of [
-    [join(corpusDir, entry.rawPath), rawText],
-    [join(corpusDir, entry.normalizedPath), normalizedText],
-  ] as const) {
-    mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, contents, 'utf8');
-  }
+  // The raw side is written as bytes so what is stored is what was served;
+  // the normalized side is text this process produced, so it is written as
+  // UTF-8.
+  const rawOut = join(corpusDir, entry.rawPath);
+  mkdirSync(dirname(rawOut), { recursive: true });
+  writeFileSync(rawOut, rawBytes);
+
+  const normalizedOut = join(corpusDir, entry.normalizedPath);
+  mkdirSync(dirname(normalizedOut), { recursive: true });
+  writeFileSync(normalizedOut, normalizedText, 'utf8');
   mkdirSync(dirname(indexPath), { recursive: true });
   writeFileSync(indexPath, `${JSON.stringify(merged, null, 2)}\n`, 'utf8');
 

@@ -9,8 +9,11 @@ import {
   CorpusIntegrityError,
   parseCorpusIndex,
   verifyCorpusIntegrity,
+  verifyCorpusServesCoverage,
 } from '../src/corpus/schema';
 import type { CorpusDocument, CorpusEdge, CorpusIndex } from '../src/corpus/types';
+import type { KnowledgePack } from '../src/types';
+import { csrdPack } from './helpers';
 
 function edge(over: Partial<CorpusEdge> = {}): CorpusEdge {
   return {
@@ -179,5 +182,40 @@ describe('corpus index integrity', () => {
       ]),
     );
     expect(() => verifyCorpusIntegrity(idx)).not.toThrow();
+  });
+});
+
+/**
+ * `serves` is the only link from a document to the citation record, and
+ * `docsForSources` resolves entry documents by exactly that field: an SRC id
+ * the pack does not carry makes the document vanish from every closure built
+ * for that requirement, silently. Checked against a pack, and kept out of
+ * verifyCorpusIntegrity so the corpus keeps no pack knowledge.
+ */
+describe('verifyCorpusServesCoverage', () => {
+  const pack = csrdPack();
+
+  it('accepts serves entries the pack carries', () => {
+    expect(() => verifyCorpusServesCoverage(index([doc({ serves: ['SRC-001'] })]), pack)).not.toThrow();
+  });
+
+  it('rejects a serves entry no source in the pack matches', () => {
+    expect(() => verifyCorpusServesCoverage(index([doc({ serves: ['SRC-999'] })]), pack)).toThrow(
+      /SRC-999/,
+    );
+  });
+
+  it('reports the document that carries the unknown id', () => {
+    expect(() =>
+      verifyCorpusServesCoverage(index([doc({ docId: 'DOC-STRAY', serves: ['SRC-999'] })]), pack),
+    ).toThrow(CorpusIntegrityError);
+  });
+
+  it('is decided by the pack it is given, not by the pack shipped in this repo', () => {
+    const thin = { id: 'PACK-TEST', sources: [{ id: 'SRC-042' }] } as unknown as KnowledgePack;
+    expect(() => verifyCorpusServesCoverage(index([doc({ serves: ['SRC-042'] })]), thin)).not.toThrow();
+    expect(() => verifyCorpusServesCoverage(index([doc({ serves: ['SRC-001'] })]), thin)).toThrow(
+      /SRC-001/,
+    );
   });
 });

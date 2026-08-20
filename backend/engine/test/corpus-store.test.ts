@@ -8,8 +8,11 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { CorpusIntegrityError } from '../src/corpus/schema';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { CorpusIntegrityError, verifyCorpusServesCoverage } from '../src/corpus/schema';
+import { computeClosure, docsForSources } from '../src/corpus/closure';
+import { csrdPack } from './helpers';
 import { normalize, NORMALIZER_VERSION } from '../src/corpus/normalize';
 import { sha256Hex } from '../src/corpus/hash';
 import { CorpusDocumentNotFoundError, loadCorpus } from '../src/corpus/store';
@@ -59,6 +62,44 @@ function writeCorpus(
   writeFileSync(join(dir, 'index.json'), JSON.stringify(index, null, 2), 'utf8');
 }
 
+/**
+ * Two raw payloads that differ in bytes and decode to the identical string:
+ * 0x80 and 0x81 are both stray UTF-8 continuation bytes, so each decodes to
+ * U+FFFD. Only a hash taken over bytes can tell them apart.
+ */
+const RAW_BYTES_A = Buffer.from([0x3c, 0x70, 0x3e, 0x80, 0x3c, 0x2f, 0x70, 0x3e]);
+const RAW_BYTES_B = Buffer.from([0x3c, 0x70, 0x3e, 0x81, 0x3c, 0x2f, 0x70, 0x3e]);
+
+/** A one-document corpus whose raw side is written as bytes, not as a string. */
+function writeByteCorpus(rawBytes: Buffer): void {
+  mkdirSync(join(dir, 'raw'), { recursive: true });
+  mkdirSync(join(dir, 'normalized'), { recursive: true });
+  const normalized = normalize(rawBytes.toString('utf8'));
+  writeFileSync(join(dir, 'raw', 'a.html'), rawBytes);
+  writeFileSync(join(dir, 'normalized', 'a.txt'), normalized, 'utf8');
+  const index = {
+    updated: '2026-08-20',
+    documents: [
+      {
+        docId: 'DOC-A',
+        serves: ['SRC-001'],
+        title: 'Instrument a',
+        url: 'https://eur-lex.europa.eu/eli/dir/2013/34/oj/eng#a',
+        versionLabel: 'consolidated 18 Mar 2026',
+        retrievedOn: '2026-08-20',
+        rawPath: 'raw/a.html',
+        normalizedPath: 'normalized/a.txt',
+        sha256Raw: sha256Hex(rawBytes),
+        sha256Normalized: sha256Hex(normalized),
+        normalizerVersion: NORMALIZER_VERSION,
+        contentSelector: null,
+        edges: [],
+      },
+    ],
+  };
+  writeFileSync(join(dir, 'index.json'), JSON.stringify(index, null, 2), 'utf8');
+}
+
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'corpus-'));
 });
@@ -96,6 +137,22 @@ describe('loadCorpus', () => {
   it('rejects a raw file edited after indexing', () => {
     writeCorpus();
     writeFileSync(join(dir, 'raw', 'a.html'), '<p>tampered</p>', 'utf8');
+    expect(() => loadCorpus(dir)).toThrow(/sha256Raw/);
+  });
+
+  it('hashes the raw side as bytes, so a decode-identical mutation still moves sha256Raw', () => {
+    // The two payloads decode to the same string, so a hash taken over the
+    // decoded rendition cannot separate them. sha256Raw covers "the bytes as
+    // fetched" (spec 2.1), and the raw store is what a future normalizer is
+    // re-run over, so it has to discriminate here.
+    expect(RAW_BYTES_A.toString('utf8')).toBe(RAW_BYTES_B.toString('utf8'));
+    expect(sha256Hex(RAW_BYTES_A)).not.toBe(sha256Hex(RAW_BYTES_B));
+  });
+
+  it('rejects a raw file mutated into decode-identical but different bytes', () => {
+    writeByteCorpus(RAW_BYTES_A);
+    expect(() => loadCorpus(dir)).not.toThrow();
+    writeFileSync(join(dir, 'raw', 'a.html'), RAW_BYTES_B);
     expect(() => loadCorpus(dir)).toThrow(/sha256Raw/);
   });
 
@@ -167,5 +224,53 @@ describe('loadCorpus', () => {
     writeFileSync(idxPath, JSON.stringify(idx, null, 2), 'utf8');
 
     expect(() => loadCorpus(dir)).toThrow(/does not reproduce/);
+  });
+});
+
+/**
+ * The committed corpus, loaded as it stands. Every fixture above builds its own
+ * store, so without this block nothing in the suite ever checks the two
+ * documents the branch actually ships — and loading them is what re-derives
+ * every stored hash from the bytes on disk.
+ */
+describe('the real corpus', () => {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const corpusDir = join(here, '..', 'corpus');
+
+  it('loads, which re-derives every stored hash from the files on disk', () => {
+    expect(() => loadCorpus(corpusDir)).not.toThrow();
+  });
+
+  it('holds the documents behind the sources they serve', () => {
+    const { index } = loadCorpus(corpusDir);
+    expect(docsForSources(index, ['SRC-001', 'SRC-004'])).toEqual([
+      'DOC-32013L0034',
+      'DOC-32026L0470',
+    ]);
+  });
+
+  it('resolves a closure over those entries that carries the amendment edge', () => {
+    const { index } = loadCorpus(corpusDir);
+    const closure = computeClosure(index, docsForSources(index, ['SRC-001', 'SRC-004']));
+    expect(closure.docIds).toEqual(['DOC-32013L0034', 'DOC-32026L0470']);
+    expect(closure.edgeIds).toEqual(['EDGE-32013L0034-amendedBy-32026L0470']);
+    expect(closure.sha256).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('sits at the current normalizer version for every document', () => {
+    // The reproduction check in loadCorpus is skipped for a document recorded
+    // under an older normalizer -- deliberately, since that is the
+    // normalizer_changed recovery path. This is what stops that skip from
+    // being usable as a hiding place: if any committed document drifts off the
+    // current version, the population is visible here rather than silent.
+    const { index } = loadCorpus(corpusDir);
+    for (const d of index.documents) {
+      expect(d.normalizerVersion, d.docId).toBe(NORMALIZER_VERSION);
+    }
+  });
+
+  it('serves only sources the pack actually cites', () => {
+    const { index } = loadCorpus(corpusDir);
+    expect(() => verifyCorpusServesCoverage(index, csrdPack())).not.toThrow();
   });
 });

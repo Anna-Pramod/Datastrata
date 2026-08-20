@@ -17,6 +17,8 @@ import { sha256Hex } from '../src/corpus/hash';
 import type { CorpusIndex } from '../src/corpus/types';
 
 const RAW = '<p>Article 19a: net turnover of EUR&nbsp;450 000 000</p>';
+/** Ingest takes the bytes as fetched, so fixtures encode their text first. */
+const bytes = (text: string): Uint8Array => new TextEncoder().encode(text);
 const RAW_WITH_REGION =
   '<div id="wrapper">chrome outside the region' +
   '<div id="text"><p>Article 19a: net turnover of EUR&nbsp;450 000 000</p></div>' +
@@ -31,7 +33,7 @@ function input(over: Partial<IngestInput> = {}): IngestInput {
     url: 'https://eur-lex.europa.eu/eli/dir/2013/34/2026-03-18/eng',
     versionLabel: 'consolidated 18 Mar 2026',
     retrievedOn: '2026-08-20',
-    rawText: RAW,
+    rawBytes: bytes(RAW),
     edges: [],
     ...over,
   };
@@ -47,7 +49,26 @@ describe('buildDocumentEntry', () => {
 
   it('hashes the raw bytes as received', () => {
     const { entry } = buildDocumentEntry(input());
-    expect(entry.sha256Raw).toBe(sha256Hex(RAW));
+    expect(entry.sha256Raw).toBe(sha256Hex(bytes(RAW)));
+  });
+
+  it('hashes the bytes, not a decoded rendition of them', () => {
+    // 0x80 and 0x81 are both stray UTF-8 continuation bytes: they decode to
+    // the same string, so a hash over the decoded form cannot separate them.
+    // sha256Raw covers the bytes as fetched (spec 2.1), so it must.
+    const a = Uint8Array.from([0x3c, 0x70, 0x3e, 0x80, 0x3c, 0x2f, 0x70, 0x3e]);
+    const b = Uint8Array.from([0x3c, 0x70, 0x3e, 0x81, 0x3c, 0x2f, 0x70, 0x3e]);
+    expect(new TextDecoder().decode(a)).toBe(new TextDecoder().decode(b));
+    expect(buildDocumentEntry(input({ rawBytes: a })).entry.sha256Raw).not.toBe(
+      buildDocumentEntry(input({ rawBytes: b })).entry.sha256Raw,
+    );
+  });
+
+  it('returns the fetched bytes for storage, unchanged', () => {
+    const raw = Uint8Array.from([0x3c, 0x70, 0x3e, 0x80, 0x3c, 0x2f, 0x70, 0x3e]);
+    expect(Buffer.from(buildDocumentEntry(input({ rawBytes: raw })).rawBytes)).toEqual(
+      Buffer.from(raw),
+    );
   });
 
   it('hashes the normalized form the normalizer produces', () => {
@@ -128,7 +149,7 @@ describe('buildDocumentEntry', () => {
 
   it('records the supplied contentSelector and scopes normalization to it', () => {
     const { entry, normalizedText } = buildDocumentEntry(
-      input({ rawText: RAW_WITH_REGION, contentSelector: '#text' }),
+      input({ rawBytes: bytes(RAW_WITH_REGION), contentSelector: '#text' }),
     );
     expect(entry.contentSelector).toBe('#text');
     expect(normalizedText).toBe(normalize(RAW_WITH_REGION, '#text'));
@@ -137,7 +158,7 @@ describe('buildDocumentEntry', () => {
 
   it('throws when the given contentSelector does not match, naming the selector', () => {
     expect(() =>
-      buildDocumentEntry(input({ rawText: RAW, contentSelector: '#nope' })),
+      buildDocumentEntry(input({ rawBytes: bytes(RAW), contentSelector: '#nope' })),
     ).toThrow(/#nope/);
   });
 });
@@ -163,6 +184,21 @@ describe('mergeIntoIndex', () => {
     const { entry: b } = buildDocumentEntry(input({ docId: 'DOC-A', slug: 'a' }));
     const merged = mergeIntoIndex(mergeIntoIndex(emptyIndex(), a), b);
     expect(merged.documents.map((d) => d.docId)).toEqual(['DOC-A', 'DOC-B']);
+  });
+
+  it('does not rewind the index date when an earlier retrieval is re-ingested', () => {
+    // updated is the index-level "last edited" date. Re-ingesting a document
+    // with an earlier --retrieved-on must not move it backwards: the later
+    // retrieval still happened.
+    const { entry: late } = buildDocumentEntry(input({ retrievedOn: '2026-09-01' }));
+    const { entry: early } = buildDocumentEntry(input({ docId: 'DOC-OTHER', slug: 'other', retrievedOn: '2026-07-01' }));
+    const merged = mergeIntoIndex(mergeIntoIndex(emptyIndex(), late), early);
+    expect(merged.updated).toBe('2026-09-01');
+  });
+
+  it('moves the index date forward for a later retrieval', () => {
+    const { entry } = buildDocumentEntry(input({ retrievedOn: '2026-09-01' }));
+    expect(mergeIntoIndex(emptyIndex(), entry).updated).toBe('2026-09-01');
   });
 
   it('produces an index that still passes integrity when edges resolve', () => {
@@ -202,9 +238,16 @@ describe('main (CLI, network mocked)', () => {
   });
 
   function withMockedFetch(responseText: string): void {
+    // Ingest reads the response as bytes, so the stub serves bytes.
+    const body = new TextEncoder().encode(responseText);
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => ({ ok: true, status: 200, statusText: 'OK', text: async () => responseText })),
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        arrayBuffer: async () => body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength),
+      })),
     );
   }
 
@@ -245,6 +288,70 @@ describe('main (CLI, network mocked)', () => {
     expect(existsSync(join(dir, 'index.json'))).toBe(false);
     expect(existsSync(join(dir, 'raw'))).toBe(false);
     expect(existsSync(join(dir, 'normalized'))).toBe(false);
+  });
+
+  it('treats a flag-shaped value as a missing value rather than writing it as content', async () => {
+    // --version-label consumed the next flag as its value would put
+    // "--retrieved-on" into a field a signature pins.
+    dir = mkdtempSync(join(tmpdir(), 'ingest-'));
+    withMockedFetch(RAW);
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new FakeProcessExit(code ?? 0);
+    }) as never);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(
+      main([
+        '--url',
+        'https://example.test/doc',
+        '--doc-id',
+        'DOC-TEST',
+        '--slug',
+        'test',
+        '--serves',
+        'SRC-001',
+        '--title',
+        'Test instrument',
+        '--version-label',
+        '--retrieved-on',
+        '2026-08-20',
+        '--corpus-dir',
+        dir,
+      ]),
+    ).rejects.toThrow(FakeProcessExit);
+
+    expect(exitSpy).toHaveBeenCalledWith(2);
+    expect(existsSync(join(dir, 'index.json'))).toBe(false);
+  });
+
+  it('stores the fetched bytes verbatim under rawPath', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'ingest-'));
+    withMockedFetch(RAW);
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    await main([
+      '--url',
+      'https://example.test/doc',
+      '--doc-id',
+      'DOC-TEST',
+      '--slug',
+      'test',
+      '--serves',
+      'SRC-001',
+      '--title',
+      'Test instrument',
+      '--version-label',
+      'v1',
+      '--retrieved-on',
+      '2026-08-20',
+      '--corpus-dir',
+      dir,
+    ]);
+
+    const stored = readFileSync(join(dir, 'raw', 'test.html'));
+    expect(sha256Hex(stored)).toBe(sha256Hex(bytes(RAW)));
+    const index = JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8'));
+    expect(index.documents[0]?.sha256Raw).toBe(sha256Hex(stored));
   });
 
   it('records the selector on the entry when the CLI ingest succeeds', async () => {
