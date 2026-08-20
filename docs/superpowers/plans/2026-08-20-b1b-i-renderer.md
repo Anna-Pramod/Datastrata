@@ -268,6 +268,12 @@ compareRequirementFeatures(a: RequirementFeatures, b: RequirementFeatures): stri
 
 **Required behaviours:**
 
+0. **`featuresFromEnglish` is built from `backend/engine/docs/verification-grammar.md`, and from that document alone.** Task 2 produced it as the renderer's output contract: the four structural markers as a closed regex, a literal template and worked example for each of the thirteen flat primitives, the two conditionally-structural ones, the requirement-level and selection-case templates, the indent rule, and a regex cheat-sheet. A reviewer verified it by predicting output cold for three cases harder than its own worked examples, matching character-for-character without opening `render.ts`.
+
+   Note the order of operations §3 specifies: split a rendered requirement into its fixed template parts **first** to isolate the substring that is `renderCondition` output, and only apply the four marker forms **within** that substring. A line ending in `:` is not sufficient evidence of a marker — a selection case's header ends in one too.
+
+   **Do not read `render.ts` while writing `features.ts`.** The import ban stops the mechanical coupling; reading the source and transcribing its templates re-couples the two sides through the author, which is the same defect in different clothes. If the document is wrong or silent on something, that is a finding to report — fix the document, then work from it — never a licence to consult the implementation.
+
 1. **Atoms compare by path.** The atom at `all[0]` on one side is compared against the atom at `all[0]` on the other — fact, comparator, threshold and unit together. The turnover/employee swap therefore diverges at both paths.
 2. **`shape` pins the operator tree**, not merely its depth. Two distinct trees must not share a shape string.
 3. **Units are part of the atom**, so a threshold that keeps its digits but loses or changes its unit diverges.
