@@ -115,7 +115,7 @@ The selector lives on the document entry rather than in the normalizer, because 
 | Evidence kind | Contents | Deterministic check |
 |---|---|---|
 | `quote` | `docId`, `sha256Normalized`, verbatim span | The span is a literal substring of that exact document under its pinned normalizer |
-| `amendment_chain` | Ordered `docId` list plus the quotes at each hop | Every hop exists as an edge in the corpus graph; every quote checks |
+| `amendment_chain` | Ordered hops, each an amendment edge plus a quote | Every hop is an `amends`/`amendedBy` edge that exists in the graph; every quote sits on one of its own hop's endpoints; consecutive hops are **oriented**, not merely connected (see below); every quote checks |
 | `cross_reference` | Source and target `docId` + provision, with quotes at both ends | Both quotes check; a `references` edge connects them |
 | `absence` | Documents searched, the search performed, the term sought | **The search is re-run.** The claim fails if the term occurs |
 
@@ -480,7 +480,7 @@ Text inside a fetched or corpus document is evidence about that document, never 
 Added to the existing 74:
 
 - **Renderer** — every v0 primitive; output stability across key reordering
-- **Evidence checker** — a fabricated quote must fail; an `absence` claim whose term is present must fail; an `absence` item standing as sole evidence must fail; an `amendment_chain` hop with no corresponding edge must fail
+- **Evidence checker** — a fabricated quote must fail; an `absence` claim whose term is present must fail; an `absence` item standing as sole evidence must fail; an `amendment_chain` hop with no corresponding edge must fail; a connected-but-unoriented chain must fail; a `cross_reference` on a non-`references` edge must fail
 - **Canonical hashing** — `conditionSha256` and `requirementInputSha256` stable under key reordering and whitespace
 - **Normalizer** — renormalising stored raw bytes reproduces `sha256Normalized`
 - **Loader** — a `verified` projection with no ledger entry fails; with open questions fails; when stale fails
