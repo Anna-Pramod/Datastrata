@@ -7,7 +7,12 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { extractText, normalize, NORMALIZER_VERSION } from '../src/corpus/normalize';
+import {
+  extractText,
+  normalize,
+  normalizeWhitespace,
+  NORMALIZER_VERSION,
+} from '../src/corpus/normalize';
 import { sha256Hex } from '../src/corpus/hash';
 
 describe('text extraction', () => {
@@ -33,12 +38,12 @@ describe('text extraction', () => {
 
   it('decodes the named entities legal text actually uses', () => {
     expect(extractText('<p>EUR&nbsp;450&nbsp;000 &amp; more &lt;here&gt;</p>')).toBe(
-      'EUR 450 000 & more <here>',
+      'EUR\u00a0450\u00a0000 & more <here>',
     );
   });
 
   it('decodes numeric entities', () => {
-    expect(extractText('<p>&#8364;450m</p>')).toBe('€450m');
+    expect(extractText('<p>&#8364;450m</p>')).toBe('\u20ac450m');
   });
 
   it('leaves plain text untouched', () => {
@@ -56,12 +61,12 @@ describe('normalization', () => {
   });
 
   it('converts non-breaking spaces to ordinary ones', () => {
-    expect(normalize('EUR 450')).toBe('EUR 450');
+    expect(normalize('EUR\u00a0450')).toBe('EUR 450');
   });
 
   it('applies unicode NFC so decomposed and composed forms agree', () => {
-    const decomposed = 'Türkiye'; // u + combining diaeresis
-    const composed = 'Türkiye'; // precomposed u-umlaut
+    const decomposed = 'Tu\u0308rkiye'; // u + combining diaeresis
+    const composed = 'T\u00fcrkiye'; // precomposed u-umlaut
     expect(decomposed).not.toBe(composed); // different bytes, same word
     expect(normalize(decomposed)).toBe(normalize(composed));
   });
@@ -75,14 +80,36 @@ describe('normalization', () => {
   });
 
   it('preserves dashes, because they appear inside legal identifiers', () => {
-    expect(normalize('2013/34/EU — Accounting Directive')).toBe(
-      '2013/34/EU — Accounting Directive',
+    expect(normalize('2013/34/EU \u2014 Accounting Directive')).toBe(
+      '2013/34/EU \u2014 Accounting Directive',
     );
   });
 
-  it('is idempotent', () => {
-    const once = normalize('<p>EUR&nbsp;450   000</p>\r\n\r\n\r\n<p>x</p>');
-    expect(normalize(once)).toBe(once);
+  it('normalizeWhitespace is idempotent', () => {
+    // The property the system actually relies on: quote checking and absence
+    // search run over already-extracted text, so the comparison form must be
+    // a fixed point. Asserted on normalizeWhitespace because that is what
+    // those call sites use.
+    const once = normalizeWhitespace('EUR\u00a0450   000\r\n\r\n\r\n\r\nx');
+    expect(normalizeWhitespace(once)).toBe(once);
+  });
+
+  it('normalizeWhitespace leaves entities alone, so it cannot double-decode', () => {
+    expect(normalizeWhitespace('&amp;lt;')).toBe('&amp;lt;');
+  });
+
+  it('extractText decodes a doubly-escaped entity exactly one level', () => {
+    // Republished legal HTML routinely carries these. One pass, one level:
+    // running extraction again would wrongly decode the result to '<'.
+    expect(extractText('&amp;lt;')).toBe('&lt;');
+  });
+
+  it('does not delete text around a bare less-than sign', () => {
+    // "turnover < 40 million" must survive. A tag stripper that matches any
+    // `<...>` deletes from the `<` to the next `>`, silently.
+    expect(extractText('<p>Applies where turnover < 40 million and cost > 10.</p>')).toBe(
+      'Applies where turnover < 40 million and cost > 10.',
+    );
   });
 
   it('declares a version', () => {

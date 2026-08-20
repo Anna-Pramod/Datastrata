@@ -22,7 +22,7 @@ const NAMED_ENTITIES: Record<string, string> = {
   gt: '>',
   quot: '"',
   apos: "'",
-  nbsp: ' ', // decoded faithfully; normalize() collapses it to a space
+  nbsp: '\u00a0', // decoded faithfully; normalize() collapses it to a space
 };
 
 /** Tags after which a line break is needed or paragraphs run together. */
@@ -46,6 +46,11 @@ function decodeEntities(text: string): string {
 /**
  * Recover running text from HTML. Plain text passes through unchanged, so this
  * is safe to run over any document.
+ *
+ * NOT idempotent, and it cannot be: entity decoding turns `&amp;lt;` into
+ * `&lt;`, which a second pass would decode again. It is applied exactly once,
+ * at ingest, to raw bytes. Anything operating on already-extracted text uses
+ * normalizeWhitespace instead.
  */
 export function extractText(rawText: string): string {
   if (!/<[a-zA-Z!/]/.test(rawText)) return decodeEntities(rawText);
@@ -57,22 +62,37 @@ export function extractText(rawText: string): string {
   text = text.replace(/<!--[\s\S]*?-->/g, '');
   // Block boundaries become line breaks before tags are stripped.
   text = text.replace(new RegExp(`<\\s*/?\\s*(${BLOCK_TAGS})\\b[^>]*>`, 'gi'), '\n');
-  text = text.replace(/<[^>]*>/g, '');
+  // A tag-shaped opener is required: `<` followed by a letter or `/`. Legal
+  // text says "turnover < 40 million"; a bare `<[^>]*>` deletes everything
+  // from that `<` to the next `>`, silently, which is the worst possible
+  // failure for a corpus whose whole purpose is that the words did not move.
+  text = text.replace(/<\/?[a-zA-Z][^>]*>/g, '');
   return decodeEntities(text).trim();
 }
 
 /**
- * The canonical form every hash, quote check and absence search runs over.
- * Idempotent: normalize(normalize(x)) === normalize(x).
+ * Unicode form and whitespace only. Idempotent by construction — it decodes
+ * nothing, so there is no second-pass transformation to apply.
+ *
+ * This is the form comparisons run over, because quote checking and absence
+ * search operate on text that has already been extracted, and running full
+ * extraction over it again would shift the haystack.
+ */
+export function normalizeWhitespace(text: string): string {
+  let out = text.normalize('NFC');
+  // Unicode spaces that are not line breaks become ordinary spaces.
+  out = out.replace(/[\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]/g, ' ');
+  out = out.replace(/\r\n?/g, '\n');
+  out = out.replace(/[ \t]+/g, ' ');
+  out = out.replace(/ *\n */g, '\n');
+  out = out.replace(/\n{3,}/g, '\n\n');
+  return out.trim();
+}
+
+/**
+ * The ingest path: raw bytes to the canonical stored form. Applied once per
+ * document, never to its own output.
  */
 export function normalize(rawText: string): string {
-  let text = extractText(rawText);
-  text = text.normalize('NFC');
-  // Unicode spaces that are not line breaks become ordinary spaces.
-  text = text.replace(/[   -   　]/g, ' ');
-  text = text.replace(/\r\n?/g, '\n');
-  text = text.replace(/[ \t]+/g, ' ');
-  text = text.replace(/ *\n */g, '\n');
-  text = text.replace(/\n{3,}/g, '\n\n');
-  return text.trim();
+  return normalizeWhitespace(extractText(rawText));
 }
