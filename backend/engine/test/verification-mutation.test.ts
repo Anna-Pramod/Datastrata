@@ -248,6 +248,68 @@ describe('displayed-value corruption', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Mutation 14: CSRD-S-013 — the national-law completeness gate
+//
+// Its third clause is an `in_catalogue` over `ratified_country_packs` with
+// `missReason: 'national_law_unresolved'`, which is the requirement's entire
+// purpose: a Member State whose pack is not yet ratified must resolve to that
+// reason code, not to the catalogue's own default. Deleting the field used to
+// leave the rendered English byte-identical and the comparison silent, while
+// `conditionSha256` moved — a signature attesting review of an encoding the
+// reviewer was never shown.
+// ---------------------------------------------------------------------------
+
+describe('CSRD-S-013 mutation', () => {
+  const original = requirementById(pack, 'CSRD-S-013');
+
+  it('14. deleted miss reason: dropping missReason is a missReason divergence at all[2]', () => {
+    const mutated = mutate(original, (clone) => {
+      if (clone.condition?.op !== 'all') throw new Error('fixture assumption failed: CSRD-S-013 condition is not `all`');
+      const of = clone.condition.of;
+      const index = of.findIndex((c) => c.op === 'in_catalogue' && c.missReason !== undefined);
+      if (index === -1) throw new Error('fixture assumption failed: CSRD-S-013 has no in_catalogue carrying a missReason');
+      const target = of[index];
+      if (!target || target.op !== 'in_catalogue') throw new Error('unreachable');
+      const { missReason: _dropped, ...withoutReason } = target;
+      clone.condition = { op: 'all', of: [...of.slice(0, index), withoutReason, ...of.slice(index + 1)] };
+    });
+    const found = divergencesFor(original, mutated, packCtx);
+    expect(found.some((d) => d.startsWith('all[2]') && d.includes('missReason'))).toBe(true);
+  });
+
+  it('14b. the rendered English actually changes — the defect was that it did not', () => {
+    const english = renderRequirement(original, packCtx);
+    expect(english).toContain("a miss is recorded as 'national law unresolved'");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Mutations 15-16: the header. The one line binding the whole argument to a
+// provision, and the line the checker used to throw away — a rendering could
+// carry the right condition under the wrong id and report nothing.
+// ---------------------------------------------------------------------------
+
+describe('header mutations', () => {
+  const original = requirementById(pack, 'CSRD-S-001');
+
+  it('15. wrong requirement id: the condition of one requirement under another id is an id divergence', () => {
+    const mutated = mutate(original, (clone) => {
+      clone.id = 'CSRD-S-002';
+    });
+    const found = divergencesFor(original, mutated, packCtx);
+    expect(found.some((d) => d.includes('id') && d.includes('CSRD-S-001') && d.includes('CSRD-S-002'))).toBe(true);
+  });
+
+  it('16. wrong title: a retitled requirement is a title divergence', () => {
+    const mutated = mutate(original, (clone) => {
+      clone.title = 'Some other threshold entirely';
+    });
+    const found = divergencesFor(original, mutated, packCtx);
+    expect(found.some((d) => d.includes('title'))).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Mutations 11-13: synthetic fixtures for prefix_in, quantifier_any and
 // sum_cmp — CSRD exercises none of the three. Higher risk precisely because
 // no real content exists to catch a mistake in these paths.

@@ -76,8 +76,13 @@ function requirement(id: string, shape: { condition?: Condition; cases?: Require
 // ---------------------------------------------------------------------------
 
 describe('RENDERER_VERSION', () => {
-  it('starts at 1.0.0', () => {
-    expect(RENDERER_VERSION).toBe('1.0.0');
+  // Pinned deliberately: the constant identifies the output grammar a
+  // signature was taken over, so changing it must be a decision someone made,
+  // never a side effect. Editing this line is the moment to check that every
+  // template change in the same wave is reflected in
+  // docs/verification-grammar.md.
+  it('is 1.1.0 — bumped when the emitted grammar changed', () => {
+    expect(RENDERER_VERSION).toBe('1.1.0');
   });
 });
 
@@ -111,11 +116,20 @@ describe('renderCondition — one primitive at a time', () => {
     expect(out).toContain('ESRS');
   });
 
-  it('in_set: fact label and every candidate value', () => {
+  it('in_set: fact label and every candidate value, marked as a list', () => {
     const out = renderCondition({ op: 'in_set', fact: 'entity.standard', set: ['ESRS', 'EQUIVALENT'] }, ctx());
     expect(out).toContain("standard used to prepare the parent's report");
+    expect(out).toContain('is one of:');
     expect(out).toContain('ESRS');
     expect(out).toContain('EQUIVALENT');
+  });
+
+  it('in_set of one: still marked as a list, so it never reads as the equivalent eq', () => {
+    const asSet = renderCondition({ op: 'in_set', fact: 'entity.standard', set: ['ESRS'] }, ctx());
+    const asEq = renderCondition({ op: 'eq', fact: 'entity.standard', value: 'ESRS' }, ctx());
+    expect(asSet).toBe("standard used to prepare the parent's report is one of: ESRS");
+    expect(asEq).toBe("standard used to prepare the parent's report is ESRS");
+    expect(asSet).not.toBe(asEq);
   });
 
   it('in_catalogue: fact label and a readable (de-slugged) catalogue name', () => {
@@ -123,6 +137,30 @@ describe('renderCondition — one primitive at a time', () => {
     expect(out).toContain('country of incorporation');
     expect(out).toContain('eu member states');
     expect(out).not.toContain('eu_member_states');
+  });
+
+  it('in_catalogue: names the miss reason when the condition overrides the catalogue default', () => {
+    // The reason code decides what a catalogue miss reports (`evaluate.ts`
+    // reads `cond.missReason ?? cat.missReason`). Rendering the clause is
+    // what puts it in front of the reviewer who signs the encoding off.
+    const out = renderCondition(
+      {
+        op: 'in_catalogue',
+        fact: 'entity.country',
+        catalogue: 'ratified_country_packs',
+        missReason: 'national_law_unresolved',
+      },
+      ctx(),
+    );
+    expect(out).toBe(
+      "country of incorporation is listed in the 'ratified country packs' catalogue; a miss is recorded as 'national law unresolved'",
+    );
+    expect(out).not.toContain('national_law_unresolved');
+  });
+
+  it('in_catalogue: adds no miss-reason clause when the condition carries no override', () => {
+    const out = renderCondition({ op: 'in_catalogue', fact: 'entity.country', catalogue: 'eu_member_states' }, ctx());
+    expect(out).not.toContain('a miss is recorded as');
   });
 
   it('prefix_in: fact label and every prefix', () => {

@@ -169,7 +169,20 @@ export function factsReferencedBy(requirement: Requirement): string[] {
  *  - carries `labelNote: "requires review"` — recording uncertainty is not
  *    resolving it; or
  *  - is used in a `cmp`, `count_cmp` or `sum_cmp` comparison and has no
- *    explicit `unit`.
+ *    explicit `unit`; or
+ *  - shares its *effective* label (explicit `label` where present, the
+ *    `mechanicalLabel` fallback otherwise) with another referenced fact.
+ *
+ * The last clause is a binding check, not a style check. The rendered English
+ * names a fact by its label, and the independent feature model compares
+ * `fact` as that label rather than as an id — deliberately, since the label is
+ * the one thing both sides may look up. The cost is that two facts sharing a
+ * label are the same fact as far as the checker can see: swap a threshold
+ * from `entity.x` to `group.x` and the comparison reports nothing, which is
+ * precisely the binding error a binding-preserving model exists to catch.
+ * Collisions are not hypothetical — `mechanicalLabel` drops the scope prefix,
+ * so any two same-named facts in different scopes collide the moment both are
+ * referenced. A pack that would create one fails the build instead.
  *
  * Names every offender in one error, not just the first, so a human fixing
  * the gap does not have to re-run the gate once per fact.
@@ -196,6 +209,26 @@ export function assertFactVocabularyCoverage(pack: KnowledgePack): void {
     }
     if (numericComparison.has(factId) && !ft.unit) {
       problems.push(`${factId}: used in a numeric comparison but has no unit`);
+    }
+  }
+
+  // Effective labels must be pairwise distinct across referenced facts. The
+  // fallback is used here rather than only the explicit label so that the
+  // clause still means something for a fact that has already failed the
+  // "no label" check above: fixing that one must not uncover this one.
+  const byEffectiveLabel = new Map<string, string[]>();
+  for (const factId of [...referenced].sort()) {
+    const label = factLabel(factId, pack.factTypes);
+    byEffectiveLabel.set(label, [...(byEffectiveLabel.get(label) ?? []), factId]);
+  }
+  for (const [label, ids] of [...byEffectiveLabel].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
+    if (ids.length < 2) continue;
+    // Every colliding pair, not just the group: the fix is per pair, and a
+    // group of three hides two of its three conflicts when reported as a set.
+    for (let i = 0; i < ids.length; i += 1) {
+      for (let j = i + 1; j < ids.length; j += 1) {
+        problems.push(`${ids[i]} and ${ids[j]}: both render as the label "${label}" — indistinguishable in the English`);
+      }
     }
   }
 

@@ -1,7 +1,7 @@
 # Verification renderer — output grammar contract
 
 This is the specification of the text `renderCondition`/`renderRequirement`
-(`src/verification/render.ts`, `RENDERER_VERSION = '1.0.0'`) produce. It exists
+(`src/verification/render.ts`, `RENDERER_VERSION = '1.1.0'`) produce. It exists
 so that a parser recovering structure from that text — `featuresFromEnglish`,
 and its round-trip parity tests across all seventeen `Condition` primitives —
 can be built without opening `render.ts`. Every template below was pinned by
@@ -177,9 +177,18 @@ standard used to prepare the parent's report is ESRS
 net turnover is 100 EUR
 ```
 
+The value here is a single value, never a list: it is not `JOIN_OR` text and
+must not be split as one, so a string value containing ` or ` belongs whole
+to the literal. Note also that §4.3's `in_set` template starts `is one of: `,
+which this bare `is` form would also match — match §4.3 first.
+
 ### 4.3 `in_set` — `{ fact, set: (string|number)[] }`
 
-Template: `<FACT_LABEL> is <JOIN_OR(set, rendered via VALUE)>`
+Template: `<FACT_LABEL> is one of: <JOIN_OR(set, rendered via VALUE)>`
+
+The `is one of: ` marker is load-bearing, not decoration: it is what keeps
+this template distinct from §4.2's `eq` at a one-item set (see
+"Injectivity" below).
 
 `JOIN_OR` (closed rule, used again in §4.5 and §4.10 with different item
 types — stated once here):
@@ -192,9 +201,9 @@ types — stated once here):
 | 3+ | `A, B, …, or Z` (Oxford comma before the final `or`) |
 
 ```
-standard used to prepare the parent's report is ESRS
-standard used to prepare the parent's report is ESRS or EQUIVALENT
-standard used to prepare the parent's report is ESRS, EQUIVALENT, or OTHER
+standard used to prepare the parent's report is one of: ESRS
+standard used to prepare the parent's report is one of: ESRS or EQUIVALENT
+standard used to prepare the parent's report is one of: ESRS, EQUIVALENT, or OTHER
 ```
 
 **Numeric set items get the full §1 `<VALUE>` treatment, per item.** The
@@ -204,47 +213,88 @@ is grouped in 3s *and* carries the fact type's unit, appended per item —
 not once at the end of the list:
 
 ```
-net turnover is 1 000 EUR or 2 000 000 EUR
-chosen standard is 1 000 or 2 000 000
+net turnover is one of: 1 000 EUR or 2 000 000 EUR
+chosen standard is one of: 1 000 or 2 000 000
 ```
 
 (second line: same set, on a fact type with no `unit`.)
 
-**Non-injectivity — `in_set` with one item is indistinguishable from `eq`.**
-A single-item `in_set` renders `<FACT_LABEL> is <VALUE>`, which is
-character-for-character the §4.2 string/number `eq` template. Rendering
+**Injectivity against `eq`.** A one-item `in_set` and the `eq` on the same
+value are different encodings and render as different lines. Rendering
 `{ op: 'in_set', fact, set: ['ESRS'] }` and `{ op: 'eq', fact, value: 'ESRS' }`
-against the same fact type produces the identical line:
+against the same fact type:
 
 ```
-chosen standard is ESRS
+standard used to prepare the parent's report is one of: ESRS
+standard used to prepare the parent's report is ESRS
 ```
 
-This is the one place in this grammar where the English does not determine
-the `Condition` op. A parser recovering structure from the text cannot tell
-the two apart and must not pretend to: it should report the op it read and
-let the comparison surface the ambiguity, rather than silently accepting
-either. No CSRD pack requirement contains a single-item `in_set`, so this
-does not arise on real content today.
+This was not always so: both templates once read `<FACT_LABEL> is <VALUE>`,
+the English did not determine the op, and this document instructed a parser
+to report one of them and let the comparison surface the ambiguity — on
+*correct* input. The `is one of: ` marker closes that. A parser must
+therefore try this template **before** §4.2's bare `is` form, which would
+otherwise match the same line and read the list as an `eq` literal beginning
+`one of: `.
 
-**`JOIN_OR` is not injective either**, for the same structural reason: an
+**`JOIN_OR` is still not injective**, for a different and unfixed reason: an
 item whose own text contains `, ` or ` or ` cannot be told from an item
 boundary. Every `set`/`prefixes`/`years` value in the pack today is a bare
 token, so this is latent rather than live, but a parser splitting a
 `JOIN_OR` list is making an assumption the renderer does not guarantee.
+Note that §4.2's `eq` is *not* a `JOIN_OR` list and must not be split as
+one: its value is a single value, and a value containing ` or ` belongs
+whole to the literal.
 
-### 4.4 `in_catalogue` — `{ fact, catalogue }`
+### 4.4 `in_catalogue` — `{ fact, catalogue, missReason? }`
 
-Template: `<FACT_LABEL> is listed in the '<DESLUG(catalogue)>' catalogue`
+Two templates, chosen by whether the condition carries a `missReason`:
+
+**No `missReason`:** `<FACT_LABEL> is listed in the '<DESLUG(catalogue)>' catalogue`
+
+**With `missReason`:** `<FACT_LABEL> is listed in the '<DESLUG(catalogue)>' catalogue; a miss is recorded as '<DESLUG(missReason)>'`
 
 `DESLUG(id)` replaces every `_` with a space; nothing else changes (no case
 changes, no expansion of abbreviations — `catalogues.json` carries no human
 label for a catalogue, so this is a mechanical fallback, deliberately never
-guessed). The de-slugged name is always wrapped in single quotes here.
+guessed). Both the de-slugged catalogue name and the de-slugged reason code
+are wrapped in single quotes.
+
+`missReason` is optional on the condition and is the reason code the
+evaluator emits when the fact's value is absent from the catalogue:
+`src/condition/evaluate.ts` reads `cond.missReason ?? cat.missReason`, so a
+condition-level value overrides the catalogue's own default. The clause is
+emitted **only** when the condition carries one — a rule that simply takes
+the catalogue's default must not gain a clause implying it overrode it, so
+the absence of the clause is itself information.
+
+Worked examples, without and with the field (the second is the pack's
+national-law gate, `CSRD-S-013`):
 
 ```
 country of incorporation is listed in the 'eu member states' catalogue
+governing Member State is listed in the 'ratified country packs' catalogue; a miss is recorded as 'national law unresolved'
 ```
+
+Both forms are always-flat and compose like any other leaf — under a `not`,
+and as a numbered child:
+
+```
+it is not the case that governing Member State is listed in the 'ratified country packs' catalogue; a miss is recorded as 'national law unresolved'
+```
+
+```
+ALL of:
+  1. country of incorporation is listed in the 'eu member states' catalogue
+  2. governing Member State is listed in the 'ratified country packs' catalogue; a miss is recorded as 'national law unresolved'
+```
+
+Note the `;` inside the line: it is a within-line separator, never a line
+break, and it does not make the clause a second atom. A parser reading this
+template gets both halves from one line, and must record the reason code as
+*absent* — not as null, empty or the catalogue's default — when there is no
+clause, since "no override" and "an override that happens to match the
+default" are different encodings.
 
 ### 4.5 `prefix_in` — `{ fact, prefixes: string[] }`
 
@@ -456,6 +506,19 @@ R-BOOL — Example boolean requirement
 
 ```
 
+Both halves are content, not decoration: this is the only line binding the
+whole rendered argument to a provision, so a parser must recover the id and
+the title and a checker must compare them. A requirement id contains no
+space, and therefore cannot contain the ` — ` separator, so splitting the
+header at the **first** separator is unambiguous — and a title carrying an
+em dash of its own survives whole in the remainder:
+
+```
+R-DASH — Scope — and its limits
+```
+
+(id `R-DASH`, title `Scope — and its limits`.)
+
 ### 7.2 Boolean form
 
 ```
@@ -596,6 +659,17 @@ For quick reference; each is defined precisely in the section named.
 # §3 — Condition-tree structural marker (apply only within an isolated
 # renderCondition substring, never across a whole rendered Requirement):
 ^(ALL of:|ANY of:|NOT:|at least one (organization|legal entity|branch|facility|product|trade lane|supplier|request|counterparty) scope where:)$
+
+# §4.4 — in_catalogue, with its optional miss-reason clause (the tail is
+# absent entirely when the condition carries no override):
+^(?<label>.+) is listed in the '(?<catalogue>[^']*)' catalogue(?:; a miss is recorded as '(?<missReason>[^']*)')?$
+
+# §4.3 — in_set. Must be matched BEFORE §4.2's bare `is` form, which also
+# matches this line:
+^(?<label>.+) is one of: (?<items>.+)$
+
+# §7.1 — header; split at the FIRST separator, ids contain no space:
+^(?<id>\S+) — (?<title>.+)$
 
 # §7.5 — selection-case block header (NOT a Condition marker, despite the
 # trailing colon):

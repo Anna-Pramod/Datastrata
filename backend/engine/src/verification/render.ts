@@ -68,7 +68,25 @@
 import type { CmpOp, Condition, FactType, Requirement } from '../types';
 import { factLabel, factUnit, renderValue } from './vocabulary';
 
-export const RENDERER_VERSION = '1.0.0';
+/**
+ * The version of the *output grammar* — the English this module emits — not of
+ * the module's internals. A signature pins `rendererVersion` alongside a hash
+ * of the rendered text so that "which renderer produced the English this
+ * person read" has an answer; if one version string covered two grammars, the
+ * moved hash would look like ordinary content drift and the version would have
+ * lied about text somebody signed.
+ *
+ * So: **any change to emitted text obliges a bump.** A new or altered
+ * template, a changed word, a changed separator or indent — all of them,
+ * however cosmetic they look, because the reader of a signature cannot tell
+ * cosmetic from substantive after the fact. Refactoring that provably leaves
+ * every rendering byte-identical does not.
+ *
+ * Minor for a grammar that gained or reshaped a template; patch for a fix to
+ * an existing one. 1.1.0 added `in_catalogue`'s miss-reason clause and changed
+ * `in_set` to the `is one of: ` form that keeps it distinct from `eq`.
+ */
+export const RENDERER_VERSION = '1.1.0';
 
 export interface RenderContext {
   factTypes: FactType[];
@@ -79,6 +97,13 @@ export interface RenderContext {
    * way `mechanicalLabel` handles an unlabelled fact: de-slugged, never
    * guessed at. The contents are not currently read; carried on the context
    * because a catalogue's `note` may be worth surfacing later.
+   *
+   * A catalogue's own `missReason` is deliberately *not* rendered from here:
+   * only the `in_catalogue` condition's optional override is (see
+   * `renderFlat`). Splicing the catalogue's default into every clause would
+   * put pack-wide configuration into the text of each rule and make the two
+   * indistinguishable to a reviewer, when it is exactly their difference
+   * that a requirement like CSRD-S-013 turns on.
    */
   catalogues: Record<string, unknown>;
 }
@@ -233,14 +258,30 @@ function renderFlat(condition: Condition, ctx: RenderContext): string {
     }
 
     case 'in_set': {
+      // "is one of:" rather than a bare "is": a one-item `in_set` and an `eq`
+      // on the same value are different encodings, and rendering both as
+      // `<label> is <value>` made the English non-injective — neither a
+      // reviewer nor the English-side parser could tell which op they were
+      // reading. The list marker costs three characters and separates them.
       const label = factLabel(condition.fact, ctx.factTypes);
       const unit = factUnit(condition.fact, ctx.factTypes);
-      return `${label} is ${joinOr(condition.set.map((v) => renderValue(v, unit)))}`;
+      return `${label} is one of: ${joinOr(condition.set.map((v) => renderValue(v, unit)))}`;
     }
 
     case 'in_catalogue': {
+      // `missReason` is the reason code the evaluator emits when the fact's
+      // value is absent from the catalogue: `src/condition/evaluate.ts` reads
+      // `cond.missReason ?? cat.missReason`, so a condition-level value
+      // overrides the catalogue's own default. That override is part of what
+      // the rule says — CSRD-S-013's entire purpose is to route a miss to
+      // `national_law_unresolved` — and leaving it unrendered hid a
+      // load-bearing field from the reviewer whose signature attests the
+      // encoding. Rendered only when the condition carries one, so a rule
+      // that simply takes the catalogue's default does not gain a clause
+      // implying it overrode it.
       const label = factLabel(condition.fact, ctx.factTypes);
-      return `${label} is listed in the '${deslug(condition.catalogue)}' catalogue`;
+      const listed = `${label} is listed in the '${deslug(condition.catalogue)}' catalogue`;
+      return condition.missReason ? `${listed}; a miss is recorded as '${deslug(condition.missReason)}'` : listed;
     }
 
     case 'prefix_in': {

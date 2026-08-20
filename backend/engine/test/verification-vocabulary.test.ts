@@ -339,6 +339,101 @@ describe('assertFactVocabularyCoverage', () => {
     expect(() => assertFactVocabularyCoverage(pack(types, reqs))).not.toThrow();
   });
 
+  // -------------------------------------------------------------------------
+  // Distinctness — the fourth clause.
+  //
+  // The rendered English names a fact by its label, and the independent
+  // feature model compares `fact` as that label rather than as an id. Two
+  // referenced facts sharing a label are therefore one fact to the checker,
+  // and a threshold rebound from one to the other reports nothing at all —
+  // the single binding error a binding-preserving model cannot see.
+  // -------------------------------------------------------------------------
+
+  it('throws when two referenced facts share an explicit label, naming both', () => {
+    const types = [
+      factType('entity.turnover', { label: 'net turnover', unit: 'EUR' }),
+      factType('group.turnover', { label: 'net turnover', unit: 'EUR' }),
+    ];
+    const reqs = [
+      requirement('R-1', {
+        condition: {
+          op: 'all',
+          of: [
+            { op: 'cmp', fact: 'entity.turnover', cmp: 'gt', value: 1 },
+            { op: 'cmp', fact: 'group.turnover', cmp: 'gt', value: 2 },
+          ],
+        },
+      }),
+    ];
+    let error: Error | undefined;
+    try {
+      assertFactVocabularyCoverage(pack(types, reqs));
+    } catch (e) {
+      error = e as Error;
+    }
+    expect(error).toBeDefined();
+    expect(error!.message).toContain('entity.turnover');
+    expect(error!.message).toContain('group.turnover');
+    expect(error!.message).toContain('net turnover');
+  });
+
+  it('throws on a collision created by the mechanical fallback dropping the scope prefix', () => {
+    // `mechanicalLabel` drops everything up to the first `.`, so `entity.x`
+    // and `group.x` collide by construction the moment both are referenced —
+    // even though neither carries an explicit label at all.
+    const types = [factType('entity.headcount'), factType('group.headcount')];
+    const reqs = [
+      requirement('R-1', {
+        condition: {
+          op: 'all',
+          of: [{ op: 'exists', fact: 'entity.headcount' }, { op: 'exists', fact: 'group.headcount' }],
+        },
+      }),
+    ];
+    expect(() => assertFactVocabularyCoverage(pack(types, reqs))).toThrow(/both render as the label "headcount"/);
+  });
+
+  it('names every colliding pair, not just the group, when three facts share a label', () => {
+    const types = [
+      factType('a.x', { label: 'shared' }),
+      factType('b.x', { label: 'shared' }),
+      factType('c.x', { label: 'shared' }),
+    ];
+    const reqs = [
+      requirement('R-1', {
+        condition: {
+          op: 'all',
+          of: [
+            { op: 'exists', fact: 'a.x' },
+            { op: 'exists', fact: 'b.x' },
+            { op: 'exists', fact: 'c.x' },
+          ],
+        },
+      }),
+    ];
+    let error: Error | undefined;
+    try {
+      assertFactVocabularyCoverage(pack(types, reqs));
+    } catch (e) {
+      error = e as Error;
+    }
+    expect(error).toBeDefined();
+    expect(error!.message).toContain('a.x and b.x');
+    expect(error!.message).toContain('a.x and c.x');
+    expect(error!.message).toContain('b.x and c.x');
+  });
+
+  it('does not object to a label shared with a fact no requirement references', () => {
+    // The gate is about what reaches a rendering. An unreferenced fact never
+    // does, so a duplicate label there is not yet a binding hazard.
+    const types = [
+      factType('entity.turnover', { label: 'net turnover', unit: 'EUR' }),
+      factType('group.turnover', { label: 'net turnover', unit: 'EUR' }),
+    ];
+    const reqs = [requirement('R-1', { condition: { op: 'cmp', fact: 'entity.turnover', cmp: 'gt', value: 1 } })];
+    expect(() => assertFactVocabularyCoverage(pack(types, reqs))).not.toThrow();
+  });
+
   it('treats a fact used in cmp inside a selection case the same as one in a boolean condition', () => {
     const types = [factType('entity.turnover', { label: 'net turnover' })]; // no unit
     const reqs = [

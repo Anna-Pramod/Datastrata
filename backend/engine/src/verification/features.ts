@@ -33,6 +33,31 @@
  *    and must never call `factUnit()` for the fact it just identified, or the
  *    unit check would be a lookup compared against itself.
  *
+ * WHAT THIS INDEPENDENCE DOES *NOT* COVER — THE LEXICON
+ *
+ * The grammar document pins its templates by rendering examples and reading
+ * the output back, so it faithfully records the renderer's *word choice* as
+ * well as its structure. This module, built from that document, therefore
+ * inherits that vocabulary: if `COMPARATOR_PHRASE` mapped `gt` to
+ * `'is below'`, the document would have recorded `is below` as the phrase for
+ * `gt`, `COMPARATOR_PHRASES` here would read `is below` back as `gt`, and the
+ * two sides would agree with each other forever while every rendered line
+ * said the opposite of the rule.
+ *
+ * That is a deliberate division of labour, not an oversight. What this
+ * module checks independently is *structure and bindings*: which atom sits
+ * at which path, which fact each threshold attaches to, which value and unit
+ * and scope each carries, which operator tree encloses them. What it cannot
+ * check is whether the chosen English word means what the encoding means —
+ * and it does not need to, because that failure is the one failure a human
+ * reading the English against the legal text sees immediately. A comparator
+ * pointing the wrong way is visible in one sentence; a threshold silently
+ * bound to the wrong fact is not, which is why the machine takes the second
+ * job and the reader keeps the first. Anyone changing a template's wording
+ * is changing something no automated check in this subsystem will contradict,
+ * and must re-derive `docs/verification-grammar.md` from real output and
+ * re-read the affected renderings against the law.
+ *
  * WHY BINDINGS, NOT AN INVENTORY
  *
  * "turnover exceeds 450 000 000 EUR; employees exceed 1 000" and
@@ -42,7 +67,15 @@
  * structural `path` and atoms are compared *by path*, and `shape` pins the
  * whole operator tree rather than its depth.
  *
- * Divergence is a finding, never a throw: the caller decides severity.
+ * Divergence is a finding, never a throw: the caller decides severity. That
+ * statement covers *disagreement* only, and is not the same as "this module
+ * never throws". A rendering the grammar cannot read at all — a line matching
+ * no template, a broken indent, a missing header — raises `EnglishParseError`
+ * from `featuresFromEnglish`/`conditionFeaturesFromEnglish`, because there is
+ * no feature model to disagree with and reporting an empty one would read as
+ * "nothing to see here" on text nobody has checked. Callers must therefore
+ * treat an unreadable rendering as a finding of its own: wrap the call, and
+ * report the throw rather than letting it abort the pass.
  *
  * Pure: no filesystem, network or clock.
  */
@@ -74,6 +107,13 @@ export interface AtomFeature {
   scope?: string;
   /** Catalogue id, canonical (underscored) form. */
   catalogue?: string;
+  /**
+   * `in_catalogue`'s optional reason-code override, canonical (underscored)
+   * form; absent when the condition carries none and the catalogue's own
+   * default therefore stands. Recorded because it decides the reason code a
+   * catalogue miss reports, which is the whole content of some requirements.
+   */
+  missReason?: string;
   requirementRef?: string;
   expect?: string;
   /** eq / in_set / prefix_in / pack_flag / date / year payloads, canonicalised. */
@@ -94,6 +134,14 @@ export interface CaseFeature {
 }
 
 export interface RequirementFeatures {
+  /**
+   * The requirement id from the header line. The header is the only thing
+   * binding the whole argument to a provision: without it, a rendering
+   * carrying the right condition under the wrong id would compare clean.
+   */
+  id: string;
+  /** The requirement title from the header line, compared for the same reason. */
+  title: string;
   kind: 'boolean' | 'selection';
   condition?: ConditionFeatures;
   cases?: CaseFeature[];
@@ -214,7 +262,12 @@ function conditionToNode(c: Condition, ctx: FeatureContext): Node {
     case 'in_catalogue':
       return {
         kind: 'leaf',
-        atom: { op: 'in_catalogue', fact: factLabel(c.fact, ctx.factTypes), catalogue: c.catalogue },
+        atom: {
+          op: 'in_catalogue',
+          fact: factLabel(c.fact, ctx.factTypes),
+          catalogue: c.catalogue,
+          missReason: c.missReason,
+        },
       };
     case 'prefix_in':
       return {
@@ -246,6 +299,8 @@ export function featuresFromCondition(condition: Condition, ctx: FeatureContext)
 export function featuresFromRequirement(requirement: Requirement, ctx: FeatureContext): RequirementFeatures {
   if (requirement.kind === 'selection') {
     return {
+      id: requirement.id,
+      title: requirement.title,
       kind: 'selection',
       cases: (requirement.cases ?? []).map((c, index) => ({
         index,
@@ -256,6 +311,8 @@ export function featuresFromRequirement(requirement: Requirement, ctx: FeatureCo
     };
   }
   return {
+    id: requirement.id,
+    title: requirement.title,
     kind: 'boolean',
     condition: requirement.condition ? featuresFromCondition(requirement.condition, ctx) : undefined,
   };
@@ -295,6 +352,16 @@ const SCOPE_PHRASES = [
   'request',
   'counterparty',
 ];
+
+/**
+ * The scope alternation used inside §3's marker regex, built from
+ * `SCOPE_PHRASES` rather than written out a second time. The two lists were
+ * hand-copies of each other and could drift silently — a phrase added to one
+ * and not the other would make the flat and structural readings of the same
+ * scope disagree. Every phrase is letters and spaces only, so none of them
+ * carries a character the alternation would have to escape.
+ */
+const SCOPE_ALTERNATION = SCOPE_PHRASES.join('|');
 
 const TRUTH_TOKENS = ['APPLIES', 'DOES_NOT_APPLY', 'INDETERMINATE'];
 
@@ -470,9 +537,21 @@ function readFlat(text: string, ctx: FeatureContext): Node {
     // §4.2 boolean true: the label alone.
     if (rest === '') return leaf({ op: 'eq', fact: label, literal: 'true', unit: null });
 
-    // §4.4 in_catalogue.
-    const cat = /^ is listed in the '(.+)' catalogue$/.exec(rest);
-    if (cat) return leaf({ op: 'in_catalogue', fact: label, catalogue: reslug(cat[1] ?? '') });
+    // §4.4 in_catalogue, including its optional miss-reason clause. The
+    // clause appears only when the condition overrides the catalogue's own
+    // default, so `missReason` is left absent — not null — when there is no
+    // clause, which is exactly what the AST side records for a condition
+    // that carries no override.
+    const cat = /^ is listed in the '([^']*)' catalogue(?:; a miss is recorded as '([^']*)')?$/.exec(rest);
+    if (cat) {
+      const reason = cat[2];
+      return leaf({
+        op: 'in_catalogue',
+        fact: label,
+        catalogue: reslug(cat[1] ?? ''),
+        missReason: reason === undefined ? undefined : reslug(reason),
+      });
+    }
 
     // §4.6 exists.
     if (rest === `${SEP}is on record`) return leaf({ op: 'exists', fact: label });
@@ -485,18 +564,24 @@ function readFlat(text: string, ctx: FeatureContext): Node {
     const cmp = readComparison(rest);
     if (cmp) return leaf({ op: 'cmp', fact: label, ...cmp });
 
-    // §4.2 string/number eq, and §4.3 in_set. A one-item list is
-    // indistinguishable from `eq` (grammar §4.3, "Non-injectivity"); the
-    // reading below reports `eq`, and the comparison then surfaces the
-    // ambiguity as an op divergence rather than hiding it.
+    // §4.3 in_set. Its `is one of: ` marker is what separates it from §4.2's
+    // `eq`, including at one item, so this is tried before the bare `is`
+    // form below — which would otherwise read the whole list as an `eq`
+    // literal beginning "one of: ".
+    const oneOf = /^ is one of: (.+)$/.exec(rest);
+    if (oneOf) {
+      const items = splitJoinOr(oneOf[1] ?? '').map(readListItem);
+      const unit = items.find((i) => i.unit !== null)?.unit ?? null;
+      return leaf({ op: 'in_set', fact: label, literal: JSON.stringify(items.map((i) => i.canonical)), unit });
+    }
+
+    // §4.2 string/number eq. Its value is a single value, never a list, so it
+    // is read whole rather than through `JOIN_OR`: a value that happens to
+    // contain " or " belongs to the `eq` literal.
     const is = /^ is (.+)$/.exec(rest);
     if (is) {
-      const items = splitJoinOr(is[1] ?? '').map(readListItem);
-      const unit = items.find((i) => i.unit !== null)?.unit ?? null;
-      if (items.length === 1) {
-        return leaf({ op: 'eq', fact: label, literal: items[0]?.canonical, unit });
-      }
-      return leaf({ op: 'in_set', fact: label, literal: JSON.stringify(items.map((i) => i.canonical)), unit });
+      const value = readListItem(is[1] ?? '');
+      return leaf({ op: 'eq', fact: label, literal: value.canonical, unit: value.unit });
     }
 
     return null;
@@ -527,8 +612,7 @@ function readFlat(text: string, ctx: FeatureContext): Node {
 
 // --- the structural layer (§2, §3, §6) -------------------------------------
 
-const MARKER =
-  /^(ALL of:|ANY of:|NOT:|at least one (organization|legal entity|branch|facility|product|trade lane|supplier|request|counterparty) scope where:)$/;
+const MARKER = new RegExp(`^(ALL of:|ANY of:|NOT:|at least one (${SCOPE_ALTERNATION}) scope where:)$`);
 
 interface Line {
   indent: number;
@@ -630,7 +714,15 @@ function valueWithoutLabelSuffix(text: string): string {
 export function featuresFromEnglish(text: string, ctx: FeatureContext): RequirementFeatures {
   const lines = text.split('\n');
   const header = lines[0] ?? '';
-  if (!header.includes(`${SEP}—${SEP}`)) throw new EnglishParseError(`missing "<id> — <title>" header`);
+  // §7.1: `<id> — <title>`. A requirement id never contains a space, so it
+  // can never contain the ` — ` separator either, and splitting at the FIRST
+  // separator recovers both halves exactly — including a title that carries
+  // an em dash of its own, which lands whole in the remainder.
+  const at = header.indexOf(`${SEP}—${SEP}`);
+  if (at === -1) throw new EnglishParseError(`missing "<id> — <title>" header`);
+  const id = header.slice(0, at);
+  const title = header.slice(at + 3);
+  if (id === '' || id.includes(SEP)) throw new EnglishParseError(`malformed requirement id in header: ${JSON.stringify(header)}`);
   if ((lines[1] ?? '') !== '') throw new EnglishParseError('missing the blank line after the header');
 
   const preamble = lines[2] ?? '';
@@ -638,8 +730,8 @@ export function featuresFromEnglish(text: string, ctx: FeatureContext): Requirem
   if (preamble === BOOLEAN_PREAMBLE) {
     const body = lines.slice(3);
     while (body.length > 0 && (body[body.length - 1] ?? '').trim() === '') body.pop();
-    if (body.length === 1 && body[0] === NO_CONDITION_LINE) return { kind: 'boolean', condition: undefined };
-    return { kind: 'boolean', condition: conditionFeaturesFromEnglish(body.join('\n'), ctx) };
+    if (body.length === 1 && body[0] === NO_CONDITION_LINE) return { id, title, kind: 'boolean', condition: undefined };
+    return { id, title, kind: 'boolean', condition: conditionFeaturesFromEnglish(body.join('\n'), ctx) };
   }
 
   if (preamble !== SELECTION_PREAMBLE) throw new EnglishParseError(`unrecognised preamble: ${JSON.stringify(preamble)}`);
@@ -698,7 +790,7 @@ export function featuresFromEnglish(text: string, ctx: FeatureContext): Requirem
     };
   });
 
-  return { kind: 'selection', cases, defaultValue };
+  return { id, title, kind: 'selection', cases, defaultValue };
 }
 
 // ---------------------------------------------------------------------------
@@ -714,6 +806,7 @@ const ATOM_FIELDS = [
   'unit',
   'scope',
   'catalogue',
+  'missReason',
   'requirementRef',
   'expect',
   'literal',
@@ -764,6 +857,12 @@ export function compareConditionFeatures(a: ConditionFeatures, b: ConditionFeatu
  */
 export function compareRequirementFeatures(a: RequirementFeatures, b: RequirementFeatures): string[] {
   const found: string[] = [];
+
+  // The header first: a rendering that carries the right condition under the
+  // wrong provision is wrong in the way that matters most, and is invisible
+  // to every check below this one.
+  if (a.id !== b.id) found.push(line('requirement', 'id', a.id, b.id));
+  if (a.title !== b.title) found.push(line('requirement', 'title', a.title, b.title));
 
   if (a.kind !== b.kind) {
     found.push(line('requirement', 'kind', a.kind, b.kind));
