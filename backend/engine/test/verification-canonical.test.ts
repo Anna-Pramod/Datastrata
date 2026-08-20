@@ -59,24 +59,46 @@ describe('canonicalizeCondition / conditionSha256', () => {
   });
 
   it('escapes rather than delimiter-joins: a value containing a delimiter-like character does not collide', () => {
-    // A naive "|"-join of {fact, op, value} in sorted-key order concatenates
-    // fact + "|" + "eq" + "|" + value into one string. Because that fixed
-    // string contains the literal substring "|eq|" twice, it re-decomposes
-    // two structurally different conditions onto the identical joined text:
-    //   fact="a|eq|b", value="c"   ->  "a|eq|b" + "|eq|" + "c"
-    //   fact="a",      value="b|eq|c" -> "a" + "|eq|" + "b|eq|c"
-    // both flatten to "a|eq|b|eq|c". A real (escaping) encoding must not
-    // collide these; JSON.stringify keeps them apart because it quotes and
-    // escapes field content instead of concatenating it.
-    const left: Condition = { op: 'eq', fact: 'a|eq|b', value: 'c' };
-    const right: Condition = { op: 'eq', fact: 'a', value: 'b|eq|c' };
+    // Two different naive joins are precedented enough to both need a probe
+    // that actually collides under them — a test with teeth against only one
+    // model can pass against an implementation broken the other way.
+    //
+    // Model B — FIXED DECLARED-ORDER join: `[op, fact, value].join('|')`,
+    // no key sorting. This is not hypothetical: it is the exact defect
+    // pre-fix `src/corpus/closure.ts` (commit 21278c2) shipped and was fixed
+    // at Critical severity (commit 2484a8f), joining declared-order fields
+    // with a delimiter instead of JSON-encoding each one. Under this model,
+    // "eq" + "|" + fact + "|" + value is fixed-position, so
+    //   fact="a|b", value="c"  ->  "eq|a|b|c"
+    //   fact="a",   value="b|c" -> "eq|a|b|c"
+    // collide directly: the pipe inside `fact` is indistinguishable from the
+    // field-separating pipe.
+    const left: Condition = { op: 'eq', fact: 'a|b', value: 'c' };
+    const right: Condition = { op: 'eq', fact: 'a', value: 'b|c' };
     expect(conditionSha256(left)).not.toBe(conditionSha256(right));
 
-    // Same shape of probe with a comma, in case the encoding were
-    // comma-joined instead: fact + "," + "eq" + "," + value both flatten to
-    // "a,eq,b,eq,c".
-    const leftComma: Condition = { op: 'eq', fact: 'a,eq,b', value: 'c' };
-    const rightComma: Condition = { op: 'eq', fact: 'a', value: 'b,eq,c' };
+    // Model A — SORTED-KEY join: `Object.keys(c).sort().map(k =>
+    // c[k]).join('|')` (fact, op, value in alphabetical order). Here "eq"
+    // sits between the two variable fields, so the pair above does NOT
+    // collide (the fixed "eq" token anchors a different split). A collision
+    // under this model needs the fixed middle token to appear twice inside
+    // the flattened string, so a different split reproduces it:
+    //   fact="a|eq|b", value="c"    -> "a|eq|b" + "|eq|" + "c"
+    //   fact="a",      value="b|eq|c" -> "a" + "|eq|" + "b|eq|c"
+    // both flatten to "a|eq|b|eq|c".
+    //
+    // Neither pair is redundant with the other — they discriminate different
+    // naive serialisations, and a real (escaping) encoding must reject both.
+    // JSON.stringify keeps every pair apart because it quotes and escapes
+    // field content instead of concatenating it.
+    const leftSortedKey: Condition = { op: 'eq', fact: 'a|eq|b', value: 'c' };
+    const rightSortedKey: Condition = { op: 'eq', fact: 'a', value: 'b|eq|c' };
+    expect(conditionSha256(leftSortedKey)).not.toBe(conditionSha256(rightSortedKey));
+
+    // Same declared-order probe with a comma, in case the encoding were
+    // comma-joined instead: "eq,a,b,c" either way.
+    const leftComma: Condition = { op: 'eq', fact: 'a,b', value: 'c' };
+    const rightComma: Condition = { op: 'eq', fact: 'a', value: 'b,c' };
     expect(conditionSha256(leftComma)).not.toBe(conditionSha256(rightComma));
   });
 

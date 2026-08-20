@@ -88,6 +88,11 @@ export function conditionSha256(condition: Condition): string {
  * Reordering cases, changing an emitted value, or changing the default are
  * each semantic edits, and each moves this hash; relabelling a case does
  * not.
+ *
+ * The payload also carries an explicit `kind` discriminator (not required by
+ * the spec, added here) so a boolean requirement's condition can never hash
+ * identically to a selection requirement's single-case cases[]/defaultValue
+ * shape by coincidence of structure.
  */
 export function logicalPayloadSha256(requirement: Requirement): string {
   const payload: Canonical =
