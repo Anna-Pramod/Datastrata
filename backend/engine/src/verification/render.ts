@@ -10,20 +10,37 @@
  *
  * Two constraints hold in tension:
  *  - `featuresFromEnglish` (a later module) must recover structural paths
- *    like `all[1].any[0]` from the rendered text, so `all`/`any`/`not`
- *    nesting is emitted through a fixed, parseable grammar: exactly the
- *    markers `ALL of:`, `ANY of:` and `NOT:`, two-space indent per level,
+ *    like `all[1].any[0]` from the rendered text, so `all`/`any`/`not`/
+ *    `quantifier_any` nesting is emitted through a fixed, parseable grammar:
+ *    exactly the markers `ALL of:`, `ANY of:`, `NOT:`, and `quantifier_any`'s
+ *    own "at least one … scope where:" prose, two-space indent per level,
  *    numbered children.
  *  - Everything *inside* that scaffolding — the individual comparisons,
  *    lookups and references a rule is built from — has to read as English a
- *    person would write, not a transliteration of the op name. So `not`
- *    only ever wraps a leaf clause (a single comparison, membership test,
- *    etc.) unmodified: it renders as one flat sentence, "it is not the case
- *    that …", rather than a nested `NOT:` block, because nesting a nine-word
- *    negation for no structural reason is exactly the kind of stilted output
- *    this module exists to avoid. `NOT:` is reserved for the case where it
- *    is structurally necessary — negating a compound (`all`/`any`) clause,
- *    where the reader genuinely needs the nested, numbered breakdown.
+ *    person would write, not a transliteration of the op name. So `not` and
+ *    `quantifier_any` only ever wrap a leaf clause (a single comparison,
+ *    membership test, etc.) unmodified when there is no structure worth
+ *    exposing: `not` of a leaf renders as one flat sentence, "it is not the
+ *    case that …", rather than a nested `NOT:` block, because nesting a
+ *    nine-word negation for no structural reason is exactly the kind of
+ *    stilted output this module exists to avoid, and likewise
+ *    `quantifier_any` of a leaf inlines as "at least one … scope where …".
+ *    The marker grammar is reserved for when it is structurally necessary —
+ *    wrapping a compound (`all`/`any`, or transitively another structural
+ *    `not`/`quantifier_any`) clause, where the reader genuinely needs the
+ *    nested, numbered breakdown.
+ *
+ *    Precisely: a `Condition` is *structural* — introduced by a marker line
+ *    that consumes one numbered-child position, with its own child(ren)
+ *    rendered two further spaces of indent, numbered from 1 — exactly when
+ *    it is `all`/`any` (always, since they always have children to
+ *    enumerate), or `not`/`quantifier_any` whose single child (`not.of` /
+ *    `quantifier_any.where`) is itself structural, recursively. Every other
+ *    node renders as exactly one line with no marker. A parser can therefore
+ *    decide structural-vs-flat purely from indentation and marker-line
+ *    syntax, without inspecting op semantics: a line ending in one of the
+ *    four marker forms at indent *d* opens a block whose numbered children
+ *    live at indent *d + 2*; every other line is a self-contained atom.
  *
  * The three-valued evaluator (`src/condition/evaluate.ts`) never turns
  * `not(cmp gt X)` into a `lte` comparison — `INDETERMINATE` behaves
@@ -92,20 +109,65 @@ function deslug(id: string): string {
   return id.replace(/_/g, ' ');
 }
 
-/** True for `all`/`any`, and for `not` wrapping (transitively) one of those — the shapes that need the multi-line marker grammar. */
+/**
+ * True for `all`/`any` (unconditionally — they always have children to
+ * enumerate), and for `not`/`quantifier_any` when their single child
+ * (`not.of`/`quantifier_any.where`) is itself structural, recursively.
+ * These are exactly the shapes that need the multi-line marker grammar;
+ * everything else renders as one line of prose (see `renderFlat`).
+ *
+ * `sum_cmp` was checked, not assumed, against this list: unlike
+ * `quantifier_any`, it carries no nested `Condition` (`{ scopeType, fact,
+ * cmp, value }` only), so it can never need the block grammar and is
+ * correctly absent here.
+ */
 function isStructural(condition: Condition): boolean {
   if (condition.op === 'all' || condition.op === 'any') return true;
   if (condition.op === 'not') return isStructural(condition.of);
+  if (condition.op === 'quantifier_any') return isStructural(condition.where);
   return false;
 }
 
+/** The marker line for a structural condition — same fixed three for `all`/`any`/`not`, plus `quantifier_any`'s own prose acting as its marker. Only ever called when `isStructural(condition)` is true. */
+function structuralMarkerLine(condition: Condition): string {
+  switch (condition.op) {
+    case 'all':
+      return 'ALL of:';
+    case 'any':
+      return 'ANY of:';
+    case 'not':
+      return 'NOT:';
+    case 'quantifier_any':
+      return `at least one ${deslug(condition.scopeType)} scope where:`;
+    default:
+      throw new Error(`structuralMarkerLine called on a non-structural op: ${condition.op}`);
+  }
+}
+
+/** The numbered children under a structural condition's marker line. `not`/`quantifier_any` always contribute exactly one. Only ever called when `isStructural(condition)` is true. */
+function structuralChildren(condition: Condition): Condition[] {
+  switch (condition.op) {
+    case 'all':
+    case 'any':
+      return condition.of;
+    case 'not':
+      return [condition.of];
+    case 'quantifier_any':
+      return [condition.where];
+    default:
+      throw new Error(`structuralChildren called on a non-structural op: ${condition.op}`);
+  }
+}
+
 /**
- * Renders a leaf condition (never `all`/`any`; `not` only when its own
- * child is itself a leaf) as prose. May return a multi-line string in one
- * edge case: `quantifier_any` whose `where` clause is itself compound — the
- * nested clause still needs the block grammar, just introduced by this
- * primitive's own leaf-level phrasing rather than by `ALL of:`/`ANY of:`
- * directly.
+ * Renders a non-structural condition as one line of prose: a genuine leaf
+ * (`cmp`, `eq`, …), or `not`/`quantifier_any` whose single child is itself
+ * non-structural (per `isStructural`). Callers (`renderNumberedChild`,
+ * `renderConditionLines`) always check `isStructural` first and route a
+ * structural condition through `structuralMarkerLine`/`structuralChildren`
+ * instead, so by construction every value this function is ever called with
+ * — including recursively, for `not`'s and `quantifier_any`'s child — is
+ * guaranteed non-structural, and this always returns a single line.
  *
  * This switch is where all seventeen `Condition` primitives are enumerated,
  * and it is the exhaustiveness guarantee: adding a member to the `Condition`
@@ -168,12 +230,12 @@ function renderFlat(condition: Condition, ctx: RenderContext): string {
     }
 
     case 'quantifier_any': {
-      const scope = deslug(condition.scopeType);
-      const whereLines = renderConditionLines(condition.where, ctx);
-      if (whereLines.length === 1) {
-        return `at least one ${scope} scope where ${whereLines[0]}`;
-      }
-      return `at least one ${scope} scope where:\n${whereLines.map((l) => `${pad(1)}${l}`).join('\n')}`;
+      // Only reached when isStructural(condition) is false, i.e. `where` is
+      // itself a leaf — a structural `where` is routed through the
+      // structuralMarkerLine/structuralChildren path before renderFlat is
+      // ever called (see renderNumberedChild/renderConditionLines), so
+      // `where` here is guaranteed flat and this is always one line.
+      return `at least one ${deslug(condition.scopeType)} scope where ${renderFlat(condition.where, ctx)}`;
     }
 
     case 'sum_cmp': {
@@ -211,52 +273,42 @@ function renderFlat(condition: Condition, ctx: RenderContext): string {
 }
 
 /**
- * Renders one numbered child within a block (`ALL of:`/`ANY of:`/`NOT:`) at
- * the given indent level. Recurses into the marker grammar for a structural
- * child; falls back to `renderFlat` (which may itself be multi-line, see
- * `quantifier_any` above) for a leaf.
+ * Renders one numbered child within a block (`ALL of:`/`ANY of:`/`NOT:`, or
+ * `quantifier_any`'s own marker line) at the given indent level. Recurses
+ * into the marker grammar for a structural child; falls back to
+ * `renderFlat` (always exactly one line — see `renderFlat`'s doc comment)
+ * for a leaf.
  */
 function renderNumberedChild(condition: Condition, ctx: RenderContext, indent: number, n: number): string[] {
-  if (condition.op === 'all' || condition.op === 'any') {
-    const marker = condition.op === 'all' ? 'ALL of:' : 'ANY of:';
-    const lines = [`${pad(indent)}${n}. ${marker}`];
-    condition.of.forEach((child, i) => lines.push(...renderNumberedChild(child, ctx, indent + 1, i + 1)));
+  if (isStructural(condition)) {
+    const lines = [`${pad(indent)}${n}. ${structuralMarkerLine(condition)}`];
+    structuralChildren(condition).forEach((child, i) => lines.push(...renderNumberedChild(child, ctx, indent + 1, i + 1)));
     return lines;
   }
-  if (condition.op === 'not' && isStructural(condition.of)) {
-    const lines = [`${pad(indent)}${n}. NOT:`];
-    lines.push(...renderNumberedChild(condition.of, ctx, indent + 1, 1));
-    return lines;
-  }
-  const text = renderFlat(condition, ctx);
-  const [first = '', ...rest] = text.split('\n');
-  return [`${pad(indent)}${n}. ${first}`, ...rest.map((l) => `${pad(indent + 1)}${l}`)];
+  return [`${pad(indent)}${n}. ${renderFlat(condition, ctx)}`];
 }
 
 /** Renders a condition at the root (no numbering, indent 0) as an array of lines. */
 function renderConditionLines(condition: Condition, ctx: RenderContext): string[] {
-  if (condition.op === 'all' || condition.op === 'any') {
-    const marker = condition.op === 'all' ? 'ALL of:' : 'ANY of:';
-    const lines = [marker];
-    condition.of.forEach((child, i) => lines.push(...renderNumberedChild(child, ctx, 1, i + 1)));
+  if (isStructural(condition)) {
+    const lines = [structuralMarkerLine(condition)];
+    structuralChildren(condition).forEach((child, i) => lines.push(...renderNumberedChild(child, ctx, 1, i + 1)));
     return lines;
   }
-  if (condition.op === 'not' && isStructural(condition.of)) {
-    const lines = ['NOT:'];
-    lines.push(...renderNumberedChild(condition.of, ctx, 1, 1));
-    return lines;
-  }
-  return renderFlat(condition, ctx).split('\n');
+  return [renderFlat(condition, ctx)];
 }
 
 /**
- * Renders a `Condition` tree to English. `all`/`any` always use the fixed
- * `ALL of:`/`ANY of:` marker grammar with two-space indent per level and
- * numbered children; `not` uses the same for a compound child but collapses
- * to one flat "it is not the case that …" sentence for a leaf child, since a
- * `NOT:` block around a single comparison has no structure worth exposing.
- * Every other primitive renders as one atom of natural prose built from
- * `factLabel`/`factUnit`/`renderValue`.
+ * Renders a `Condition` tree to English. A structural node — `all`/`any`
+ * unconditionally, or `not`/`quantifier_any` wrapping a structural child —
+ * uses the fixed marker grammar (`ALL of:`/`ANY of:`/`NOT:`, or
+ * `quantifier_any`'s own "at least one … scope where:" prose) with
+ * two-space indent per level and numbered children. `not`/`quantifier_any`
+ * wrapping a non-structural (leaf) child instead collapses to one flat
+ * sentence — "it is not the case that …" / "at least one … scope where …" —
+ * since a marker block around a single comparison has no structure worth
+ * exposing. Every leaf primitive renders as one atom of natural prose built
+ * from `factLabel`/`factUnit`/`renderValue`.
  */
 export function renderCondition(condition: Condition, ctx: RenderContext): string {
   return renderConditionLines(condition, ctx).join('\n');
@@ -267,17 +319,20 @@ export function renderCondition(condition: Condition, ctx: RenderContext): strin
  * Inline ("If X, the applicable value is Y.") when `when` renders flat;
  * introduces an indented block when `when` is compound, since the evaluator
  * takes the first matching case and the reviewer needs to see exactly what
- * each one tests.
+ * each one tests. The case bullet itself sits at indent level 1 (`pad(1)`,
+ * two spaces); a compound `when`'s nested lines sit at level 2 (`pad(2)`,
+ * four spaces) — a multiple of two from column 0, like every other block in
+ * this grammar, rather than aligned to the bullet text's own width.
  */
 function renderCaseEntry(when: Condition, value: string, label: string | undefined, ctx: RenderContext, n: number): string[] {
   const suffix = label ? ` (${label})` : '';
   const whenLines = renderConditionLines(when, ctx);
   if (whenLines.length === 1) {
-    return [`  ${n}. If ${whenLines[0]}, the applicable value is ${value}${suffix}.`];
+    return [`${pad(1)}${n}. If ${whenLines[0]}, the applicable value is ${value}${suffix}.`];
   }
   return [
-    `  ${n}. If the following holds, the applicable value is ${value}${suffix}:`,
-    ...whenLines.map((l) => `     ${l}`),
+    `${pad(1)}${n}. If the following holds, the applicable value is ${value}${suffix}:`,
+    ...whenLines.map((l) => `${pad(2)}${l}`),
   ];
 }
 

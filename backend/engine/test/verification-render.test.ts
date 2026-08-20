@@ -267,6 +267,50 @@ describe('renderCondition — nesting grammar', () => {
 });
 
 // ---------------------------------------------------------------------------
+// quantifier_any conforms to the same structural-vs-flat grammar as not
+// (I1 follow-up: a compound `where` must be introduced by a fixed marker at
+// a numbered-child position, not by free-floating prose-plus-indent).
+// ---------------------------------------------------------------------------
+
+describe('renderCondition — quantifier_any follows the marker grammar for a compound where', () => {
+  const a: Condition = { op: 'cmp', fact: 'entity.turnover', cmp: 'gt', value: 1 };
+  const b: Condition = { op: 'cmp', fact: 'entity.employees', cmp: 'gt', value: 2 };
+
+  it('a compound where is introduced by the quantifier prose as a marker line, with ALL of: at a numbered-child position', () => {
+    const out = renderCondition({ op: 'quantifier_any', scopeType: 'facility', where: { op: 'all', of: [a, b] } }, ctx());
+    const lines = out.split('\n');
+    expect(lines[0]).toBe('at least one facility scope where:');
+    expect(lines).toContain('  1. ALL of:');
+    // ALL of:'s own children sit two further spaces in (four total), same as any other nested block.
+    expect(lines.some((l) => /^ {4}1\. /.test(l))).toBe(true);
+    expect(lines.some((l) => /^ {4}2\. /.test(l))).toBe(true);
+  });
+
+  it('not(quantifier_any{where: all[...]}) uses NOT: with the quantifier as its numbered child, structural all the way down', () => {
+    const out = renderCondition(
+      { op: 'not', of: { op: 'quantifier_any', scopeType: 'facility', where: { op: 'all', of: [a, b] } } },
+      ctx(),
+    );
+    const lines = out.split('\n');
+    expect(lines[0]).toBe('NOT:');
+    expect(lines).toContain('  1. at least one facility scope where:');
+    expect(lines).toContain('    1. ALL of:');
+    expect(lines.some((l) => /^ {6}1\. /.test(l))).toBe(true);
+    expect(lines.some((l) => /^ {6}2\. /.test(l))).toBe(true);
+    // Still never flips the wrapped comparators.
+    expect(out).not.toContain('is at most');
+    expect(out).toContain('exceeds');
+  });
+
+  it('a flat where still inlines, unchanged', () => {
+    const out = renderCondition({ op: 'quantifier_any', scopeType: 'facility', where: a }, ctx());
+    expect(out.split('\n')).toHaveLength(1);
+    expect(out).toContain('at least one facility scope where');
+    expect(out).toContain('exceeds');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // not must not perform a logical transformation the evaluator does not
 // ---------------------------------------------------------------------------
 
@@ -275,6 +319,18 @@ describe('renderCondition — not never flips a comparator', () => {
     const out = renderCondition({ op: 'not', of: { op: 'cmp', fact: 'entity.turnover', cmp: 'gt', value: 1000 } }, ctx());
     expect(out).not.toContain('is at most');
     expect(out).toContain('exceeds');
+  });
+
+  it('not(not(cmp gt 1000)) doubles the negation prefix and still never flips the comparator', () => {
+    // Kleene negation is involutive and each `not` renders independently of
+    // its neighbours, so n nested `not`s must recover as n literal
+    // "it is not the case that" prefixes — never collapsed, never flipped.
+    const out = renderCondition(
+      { op: 'not', of: { op: 'not', of: { op: 'cmp', fact: 'entity.turnover', cmp: 'gt', value: 1000 } } },
+      ctx(),
+    );
+    expect(out).toBe('it is not the case that it is not the case that net turnover exceeds 1 000 EUR');
+    expect(out).not.toContain('is at most');
   });
 });
 
