@@ -14,7 +14,7 @@
  * sole evidence for a conclusion.
  */
 
-import type { CorpusEdge } from './types';
+import { amendmentDirection } from './schema';
 import type { LoadedCorpus } from './store';
 import { normalizeWhitespace } from './normalize';
 
@@ -141,44 +141,74 @@ export function checkEvidenceSet(items: EvidenceItem[], corpus: LoadedCorpus): E
         problems.push(`${label}: amendment chain has no hops`);
         return;
       }
-      // A chain has to chain. Checking each hop in isolation would make this
-      // item a bag of unrelated (edge, quote) pairs: an agent could assert a
-      // chain A -> D out of a genuine A -> B edge and a genuine C -> D edge,
-      // with both quotes checking, and nothing would object.
+      // A chain has to chain, and a chain has to run one way.
       //
-      // Consecutive hops must share a document. Sharing, not `previous.to ===
-      // current.from`: the same relation is recorded from either end
-      // (`amends` and `amendedBy`), so an edge's direction does not tell you
-      // which way the chain is being walked, and requiring a particular
-      // orientation would reject honest chains.
-      let previous: CorpusEdge | undefined;
+      // Checking hops in isolation would make this item a bag of unrelated
+      // (edge, quote) pairs: an agent could assert a chain A -> D out of a
+      // genuine A -> B edge and a genuine C -> D edge, both quotes checking,
+      // and nothing would object. Requiring only that consecutive hops *touch*
+      // is not enough either: two edges that both amend from the same document
+      // are connected without either succeeding the other.
+      //
+      // Orientation is decidable because the direction is canonicalised first.
+      // `amends` and `amendedBy` state one relation from opposite ends, so the
+      // raw from/to pair says nothing on its own -- but amendmentDirection()
+      // resolves both spellings to one (amender, amended) pair, the same one
+      // the schema's cycle detection uses. A chain is then oriented when every
+      // junction runs the same way: each hop amending the previous hop's
+      // amender, or each hop being amended by the previous hop's amended
+      // document. Either walk direction is fine; mixing them is not.
+      type Amendment = { edgeId: string; amender: string; amended: string };
+      const walk: Array<Amendment | null> = [];
+
       item.hops.forEach((hop, h) => {
         const hopLabel = `${label}.hops[${h}]`;
         const edge = edgeById(corpus, hop.edgeId);
         if (edge === undefined) {
           problems.push(`${hopLabel}: names edge ${hop.edgeId}, which the corpus does not hold`);
+          walk.push(null);
         } else {
           if (hop.quote.docId !== edge.from && hop.quote.docId !== edge.to) {
             problems.push(
               `${hopLabel}: quote is taken from ${hop.quote.docId}, which is neither endpoint of edge ${hop.edgeId} (${edge.from} -> ${edge.to})`,
             );
           }
-          if (previous !== undefined) {
-            const shares =
-              previous.from === edge.from ||
-              previous.from === edge.to ||
-              previous.to === edge.from ||
-              previous.to === edge.to;
-            if (!shares) {
-              problems.push(
-                `${hopLabel}: edge ${hop.edgeId} (${edge.from} -> ${edge.to}) does not continue the chain from ${previous.edgeId} (${previous.from} -> ${previous.to}): consecutive hops must share a document`,
-              );
-            }
+          // A hop must be an amendment. A `references` edge has no amender, so
+          // orientation is not a question that can be asked of it -- and a
+          // chain of references is not an amendment chain in the first place.
+          const direction = amendmentDirection(edge);
+          if (direction === null) {
+            problems.push(
+              `${hopLabel}: edge ${hop.edgeId} is a ${edge.kind} edge; an amendment_chain hop must rest on an amends or amendedBy edge`,
+            );
           }
-          previous = edge;
+          walk.push(direction === null ? null : { edgeId: hop.edgeId, ...direction });
         }
         checkQuote(hop.quote, corpus, hopLabel, problems);
       });
+
+      // Orientation needs every hop to have a direction; any hop that failed
+      // above already carries its own problem, so there is nothing to add.
+      const hops: Amendment[] = walk.filter((h): h is Amendment => h !== null);
+      if (hops.length === walk.length) {
+        let forward = true; // each hop amends the previous hop's amender
+        let backward = true; // each hop is amended by the previous hop's amended document
+        for (let h = 1; h < hops.length; h += 1) {
+          const prev = hops[h - 1] as Amendment;
+          const next = hops[h] as Amendment;
+          forward = forward && next.amended === prev.amender;
+          backward = backward && next.amender === prev.amended;
+          // The first junction at which no single walk direction survives the
+          // chain so far: where the succession provably breaks, whether the
+          // chain never connected or changed direction here.
+          if (!forward && !backward) {
+            problems.push(
+              `${label}.hops[${h}]: edge ${next.edgeId} (${next.amender} amends ${next.amended}) does not continue the amendment chain from ${prev.edgeId} (${prev.amender} amends ${prev.amended}): every hop must run the same way, each one either amending the previous hop's amender or being amended by the previous hop's amended document`,
+            );
+            break;
+          }
+        }
+      }
       return;
     }
 

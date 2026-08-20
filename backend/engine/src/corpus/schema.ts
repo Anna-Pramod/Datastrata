@@ -10,7 +10,7 @@
 
 import { z } from 'zod';
 import type { KnowledgePack } from '../types';
-import type { CorpusIndex } from './types';
+import type { CorpusEdge, CorpusIndex } from './types';
 import { CONTENT_SELECTOR_PATTERN } from './normalize';
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'must be an ISO date (YYYY-MM-DD)');
@@ -103,6 +103,26 @@ export function parseCorpusIndex(raw: unknown): CorpusIndex {
 }
 
 /**
+ * The canonical direction of an amendment edge: which document amends, and
+ * which is amended.
+ *
+ * `amends` and `amendedBy` state one relation from opposite ends, so an edge's
+ * stored `from`/`to` pair does not by itself say which document is the amender
+ * — and which endpoint carries the edge says nothing either. Canonicalising
+ * first is what lets any check downstream be direction-aware: cycle detection
+ * below, and chain orientation in evidence.ts, ask the same question and must
+ * get the same answer.
+ *
+ * Returns null for a kind that is not an amendment at all, since no such edge
+ * has an amender.
+ */
+export function amendmentDirection(edge: CorpusEdge): { amender: string; amended: string } | null {
+  if (edge.kind === 'amends') return { amender: edge.from, amended: edge.to };
+  if (edge.kind === 'amendedBy') return { amender: edge.to, amended: edge.from };
+  return null;
+}
+
+/**
  * Collapse the amendment relation into one direction so that "A amendedBy B"
  * and "B amends A" produce the identical pair, then look for a real loop.
  */
@@ -110,9 +130,8 @@ function amendmentPairs(index: CorpusIndex): Set<string> {
   const pairs = new Set<string>();
   for (const d of index.documents) {
     for (const e of d.edges) {
-      // Normalised as "amender -> amended".
-      if (e.kind === 'amends') pairs.add(`${e.from}->${e.to}`);
-      if (e.kind === 'amendedBy') pairs.add(`${e.to}->${e.from}`);
+      const direction = amendmentDirection(e);
+      if (direction !== null) pairs.add(`${direction.amender}->${direction.amended}`);
     }
   }
   return pairs;
