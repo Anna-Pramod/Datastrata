@@ -56,6 +56,13 @@ export interface CorpusDocument {
   sha256Normalized: string;
   /** Which normalizer produced normalizedPath. */
   normalizerVersion: string;
+  /**
+   * The `#id` region extraction was scoped to, or `null` when extraction ran
+   * over the whole raw document. Not part of the closure hash: it is how the
+   * text was derived, and its effect is already fully captured by
+   * sha256Normalized.
+   */
+  contentSelector: string | null;
   edges: CorpusEdge[];
 }
 

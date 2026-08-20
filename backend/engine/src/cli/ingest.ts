@@ -31,19 +31,25 @@ export interface IngestInput {
   /** ISO date. Passed in, never read from the clock here. */
   retrievedOn: string;
   rawText: string;
+  /** `#id` region to scope extraction to. Omitted means the whole document. */
+  contentSelector?: string;
   edges: CorpusEdge[];
 }
 
 /**
  * Bytes to a validated index entry. Throws if the result would not satisfy the
- * schema, so an invalid entry can never reach index.json.
+ * schema, so an invalid entry can never reach index.json. Also throws (via
+ * `normalize`) when `contentSelector` is given but does not match anything in
+ * `rawText` -- there is no silent fallback to the whole document, so nothing
+ * downstream ever writes a document under a selector that does not describe
+ * how its text was actually derived.
  */
 export function buildDocumentEntry(input: IngestInput): {
   entry: CorpusDocument;
   rawText: string;
   normalizedText: string;
 } {
-  const normalizedText = normalize(input.rawText);
+  const normalizedText = normalize(input.rawText, input.contentSelector);
 
   const entry: CorpusDocument = {
     docId: input.docId,
@@ -57,6 +63,7 @@ export function buildDocumentEntry(input: IngestInput): {
     sha256Raw: sha256Hex(input.rawText),
     sha256Normalized: sha256Hex(normalizedText),
     normalizerVersion: NORMALIZER_VERSION,
+    contentSelector: input.contentSelector ?? null,
     edges: input.edges,
   };
 
@@ -99,10 +106,16 @@ function usage(): never {
       'Usage:',
       '  npm run ingest -- --url <url> --doc-id <DOC-...> --slug <stem> \\',
       '    --serves SRC-001[,SRC-004] --title "<title>" --version-label "<label>" \\',
-      '    --retrieved-on YYYY-MM-DD [--corpus-dir <dir>] [--edges <edges.json>]',
+      '    --retrieved-on YYYY-MM-DD [--corpus-dir <dir>] [--edges <edges.json>] \\',
+      '    [--content-selector "#id"]',
       '',
       'Edges, when supplied, are a JSON array of CorpusEdge objects. Each needs a',
       'complete provenance block. Ingest validates them; it does not invent them.',
+      '',
+      '--content-selector scopes extraction to one element (v0 supports a bare',
+      '"#id" only). A selector that does not match the fetched document is an',
+      'error: nothing is written, rather than silently falling back to the whole',
+      'document.',
     ].join('\n'),
   );
   process.exit(2);
@@ -124,6 +137,7 @@ export async function main(argv: string[]): Promise<void> {
   const retrievedOn = arg(argv, 'retrieved-on');
   const corpusDir = arg(argv, 'corpus-dir') ?? 'corpus';
   const edgesPath = arg(argv, 'edges');
+  const contentSelector = arg(argv, 'content-selector');
 
   if (!url || !docId || !slug || !serves || !title || !versionLabel || !retrievedOn) usage();
 
@@ -136,17 +150,26 @@ export async function main(argv: string[]): Promise<void> {
     process.exit(1);
   }
 
-  const { entry, rawText, normalizedText } = buildDocumentEntry({
-    docId,
-    slug,
-    serves: serves.split(',').map((s) => s.trim()),
-    title,
-    url,
-    versionLabel,
-    retrievedOn,
-    rawText: outcome.text,
-    edges,
-  });
+  let built: ReturnType<typeof buildDocumentEntry>;
+  try {
+    built = buildDocumentEntry({
+      docId,
+      slug,
+      serves: serves.split(',').map((s) => s.trim()),
+      title,
+      url,
+      versionLabel,
+      retrievedOn,
+      rawText: outcome.text,
+      contentSelector,
+      edges,
+    });
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err));
+    console.error('Nothing was written.');
+    process.exit(1);
+  }
+  const { entry, rawText, normalizedText } = built;
 
   const indexPath = join(corpusDir, 'index.json');
   let index: CorpusIndex;
@@ -172,6 +195,7 @@ export async function main(argv: string[]): Promise<void> {
   console.log(`Ingested ${entry.docId}`);
   console.log(`  raw        ${entry.rawPath}  ${entry.sha256Raw.slice(0, 12)}\u2026`);
   console.log(`  normalized ${entry.normalizedPath}  ${entry.sha256Normalized.slice(0, 12)}\u2026`);
+  console.log(`  selector   ${entry.contentSelector ?? '(none: whole document)'}`);
   console.log(`  edges      ${entry.edges.length}`);
   if (entry.edges.length === 0) {
     console.log('  No edges recorded. Ingest does not infer them \u2014 supply them with --edges.');

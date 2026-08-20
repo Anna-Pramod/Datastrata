@@ -20,18 +20,21 @@ const RAW_A = '<p>Article 19a: net turnover of EUR&nbsp;450 000 000</p>';
 const RAW_B = '<p>Directive (EU) 2026/470 amends Article 19a.</p>';
 
 /** Writes a corpus whose hashes are correct by construction. */
-function writeCorpus(overrides: { rawA?: string; indexPatch?: (i: any) => void } = {}): void {
+function writeCorpus(
+  overrides: { rawA?: string; selectorA?: string | null; indexPatch?: (i: any) => void } = {},
+): void {
   const rawA = overrides.rawA ?? RAW_A;
+  const selectorA = overrides.selectorA ?? null;
   mkdirSync(join(dir, 'raw'), { recursive: true });
   mkdirSync(join(dir, 'normalized'), { recursive: true });
 
   const docs = [
-    { id: 'DOC-A', slug: 'a', raw: rawA },
-    { id: 'DOC-B', slug: 'b', raw: RAW_B },
+    { id: 'DOC-A', slug: 'a', raw: rawA, selector: selectorA },
+    { id: 'DOC-B', slug: 'b', raw: RAW_B, selector: null as string | null },
   ];
 
   const documents = docs.map((d) => {
-    const normalized = normalize(d.raw);
+    const normalized = normalize(d.raw, d.selector ?? undefined);
     writeFileSync(join(dir, 'raw', `${d.slug}.html`), d.raw, 'utf8');
     writeFileSync(join(dir, 'normalized', `${d.slug}.txt`), normalized, 'utf8');
     return {
@@ -46,6 +49,7 @@ function writeCorpus(overrides: { rawA?: string; indexPatch?: (i: any) => void }
       sha256Raw: sha256Hex(d.raw),
       sha256Normalized: sha256Hex(normalized),
       normalizerVersion: NORMALIZER_VERSION,
+      contentSelector: d.selector,
       edges: [] as unknown[],
     };
   });
@@ -130,5 +134,38 @@ describe('loadCorpus', () => {
       },
     });
     expect(() => loadCorpus(dir)).not.toThrow();
+  });
+
+  it('reproduces a document ingested with a content selector, using the recorded selector', () => {
+    const wrapped =
+      '<div id="wrapper">chrome outside the region' +
+      '<div id="text"><p>Article 19a: net turnover of EUR&nbsp;450 000 000</p></div>' +
+      '</div>';
+    writeCorpus({ rawA: wrapped, selectorA: '#text' });
+    const corpus = loadCorpus(dir);
+    expect(corpus.document('DOC-A').contentSelector).toBe('#text');
+    expect(corpus.normalizedText('DOC-A')).toContain('EUR 450 000 000');
+    expect(corpus.normalizedText('DOC-A')).not.toContain('chrome outside the region');
+  });
+
+  it('rejects a document whose recorded selector does not reproduce the stored normalized text', () => {
+    // The selector is recorded as "#text", but the stored normalized text was
+    // actually produced without scoping to it (full-page extraction) -- an
+    // integrity problem the reproduction check must catch, not the hash checks
+    // alone, since both stored hashes are repointed at the mismatched content.
+    const wrapped =
+      '<div id="wrapper">chrome outside the region' +
+      '<div id="text"><p>Article 19a: net turnover of EUR&nbsp;450 000 000</p></div>' +
+      '</div>';
+    writeCorpus({ rawA: wrapped, selectorA: '#text' });
+
+    const fullPageNormalized = normalize(wrapped); // no selector: includes the chrome text
+    writeFileSync(join(dir, 'normalized', 'a.txt'), fullPageNormalized, 'utf8');
+    const idxPath = join(dir, 'index.json');
+    const idx = JSON.parse(readFileSync(idxPath, 'utf8'));
+    idx.documents[0].sha256Normalized = sha256Hex(fullPageNormalized);
+    writeFileSync(idxPath, JSON.stringify(idx, null, 2), 'utf8');
+
+    expect(() => loadCorpus(dir)).toThrow(/does not reproduce/);
   });
 });

@@ -76,12 +76,20 @@ export function loadCorpus(corpusDir: string): LoadedCorpus {
     }
 
     // The pair must be internally consistent: raw bytes plus the named
-    // normalizer must reconstruct the normalized text. A document produced by a
-    // different normalizer version is not corrupt — recovering it is the
+    // normalizer, run with the document's own recorded selector, must
+    // reconstruct the normalized text. A document produced by a different
+    // normalizer version is not corrupt — recovering it is the
     // normalizer_changed path, handled in B1b — so the check is skipped there.
+    // A document whose selector is recorded but whose stored text was
+    // produced without it (or vice versa) fails here, not silently.
     if (raw !== null && norm !== null && d.normalizerVersion === NORMALIZER_VERSION) {
-      if (normalize(raw) !== norm) {
-        problems.push(`${d.docId}: ${d.rawPath} does not reproduce ${d.normalizedPath} under normalizer ${NORMALIZER_VERSION}`);
+      try {
+        if (normalize(raw, d.contentSelector ?? undefined) !== norm) {
+          problems.push(`${d.docId}: ${d.rawPath} does not reproduce ${d.normalizedPath} under normalizer ${NORMALIZER_VERSION}`);
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        problems.push(`${d.docId}: ${d.rawPath} does not reproduce ${d.normalizedPath} under normalizer ${NORMALIZER_VERSION} (${message})`);
       }
     }
 

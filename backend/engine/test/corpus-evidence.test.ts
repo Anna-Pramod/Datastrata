@@ -47,6 +47,7 @@ beforeEach(() => {
       sha256Raw: sha256Hex(d.text),
       sha256Normalized: sha256Hex(normalized),
       normalizerVersion: NORMALIZER_VERSION,
+      contentSelector: null,
       edges:
         d.id === 'DOC-A'
           ? [

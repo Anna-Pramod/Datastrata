@@ -12,9 +12,10 @@
       "retrievedOn": "2026-08-20",
       "rawPath": "raw/32013L0034.html",
       "normalizedPath": "normalized/32013L0034.txt",
-      "sha256Raw": "aeec580a556de28272259dff5886d1754bb9632995ec1e7367d8eca983be3add",
-      "sha256Normalized": "1823949951d06dd9f17b9bf674ea5d2d9ecf333a64bad990b9077ecb31349e3c",
-      "normalizerVersion": "1.0.1",
+      "sha256Raw": "2652ea61517d1c48cb9bc9c3039afbc65890d8094525d075306dc20967b5c2cc",
+      "sha256Normalized": "8822d68adb0e5ab7f35b68edfa13e858d04a91b7a6a9b1fd1c7ec7c410423a32",
+      "normalizerVersion": "1.0.2",
+      "contentSelector": "#text",
       "edges": [
         {
           "edgeId": "EDGE-32013L0034-amendedBy-32026L0470",
@@ -40,9 +41,10 @@
       "retrievedOn": "2026-08-20",
       "rawPath": "raw/32026L0470.html",
       "normalizedPath": "normalized/32026L0470.txt",
-      "sha256Raw": "0923dec71628cd735a1c4e2275b1e461bf46316f15de1b464ca1d8c83b634a7e",
-      "sha256Normalized": "032f554a40fd61169a19e0b41faec77eb2e665b959b1afea425cdabe3fa03beb",
-      "normalizerVersion": "1.0.1",
+      "sha256Raw": "ad0ce24d7834b24aeddd066b0863bb9d188cf873c5f1489baea9dab07824c151",
+      "sha256Normalized": "c228f7b17cb674c78ba21000c813d60f81d52201a207367747c91fa68b990cf6",
+      "normalizerVersion": "1.0.2",
+      "contentSelector": "#text",
       "edges": []
     }
   ]

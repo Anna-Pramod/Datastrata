@@ -40,6 +40,7 @@ function doc(over: Partial<CorpusDocument> = {}): CorpusDocument {
     sha256Raw: 'a'.repeat(64),
     sha256Normalized: 'b'.repeat(64),
     normalizerVersion: '1.0.0',
+    contentSelector: null,
     edges: [],
     ...over,
   };
@@ -85,6 +86,28 @@ describe('corpus index schema', () => {
 
   it('rejects a non-ISO recordedOn', () => {
     const bad = index([doc({ edges: [edge({ provenance: { type: 'human', source: 'read it', recordedOn: '20 Aug 2026' } })] })]);
+    expect(() => parseCorpusIndex(bad)).toThrow();
+  });
+
+  it('rejects a document missing contentSelector', () => {
+    const noSelector = doc() as Partial<CorpusDocument>;
+    delete noSelector.contentSelector;
+    const bad = index([noSelector as CorpusDocument]);
+    expect(() => parseCorpusIndex(bad)).toThrow();
+  });
+
+  it('accepts a document with contentSelector null', () => {
+    const parsed = parseCorpusIndex(index([doc({ contentSelector: null })]));
+    expect(parsed.documents[0]?.contentSelector).toBeNull();
+  });
+
+  it('accepts a document with a well-formed #id contentSelector', () => {
+    const parsed = parseCorpusIndex(index([doc({ contentSelector: '#text' })]));
+    expect(parsed.documents[0]?.contentSelector).toBe('#text');
+  });
+
+  it('rejects a contentSelector that is not a bare #id', () => {
+    const bad = index([doc({ contentSelector: '.panel-body' })]);
     expect(() => parseCorpusIndex(bad)).toThrow();
   });
 });

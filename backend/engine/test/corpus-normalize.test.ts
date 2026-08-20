@@ -12,6 +12,7 @@ import {
   normalize,
   normalizeWhitespace,
   NORMALIZER_VERSION,
+  selectContent,
 } from '../src/corpus/normalize';
 import { sha256Hex } from '../src/corpus/hash';
 
@@ -64,6 +65,88 @@ describe('text extraction', () => {
   it('drops a standalone nav sitting beside the legal text', () => {
     const html = '<nav class="Sidebar">Table of contents</nav><p>Kept</p>';
     expect(extractText(html)).toBe('Kept');
+  });
+
+  it('does not survive a DOCTYPE declaration', () => {
+    const html = '<!DOCTYPE html><html><body><p>Article 19a</p></body></html>';
+    expect(extractText(html)).toBe('Article 19a');
+  });
+
+  it('still drops an HTML comment alongside the declaration strip', () => {
+    const html = '<!DOCTYPE html><!-- nav redesign 2026 --><p>Kept</p>';
+    expect(extractText(html)).toBe('Kept');
+  });
+
+  it('still lets "turnover < 40 million" survive alongside declaration stripping', () => {
+    // Regression guard: the new declaration-strip pass must not reopen the
+    // Task 2 bare-less-than hole.
+    expect(
+      extractText('<!DOCTYPE html><p>Applies where turnover < 40 million and cost > 10.</p>'),
+    ).toBe('Applies where turnover < 40 million and cost > 10.');
+  });
+
+  it('scopes extraction to a matching selector, dropping chrome outside it', () => {
+    const html =
+      '<!DOCTYPE html><header>Skip to main content</header>' +
+      '<div id="text"><p>Article 19a</p></div>' +
+      '<footer>Top / Table of contents</footer>';
+    expect(extractText(html, '#text')).toBe('Article 19a');
+  });
+
+  it('throws when a given selector does not match, naming the selector', () => {
+    const html = '<div id="other"><p>Article 19a</p></div>';
+    expect(() => extractText(html, '#text')).toThrow(/#text/);
+  });
+
+  it('does not fall back to the whole document when the selector misses', () => {
+    // A silent fallback would store chrome under a config that claims it was
+    // excluded. Confirm the throw, not just its message.
+    const html = '<header>Skip to main content</header><div id="other">Article 19a</div>';
+    expect(() => extractText(html, '#text')).toThrow();
+  });
+});
+
+describe('selectContent', () => {
+  it('returns the outer HTML of the element with a matching id', () => {
+    const html = '<div id="wrap"><p>hi</p></div><div id="text"><p>Article 19a</p></div>';
+    expect(selectContent(html, '#text')).toBe('<div id="text"><p>Article 19a</p></div>');
+  });
+
+  it('returns null when no element has the id', () => {
+    const html = '<div id="other"><p>Article 19a</p></div>';
+    expect(selectContent(html, '#text')).toBeNull();
+  });
+
+  it('does not truncate early at a nested element of the same tag name', () => {
+    const html = '<div id="text"><div class="inner"><p>Article 19a</p></div><p>tail</p></div>';
+    expect(selectContent(html, '#text')).toBe(html);
+  });
+
+  it('is unaffected by several levels of same-name nesting', () => {
+    const html =
+      '<div id="text"><div><div><p>deep</p></div></div><p>after</p></div>';
+    expect(selectContent(html, '#text')).toBe(html);
+  });
+
+  it('returns null for a malformed region with no closing tag, rather than running to end of file', () => {
+    const html = '<div id="text"><p>Article 19a, unterminated';
+    expect(selectContent(html, '#text')).toBeNull();
+  });
+
+  it('rejects a selector that is not a bare #id, naming the supported form', () => {
+    expect(() => selectContent('<p>x</p>', '.panel-body')).toThrow(/#id/);
+    expect(() => selectContent('<p>x</p>', 'div#text')).toThrow(/#id/);
+    expect(() => selectContent('<p>x</p>', '#text .child')).toThrow(/#id/);
+  });
+
+  it('is not fooled by an id substring match', () => {
+    const html = '<div id="text2">wrong</div><div id="text">right</div>';
+    expect(selectContent(html, '#text')).toBe('<div id="text">right</div>');
+  });
+
+  it('finds the id regardless of attribute order', () => {
+    const html = '<div class="panel-body" id="text">Article 19a</div>';
+    expect(selectContent(html, '#text')).toBe(html);
   });
 });
 
@@ -130,6 +213,10 @@ describe('normalization', () => {
 
   it('declares a version', () => {
     expect(NORMALIZER_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
+  });
+
+  it('bumped the normalizer version for the content-selection behaviour change', () => {
+    expect(NORMALIZER_VERSION).toBe('1.0.2');
   });
 });
 

@@ -6,14 +6,21 @@
  * it must be.
  */
 
-import { describe, expect, it } from 'vitest';
-import { buildDocumentEntry, mergeIntoIndex, type IngestInput } from '../src/cli/ingest';
+import { describe, expect, it, vi, afterEach } from 'vitest';
+import { mkdtempSync, existsSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { buildDocumentEntry, main, mergeIntoIndex, type IngestInput } from '../src/cli/ingest';
 import { parseCorpusIndex, verifyCorpusIntegrity } from '../src/corpus/schema';
 import { normalize, NORMALIZER_VERSION } from '../src/corpus/normalize';
 import { sha256Hex } from '../src/corpus/hash';
 import type { CorpusIndex } from '../src/corpus/types';
 
 const RAW = '<p>Article 19a: net turnover of EUR&nbsp;450 000 000</p>';
+const RAW_WITH_REGION =
+  '<div id="wrapper">chrome outside the region' +
+  '<div id="text"><p>Article 19a: net turnover of EUR&nbsp;450 000 000</p></div>' +
+  '</div>';
 
 function input(over: Partial<IngestInput> = {}): IngestInput {
   return {
@@ -113,6 +120,26 @@ describe('buildDocumentEntry', () => {
       ),
     ).toThrow(/from/);
   });
+
+  it('records a null contentSelector when none is supplied', () => {
+    const { entry } = buildDocumentEntry(input());
+    expect(entry.contentSelector).toBeNull();
+  });
+
+  it('records the supplied contentSelector and scopes normalization to it', () => {
+    const { entry, normalizedText } = buildDocumentEntry(
+      input({ rawText: RAW_WITH_REGION, contentSelector: '#text' }),
+    );
+    expect(entry.contentSelector).toBe('#text');
+    expect(normalizedText).toBe(normalize(RAW_WITH_REGION, '#text'));
+    expect(normalizedText).not.toContain('chrome outside the region');
+  });
+
+  it('throws when the given contentSelector does not match, naming the selector', () => {
+    expect(() =>
+      buildDocumentEntry(input({ rawText: RAW, contentSelector: '#nope' })),
+    ).toThrow(/#nope/);
+  });
 });
 
 describe('mergeIntoIndex', () => {
@@ -155,5 +182,98 @@ describe('mergeIntoIndex', () => {
     );
     const merged = mergeIntoIndex(mergeIntoIndex(emptyIndex(), target), base);
     expect(() => verifyCorpusIntegrity(parseCorpusIndex(merged))).not.toThrow();
+  });
+});
+
+describe('main (CLI, network mocked)', () => {
+  class FakeProcessExit extends Error {
+    constructor(public code: number) {
+      super(`process.exit(${code})`);
+    }
+  }
+
+  let dir = '';
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    if (dir) rmSync(dir, { recursive: true, force: true });
+    dir = '';
+  });
+
+  function withMockedFetch(responseText: string): void {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, status: 200, statusText: 'OK', text: async () => responseText })),
+    );
+  }
+
+  it('writes nothing and exits non-zero when the content selector does not match', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'ingest-'));
+    withMockedFetch(RAW); // has no id="text" element at all
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new FakeProcessExit(code ?? 0);
+    }) as never);
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(
+      main([
+        '--url',
+        'https://example.test/doc',
+        '--doc-id',
+        'DOC-TEST',
+        '--slug',
+        'test',
+        '--serves',
+        'SRC-001',
+        '--title',
+        'Test instrument',
+        '--version-label',
+        'v1',
+        '--retrieved-on',
+        '2026-08-20',
+        '--corpus-dir',
+        dir,
+        '--content-selector',
+        '#text',
+      ]),
+    ).rejects.toThrow(FakeProcessExit);
+
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    expect(errorSpy.mock.calls.some(([msg]) => String(msg).includes('#text'))).toBe(true);
+    // Nothing written: no raw/normalized files, and no index.json.
+    expect(existsSync(join(dir, 'index.json'))).toBe(false);
+    expect(existsSync(join(dir, 'raw'))).toBe(false);
+    expect(existsSync(join(dir, 'normalized'))).toBe(false);
+  });
+
+  it('records the selector on the entry when the CLI ingest succeeds', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'ingest-'));
+    withMockedFetch(RAW_WITH_REGION);
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    await main([
+      '--url',
+      'https://example.test/doc',
+      '--doc-id',
+      'DOC-TEST',
+      '--slug',
+      'test',
+      '--serves',
+      'SRC-001',
+      '--title',
+      'Test instrument',
+      '--version-label',
+      'v1',
+      '--retrieved-on',
+      '2026-08-20',
+      '--corpus-dir',
+      dir,
+      '--content-selector',
+      '#text',
+    ]);
+
+    const index = JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8'));
+    expect(index.documents[0]?.contentSelector).toBe('#text');
   });
 });

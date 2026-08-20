@@ -10,6 +10,7 @@
 
 import { z } from 'zod';
 import type { CorpusIndex, EdgeKind } from './types';
+import { CONTENT_SELECTOR_PATTERN } from './normalize';
 
 /** Kinds that lead to the same law in its currently governing form. */
 export const STRUCTURAL_EDGE_KINDS: readonly EdgeKind[] = [
@@ -22,6 +23,11 @@ export const STRUCTURAL_EDGE_KINDS: readonly EdgeKind[] = [
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'must be an ISO date (YYYY-MM-DD)');
 const docId = z.string().regex(/^DOC-[A-Za-z0-9._-]+$/, 'document id must be DOC-*');
 const sha256 = z.string().regex(/^[0-9a-f]{64}$/, 'must be a lowercase hex sha-256');
+/** null means extraction ran over the whole raw document, not a selected region. */
+const contentSelector = z
+  .string()
+  .regex(CONTENT_SELECTOR_PATTERN, 'content selector must be a bare "#id"')
+  .nullable();
 
 const edgeProvenance = z
   .object({
@@ -54,6 +60,7 @@ const corpusDocument = z
     sha256Raw: sha256,
     sha256Normalized: sha256,
     normalizerVersion: z.string().min(1),
+    contentSelector,
     edges: z.array(corpusEdge),
   })
   .strict()

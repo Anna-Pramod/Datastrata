@@ -27,6 +27,7 @@ function doc(docId: string, edges: CorpusEdge[] = [], serves: string[] = []): Co
     sha256Raw: 'a'.repeat(64),
     sha256Normalized: 'b'.repeat(64),
     normalizerVersion: '1.0.0',
+    contentSelector: null,
     edges,
   };
 }
@@ -238,6 +239,14 @@ describe('closure hash', () => {
       doc('DOC-B'),
     ]);
     expect(computeClosure(after, ['DOC-A']).sha256).not.toBe(computeClosure(before, ['DOC-A']).sha256);
+  });
+
+  it('is unchanged by contentSelector, since it is how the text was derived and sha256Normalized already covers that', () => {
+    const before = index([doc('DOC-A', [edge('E1', 'amendedBy', 'DOC-A', 'DOC-B')]), doc('DOC-B')]);
+    const reselected = doc('DOC-A', [edge('E1', 'amendedBy', 'DOC-A', 'DOC-B')]);
+    reselected.contentSelector = '#text';
+    const after = index([reselected, doc('DOC-B')]);
+    expect(computeClosure(after, ['DOC-A']).sha256).toBe(computeClosure(before, ['DOC-A']).sha256);
   });
 });
 
