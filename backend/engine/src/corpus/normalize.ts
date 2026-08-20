@@ -56,7 +56,7 @@ function escapeRegExp(literal: string): string {
  * HTML (opening tag through matching closing tag, inclusive), or `null` when
  * no element carries that id.
  *
- * Algorithm, since there is no HTML parser available: find the `id="..."`
+ * Algorithm, since there is no HTML parser available: find a literal `id`
  * attribute by exact value match, walk back to the `<` that opens the tag
  * carrying it, read that tag's name, then scan forward counting opens and
  * closes of that same tag name (self-closing and void instances of it do not
@@ -67,6 +67,25 @@ function escapeRegExp(literal: string): string {
  * count never returns to zero the region is malformed and `null` is
  * returned, rather than running to end of file and calling that "the
  * region".
+ *
+ * The `id` match requires an actual attribute-name boundary (whitespace or
+ * `<` immediately before it): `\b` alone is not enough, because `-`, `:`
+ * and `.` are non-word characters, so a plain `\bid` also matches inside
+ * `data-id=`, `xml:id=` and `aria-id=`. Without the boundary check, a decoy
+ * attribute carrying the selector's value earlier in the bytes than the real
+ * element would win silently (`exec` returns the first match) -- no `null`,
+ * no throw, just the wrong region, one that reproduces identically on every
+ * later `normalize` call because the function is deterministic. The attribute
+ * *name* is matched case-insensitively (`[iI][dD]`), matching HTML's own
+ * attribute-name case-insensitivity and the case-insensitive tag-name scan
+ * below; the attribute *value* stays case-sensitive, since `#Text` and
+ * `#text` must not be treated as the same selector.
+ *
+ * Known imprecision, inherent to a regex scanner rather than a DOM parser:
+ * the tag-close scan below (`[^>]*?`) ends a tag at the first `>`, so an
+ * attribute value containing a literal `>` (e.g. `data-foo="a>b"`) would
+ * terminate that tag's match early. Out of dependency budget to fix
+ * properly (see the module-level note on why there is no DOM parser here).
  *
  * Throws only for a syntactically unsupported selector, never for one that
  * is well-formed but simply does not appear in the document.
@@ -81,7 +100,7 @@ export function selectContent(rawText: string, selector: string): string | null 
   }
   const id = selector.slice(1);
 
-  const idAttr = new RegExp(`\\bid\\s*=\\s*(["'])${escapeRegExp(id)}\\1`);
+  const idAttr = new RegExp(`(?<=[\\s<])[iI][dD]\\s*=\\s*(["'])${escapeRegExp(id)}\\1`);
   const attrMatch = idAttr.exec(rawText);
   if (attrMatch === null) return null;
 

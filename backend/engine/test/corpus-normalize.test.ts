@@ -148,6 +148,24 @@ describe('selectContent', () => {
     const html = '<div class="panel-body" id="text">Article 19a</div>';
     expect(selectContent(html, '#text')).toBe(html);
   });
+
+  it('is not fooled by an attribute name merely ending in "id"', () => {
+    // Regression: a plain `\bid` boundary treats `-`, `:` and `.` as word
+    // boundaries too, so it also matches inside data-id=, xml:id=, aria-id=.
+    // Each case below places the decoy earlier in the bytes than the real
+    // element, which is exactly the arrangement that made the old matcher
+    // silently select the wrong region instead of the right one.
+    const decoyAttrs = ['data-id', 'xml:id', 'aria-id'];
+    for (const attr of decoyAttrs) {
+      const html = `<div ${attr}="text">decoy</div><div id="text">real</div>`;
+      expect(selectContent(html, '#text')).toBe('<div id="text">real</div>');
+    }
+  });
+
+  it('matches the id attribute name case-insensitively, like HTML attribute names generally', () => {
+    const html = '<div ID="text">Article 19a</div>';
+    expect(selectContent(html, '#text')).toBe(html);
+  });
 });
 
 describe('normalization', () => {
