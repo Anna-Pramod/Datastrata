@@ -360,12 +360,25 @@ allEvidenceValid = true
 - a failing evidence check (including a failing `absence` re-search)
 - an unresolved `corpus_gap` or `closure_gap`
 - an invalid result schema
-- derived staleness other than `fresh` or `source_reissued`
+- **candidate inconsistency** — the result's pinned inputs no longer equal current inputs
 - an integrity failure
 - a red test suite
 - a `pipelineVersion` with no promotion record
 
 Refusal is the feature. Every item is a way a signature could mean less than it appears to.
+
+**Corrected 2026-08-20: the gate is candidate consistency, not existing-signature staleness.** An earlier draft of this list refused on "derived staleness other than `fresh` or `source_reissued`". That was wrong, and wrong in the worst direction — it would refuse to sign exactly when signing is the remedy. Staleness is a property of the *existing governing entry*: `CSRD-S-001` reads `stale_encoding` today precisely because its condition was corrected, which is why a fresh verification exists and wants signing. Refusing on it makes recovery impossible.
+
+The two concepts must stay apart:
+
+| | Question it answers | Effect at signing |
+|---|---|---|
+| **Existing-signature staleness** | Why does this requirement currently read `draft`? | Informational. Shown, never blocking |
+| **Candidate consistency** | Does the result being signed describe the world as it is *now*? | Blocking |
+
+Candidate consistency compares the result's pinned inputs against current state: `requirementInputSha256`, `conditionSha256`, `renderedConditionSha256`, `corpusClosureSha256`, and each pinned document's `sha256Normalized`. A pinned `sha256Raw` that differs while normalized matches is advisory, not blocking — the same raw-versus-normalized logic as §4.3, since the words did not move.
+
+**Signing is one of the ways a stale status is repaired.** A gate that forbids it has inverted the mechanism.
 
 **`MISMATCH` is refused categorically**, not weighed. `verified` asserts that the encoding matches the law, so it must never be possible to sign "we verified that this encoding is wrong" — a status that would be technically truthful and operationally catastrophic, since downstream code reads `verified` as fit to rely on. A confirmed mismatch instead exits into a correction cycle:
 
