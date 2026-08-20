@@ -1,0 +1,49 @@
+{
+  "updated": "2026-08-20",
+  "documents": [
+    {
+      "docId": "DOC-32013L0034",
+      "serves": [
+        "SRC-001"
+      ],
+      "title": "Directive 2013/34/EU — Accounting Directive (consolidated text)",
+      "url": "https://eur-lex.europa.eu/eli/dir/2013/34/2026-03-18",
+      "versionLabel": "consolidated, in force from 2026-03-18 (CELEX 02013L0034-20260318)",
+      "retrievedOn": "2026-08-20",
+      "rawPath": "raw/32013L0034.html",
+      "normalizedPath": "normalized/32013L0034.txt",
+      "sha256Raw": "aeec580a556de28272259dff5886d1754bb9632995ec1e7367d8eca983be3add",
+      "sha256Normalized": "1823949951d06dd9f17b9bf674ea5d2d9ecf333a64bad990b9077ecb31349e3c",
+      "normalizerVersion": "1.0.1",
+      "edges": [
+        {
+          "edgeId": "EDGE-32013L0034-amendedBy-32026L0470",
+          "kind": "amendedBy",
+          "from": "DOC-32013L0034",
+          "to": "DOC-32026L0470",
+          "provenance": {
+            "type": "celex_metadata",
+            "source": "EUR-Lex CELEX:32013L0034 document-information page (https://eur-lex.europa.eu/legal-content/EN/ALL/?uri=CELEX:32013L0034), 'Modified by' relationship table listing 32026L0470 ('Addition', article 29a paragraph 4a, effective 18/03/2026); corroborated by eli:changed_by RDFa metadata on the original-act page pointing to http://data.europa.eu/eli/dir/2026/470/oj",
+            "recordedOn": "2026-08-20"
+          }
+        }
+      ]
+    },
+    {
+      "docId": "DOC-32026L0470",
+      "serves": [
+        "SRC-004"
+      ],
+      "title": "Directive (EU) 2026/470 — Omnibus I",
+      "url": "https://eur-lex.europa.eu/eli/dir/2026/470/oj/eng",
+      "versionLabel": "as published",
+      "retrievedOn": "2026-08-20",
+      "rawPath": "raw/32026L0470.html",
+      "normalizedPath": "normalized/32026L0470.txt",
+      "sha256Raw": "0923dec71628cd735a1c4e2275b1e461bf46316f15de1b464ca1d8c83b634a7e",
+      "sha256Normalized": "032f554a40fd61169a19e0b41faec77eb2e665b959b1afea425cdabe3fa03beb",
+      "normalizerVersion": "1.0.1",
+      "edges": []
+    }
+  ]
+}
