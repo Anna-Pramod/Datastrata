@@ -79,17 +79,33 @@ A `revoked` governing entry yields `derivedStatus: 'draft'` with reason `revoked
 
 ---
 
-## 3.1 `requirementVersion` and its backstop
+## 3.1 `requirementVersion` and the version-integrity registry
 
 The entry pins `requirementVersion`, which does not exist yet. `pack.json` carries one version for the whole pack — too coarse to name a requirement revision, and the ledger has to be portable across CSRD, CBAM and country packs.
 
 Each requirement gains `version`, an integer **bumped by hand** as part of any content edit. A generated version cannot distinguish a revision from a reformat, which is the distinction that matters here.
 
-The factory spec mandates a machine backstop: content changing without a version bump must fail the build. That needs a record of what content each version corresponds to, and no such record exists — an unsigned requirement has no ledger entry to compare against. So B1b-ii-a adds `knowledge/<pack>/requirement-versions.json`, mapping `requirementId → { version, requirementSha256 }`, updated deliberately alongside a bump.
+The factory spec mandates a machine backstop: content changing without a version bump must fail the build. That needs a record of what content each version described, and none exists — an unsigned requirement has no ledger entry to compare against. So B1b-ii-a adds:
 
-The loader then fails when a requirement's current `requirementSha256` differs from the one recorded against its current `version`. Editing content without bumping is a build failure; bumping without updating the lockfile is the same failure from the other side.
+```
+verification/requirement-versions/<packId>.json
+```
 
-**This is a lockfile, not a source of truth.** The requirement is the content; the lockfile only remembers what the last declared version described. It is classified `audit` in §6 and is never read to decide status.
+**It lives under `verification/`, not under `knowledge/`.** The requirement remains authoritative for its own content; this registry only enforces that a declared version stays bound to the content hash it originally named. Putting it beside authored regulatory knowledge would invite reading it as content.
+
+**It retains every historical mapping, not just the latest pair:**
+
+```json
+{
+  "CSRD-S-001": { "1": "sha256:A", "2": "sha256:B", "3": "sha256:C" }
+}
+```
+
+So a version number acquires permanent meaning and cannot quietly be reused for different content. The requirement's current `version: 3` must match the hash recorded for version 3 — not merely "the most recent hash we saw".
+
+The loader fails when a requirement's current `requirementSha256` differs from the hash recorded against its current `version`. Editing content without bumping fails; bumping without registering the new hash fails from the other side; re-using an old version number for new content fails against the historical record.
+
+**This is a version-integrity registry, never a status source.** It is classified `integrity` in §6: the loader refuses the pack on its evidence, which is more than audit and less than authority — it can stop a load, and it can never decide a status.
 
 ---
 
@@ -97,7 +113,23 @@ The loader then fails when a requirement's current `requirementSha256` differs f
 
 **Staleness returns a set, never a ranked primary.** `stale_encoding` and `stale_source_text` co-occur when a condition was corrected *and* the law's text moved; a precedence order would have to invent which is "the" reason and would hide the other from the person deciding what to do. `blocks` is a predicate over the set.
 
-States are as the factory spec §4.3 defines them, plus `revoked`. `INTEGRITY_FAILURE` is not a member — it is a separate category with its own exit code, per §4.4.
+States are as the factory spec §4.3 defines them, plus `stale_result` (§4.1). `INTEGRITY_FAILURE` is not a member — it is a separate category with its own exit code, per §4.4.
+
+**`revoked` is not a staleness reason and `deriveStaleness()` never returns it.** Nothing moved underneath a revoked signature; a human deliberately withdrew its authority. Conflating the two would blur the distinction the ledger exists to record:
+
+> staleness = the world moved · revocation = a person withdrew authority
+
+`deriveStatus(governingEntry, staleness)` handles it instead: a governing entry of kind `revoked` yields `derivedStatus: 'draft'` with `statusReasons: ['revoked']`, without consulting staleness at all.
+
+### 4.1 `stale_result` — the rule the pinned result was missing
+
+The entry pins `resultSha256`, and without a corresponding validity rule that pin does nothing. The failure it leaves open:
+
+> Sign with `challenges[0].verdict = CONFIRMED`. Afterwards, edit `verification-result.json` so that verdict reads `MISMATCH`. The condition, the corpus and the rendering are all untouched, so no other freshness comparison fires — and the signature keeps producing `verified` over a result that now says the opposite of what was signed.
+
+So: **`stale_result` fires when the current `verification-result.json` hash differs from the governing entry's `resultSha256`, and it blocks.** If the pinned result file is absent entirely, that is an `INTEGRITY_FAILURE`, exactly as a missing pinned corpus document is — a signed artefact cannot vanish through ordinary drift.
+
+**This is why nested result fields do not each need their own freshness rule.** `challenges[].evidence[]` is `signability` — evidence validity is checked before signing — and `audit` thereafter. Any post-signing edit to it changes the enclosing `resultSha256` and surfaces as `stale_result`. One invalidation mechanism, rather than re-implementing freshness independently for every field inside the result.
 
 **Projection.** `derivedStatus` is `draft | verified | ratified`, with `statusReasons[]` attached. A blocking reason withholds `verified` and yields `draft` **carrying its reasons**, so every surface can say *why* rather than merely refusing. No ledger entry means `draft` with an empty reason set — status and staleness are two axes and they do not overlap.
 
@@ -107,7 +139,17 @@ States are as the factory spec §4.3 defines them, plus `revoked`. `INTEGRITY_FA
 
 **One frozen derivation.** `buildSignature()` reads pack, corpus, result and renderer **once** and returns an immutable candidate. Every precondition runs against that object, and the appended line is that object serialised. There is no window between checking and writing, because the checked values and the written values are the same values.
 
-**Then verify after write.** Re-read the appended line, re-derive status from disk, confirm `fresh`. The freeze closes the check-then-recompute gap; the post-write read catches the world moving underneath the whole operation, which the freeze cannot.
+**Then verify after write.** Re-read the ledger from disk and assert three things together:
+
+```
+governingEntry.entryId === candidate.entryId
+staleness(governingEntry) is empty
+derivedStatus === candidate.kind
+```
+
+Confirming freshness alone is not enough. Another signing event could become governing between the append and the check — today only through operator error, later through genuine concurrency — and a check that asked only "is the governing entry fresh?" would report success for someone else's entry. Asserting the governing entry **is the one just written** is what makes the report about this operation.
+
+The freeze closes the check-then-recompute gap; the post-write read catches the world moving underneath the whole operation, which the freeze cannot.
 
 ### 5.1 The gate is candidate consistency, not existing staleness
 
@@ -130,26 +172,61 @@ Candidate consistency compares the result's pinned inputs against current state:
 
 The direct lesson from B1b-i, where `in_catalogue.missReason` was rendered by nobody, recorded by neither feature producer, and declared away in the grammar contract — three modules and a specification agreeing, all wrong in the same direction.
 
-**Classifications are field *paths*, over every schema variant — not top-level keys.** Classifying `result.challenges` as a unit recreates the same hole one level down: "every variant has a handler" while a field *inside* a variant goes unhandled. Paths reach into arrays and unions:
+But "is this field used?" is the wrong question, and it is where an earlier draft of this section stopped. The question that generalises the lesson is **what kind of authority does this field exercise?** A field can be read everywhere and still be misclassified if nobody asked whether it decides something.
+
+### 6.1 Six roles
+
+| Role | Meaning |
+|---|---|
+| `authority` | Determines routing, governing state, or status |
+| `signability` | The candidate must satisfy this before signing |
+| `freshness` | Participates in post-signing validity and reason derivation |
+| `integrity` | Malformed, tampered or missing state causes a hard failure |
+| `display` | Shown to a human; decides nothing |
+| `audit` | Retained for the record; decides nothing |
+
+Roles compose — most fields carry two.
+
+**`freshness`, not `staleness`.** Participation in the derivation is not the same as invalidating. `corpus[].sha256Raw` participates: a changed raw hash with unchanged normalized text yields `source_reissued`, which is advisory. A class named "staleness" and defined as "invalidates" would misdescribe it, and misdescription in this table is how the last hole opened. **The reason decides whether it blocks; the field classification only says the field takes part.**
+
+### 6.2 Representative classifications
+
+Paths, not top-level keys — classifying `result.challenges` as a unit recreates the same hole one level down.
 
 ```
-corpus[].sha256Normalized      → staleness + audit
-corpus[].sha256Raw             → display + audit
-corpus[].normalizerVersion     → staleness + audit
-challenges[].verdict           → signability + display
-challenges[].evidence[]        → signability + audit
-openQuestions[]                → signability + display
-pipelineVersion                → signability + audit
-renderedConditionSha256        → staleness + audit
-rendererVersion                → audit
-requirementInputSha256         → staleness + audit
-on                             → display + audit
-note                           → audit
+entryId                        integrity + audit
+kind                           authority
+packId, requirementId          authority
+revokes                        authority + integrity
+requirementVersion             integrity + audit
+requirementSha256              integrity + audit
+requirementInputSha256         freshness + audit
+conditionSha256                freshness + audit
+renderedConditionSha256        freshness + audit
+rendererVersion                audit
+corpusClosureSha256            freshness + audit
+corpus[].sha256Normalized      freshness + audit
+corpus[].sha256Raw             freshness + audit
+corpus[].normalizerVersion     freshness + audit
+resultSha256                   freshness + integrity + audit
+pipelineVersion                signability + audit
+challenges[].verdict           signability + display
+challenges[].evidence[]        signability + audit
+openQuestions[]                signability + display
+by                             display + audit
+on                             display + audit
+note                           audit
 ```
 
-Four classes: **signability** (refuses signing), **staleness** (invalidates an existing signature), **display**, **audit**.
+`entryId` is `integrity` because the ledger's internal consistency rests on it, and `revokes` is `authority + integrity` because it both redirects governing state and must resolve to a real earlier entry. `on` is `display + audit` and deliberately **not** `authority` — §3 orders by file position, and this row is what stops a later reader "improving" that to use the date.
 
-**The completeness guard derives its path set from the runtime zod schemas, not from TypeScript interfaces.** TypeScript disappears at runtime and cannot be walked; zod schemas exist and can. The guard enumerates every leaf path across every variant and fails until each carries a classification. This is B1b-ii-a's hardest acceptance test, and it is the one that closes the class rather than the instance.
+`resultSha256` carries three roles: `freshness` because it produces `stale_result`, `integrity` because a missing pinned result is a hard failure, `audit` because it names what was signed.
+
+### 6.3 The guard
+
+**The completeness guard derives its path set from the runtime zod schemas, not from TypeScript interfaces.** TypeScript disappears at runtime and cannot be walked; zod schemas exist and can. The guard enumerates every leaf path across every variant of every schema and fails until each carries at least one role.
+
+This is B1b-ii-a's hardest acceptance test, and the one that closes the class rather than the instance.
 
 ---
 
@@ -210,9 +287,12 @@ The public migration lands *after* the derivation machinery exists and is tested
 Beyond per-module unit tests:
 
 - **Governing-entry resolution** — multiple entries, revocation, revocation of a non-existent target, revocation across packs, revocation of a revocation (all four rejected at load)
-- **Staleness as a set** — co-occurring causes both present; `blocks` correct over the set
+- **Staleness as a set** — co-occurring causes both present; `blocks` correct over the set; `deriveStaleness()` **never** returns `revoked`
+- **`stale_result`** — editing a verdict in the pinned result after signing, with condition, corpus and rendering untouched, withholds `verified`; a missing pinned result is an `INTEGRITY_FAILURE`, not a staleness reason
 - **Candidate consistency** — a stale existing signature does **not** block signing; a candidate whose pinned inputs no longer match current state **does**
-- **Field accounting** — a new field on any schema variant fails until classified; nested and union paths reached
+- **Post-write verification** — asserts the governing entry is the one just written, not merely that some governing entry is fresh
+- **Version registry** — re-using an old version number for new content fails against the historical record, not only against the latest pair
+- **Field accounting** — a new field on any schema variant fails until classified; nested and union paths reached; roles derived from zod, not TypeScript
 - **Migration golden** — engine and public levels, compared against the recorded artifact, with regeneration explicitly excluded from CI
 - **`minStatus`** — one test per level
 - **Version backstop** — editing a requirement's content without bumping `version` fails the build; bumping without updating the lockfile fails the same way
