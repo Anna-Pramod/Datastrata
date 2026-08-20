@@ -83,10 +83,16 @@ Spec §3.1. A signature pins `requirementVersion`, which does not exist yet. Con
 - [ ] **Step 2: Run them; confirm they fail for the right reason**
 - [ ] **Step 3: Implement `registry.ts`**
 - [ ] **Step 4: Add `version: 1` to all 16 requirements and `version: number` to the `Requirement` type**
-- [ ] **Step 5: Generate `verification/requirement-versions/csrd.json`** by computing each requirement's `requirementSha256` with `requirementInputSha256`'s sibling from `canonical.ts`. **Print the file and read it** — 16 entries, each version `"1"`. If a hash looks wrong, stop and report rather than committing a registry that blesses whatever the code currently produces.
-- [ ] **Step 6: Wire `assertVersionIntegrity` into the loader** so a mismatch fails `npm test`
-- [ ] **Step 7: Prove the gate bites** — change one character in one requirement's `plainEnglish`, confirm `npm test` fails naming that requirement, revert, confirm green. Record both outputs.
-- [ ] **Step 8: `npm test && npm run typecheck`, then commit**
+- [ ] **Step 5: Establish the hash domain before seeding anything.** The first registry is unavoidably trust-on-first-use — a correct and an incorrect SHA-256 look equally random, so reading the file proves nothing. What *is* independently establishable is what the hash covers. Write these tests first and get them green:
+  - `requirementSha256` **moves** for an edit to every class of authored content: `title`, `plainEnglish`, `condition`, `sources`, `provisions`, `caution`, `obligationTemplates`, `severity`, `legalStatus`, `version`
+  - it is **stable** under JSON key reordering and under whitespace or pretty-printing changes
+  - it is computed over the **authored requirement only** — adding a loader-attached field such as `derivedStatus` or `statusReasons` to the object **must not** change it
+
+  That last one is load-bearing for B1b-ii-b: if the hash covered loader-added fields, a status change would read as a requirement revision and every derived-status update would trip version integrity.
+- [ ] **Step 6: Generate `verification/requirement-versions/csrd.json`** — 16 entries, each version `"1"`, computed with the now-characterised hash function
+- [ ] **Step 7: Wire `assertVersionIntegrity` into the loader** so a mismatch fails `npm test`
+- [ ] **Step 8: Prove the gate bites** — change one character in one requirement's `plainEnglish`, confirm `npm test` fails naming that requirement, revert, confirm green. Record both outputs.
+- [ ] **Step 9: `npm test && npm run typecheck`, then commit**
 
 ---
 
@@ -119,13 +125,24 @@ corpus[]                       { docId, versionLabel, sha256Raw, sha256Normalize
 reading                        { elements: [{ id, statement, evidence[] }] }
 coverage                       { cells: [{ direction, readingElementId?, conditionPath?, verdict }] }
 challenges[]                   { id, lens, statement, verdict, evidence[], resolution? }
-openQuestions[]                { id, statement, blocking }
+openQuestions[]                { id, statement }
+gaps[]                         { kind, docId, detail }
 narrative?                     string
 ```
 
 `evidence[]` reuses the `EvidenceItem` union already defined in `src/corpus/evidence.ts` — import its zod schema if one exists, otherwise define the zod mirror in `result.ts` and add a test asserting the two agree on a round-trip fixture. Do not fork the type.
 
 `verdict` on a challenge is `'CONFIRMED' | 'MISMATCH' | 'OPEN_QUESTION'`. Coverage `verdict` is `'MAPPED' | 'UNMAPPED' | 'UNSUPPORTED' | 'UNCERTAIN'`. `direction` is `'reading_to_condition' | 'condition_to_reading'`.
+
+**Three things the schema must represent, because the sign gate polices them and cannot police what is not there:**
+
+**`openQuestions[]` carries no `blocking` flag.** The signing rule is that *any* outstanding `OPEN_QUESTION` blocks. A per-item `blocking: false` would introduce a second, competing policy and let a result declare its own open question harmless. If non-blocking observations are ever wanted, they are a different concept and get their own field — they are not open questions with a flag turned off.
+
+**`gaps[]` is structural.** `gaps[].kind` is `'corpus_gap' | 'closure_gap'`, with the `docId` and a detail string. The sign CLI must refuse an unresolved gap, and leaving B1b-ii-b to infer gaps from transcripts would make a refusal depend on prose. An empty array is the normal case.
+
+**Adverse coverage must name the challenge that addresses it.** A `coverage.cells[]` entry whose `verdict` is `UNMAPPED`, `UNSUPPORTED` or `UNCERTAIN` **must** carry a `challengeId`, and `parseVerificationResult` must reject a result where that id names no challenge in `challenges[]`. Without the link, a result could report `UNMAPPED` coverage while carrying no `MISMATCH` and no `OPEN_QUESTION` — and a sign gate looking only at verdicts would sign it, with the adjudicator's judgement silently bypassed. `MAPPED` cells carry no `challengeId`, and one supplying it is rejected.
+
+This is what makes `verification-result.json` a self-consistent record rather than a bag of pipeline outputs.
 
 **Required behaviours:**
 
@@ -134,6 +151,8 @@ narrative?                     string
 3. **All zod objects are `.strict()`.** An unknown key is a validation failure, not a silently dropped field — that is how `missReason` escaped in B1b-i.
 
 **Required test cases:** key reordering yields an identical `resultSha256`; whitespace/pretty-printing yields an identical hash; changing a challenge `verdict` changes the hash; changing an `evidence[]` item changes the hash; an unknown top-level key is rejected; an unknown key nested inside `challenges[]` is rejected; the `EvidenceItem` round-trip agrees with `src/corpus/evidence.ts`.
+
+**Plus, for signability completeness:** an `UNMAPPED` cell with no `challengeId` is rejected; an `UNSUPPORTED` cell naming a challenge id absent from `challenges[]` is rejected; an `UNCERTAIN` cell naming a present challenge is accepted; a `MAPPED` cell carrying a `challengeId` is rejected; an `openQuestions[]` item carrying `blocking` is rejected by `.strict()`; a `gaps[]` entry with an unknown `kind` is rejected.
 
 - [ ] **Step 1: Write the failing tests**
 - [ ] **Step 2: Run them; confirm they fail**
@@ -156,7 +175,8 @@ Spec §3. Two variants, not one shape with optional fields.
 - Produces:
   - `signingEntrySchema`, `revocationEntrySchema`, `ledgerEntrySchema` (a `z.discriminatedUnion('kind', …)`), all exported for the accounting guard
   - `type SigningEntry`, `type RevocationEntry`, `type LedgerEntry`
-  - `entryId(entry: Omit<LedgerEntry, 'entryId'>): string` — canonical hash of the entry excluding `entryId` itself
+  - `type UnsignedLedgerEntry = Omit<SigningEntry, 'entryId'> | Omit<RevocationEntry, 'entryId'>` — written explicitly as a union of omits, **not** `Omit<LedgerEntry, 'entryId'>`, which collapses a discriminated union into one object type carrying the union of all properties and loses the discrimination
+  - `entryId(entry: UnsignedLedgerEntry): string` — canonical hash of the entry excluding `entryId` itself
   - `parseLedger(lines: string[]): LedgerEntry[]` — one JSON object per line
   - `verifyLedgerIntegrity(entries: LedgerEntry[]): void` — throws `LedgerIntegrityError`
   - `governingEntry(entries: LedgerEntry[], packId: string, requirementId: string): LedgerEntry | null`
@@ -208,11 +228,26 @@ Spec §4 and §4.1.
 1. **Returns a set, never a ranked primary.** `stale_encoding` and `stale_source_text` co-occur when a condition was corrected *and* the law's text moved, and both must appear. A precedence order would invent which is "the" reason and hide the other from the person deciding what to do. Return sorted and deduplicated so comparison is stable.
 2. **`deriveStaleness` never returns `revoked`.** Revocation is not staleness — nothing moved under a revoked signature; a person withdrew authority. `revoked` is not a member of `StalenessReason`, so this is enforced by the type, not by discipline.
 3. **`source_reissued` is advisory** — raw hash moved, normalized identical. It is **not** in `BLOCKING`. Everything else is.
-4. **`normalizer_changed`** fires when a pinned document's `normalizerVersion` differs from the current one. The plan's scope stops at detecting it: renormalising stored raw bytes to decide whether the text actually moved is B1b-ii-b's concern, and this task must not silently treat a version change as text change.
+4. **`normalizer_changed`, and the comparison order it forces.** Normalized hashes produced by *different* normalizer versions are not comparable — asserting `stale_source_text` from them would claim the law's text changed on the evidence of an algorithm change. So the rule is **per document, in this order**:
+
+   ```
+   if entry.normalizerVersion !== current.normalizerVersion
+       → normalizer_changed, and infer nothing further for this document
+   else if sha256Normalized differs
+       → stale_source_text
+   else if sha256Raw differs
+       → source_reissued
+   ```
+
+   Different documents in the same closure still contribute independently, so a set may carry `normalizer_changed` for one document and `stale_source_text` for another. What must never happen is both for the *same* document.
+
+   Detection is where this task stops. Renormalising the retained raw bytes to decide whether the text actually moved resolves `normalizer_changed`, and that is B1b-ii-b's work.
 5. **`stale_result`** fires when `current.resultSha256` differs from `entry.resultSha256`. A **missing** result file is not a staleness reason — the caller raises an integrity failure before calling, exactly as a missing pinned corpus document does. `CurrentState.resultSha256` is therefore non-nullable, and that is deliberate: the type makes the integrity case unrepresentable here.
 6. **A document present in the entry's `corpus[]` but absent from `current.corpus`** is likewise an integrity concern, not staleness. Document this in the JSDoc; do not add a reason for it.
 
 **Required test cases:** every reason fires individually; `stale_encoding` + `stale_source_text` both present when both apply; `source_reissued` alone does not block; `stale_result` fires on a differing result hash and blocks; identical state yields an empty set; the returned array is sorted and deduplicated.
+
+**Plus, for the comparison order:** a document whose `normalizerVersion` differs **and** whose normalized hash differs yields `normalizer_changed` **only** — never `stale_source_text` alongside it for that document; a two-document closure where one has a version change and the other has genuinely moved text yields both reasons; a version change with an identical normalized hash still yields `normalizer_changed`.
 
 - [ ] **Step 1: Write the failing tests**
 - [ ] **Step 2: Run them; confirm they fail**
@@ -234,19 +269,19 @@ Spec §4.
 - Consumes: `LedgerEntry`, `governingEntry` (Task 3); `StalenessReason`, `blocks` (Task 4).
 - Produces:
   - `type DerivedStatus = 'draft' | 'verified' | 'ratified'`
-  - `type StatusReason = StalenessReason | 'revoked' | 'unsigned'`
+  - `type StatusReason = StalenessReason | 'revoked'`
   - `interface RequirementStatus { derivedStatus: DerivedStatus; statusReasons: StatusReason[] }`
   - `deriveStatus(governing: LedgerEntry | null, staleness: StalenessReason[]): RequirementStatus`
 
 **Required behaviours:**
 
-1. **No governing entry** → `{ derivedStatus: 'draft', statusReasons: ['unsigned'] }`. Status and staleness are two axes: an unsigned requirement has nothing for staleness to be about.
+1. **No governing entry** → `{ derivedStatus: 'draft', statusReasons: [] }` — an **empty** reason set, not `['unsigned']`. `draft` already expresses the absence of signing authority, and adding a reason would break B1b-ii-b's migration golden, whose one sanctioned transformation is `ratificationStatus: 'draft'` → `derivedStatus: 'draft', statusReasons: []`. A reason here would force the adapter to normalise it away, which is how a small invention becomes a permanent fixture. Status and staleness are two axes: an unsigned requirement has nothing for staleness to be about.
 2. **A `RevocationEntry` governs** → `{ derivedStatus: 'draft', statusReasons: ['revoked'] }`, **without consulting staleness at all**. A revoked signature's freshness is irrelevant and computing it would imply otherwise.
 3. **A `SigningEntry` with no blocking staleness** → `derivedStatus` equals the entry's `kind`, `statusReasons` carries any advisory reasons (`source_reissued`).
 4. **A `SigningEntry` with blocking staleness** → `{ derivedStatus: 'draft', statusReasons: <the full set> }`. The reasons travel with the status so every surface can say *why*, rather than merely refusing.
 5. **Pure and total** — every input combination returns a value; no throws.
 
-**Required test cases:** each of the four cases above; a blocked signing entry carries all its reasons, not one; an advisory-only entry keeps its `kind` and still reports `source_reissued`; a revocation ignores a non-empty staleness array passed alongside it.
+**Required test cases:** each of the four cases above; **no governing entry yields exactly `[]`, asserted with `toEqual([])` rather than a length check**; a blocked signing entry carries all its reasons, not one; an advisory-only entry keeps its `kind` and still reports `source_reissued`; a revocation ignores a non-empty staleness array passed alongside it.
 
 - [ ] **Step 1: Write the failing tests**
 - [ ] **Step 2: Run them; confirm they fail**
@@ -265,84 +300,111 @@ Spec §6. The hardest acceptance test in this plan, and the one that closes a cl
 - Test: `test/verification-accounting.test.ts`
 
 **Interfaces:**
-- Consumes: `verificationResultSchema` (Task 2); `ledgerEntrySchema` (Task 3).
+- Consumes: `verificationResultSchema` (Task 2); `ledgerEntrySchema`, `signingEntrySchema`, `revocationEntrySchema` (Task 3).
 - Produces:
   - `type FieldRole = 'authority' | 'signability' | 'freshness' | 'integrity' | 'display' | 'audit'`
-  - `leafPaths(schema: z.ZodTypeAny): string[]` — every leaf path, sorted
-  - `FIELD_ROLES: Record<string, FieldRole[]>` — the classification table
-  - `assertFieldAccounting(schemas: Record<string, z.ZodTypeAny>): void` — throws naming every unclassified path
+  - `accountablePaths(schema: z.ZodTypeAny): string[]` — every accountable path, sorted
+  - `FIELD_ROLES: Record<string, FieldRole[]>` — the classification table, **schema-qualified**
+  - `assertFieldAccounting(schemas: Record<string, z.ZodTypeAny>): void` — throws naming every discrepancy
+  - `class FieldAccountingError extends Error { problems: string[] }`
 
 **The six roles** carry the meanings in spec §6.1. Note especially: **`freshness` means the field participates in freshness derivation, not that it invalidates.** `corpus[].sha256Raw` participates and yields `source_reissued`, which is advisory — a role called `staleness` defined as "invalidates" would misdescribe it, and misdescription in this table is how the last hole opened.
 
-**The traversal.** zod 3.25.76 is installed and its internals are stable enough to walk. Verified by probe:
+**Accountable paths, not leaf paths.** An earlier draft emitted only leaves while the table named containers like `openQuestions[]` — a contradiction that could not validate, since the guard also rejects classified paths no schema emits. The container is not an accident of notation: **whether `openQuestions[]` is non-empty decides signability**, and a leaf-only model cannot express collection cardinality. So the walker emits **both a semantic container and its descendants**:
 
-| Node | How to descend |
-|---|---|
-| `ZodObject` | `_def.shape()` → record of child schemas; path segment is the key |
-| `ZodArray` | `_def.type` → element schema; path segment is `[]` |
-| `ZodRecord` | `_def.valueType` → value schema; path segment is `{}` |
-| `ZodOptional` / `ZodNullable` / `ZodDefault` | `_def.innerType` — unwrap, do **not** emit a path segment |
-| `ZodDiscriminatedUnion` | `_def.options` is an **array** of object schemas; descend into every option and union the results |
-| `ZodUnion` | `_def.options` array; descend into all |
-| everything else | a leaf — emit the accumulated path |
+```
+openQuestions[]                  signability
+openQuestions[].id               audit
+openQuestions[].statement        display, audit
+```
 
-So `challenges[].evidence[]` and `corpus[].sha256Normalized` are real emitted paths.
+**A container's role never covers its descendants.** A new nested field still requires its own classification — otherwise "the container is accounted for" becomes the same excuse "the op has a handler" was in B1b-i.
+
+**Schema-qualified keys.** Classifications are namespaced by schema, so `result.requirementVersion` and `ledger.signing.requirementVersion` are distinct rows. A bare `requirementVersion` key would let a role appropriate to one artifact silently govern the other.
+
+**The traversal, and it fails closed.** zod 3.25.76 is installed; its internals were probed directly for this plan:
+
+| Node | How to descend | Emits a path segment? |
+|---|---|---|
+| `ZodObject` | `_def.shape()` → record of children | yes, the key |
+| `ZodArray` | `_def.type` → element schema | yes, `[]` — and the container path is emitted too |
+| `ZodRecord` | `_def.valueType` → value schema | yes, `{}` — container emitted too |
+| `ZodOptional` / `ZodNullable` / `ZodDefault` | `_def.innerType` — unwrap | no |
+| `ZodDiscriminatedUnion` | `_def.options` is an **array**; descend every option, union the results | no |
+| `ZodUnion` | `_def.options` array; descend all | no |
+| `ZodString` `ZodNumber` `ZodBoolean` `ZodLiteral` `ZodEnum` | terminal | yes, the leaf |
+| **anything else** | **throw** | — |
+
+**An unrecognised node kind must throw, never be treated as a leaf.** If someone later wraps an object in `ZodEffects` for a refinement, silently classifying the whole composite as one leaf would hide every field beneath it — which is exactly the `missReason` failure, reproduced by a walker that guesses instead of refusing.
 
 **Required behaviours:**
 
-1. **`leafPaths` derives from the runtime zod schema, never from a TypeScript interface.** TypeScript disappears at runtime and cannot be walked; zod exists and can. This is the whole reason the guard can be complete.
-2. **The walker descends into arrays, optionals, discriminated unions and records** with wildcard path segments, rather than stopping at the container. A walker that classifies a container and calls the job done reproduces the original hole at one remove.
-3. **`assertFieldAccounting` fails when any leaf path across any supplied schema has no role**, naming every unclassified path. It fails **equally** when `FIELD_ROLES` contains a path that no schema produces — a stale classification is a lie about the shape and hides a removal.
-4. **Both discriminated-union variants are covered.** A path present only on `RevocationEntry` must still be classified.
+1. **`accountablePaths` derives from the runtime zod schema, never from a TypeScript interface.** TypeScript disappears at runtime and cannot be walked; zod exists and can. That is the whole reason the guard can be complete.
+2. **Descends into arrays, optionals, discriminated unions and records** with wildcard segments, emitting containers *and* descendants.
+3. **Throws on an unrecognised node kind**, naming the `typeName` and the path where it was found.
+4. **`assertFieldAccounting` fails in both directions**, naming every discrepancy: a path a schema emits with no classification, **and** a classified path no schema emits. A stale classification is a lie about the shape that hides a removal.
+5. **Both discriminated-union variants are covered.** A path present only on `RevocationEntry` must still be classified.
 
-**The classification table** starts from spec §6.2 and must be completed for every path the walker actually emits. These are given verbatim and must be used verbatim:
+**The classification table** starts from spec §6.2, schema-qualified. These are given verbatim and must be used verbatim:
 
 ```
-kind                           authority
-packId                         authority
-requirementId                  authority
-revokes                        authority, integrity
-entryId                        integrity, audit
-requirementVersion             integrity, audit
-requirementSha256              integrity, audit
-requirementInputSha256         freshness, audit
-conditionSha256                freshness, audit
-renderedConditionSha256        freshness, audit
-rendererVersion                audit
-corpusClosureSha256            freshness, audit
-corpus[].sha256Normalized      freshness, audit
-corpus[].sha256Raw             freshness, audit
-corpus[].normalizerVersion     freshness, audit
-resultSha256                   freshness, integrity, audit
-pipelineVersion                signability, audit
-challenges[].verdict           signability, display
-challenges[].evidence[]        signability, audit
-openQuestions[]                signability, display
-by                             display, audit
-on                             display, audit
-note                           audit
-reason                         display, audit
+ledger.signing.kind                          authority
+ledger.signing.packId                        authority
+ledger.signing.requirementId                 authority
+ledger.signing.entryId                       integrity, audit
+ledger.signing.requirementVersion            integrity, audit
+ledger.signing.requirementSha256             integrity, audit
+ledger.signing.requirementInputSha256        freshness, audit
+ledger.signing.conditionSha256               freshness, audit
+ledger.signing.renderedConditionSha256       freshness, audit
+ledger.signing.rendererVersion               audit
+ledger.signing.corpusClosureSha256           freshness, audit
+ledger.signing.corpus[]                      freshness, audit
+ledger.signing.corpus[].docId                integrity, audit
+ledger.signing.corpus[].sha256Normalized     freshness, audit
+ledger.signing.corpus[].sha256Raw            freshness, audit
+ledger.signing.corpus[].normalizerVersion    freshness, audit
+ledger.signing.resultSha256                  freshness, integrity, audit
+ledger.signing.pipelineVersion               signability, audit
+ledger.signing.by                            display, audit
+ledger.signing.on                            display, audit
+ledger.revocation.kind                       authority
+ledger.revocation.packId                     authority
+ledger.revocation.requirementId              authority
+ledger.revocation.revokes                    authority, integrity
+ledger.revocation.entryId                    integrity, audit
+ledger.revocation.by                         display, audit
+ledger.revocation.on                         display, audit
+ledger.revocation.reason                     display, audit
+result.openQuestions[]                       signability
+result.challenges[].verdict                  signability, display
+result.challenges[].evidence[]               signability, audit
+result.gaps[]                                signability
+result.pipelineVersion                       signability, audit
+result.resultSchemaVersion                   integrity, audit
 ```
 
-For any remaining path, choose a role and **state your reasoning in the report**. `on` is `display, audit` and deliberately **not** `authority` — Task 3 orders by file position, and this row is what stops a later reader "improving" that to use the date.
+`on` is `display, audit` and deliberately **not** `authority` — Task 3 orders by file position, and this row is what stops a later reader "improving" that to use the date.
 
-**Required test cases:** `leafPaths` on a hand-built fixture schema with an array of objects, an optional, a record and a discriminated union returns exactly the expected wildcard paths; a path present on only one union variant appears; `assertFieldAccounting` fails naming an unclassified path; it fails naming a stale classified path no schema emits; both real schemas pass with the completed table.
+For every remaining path the walker emits, choose a role and **state your reasoning in the report**. The result schema will produce considerably more than the rows above — `result.reading.elements[].statement`, `result.coverage.cells[].verdict` and so on — and those are where a wrong role is most likely to land unnoticed, so they are the ones to justify explicitly rather than fill in quietly.
 
-- [ ] **Step 1: Write the failing tests**, including the hand-built fixture schema covering all five node kinds
+**Required test cases:** `accountablePaths` on a hand-built fixture schema containing an array of objects, an optional, a record and a discriminated union returns exactly the expected paths, **containers included**; a path present on only one union variant appears; an unrecognised node kind (wrap something in `z.preprocess` or `.refine()` to produce a `ZodEffects`) **throws** naming the type and path; `assertFieldAccounting` fails naming an unclassified path; it fails naming a stale classified path; a container's role does not satisfy a descendant's requirement; both real schemas pass with the completed table.
+
+- [ ] **Step 1: Write the failing tests**, including the fixture schema covering all node kinds and the throw-on-unknown case
 - [ ] **Step 2: Run them; confirm they fail**
 - [ ] **Step 3: Implement `accounting.ts`**
-- [ ] **Step 4: Complete the classification table** for every path the walker emits from the two real schemas
-- [ ] **Step 5: Prove the guard bites.** Add a new optional field to a nested variant of `verificationResultSchema` — for instance `challenges[].confidence` — confirm `npm test` fails naming exactly that path, then revert and confirm green. This is the B1b-i `missReason` scenario reproduced deliberately; record both outputs.
+- [ ] **Step 4: Complete the classification table** for every path the walker emits from both real schemas, justifying each addition beyond the verbatim rows
+- [ ] **Step 5: Prove the guard bites, twice.** First add a new optional field to a nested variant of `verificationResultSchema` — for instance `challenges[].confidence` — and confirm `npm test` fails naming exactly that path. Then wrap a nested object in `.refine()` and confirm the walker **throws** rather than silently collapsing it to a leaf. Revert both; confirm green. The first is the B1b-i `missReason` scenario reproduced deliberately; the second is the way a future refactor would reopen it. Record all outputs.
 - [ ] **Step 6: `npm test && npm run typecheck`, then commit**
 
 ---
 
 ## Self-review
 
-**Spec coverage.** §3's two variants and referential validation are Task 3. §3.1's registry, historical mappings and no-overwrite property are Task 1. §4's staleness set and the `revoked` exclusion are Task 4; §4.1's `stale_result` and the canonical semantic hash are Tasks 4 and 2. §4's projection is Task 5. §6's six roles, path-level classification and zod-derived guard are Task 6.
+**Spec coverage.** §3's two variants and referential validation are Task 3, with `entryId` taking an explicit union of omits rather than `Omit` over the union, which would collapse the discrimination. §3.1's registry, historical mappings and no-overwrite property are Task 1. §4's staleness set and the `revoked` exclusion are Task 4; §4.1's `stale_result` and the canonical semantic hash are Tasks 4 and 2. §4's projection is Task 5. §6's six roles, path-level classification and zod-derived guard are Task 6.
 
 **Deferred to B1b-ii-b, correctly.** The sign and revoke CLIs, post-write verification, the review sheet, `minStatus`, the public migration and both goldens. Renormalising raw bytes to resolve `normalizer_changed` is B1b-ii-b's, and Task 4 detects the condition without resolving it.
 
 **Known scope edge, stated.** `CurrentState.resultSha256` is non-nullable, which makes the missing-result case unrepresentable in `deriveStaleness`. That is deliberate — it is an integrity failure and belongs to the caller — but it means B1b-ii-b must raise it, and nothing in *this* plan enforces that. Task 4's JSDoc records the obligation; the enforcement lands with the CLI.
 
-**Type consistency checked.** `SigningEntry`/`RevocationEntry`/`LedgerEntry` are defined in Task 3 and consumed unchanged in Tasks 4, 5 and 6. `StalenessReason` is defined in Task 4 and widened to `StatusReason` in Task 5 by union with `'revoked' | 'unsigned'`. `canonicalJson` is defined in Task 2 and used by Task 3's `entryId`. `verificationResultSchema` and `ledgerEntrySchema` are exported by Tasks 2 and 3 for Task 6 to walk.
+**Type consistency checked.** `SigningEntry`/`RevocationEntry`/`LedgerEntry`/`UnsignedLedgerEntry` are defined in Task 3 and consumed unchanged in Tasks 4, 5 and 6. `StalenessReason` is defined in Task 4 and widened to `StatusReason` in Task 5 by union with `'revoked'` only — there is no `'unsigned'` reason, because an unsigned requirement returns an empty set. `canonicalJson` is defined in Task 2 and used by Task 3's `entryId`. `verificationResultSchema` and `ledgerEntrySchema` are exported by Tasks 2 and 3 for Task 6 to walk.
