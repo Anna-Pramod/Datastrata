@@ -49,6 +49,22 @@ describe('text extraction', () => {
   it('leaves plain text untouched', () => {
     expect(extractText('Article 19a')).toBe('Article 19a');
   });
+
+  it('drops header, nav and footer content entirely, as site chrome not legal text', () => {
+    // EUR-Lex wraps its megamenu, language switcher and document toolbar in
+    // <header>/<nav>, and its site footer in <footer>. None of it is part of
+    // the instrument (regression: v1.0.0 stored this chrome as if it were text).
+    const html =
+      '<header id="op-header"><nav class="MenuBlock">EU law Treaties</nav>Log in</header>' +
+      '<p>Article 19a</p>' +
+      '<footer class="ecl-site-footer">Legal notice Cookies policy</footer>';
+    expect(extractText(html)).toBe('Article 19a');
+  });
+
+  it('drops a standalone nav sitting beside the legal text', () => {
+    const html = '<nav class="Sidebar">Table of contents</nav><p>Kept</p>';
+    expect(extractText(html)).toBe('Kept');
+  });
 });
 
 describe('normalization', () => {

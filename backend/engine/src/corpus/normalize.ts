@@ -13,7 +13,7 @@
  */
 
 /** Bump on any change to extractText or normalize. */
-export const NORMALIZER_VERSION = '1.0.0';
+export const NORMALIZER_VERSION = '1.0.1';
 
 /** Entities that actually occur in EU legal text. */
 const NAMED_ENTITIES: Record<string, string> = {
@@ -59,6 +59,14 @@ export function extractText(rawText: string): string {
   // Content of these elements is machinery, not text.
   text = text.replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, '');
   text = text.replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, '');
+  // Site chrome, not legal text: page header/nav/footer wrap the same running
+  // text on every EUR-Lex page (megamenu, language switcher, document
+  // toolbar, consolidated-version picker, site footer). None of it is part of
+  // the instrument. HTML5 pages nest at most one of each at the page level,
+  // so a non-greedy match to the first closing tag is correct here.
+  text = text.replace(/<header\b[^>]*>[\s\S]*?<\/header\s*>/gi, '');
+  text = text.replace(/<nav\b[^>]*>[\s\S]*?<\/nav\s*>/gi, '');
+  text = text.replace(/<footer\b[^>]*>[\s\S]*?<\/footer\s*>/gi, '');
   text = text.replace(/<!--[\s\S]*?-->/g, '');
   // Block boundaries become line breaks before tags are stripped.
   text = text.replace(new RegExp(`<\\s*/?\\s*(${BLOCK_TAGS})\\b[^>]*>`, 'gi'), '\n');
