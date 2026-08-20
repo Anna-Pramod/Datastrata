@@ -389,6 +389,32 @@ describe('renderRequirement — selection requirements', () => {
     expect(out).toContain('ALL of:');
     expect(out).toContain('CASE_C');
   });
+
+  it('indents a compound case block at multiples of two from column 0, not aligned to the bullet text width (I2 regression)', () => {
+    // Guards against the bullet-aligned 5/7-space indent this was fixed
+    // from: a nested block must land at 4/6 spaces (pad(2)/pad(3)), never
+    // at 5/7. Every non-blank line in the whole rendering must have an even
+    // leading-space count.
+    const req = requirement('R-SEL-3', {
+      cases: [
+        {
+          when: { op: 'all', of: [{ op: 'eq', fact: 'entity.standard', value: 'ESRS' }, { op: 'eq', fact: 'entity.is_parent', value: true }] },
+          value: 'CASE_D',
+        },
+      ],
+      defaultValue: 'FALLBACK',
+    });
+    const out = renderRequirement(req, ctx());
+    const lines = out.split('\n').filter((l) => l.length > 0);
+    for (const line of lines) {
+      const leadingSpaces = line.length - line.trimStart().length;
+      expect(leadingSpaces % 2, `line has odd indent (${leadingSpaces}): ${JSON.stringify(line)}`).toBe(0);
+    }
+    expect(lines).toContain('    ALL of:');
+    expect(lines.some((l) => /^ {6}1\. /.test(l))).toBe(true);
+    expect(lines.some((l) => /^ {6}2\. /.test(l))).toBe(true);
+    expect(lines).not.toContain('     ALL of:');
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -13,8 +13,8 @@
  *    like `all[1].any[0]` from the rendered text, so `all`/`any`/`not`/
  *    `quantifier_any` nesting is emitted through a fixed, parseable grammar:
  *    exactly the markers `ALL of:`, `ANY of:`, `NOT:`, and `quantifier_any`'s
- *    own "at least one … scope where:" prose, two-space indent per level,
- *    numbered children.
+ *    own closed-template `` `at least one <scope> scope where:` `` prose,
+ *    two-space indent per level, numbered children.
  *  - Everything *inside* that scaffolding — the individual comparisons,
  *    lookups and references a rule is built from — has to read as English a
  *    person would write, not a transliteration of the op name. So `not` and
@@ -36,11 +36,23 @@
  *    it is `all`/`any` (always, since they always have children to
  *    enumerate), or `not`/`quantifier_any` whose single child (`not.of` /
  *    `quantifier_any.where`) is itself structural, recursively. Every other
- *    node renders as exactly one line with no marker. A parser can therefore
- *    decide structural-vs-flat purely from indentation and marker-line
- *    syntax, without inspecting op semantics: a line ending in one of the
- *    four marker forms at indent *d* opens a block whose numbered children
- *    live at indent *d + 2*; every other line is a self-contained atom.
+ *    node renders as exactly one line with no marker.
+ *
+ *    A parser does **not** get to treat "line ends in `:`" as the marker
+ *    test — that is necessary but nowhere near sufficient. `renderRequirement`
+ *    (below) emits its own fixed line for a selection case with a compound
+ *    `when` — `` `If the following holds, the applicable value is <V>:` ``
+ *    — which also ends in `:` and can sit directly above a genuine
+ *    `quantifier_any` marker line in the same rendering. The full grammar,
+ *    every closed template (all thirteen always-flat primitives, both
+ *    conditionally-structural ones, and the `renderRequirement` templates
+ *    that must be recognized first to isolate a pure `Condition` substring),
+ *    and this exact ambiguity worked through with real output, are recorded
+ *    in `docs/verification-grammar.md` — written for, and to be built
+ *    against by, a parser author who will not open this file. Keep that
+ *    document in sync with this one; it was derived by rendering examples
+ *    and reading the output, not by transcribing the code below, and should
+ *    be re-derived the same way if this file changes.
  *
  * The three-valued evaluator (`src/condition/evaluate.ts`) never turns
  * `not(cmp gt X)` into a `lte` comparison — `INDETERMINATE` behaves
@@ -110,26 +122,40 @@ function deslug(id: string): string {
 }
 
 /**
+ * The four `Condition` shapes that *can* be structural — the only ones with
+ * a nested `Condition` to introduce a marker for. Narrowing to this type (via
+ * `isStructural`'s type-predicate return below) is what turns
+ * `structuralMarkerLine`/`structuralChildren`'s switches into compile-time
+ * exhaustiveness checks, the same guarantee `renderFlat`'s `never` branch
+ * gives the thirteen leaf primitives, rather than a runtime-only assumption.
+ */
+type StructuralShapedCondition = Extract<Condition, { op: 'all' | 'any' | 'not' | 'quantifier_any' }>;
+
+/**
  * True for `all`/`any` (unconditionally — they always have children to
  * enumerate), and for `not`/`quantifier_any` when their single child
  * (`not.of`/`quantifier_any.where`) is itself structural, recursively.
  * These are exactly the shapes that need the multi-line marker grammar;
- * everything else renders as one line of prose (see `renderFlat`).
+ * everything else renders as one line of prose (see `renderFlat`). A type
+ * predicate, not just `boolean`: every caller that checks `isStructural`
+ * gets `condition` narrowed to `StructuralShapedCondition` for free, so
+ * `structuralMarkerLine`/`structuralChildren` can only ever be called with
+ * an argument type they exhaustively cover.
  *
  * `sum_cmp` was checked, not assumed, against this list: unlike
  * `quantifier_any`, it carries no nested `Condition` (`{ scopeType, fact,
  * cmp, value }` only), so it can never need the block grammar and is
  * correctly absent here.
  */
-function isStructural(condition: Condition): boolean {
+function isStructural(condition: Condition): condition is StructuralShapedCondition {
   if (condition.op === 'all' || condition.op === 'any') return true;
   if (condition.op === 'not') return isStructural(condition.of);
   if (condition.op === 'quantifier_any') return isStructural(condition.where);
   return false;
 }
 
-/** The marker line for a structural condition — same fixed three for `all`/`any`/`not`, plus `quantifier_any`'s own prose acting as its marker. Only ever called when `isStructural(condition)` is true. */
-function structuralMarkerLine(condition: Condition): string {
+/** The marker line for a structural condition — same fixed three for `all`/`any`/`not`, plus `quantifier_any`'s own prose acting as its marker. */
+function structuralMarkerLine(condition: StructuralShapedCondition): string {
   switch (condition.op) {
     case 'all':
       return 'ALL of:';
@@ -139,13 +165,15 @@ function structuralMarkerLine(condition: Condition): string {
       return 'NOT:';
     case 'quantifier_any':
       return `at least one ${deslug(condition.scopeType)} scope where:`;
-    default:
-      throw new Error(`structuralMarkerLine called on a non-structural op: ${condition.op}`);
+    default: {
+      const exhaustive: never = condition;
+      throw new Error(`unhandled structural condition op: ${JSON.stringify(exhaustive)}`);
+    }
   }
 }
 
-/** The numbered children under a structural condition's marker line. `not`/`quantifier_any` always contribute exactly one. Only ever called when `isStructural(condition)` is true. */
-function structuralChildren(condition: Condition): Condition[] {
+/** The numbered children under a structural condition's marker line. `not`/`quantifier_any` always contribute exactly one. */
+function structuralChildren(condition: StructuralShapedCondition): Condition[] {
   switch (condition.op) {
     case 'all':
     case 'any':
@@ -154,8 +182,10 @@ function structuralChildren(condition: Condition): Condition[] {
       return [condition.of];
     case 'quantifier_any':
       return [condition.where];
-    default:
-      throw new Error(`structuralChildren called on a non-structural op: ${condition.op}`);
+    default: {
+      const exhaustive: never = condition;
+      throw new Error(`unhandled structural condition op: ${JSON.stringify(exhaustive)}`);
+    }
   }
 }
 
