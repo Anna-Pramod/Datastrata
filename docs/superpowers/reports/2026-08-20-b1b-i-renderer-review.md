@@ -1,7 +1,7 @@
 # B1b-i — The condition renderer: final review report
 
 **Branch:** `feature/b1b-i-renderer`
-**Commit range:** `309cc86..feature/b1b-i-renderer` — **12 commits**, of which the commit adding this report is the last. `git log --oneline 309cc86..HEAD | wc -l` on the branch head returns exactly that number.
+**Commit range:** `309cc86..feature/b1b-i-renderer` — **13 commits**, of which the commit correcting this report is the last. `git log --oneline 309cc86..HEAD | wc -l` on the branch head returns exactly that number.
 **Date:** 2026-08-20
 **Plan:** `docs/superpowers/plans/2026-08-20-b1b-i-renderer.md`
 **Spec:** `docs/superpowers/specs/2026-08-20-verification-factory-design.md` §2.3, §4.2
@@ -29,7 +29,7 @@ B1b-i is complete and mergeable. Five tasks, each gated by its own review, then 
 | A wrong binding is caught, not just a wrong word-bag | Atoms carry `{path, op, negated, fact, comparator, threshold, unit, missReason, …}` and compare by path; `shape` pins the operator tree |
 | The check cannot inherit the renderer's misreading | Symbol-level import boundary: only `factLabel` and `factUnit` (lookups) — never `renderValue` (a derivation), never `render.ts` |
 | A material edit moves the hash; a cosmetic one does not | `logicalPayloadSha256` covers ordered cases, each `when` and `value`, and `defaultValue` — not a case `label`. `requirementInputSha256` covers provisions, `sources[]` and the payload |
-| The English is bound to its provision | Requirement id and title are compared, so the right condition cannot appear under the wrong provision |
+| The English is bound to the correct **requirement** | Requirement id and title are compared, preventing a correctly rendered condition from being attributed to another requirement |
 | An unlabelled or ambiguous fact cannot reach a signature | The vocabulary gate fails the build on a missing label, an unresolved `labelNote`, a missing unit on a comparison fact, or two referenced facts sharing an effective label |
 | A new primitive cannot silently escape coverage | Fixture table typed `Record<Condition['op'], Condition>` — an eighteenth op fails typecheck |
 | A new *field* cannot silently escape coverage | A field-accounting guard derives the field set from the `Condition` union in `src/types.ts` and fails until every field is handled by both sides |
@@ -66,6 +66,7 @@ Stated so nothing is assumed that was not built.
 - **Regex-based English parsing**, no grammar engine. Stated limits in the contract.
 - **The field-probe guard proves a probe exists per field**, not that each probe is well-targeted. A careless future probe could satisfy the completeness check without exercising its named field.
 - **`prefix_in`, `quantifier_any` and `sum_cmp` have synthetic coverage only** — the CSRD pack exercises none of them. That is exactly why the parity fixtures exist.
+- **The rendering does not bind to the provision or the source set, and cannot.** Verified: changing `provisions`, or changing `sources[]`, leaves the rendered English byte-identical and `logicalPayloadSha256` unmoved, while `requirementInputSha256` moves. That is the correct behaviour — a citation correction should not alter what the rule says in English — but it means the English alone cannot evidence which provision was reviewed. B1b-ii closes this by pinning `requirementInputSha256` and `renderedConditionSha256` in the same signature, at which point the stronger claim becomes available: *the signed rendering is bound to the provision and source set.* Until then, do not read a rendering as attesting its citation.
 
 ---
 
@@ -102,3 +103,4 @@ This plan deliberately specified **interfaces and required behaviours rather tha
 2. **B1b-ii — the record**: `verification-result.json` schema, the signature ledger, derived status projection, derived staleness, the integrity check, the sign CLI, the review sheet, and the migration moving `ratification.status` from asserted to derived — which changes what `frontend/web/lib/pack.ts` reads.
 3. **Carry the field-accounting question into B1b-ii's design.** The signature pins a set of hashes; ask early whether every field those hashes cover reaches the thing that verifies them.
 4. `RENDERER_VERSION` is `1.1.0` and `renderedConditionSha256` will pin the English a reviewer read. B1b-ii should record both.
+5. **Pin `requirementInputSha256` and `renderedConditionSha256` in the same signature.** Only together do they support the claim B1b-i cannot make on its own — that the signed rendering is bound to the provision and source set. Separately, each is silent about the other: the input hash moves on a citation change that leaves the English untouched, and the rendering hash moves on a wording change that leaves the citation untouched.
