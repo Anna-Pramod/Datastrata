@@ -125,20 +125,35 @@ function resultFor(
   };
 }
 
-export function buildFixtureRepository(options: FixtureOptions = {}): FixtureRepository {
-  const repoRoot = mkdtempSync(join(tmpdir(), 'public-resolver-seam-'));
-  const engineRoot = join(repoRoot, 'backend', 'engine');
-  mkdirSync(engineRoot, { recursive: true });
-
-  // Symlinked, not copied: the fixture must be about the real content.
-  symlinkSync(join(REAL_ENGINE_ROOT, 'knowledge'), join(engineRoot, 'knowledge'));
-  symlinkSync(join(REAL_ENGINE_ROOT, 'corpus'), join(engineRoot, 'corpus'));
+/**
+ * Writes verification state into an engine root that already holds authored
+ * knowledge, a corpus and a version registry.
+ *
+ * **Separated from `buildFixtureRepository` because Task 3 installs this state
+ * into a real repository rather than a synthesised one.** The deployment
+ * agreement gate clones the checkout, installs the ledger and the pinned results
+ * *at the production paths* inside that clone, and only then runs `next build`
+ * — so that the tracing mechanism, and nothing else, is what carries them into
+ * the standalone artifact. Post-build injection would make an untraced member
+ * appear present and would void the test entirely, so the fixture has to be able
+ * to land before the build, in a tree Next will trace from.
+ *
+ * Nothing here is specific to a temporary directory: `engineRoot` is whichever
+ * `backend/engine` the caller wants signed, and the paths written beneath it are
+ * the ones `lib/pack.ts` reads in production.
+ */
+export function installVerificationState(
+  engineRoot: string,
+  options: FixtureOptions = {},
+): { signedIds: string[]; allIds: string[] } {
   const verificationDir = join(engineRoot, 'verification');
   mkdirSync(verificationDir, { recursive: true });
-  symlinkSync(
-    join(REAL_ENGINE_ROOT, 'verification', 'requirement-versions'),
-    join(verificationDir, 'requirement-versions'),
-  );
+
+  // Emptied first, so what this function writes is a function of its arguments
+  // alone. Installing into a real repository means the target may already carry
+  // state, and a fixture that silently accumulated a previous run's entries
+  // would make the comparison it exists to support depend on history.
+  writeFileSync(join(verificationDir, 'signatures.jsonl'), '', 'utf8');
 
   // Read through the engine, with no ledger, purely to obtain the authored
   // content every hash below is taken over.
@@ -206,5 +221,24 @@ export function buildFixtureRepository(options: FixtureOptions = {}): FixtureRep
     'utf8',
   );
 
+  return { signedIds, allIds };
+}
+
+export function buildFixtureRepository(options: FixtureOptions = {}): FixtureRepository {
+  const repoRoot = mkdtempSync(join(tmpdir(), 'public-resolver-seam-'));
+  const engineRoot = join(repoRoot, 'backend', 'engine');
+  mkdirSync(engineRoot, { recursive: true });
+
+  // Symlinked, not copied: the fixture must be about the real content.
+  symlinkSync(join(REAL_ENGINE_ROOT, 'knowledge'), join(engineRoot, 'knowledge'));
+  symlinkSync(join(REAL_ENGINE_ROOT, 'corpus'), join(engineRoot, 'corpus'));
+  const verificationDir = join(engineRoot, 'verification');
+  mkdirSync(verificationDir, { recursive: true });
+  symlinkSync(
+    join(REAL_ENGINE_ROOT, 'verification', 'requirement-versions'),
+    join(verificationDir, 'requirement-versions'),
+  );
+
+  const { signedIds, allIds } = installVerificationState(engineRoot, options);
   return { repoRoot, engineRoot, signedIds, allIds };
 }
