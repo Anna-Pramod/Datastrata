@@ -119,9 +119,10 @@ export function conditionSha256(condition: Condition): string {
  * shape by coincidence of structure.
  *
  * `AuthoredRequirement`, because the payload is authored logic and nothing the
- * loader attaches afterwards may reach it. Its two siblings below still take a
- * whole `Requirement`: `requirementSha256` parses through `requirementSchema`,
- * which strips the projected fields itself.
+ * loader attaches afterwards may reach it. `requirementInputSha256` below takes
+ * one for the same reason; `requirementSha256` still takes a whole
+ * `Requirement`, because it parses through `requirementSchema`, which strips
+ * the projected fields itself.
  */
 export function logicalPayloadSha256(requirement: AuthoredRequirement): string {
   const payload =
@@ -140,8 +141,12 @@ export function logicalPayloadSha256(requirement: AuthoredRequirement): string {
  * `sources[]`, and `logicalPayloadSha256`. Nothing else — per spec §4.2 this
  * must move when the verification input changes and stay still when an
  * unrelated field (e.g. `caution`) is edited.
+ *
+ * `AuthoredRequirement`, for the same reason `logicalPayloadSha256` takes one:
+ * every field it reads is authored, and nothing the loader attaches afterwards
+ * may reach the hash. A whole `Requirement` is still accepted, since it is one.
  */
-export function requirementInputSha256(requirement: Requirement): string {
+export function requirementInputSha256(requirement: AuthoredRequirement): string {
   return sha256Hex(
     canonicalJson({
       provisions: requirement.provisions,

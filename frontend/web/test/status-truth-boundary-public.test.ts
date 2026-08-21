@@ -233,16 +233,24 @@ describe('the customer-facing surface, through the four stages', () => {
   });
 });
 
-describe('what the site itself does, with no resolver anywhere', () => {
+describe('what the site does with no resolver anywhere', () => {
   /**
-   * The shipped configuration: `lib/pack.ts` calls `loadPack(dir)` with no
-   * options at all, so every signature loads unevaluated. The count reads zero
-   * and the banner stays up — fail-closed, and the state the operational gate
-   * in the plan says the system is in until B2 supplies a live resolver.
+   * The loader's own default: `loadPack(dir)` with no options loads every
+   * signature unevaluated, so the count reads zero and the banner stays up.
+   * Fail-closed, and the state everything above is measured against.
+   *
+   * **This is no longer the site's shipped configuration.** The public resolver
+   * seam gave `lib/pack.ts` a live `freshnessResolver`, so the site now
+   * evaluates freshness over the deployed revision's verification state; what
+   * that path does is `test/public-resolver-seam.test.ts`'s subject, over a
+   * repository that actually holds signatures. The stage mock above discards
+   * the options `lib/pack.ts` passes and installs this stage's instead, which
+   * is what keeps these four stages about the loader's boundary rather than
+   * about the resolver.
    *
    * On its own this asserts nothing: a count that is always zero satisfies it.
    * The stages above are its positive control, and this is here to record that
-   * the *default* path is the safe one rather than merely that a safe path
+   * the *unevaluated* path is the safe one rather than merely that a safe path
    * exists.
    */
   it('reads zero ratified and keeps the draft banner up', async () => {

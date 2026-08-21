@@ -72,7 +72,7 @@ import type {
   Question,
   Requirement,
 } from '../types';
-import { requirementInputSha256 } from '../verification/canonical';
+import { currentStateOf } from '../verification/current-state';
 import type { EvidenceItem } from '../corpus/evidence';
 import {
   governingEntry,
@@ -87,12 +87,8 @@ import {
 } from '../verification/promotions';
 import { RENDERER_VERSION, renderRequirement, type RenderContext } from '../verification/render';
 import { VersionIntegrityError } from '../verification/registry';
-import {
-  resultSha256,
-  verificationResultSchema,
-  type VerificationResult,
-} from '../verification/result';
-import { candidateConditionSha256, candidateRenderedConditionSha256 } from '../verification/sign';
+import { verificationResultSchema, type VerificationResult } from '../verification/result';
+import { candidateRenderedConditionSha256 } from '../verification/sign';
 import { BLOCKING, type CurrentState, type StalenessReason } from '../verification/staleness';
 import { deriveStatus, toStatusInput, type RequirementStatus } from '../verification/status';
 import { factLabel, factsReferencedBy } from '../verification/vocabulary';
@@ -537,22 +533,19 @@ function gatherRequirement(input: GatherOneInput): SheetRequirement {
       );
       status = null;
     } else {
-      const current: CurrentState = {
-        requirementInputSha256: requirementInputSha256(requirement),
-        conditionSha256: candidateConditionSha256(requirement),
-        renderedConditionSha256: candidateRenderedConditionSha256(requirement, renderCtx),
-        corpusClosureSha256: closureSha256,
-        resultSha256: resultSha256(result),
-        corpus: closureDocIds.map((docId) => {
-          const d = corpus.document(docId);
-          return {
-            docId,
-            sha256Raw: d.sha256Raw,
-            sha256Normalized: d.sha256Normalized,
-            normalizerVersion: d.normalizerVersion,
-          };
-        }),
-      };
+      // Built by `currentStateOf`, not assembled here. This literal and the
+      // sign CLI's private copy were two constructions of the record freshness
+      // is measured over, and the public resolver would have been a third; the
+      // sheet and the site disagreeing about one signature is exactly the
+      // failure that would not show up in any test comparing either surface
+      // against itself.
+      const current: CurrentState = currentStateOf({
+        requirement,
+        renderContext: renderCtx,
+        closure: { sha256: closureSha256, docIds: closureDocIds },
+        corpus,
+        result,
+      });
       // Task 4's resolver, reused rather than reimplemented: this is the
       // surface where `normalizer_changed`'s narrowing actually pays off.
       staleness = resolvedStaleness(signature, current, corpus);

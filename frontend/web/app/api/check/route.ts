@@ -9,10 +9,33 @@
  * The route holds no logic of its own. It reads the request, reads the clock,
  * and hands both to `buildCheckResponse`, which is where the payload is built
  * and where it can be tested without Next's runtime.
+ *
+ * **It may refuse; it may not downgrade** (design §6). The freshness resolver
+ * throws `IntegrityFailureError` when the verification record it was asked to
+ * judge is damaged — a missing pinned result, an uncomputable closure, a pinned
+ * document the corpus no longer holds. That reaches this route through
+ * `loadPack`, which deliberately puts no `try` around the resolver.
+ *
+ * Two responses are available and only one is honest:
+ *
+ * ```
+ * refuse     503, no status at all               permitted
+ * downgrade  200 with containsDraftContent       forbidden
+ * ```
+ *
+ * Downgrading would report `freshness_unchecked` over a record *known* to be
+ * broken — the forbidden catch from the status-truth-boundary design §5, moved
+ * one layer out and therefore harder to see. So the catch below returns a body
+ * carrying no `containsDraftContent`, no determinations and no counts: nothing
+ * a caller could mistake for an assessment. Every other error is rethrown,
+ * because a refusal that swallows unrelated failures is a refusal that hides
+ * them.
  */
 
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { IntegrityFailureError } from '@datastrata/engine';
+import type { KnowledgePack } from '@datastrata/engine';
 import { csrdPack } from '@/lib/pack';
 import { buildCheckResponse } from '@/lib/checkResponse';
 import type { CheckerAnswers } from '@/lib/checker';
@@ -42,7 +65,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Malformed check answers.' }, { status: 400 });
   }
 
-  const pack = csrdPack();
+  let pack: KnowledgePack;
+  try {
+    pack = csrdPack();
+  } catch (error) {
+    if (error instanceof IntegrityFailureError) {
+      return NextResponse.json(
+        {
+          error:
+            'The verification record for this pack is damaged, so the check is unavailable. ' +
+            'No assessment is produced from an unverifiable record.',
+          refusals: error.refusals.map((refusal) => `${refusal.code}: ${refusal.detail}`),
+        },
+        { status: 503 },
+      );
+    }
+    throw error;
+  }
+
   // The engine never reads the clock — the assessment date is an input, and it
   // is echoed back so the result is reproducible.
   const assessmentDate = new Date().toISOString().slice(0, 10);

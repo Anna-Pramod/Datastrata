@@ -15,16 +15,21 @@
  * configuration and the tests can share, which is the entire point: two lists
  * would be two closures, and the narrower one would become the real one.
  *
- * **Declared is not proven.** Every member here is part of the settled closure
- * *after* the public freshness resolver lands (plan Task 2). Today only
- * `authored-knowledge` and `version-integrity-registry` are read by the running
- * program — `loadPack` reads them and hard-fails without the second. The
- * ledger, the corpus and the pinned results are declared because the resolver
- * seam will read them, and the tracing must already be right on the revision
- * that introduces the read; nothing exercises them yet. Task 2 replaces that
- * argument with behaviour, by instrumenting the resolver's real reads and
- * asserting each is matched here. Until then this file is a specification of
- * intent that the build honours, not evidence of what runs.
+ * **Declared, and now derived from behaviour.** These five were written from
+ * the design's semantics while the public freshness resolver did not yet exist,
+ * when only `authored-knowledge` and `version-integrity-registry` were read by
+ * the running program. The resolver landed at plan Task 2, and
+ * `test/verification-read-coverage.test.ts` now instruments the reads the site
+ * actually performs over a repository that holds verification state, and
+ * asserts every one of them is matched by a glob below — with the recorded set
+ * required to span the members the *resolver* owns, since a run over a
+ * repository with nothing signed would record only the loader's own subset and
+ * prove nothing about the rest.
+ *
+ * That test is the fast inner loop, not the evidence. A check run inside the
+ * repository cannot prove a file reached the standalone artifact, because the
+ * repository masks the answer; `npm run test:standalone` is where that is
+ * settled (design §4.2).
  *
  * Globs are relative to the Next app directory (`frontend/web`), which is what
  * `outputFileTracingIncludes` resolves them against; `outputFileTracingRoot` is
@@ -45,12 +50,18 @@
  *                              the liveness half of the deployment gate;
  *                              `silent` members degrade into a wrong answer with
  *                              a 200, and are why design §4.3 needs an agreement
- *                              half as well. Observed today only for the two
- *                              members the program actually reads; for the rest
- *                              it follows from the design's resolver contract —
- *                              a resolver that cannot complete its check throws
- *                              rather than reporting ignorance — and Task 2 is
- *                              what turns it into an observation.
+ *                              half as well. `fatal` is observed rather than
+ *                              assumed for the version registry (the uncorrected
+ *                              standalone artifact failed on it) and for the
+ *                              pinned results (an absent result raises
+ *                              `IntegrityFailureError` out of the resolver, and
+ *                              the route refuses); for the remaining members it
+ *                              follows from the design's resolver contract — a
+ *                              resolver that cannot complete its check throws
+ *                              rather than reporting ignorance. `silent` is the
+ *                              ledger alone, and stays a claim about the loader
+ *                              rather than about the artifact until Task 3's
+ *                              agreement half exists to catch it.
  * @property {string[]} globs
  */
 

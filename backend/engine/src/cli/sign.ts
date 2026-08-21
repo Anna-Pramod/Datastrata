@@ -90,7 +90,7 @@ import {
   VersionIntegrityError,
   type VersionRegistry,
 } from '../verification/registry';
-import { resultSha256, verificationResultSchema, type VerificationResult } from '../verification/result';
+import { verificationResultSchema, type VerificationResult } from '../verification/result';
 import {
   assertSignable,
   buildSignature,
@@ -99,6 +99,7 @@ import {
   IntegrityFailureError,
   RefusalError,
 } from '../verification/sign';
+import { currentStateOf } from '../verification/current-state';
 import {
   deriveStaleness,
   resolveNormalizerChanged,
@@ -491,21 +492,23 @@ export function resolvedStaleness(
   );
 }
 
-/** Current state in the shape `deriveStaleness` compares an entry against. */
-function currentStateOf(world: CurrentWorld, result: VerificationResult): CurrentState {
-  return {
-    requirementInputSha256: world.requirementInputSha256,
-    conditionSha256: world.conditionSha256,
-    renderedConditionSha256: world.renderedConditionSha256,
-    corpusClosureSha256: world.closureSha256,
-    resultSha256: resultSha256(result),
-    corpus: world.pins.map((pin) => ({
-      docId: pin.docId,
-      sha256Raw: pin.sha256Raw,
-      sha256Normalized: pin.sha256Normalized,
-      normalizerVersion: pin.normalizerVersion,
-    })),
-  };
+/**
+ * Current state in the shape `deriveStaleness` compares an entry against.
+ *
+ * The record is built by `currentStateOf` in `src/verification/`, not here. The
+ * review sheet assembled the same six fields in a literal of its own and the
+ * public resolver would have been a third construction — so what freshness is
+ * measured *over* now has one definition, and this function is only the layer
+ * that hands it the world it has already read.
+ */
+function currentWorldState(world: CurrentWorld, result: VerificationResult): CurrentState {
+  return currentStateOf({
+    requirement: world.requirement,
+    renderContext: world.renderCtx,
+    closure: { sha256: world.closureSha256, docIds: world.pins.map((pin) => pin.docId) },
+    corpus: world.corpus,
+    result,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -608,7 +611,7 @@ export function verifyAfterWrite(
 
   const world = readWorld(paths, packId, requirementId);
   const result = readResultOrRefuse(paths, packId, requirementId);
-  const staleness = resolvedStaleness(governing, currentStateOf(world, result), world.corpus);
+  const staleness = resolvedStaleness(governing, currentWorldState(world, result), world.corpus);
   // Checked, and here is what was found. This CLI is one of the two places that
   // can honestly say so: it has just re-read the corpus, the result and the
   // ledger from disk.
@@ -673,7 +676,7 @@ export function runSign(args: SignArgs, paths: VerifyPaths, hooks: WriteHooks = 
     const existing = governing !== null && governing.kind !== 'revoked' ? governing : null;
 
     if (existing !== null) {
-      const staleness = resolvedStaleness(existing, currentStateOf(world, result), world.corpus);
+      const staleness = resolvedStaleness(existing, currentWorldState(world, result), world.corpus);
       lines.push(
         `Existing signature ${existing.entryId} (${existing.kind}, by ${existing.by}).`,
         staleness.length === 0
