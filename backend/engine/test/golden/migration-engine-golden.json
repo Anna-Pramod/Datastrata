@@ -1,0 +1,1437 @@
+{
+  "changeWatch": [
+    {
+      "affectsRequirements": [
+        "CSRD-S-012"
+      ],
+      "expected": "Entry into force expected 20 Nov 2026 subject to Parliament/Council scrutiny and OJ publication; applies to FY beginning on/after 1 Jan 2027, FY2026 early adoption once in force",
+      "id": "CW-001",
+      "note": "On entry into force: set packFlags.revised_esrs_in_force=true, bump pack version, re-run golden profiles, then re-evaluate customer determinations. Until then this act must not change any current determination.",
+      "sources": [
+        "SRC-007"
+      ],
+      "status": "adopted_not_effective",
+      "title": "Revised ESRS delegated act (adopted 3 Jul 2026) — scrutiny pending"
+    },
+    {
+      "affectsRequirements": [
+        "CSRD-S-011"
+      ],
+      "expected": "Same scrutiny track as the revised ESRS; the cap item catalogue for S-011 mappings versions against this act",
+      "id": "CW-002",
+      "note": "Caution: the cap protection does not extend to GHG emissions metrics — an above-cap analysis must not tell a supplier it can decline emissions data requests.",
+      "sources": [
+        "SRC-008",
+        "SRC-010"
+      ],
+      "status": "adopted_not_effective",
+      "title": "Voluntary sustainability standard delegated act — value-chain cap catalogue"
+    },
+    {
+      "affectsRequirements": [
+        "CSRD-S-004",
+        "CSRD-S-005",
+        "CSRD-S-013",
+        "CSRD-S-014"
+      ],
+      "expected": "Member-State implementing measures and FY2025–26 transitional options land country by country",
+      "id": "CW-003",
+      "note": "Each published national measure feeds a country pack; a country enters the ratified_country_packs catalogue only after expert ratification.",
+      "sources": [
+        "SRC-015"
+      ],
+      "status": "in_progress",
+      "title": "Omnibus I national transpositions (deadline 19 Mar 2027)"
+    },
+    {
+      "affectsRequirements": [
+        "CSRD-S-008",
+        "CSRD-S-009"
+      ],
+      "expected": "Standard-setting active; Art. 40a reporting starts for FY beginning on/after 1 Jan 2028",
+      "id": "CW-004",
+      "note": "Third-country obligations O-012/O-013 reference the applicable standard; keep versioned.",
+      "sources": [
+        "SRC-014"
+      ],
+      "status": "in_development",
+      "title": "EFRAG standard for non-EU groups (Art. 40a N-ESRS)"
+    }
+  ],
+  "containsDraftContent": true,
+  "context": {
+    "assessmentDate": "2026-07-26",
+    "financialYear": {
+      "end": "2027-12-31",
+      "start": "2027-01-01"
+    },
+    "subjectId": "e1"
+  },
+  "determinations": [
+    {
+      "caution": "Threshold-crossing ranges are indeterminate — ask for the exact value. This is scope, not the final reporting duty (see CSRD-S-014); national transposition may vary timing and options.",
+      "decisionArea": "Individual scope",
+      "evaluatedAt": "2026-07-26",
+      "legalStatus": "in_force",
+      "needs": [],
+      "packVersion": "csrd@0.1.0 (legal snapshot 2026-07-26)",
+      "program": "CSRD",
+      "provisions": "Accounting Directive Art. 19a as amended by Directive (EU) 2026/470",
+      "ratificationStatus": "draft",
+      "relationshipClass": "direct_legal",
+      "requirementId": "CSRD-S-001",
+      "requirementTitle": "Individual Article 19a threshold scope",
+      "result": "APPLIES",
+      "scopeId": "e1",
+      "scopeName": "Alpine Industrie SAS",
+      "severity": "critical",
+      "sources": [
+        "SRC-004",
+        "SRC-001"
+      ],
+      "trace": {
+        "children": [
+          {
+            "detail": "entity.incorporation_country (FR) in catalogue eu_member_states",
+            "factsUsed": [
+              {
+                "factType": "entity.incorporation_country",
+                "scopeId": "e1",
+                "source": {
+                  "kind": "customer_statement",
+                  "ref": "test fixture"
+                },
+                "value": {
+                  "kind": "string",
+                  "value": "FR"
+                }
+              }
+            ],
+            "op": "in_catalogue",
+            "truth": "APPLIES"
+          },
+          {
+            "detail": "entity.legal_form (private_limited_company) in catalogue accounting_directive_forms",
+            "factsUsed": [
+              {
+                "factType": "entity.legal_form",
+                "scopeId": "e1",
+                "source": {
+                  "kind": "customer_statement",
+                  "ref": "test fixture"
+                },
+                "value": {
+                  "kind": "string",
+                  "value": "private_limited_company"
+                }
+              }
+            ],
+            "op": "in_catalogue",
+            "truth": "APPLIES"
+          },
+          {
+            "detail": "entity.net_turnover_eur (520000000) gt 450000000",
+            "factsUsed": [
+              {
+                "factType": "entity.net_turnover_eur",
+                "scopeId": "e1",
+                "source": {
+                  "kind": "customer_statement",
+                  "ref": "test fixture"
+                },
+                "value": {
+                  "kind": "number",
+                  "value": 520000000
+                }
+              }
+            ],
+            "op": "cmp",
+            "truth": "APPLIES"
+          },
+          {
+            "detail": "entity.avg_employees (1350) gt 1000",
+            "factsUsed": [
+              {
+                "factType": "entity.avg_employees",
+                "scopeId": "e1",
+                "source": {
+                  "kind": "customer_statement",
+                  "ref": "test fixture"
+                },
+                "value": {
+                  "kind": "number",
+                  "value": 1350
+                }
+              }
+            ],
+            "op": "cmp",
+            "truth": "APPLIES"
+          }
+        ],
+        "detail": "all of 4",
+        "op": "all",
+        "truth": "APPLIES"
+      }
+    },
+    {
+      "caution": "Use the legal consolidation perimeter, not internal business units.",
+      "decisionArea": "Consolidated scope",
+      "evaluatedAt": "2026-07-26",
+      "legalStatus": "in_force",
+      "needs": [],
+      "packVersion": "csrd@0.1.0 (legal snapshot 2026-07-26)",
+      "program": "CSRD",
+      "provisions": "Accounting Directive Art. 29a as amended by Directive (EU) 2026/470",
+      "ratificationStatus": "draft",
+      "relationshipClass": "direct_legal",
+      "requirementId": "CSRD-S-002",
+      "requirementTitle": "Consolidated Article 29a threshold scope",
+      "result": "DOES_NOT_APPLY",
+      "scopeId": "e1",
+      "scopeName": "Alpine Industrie SAS",
+      "severity": "critical",
+      "sources": [
+        "SRC-004",
+        "SRC-001"
+      ],
+      "trace": {
+        "children": [
+          {
+            "detail": "entity.incorporation_country (FR) in catalogue eu_member_states",
+            "factsUsed": [
+              {
+                "factType": "entity.incorporation_country",
+                "scopeId": "e1",
+                "source": {
+                  "kind": "customer_statement",
+                  "ref": "test fixture"
+                },
+                "value": {
+                  "kind": "string",
+                  "value": "FR"
+                }
+              }
+            ],
+            "op": "in_catalogue",
+            "truth": "APPLIES"
+          },
+          {
+            "detail": "entity.legal_form (private_limited_company) in catalogue accounting_directive_forms",
+            "factsUsed": [
+              {
+                "factType": "entity.legal_form",
+                "scopeId": "e1",
+                "source": {
+                  "kind": "customer_statement",
+                  "ref": "test fixture"
+                },
+                "value": {
+                  "kind": "string",
+                  "value": "private_limited_company"
+                }
+              }
+            ],
+            "op": "in_catalogue",
+            "truth": "APPLIES"
+          },
+          {
+            "detail": "entity.is_parent_undertaking (false) == true",
+            "factsUsed": [
+              {
+                "factType": "entity.is_parent_undertaking",
+                "scopeId": "e1",
+                "source": {
+                  "kind": "customer_statement",
+                  "ref": "test fixture"
+                },
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "op": "eq",
+            "truth": "DOES_NOT_APPLY"
+          },
+          {
+            "detail": "group.consolidated_net_turnover_eur: not available (customer_scope_ambiguity)",
+            "factsUsed": [],
+            "op": "cmp",
+            "reason": "customer_scope_ambiguity",
+            "truth": "INDETERMINATE"
+          },
+          {
+            "detail": "group.avg_employees: not available (customer_scope_ambiguity)",
+            "factsUsed": [],
+            "op": "cmp",
+            "reason": "customer_scope_ambiguity",
+            "truth": "INDETERMINATE"
+          }
+        ],
+        "detail": "all of 5",
+        "op": "all",
+        "truth": "DOES_NOT_APPLY"
+      }
+    },
+    {
+      "caution": "Never tell a former reporter to stop based only on an EU-level threshold screen (see CSRD-S-004 and CSRD-S-013).",
+      "decisionArea": "Wave history",
+      "evaluatedAt": "2026-07-26",
+      "legalStatus": "in_force",
+      "needs": [
+        {
+          "factType": "entity.reported_csrd_fy2024",
+          "reason": "missing_fact",
+          "scopeId": "e1"
+        }
+      ],
+      "packVersion": "csrd@0.1.0 (legal snapshot 2026-07-26)",
+      "program": "CSRD",
+      "ratificationStatus": "draft",
+      "reason": "missing_fact",
+      "relationshipClass": "timing_context",
+      "requirementId": "CSRD-S-003",
+      "requirementTitle": "First-wave (FY2024) reporting history",
+      "result": "INDETERMINATE",
+      "scopeId": "e1",
+      "scopeName": "Alpine Industrie SAS",
+      "severity": "medium",
+      "sources": [
+        "SRC-004",
+        "SRC-006"
+      ],
+      "trace": {
+        "detail": "entity.reported_csrd_fy2024: not available (missing_fact)",
+        "factsUsed": [],
+        "op": "eq",
+        "reason": "missing_fact",
+        "truth": "INDETERMINATE"
+      }
+    },
+    {
+      "caution": "Requires the governing country pack — this is a national option, not a universal automatic exemption.",
+      "decisionArea": "Transition exemption",
+      "evaluatedAt": "2026-07-26",
+      "legalStatus": "in_force",
+      "needs": [],
+      "packVersion": "csrd@0.1.0 (legal snapshot 2026-07-26)",
+      "program": "CSRD",
+      "ratificationStatus": "draft",
+      "relationshipClass": "direct_legal_exemption",
+      "requirementId": "CSRD-S-004",
+      "requirementTitle": "FY2025–26 national transition exemption",
+      "result": "DOES_NOT_APPLY",
+      "scopeId": "e1",
+      "scopeName": "Alpine Industrie SAS",
+      "severity": "high",
+      "sources": [
+        "SRC-004",
+        "SRC-015"
+      ],
+      "trace": {
+        "children": [
+          {
+            "detail": "entity.incorporation_country (FR) in catalogue eu_member_states",
+            "factsUsed": [
+              {
+                "factType": "entity.incorporation_country",
+                "scopeId": "e1",
+                "source": {
+                  "kind": "customer_statement",
+                  "ref": "test fixture"
+                },
+                "value": {
+                  "kind": "string",
+                  "value": "FR"
+                }
+              }
+            ],
+            "op": "in_catalogue",
+            "truth": "APPLIES"
+          },
+          {
+            "detail": "FY start year 2027 in [2025, 2026]",
+            "op": "fy_start_year_in",
+            "truth": "DOES_NOT_APPLY"
+          },
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": "entity.net_turnover_eur (520000000) gt 450000000",
+                    "factsUsed": [
+                      {
+                        "factType": "entity.net_turnover_eur",
+                        "scopeId": "e1",
+                        "source": {
+                          "kind": "customer_statement",
+                          "ref": "test fixture"
+                        },
+                        "value": {
+                          "kind": "number",
+                          "value": 520000000
+                        }
+                      }
+                    ],
+                    "op": "cmp",
+                    "truth": "APPLIES"
+                  }
+                ],
+                "detail": "not",
+                "op": "not",
+                "truth": "DOES_NOT_APPLY"
+              },
+              {
+                "children": [
+                  {
+                    "detail": "entity.avg_employees (1350) gt 1000",
+                    "factsUsed": [
+                      {
+                        "factType": "entity.avg_employees",
+                        "scopeId": "e1",
+                        "source": {
+                          "kind": "customer_statement",
+                          "ref": "test fixture"
+                        },
+                        "value": {
+                          "kind": "number",
+                          "value": 1350
+                        }
+                      }
+                    ],
+                    "op": "cmp",
+                    "truth": "APPLIES"
+                  }
+                ],
+                "detail": "not",
+                "op": "not",
+                "truth": "DOES_NOT_APPLY"
+              }
+            ],
+            "detail": "any of 2",
+            "op": "any",
+            "truth": "DOES_NOT_APPLY"
+          },
+          {
+            "detail": "entity.member_state_transition_option: not available (national_law_unresolved)",
+            "factsUsed": [],
+            "op": "eq",
+            "reason": "national_law_unresolved",
+            "truth": "INDETERMINATE"
+          }
+        ],
+        "detail": "all of 4",
+        "op": "all",
+        "truth": "DOES_NOT_APPLY"
+      }
+    },
+    {
+      "caution": "Scope and exemption are separate determinations: 'threshold in scope but exempt' must never be summarised as 'CSRD does not apply'. Exemption evidence must remain current every year (O-011).",
+      "decisionArea": "Exemption",
+      "evaluatedAt": "2026-07-26",
+      "legalStatus": "in_force",
+      "needs": [],
+      "packVersion": "csrd@0.1.0 (legal snapshot 2026-07-26)",
+      "program": "CSRD",
+      "ratificationStatus": "draft",
+      "relationshipClass": "direct_legal_exemption",
+      "requirementId": "CSRD-S-005",
+      "requirementTitle": "Subsidiary exemption via qualifying EU-parent consolidated report",
+      "result": "DOES_NOT_APPLY",
+      "scopeId": "e1",
+      "scopeName": "Alpine Industrie SAS",
+      "severity": "high",
+      "sources": [
+        "SRC-002",
+        "SRC-004"
+      ],
+      "trace": {
+        "children": [
+          {
+            "detail": "entity.is_subsidiary (false) == true",
+            "factsUsed": [
+              {
+                "factType": "entity.is_subsidiary",
+                "scopeId": "e1",
+                "source": {
+                  "kind": "customer_statement",
+                  "ref": "test fixture"
+                },
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "op": "eq",
+            "truth": "DOES_NOT_APPLY"
+          },
+          {
+            "detail": "group.ultimate_parent_country: not available (customer_scope_ambiguity)",
+            "factsUsed": [],
+            "op": "in_catalogue",
+            "reason": "customer_scope_ambiguity",
+            "truth": "INDETERMINATE"
+          },
+          {
+            "detail": "parent.report_includes_entity: not available (missing_fact)",
+            "factsUsed": [],
+            "op": "eq",
+            "reason": "missing_fact",
+            "truth": "INDETERMINATE"
+          },
+          {
+            "detail": "parent.report_standard: not available (customer_scope_ambiguity)",
+            "factsUsed": [],
+            "op": "eq",
+            "reason": "customer_scope_ambiguity",
+            "truth": "INDETERMINATE"
+          },
+          {
+            "detail": "parent.report_public_url exists",
+            "factsUsed": [],
+            "op": "exists",
+            "reason": "customer_scope_ambiguity",
+            "truth": "INDETERMINATE"
+          },
+          {
+            "detail": "entity.national_publication_conditions_met: not available (national_law_unresolved)",
+            "factsUsed": [],
+            "op": "eq",
+            "reason": "national_law_unresolved",
+            "truth": "INDETERMINATE"
+          }
+        ],
+        "detail": "all of 6",
+        "op": "all",
+        "truth": "DOES_NOT_APPLY"
+      }
+    },
+    {
+      "caution": "'EQUIVALENT' requires a formal equivalence basis — treat as legal judgment with a signed DecisionRecord until an equivalence decision exists.",
+      "decisionArea": "Exemption",
+      "evaluatedAt": "2026-07-26",
+      "legalStatus": "in_force",
+      "needs": [],
+      "packVersion": "csrd@0.1.0 (legal snapshot 2026-07-26)",
+      "program": "CSRD",
+      "ratificationStatus": "draft",
+      "relationshipClass": "direct_legal_exemption",
+      "requirementId": "CSRD-S-006",
+      "requirementTitle": "Subsidiary exemption via qualifying non-EU parent report",
+      "result": "DOES_NOT_APPLY",
+      "scopeId": "e1",
+      "scopeName": "Alpine Industrie SAS",
+      "severity": "high",
+      "sources": [
+        "SRC-002",
+        "SRC-004",
+        "SRC-009"
+      ],
+      "trace": {
+        "children": [
+          {
+            "detail": "entity.is_subsidiary (false) == true",
+            "factsUsed": [
+              {
+                "factType": "entity.is_subsidiary",
+                "scopeId": "e1",
+                "source": {
+                  "kind": "customer_statement",
+                  "ref": "test fixture"
+                },
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "op": "eq",
+            "truth": "DOES_NOT_APPLY"
+          },
+          {
+            "children": [
+              {
+                "detail": "group.ultimate_parent_country: not available (customer_scope_ambiguity)",
+                "factsUsed": [],
+                "op": "in_catalogue",
+                "reason": "customer_scope_ambiguity",
+                "truth": "INDETERMINATE"
+              }
+            ],
+            "detail": "not",
+            "op": "not",
+            "reason": "customer_scope_ambiguity",
+            "truth": "INDETERMINATE"
+          },
+          {
+            "detail": "parent.report_includes_entity: not available (missing_fact)",
+            "factsUsed": [],
+            "op": "eq",
+            "reason": "missing_fact",
+            "truth": "INDETERMINATE"
+          },
+          {
+            "detail": "parent.report_standard: not available (customer_scope_ambiguity)",
+            "factsUsed": [],
+            "op": "in_set",
+            "reason": "customer_scope_ambiguity",
+            "truth": "INDETERMINATE"
+          },
+          {
+            "detail": "parent.assurance_opinion_available: not available (customer_scope_ambiguity)",
+            "factsUsed": [],
+            "op": "eq",
+            "reason": "customer_scope_ambiguity",
+            "truth": "INDETERMINATE"
+          },
+          {
+            "detail": "parent.taxonomy_information_included: not available (customer_scope_ambiguity)",
+            "factsUsed": [],
+            "op": "eq",
+            "reason": "customer_scope_ambiguity",
+            "truth": "INDETERMINATE"
+          },
+          {
+            "detail": "entity.national_publication_conditions_met: not available (national_law_unresolved)",
+            "factsUsed": [],
+            "op": "eq",
+            "reason": "national_law_unresolved",
+            "truth": "INDETERMINATE"
+          }
+        ],
+        "detail": "all of 7",
+        "op": "all",
+        "truth": "DOES_NOT_APPLY"
+      }
+    },
+    {
+      "caution": "The subsidiary is a publication gateway, not necessarily the reporting parent. Art. 40a reporting runs for financial years beginning on or after 1 January 2028 (R-012).",
+      "decisionArea": "Third-country scope",
+      "evaluatedAt": "2026-07-26",
+      "legalStatus": "in_force",
+      "needs": [],
+      "packVersion": "csrd@0.1.0 (legal snapshot 2026-07-26)",
+      "program": "CSRD",
+      "ratificationStatus": "draft",
+      "relationshipClass": "direct_legal",
+      "requirementId": "CSRD-S-008",
+      "requirementTitle": "Article 40a subsidiary gateway",
+      "result": "DOES_NOT_APPLY",
+      "scopeId": "e1",
+      "scopeName": "Alpine Industrie SAS",
+      "severity": "high",
+      "sources": [
+        "SRC-004"
+      ],
+      "trace": {
+        "children": [
+          {
+            "detail": "CSRD-S-007 is INDETERMINATE (expected APPLIES)",
+            "op": "requirement_ref",
+            "reason": "upstream_indeterminate",
+            "truth": "INDETERMINATE"
+          },
+          {
+            "detail": "entity.incorporation_country (FR) in catalogue eu_member_states",
+            "factsUsed": [
+              {
+                "factType": "entity.incorporation_country",
+                "scopeId": "e1",
+                "source": {
+                  "kind": "customer_statement",
+                  "ref": "test fixture"
+                },
+                "value": {
+                  "kind": "string",
+                  "value": "FR"
+                }
+              }
+            ],
+            "op": "in_catalogue",
+            "truth": "APPLIES"
+          },
+          {
+            "detail": "entity.is_subsidiary (false) == true",
+            "factsUsed": [
+              {
+                "factType": "entity.is_subsidiary",
+                "scopeId": "e1",
+                "source": {
+                  "kind": "customer_statement",
+                  "ref": "test fixture"
+                },
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "op": "eq",
+            "truth": "DOES_NOT_APPLY"
+          },
+          {
+            "detail": "third_country.eu_subsidiary_turnover_eur: not available (missing_fact)",
+            "factsUsed": [],
+            "op": "cmp",
+            "reason": "missing_fact",
+            "truth": "INDETERMINATE"
+          }
+        ],
+        "detail": "all of 4",
+        "op": "all",
+        "truth": "DOES_NOT_APPLY"
+      }
+    },
+    {
+      "caution": "The revised ESRS were adopted 3 Jul 2026 but were NOT in force at the pack snapshot; they must not alter current obligations until legal effectiveness (Change Watch CW-001).",
+      "decisionArea": "Standard selection",
+      "evaluatedAt": "2026-07-26",
+      "legalStatus": "in_force",
+      "needs": [],
+      "packVersion": "csrd@0.1.0 (legal snapshot 2026-07-26)",
+      "program": "CSRD",
+      "ratificationStatus": "draft",
+      "relationshipClass": "standard_selection",
+      "requirementId": "CSRD-S-012",
+      "requirementTitle": "Applicable ESRS version",
+      "result": "APPLIES",
+      "scopeId": "e1",
+      "scopeName": "Alpine Industrie SAS",
+      "selected": "ESRS_2023",
+      "severity": "high",
+      "sources": [
+        "SRC-005",
+        "SRC-006",
+        "SRC-007"
+      ],
+      "trace": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": "pack flag revised_esrs_in_force = false",
+                "op": "pack_flag",
+                "truth": "DOES_NOT_APPLY"
+              }
+            ],
+            "detail": "not",
+            "op": "not",
+            "truth": "APPLIES"
+          }
+        ],
+        "detail": "selected ESRS_2023",
+        "op": "selection",
+        "truth": "APPLIES"
+      }
+    },
+    {
+      "caution": "CSRD is directive-based law. A negative EU-level threshold result with this gate unresolved must read 'EU-level threshold not met; national-law status requires review' — never 'CSRD does not apply'.",
+      "decisionArea": "National overlay",
+      "evaluatedAt": "2026-07-26",
+      "legalStatus": "in_force",
+      "needs": [
+        {
+          "factType": "entity.governing_member_state",
+          "reason": "national_law_unresolved",
+          "scopeId": "e1"
+        }
+      ],
+      "packVersion": "csrd@0.1.0 (legal snapshot 2026-07-26)",
+      "program": "CSRD",
+      "ratificationStatus": "draft",
+      "reason": "national_law_unresolved",
+      "relationshipClass": "legal_status_gate",
+      "requirementId": "CSRD-S-013",
+      "requirementTitle": "National-law completeness gate",
+      "result": "INDETERMINATE",
+      "scopeId": "e1",
+      "scopeName": "Alpine Industrie SAS",
+      "severity": "critical",
+      "sources": [
+        "SRC-015",
+        "SRC-001"
+      ],
+      "trace": {
+        "children": [
+          {
+            "detail": "entity.incorporation_country (FR) in catalogue eu_member_states",
+            "factsUsed": [
+              {
+                "factType": "entity.incorporation_country",
+                "scopeId": "e1",
+                "source": {
+                  "kind": "customer_statement",
+                  "ref": "test fixture"
+                },
+                "value": {
+                  "kind": "string",
+                  "value": "FR"
+                }
+              }
+            ],
+            "op": "in_catalogue",
+            "truth": "APPLIES"
+          },
+          {
+            "detail": "entity.governing_member_state exists",
+            "factsUsed": [
+              {
+                "factType": "entity.governing_member_state",
+                "scopeId": "e1",
+                "source": {
+                  "kind": "customer_statement",
+                  "ref": "test fixture"
+                },
+                "value": {
+                  "kind": "string",
+                  "value": "FR"
+                }
+              }
+            ],
+            "op": "exists",
+            "truth": "APPLIES"
+          },
+          {
+            "detail": "entity.governing_member_state (FR) in catalogue ratified_country_packs",
+            "factsUsed": [
+              {
+                "factType": "entity.governing_member_state",
+                "scopeId": "e1",
+                "source": {
+                  "kind": "customer_statement",
+                  "ref": "test fixture"
+                },
+                "value": {
+                  "kind": "string",
+                  "value": "FR"
+                }
+              }
+            ],
+            "op": "in_catalogue",
+            "reason": "national_law_unresolved",
+            "truth": "INDETERMINATE"
+          }
+        ],
+        "detail": "all of 3",
+        "op": "all",
+        "reason": "national_law_unresolved",
+        "truth": "INDETERMINATE"
+      }
+    },
+    {
+      "caution": "A standalone promotional sustainability report is not automatically sufficient. First reporting year and filing calendar resolve through the national overlay (S-013) and timing rules (R-005: generally FY beginning on or after 1 Jan 2027 for non-first-wave reporters).",
+      "decisionArea": "Reporting duty",
+      "evaluatedAt": "2026-07-26",
+      "legalStatus": "in_force",
+      "needs": [],
+      "packVersion": "csrd@0.1.0 (legal snapshot 2026-07-26)",
+      "program": "CSRD",
+      "ratificationStatus": "draft",
+      "relationshipClass": "direct_legal",
+      "requirementId": "CSRD-S-014",
+      "requirementTitle": "Reporting duty (post-exemption)",
+      "result": "APPLIES",
+      "scopeId": "e1",
+      "scopeName": "Alpine Industrie SAS",
+      "severity": "critical",
+      "sources": [
+        "SRC-002",
+        "SRC-004"
+      ],
+      "trace": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": "CSRD-S-001 is APPLIES (expected APPLIES)",
+                "op": "requirement_ref",
+                "truth": "APPLIES"
+              },
+              {
+                "detail": "CSRD-S-002 is DOES_NOT_APPLY (expected APPLIES)",
+                "op": "requirement_ref",
+                "truth": "DOES_NOT_APPLY"
+              }
+            ],
+            "detail": "any of 2",
+            "op": "any",
+            "truth": "APPLIES"
+          },
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": "CSRD-S-004 is DOES_NOT_APPLY (expected APPLIES)",
+                    "op": "requirement_ref",
+                    "truth": "DOES_NOT_APPLY"
+                  },
+                  {
+                    "detail": "CSRD-S-005 is DOES_NOT_APPLY (expected APPLIES)",
+                    "op": "requirement_ref",
+                    "truth": "DOES_NOT_APPLY"
+                  },
+                  {
+                    "detail": "CSRD-S-006 is DOES_NOT_APPLY (expected APPLIES)",
+                    "op": "requirement_ref",
+                    "truth": "DOES_NOT_APPLY"
+                  }
+                ],
+                "detail": "any of 3",
+                "op": "any",
+                "truth": "DOES_NOT_APPLY"
+              }
+            ],
+            "detail": "not",
+            "op": "not",
+            "truth": "APPLIES"
+          }
+        ],
+        "detail": "all of 2",
+        "op": "all",
+        "truth": "APPLIES"
+      }
+    },
+    {
+      "caution": "Provider eligibility and appointment rules require the national overlay. Limited assurance remains the mandatory level; the assurance standard is due by 1 July 2027.",
+      "decisionArea": "Assurance",
+      "evaluatedAt": "2026-07-26",
+      "legalStatus": "in_force",
+      "needs": [],
+      "packVersion": "csrd@0.1.0 (legal snapshot 2026-07-26)",
+      "program": "CSRD",
+      "ratificationStatus": "draft",
+      "relationshipClass": "direct_legal",
+      "requirementId": "CSRD-S-015",
+      "requirementTitle": "Limited assurance over sustainability reporting",
+      "result": "APPLIES",
+      "scopeId": "e1",
+      "scopeName": "Alpine Industrie SAS",
+      "severity": "critical",
+      "sources": [
+        "SRC-002",
+        "SRC-004"
+      ],
+      "trace": {
+        "detail": "CSRD-S-014 is APPLIES (expected APPLIES)",
+        "op": "requirement_ref",
+        "truth": "APPLIES"
+      }
+    }
+  ],
+  "gaps": [
+    {
+      "consequence": "The report can be structurally non-compliant even if a standalone ESG report exists.",
+      "existingEvidenceToCredit": "Current report template / prior report",
+      "firstAction": "Create statutory-report template and assign an editor.",
+      "gapId": "G-001",
+      "obligationTemplateId": "O-001",
+      "priority": "high",
+      "readinessTest": "Dedicated statutory management-report section exists.",
+      "scopeId": "e1",
+      "status": "open"
+    },
+    {
+      "consequence": "The wrong standard version causes extensive rework and assurance findings.",
+      "existingEvidenceToCredit": "Basis-of-preparation memo / ESRS index",
+      "firstAction": "Issue a dated standard-version determination (from CSRD-S-012).",
+      "gapId": "G-002",
+      "obligationTemplateId": "O-002",
+      "priority": "critical",
+      "readinessTest": "Applicable ESRS version and requirement mapping are approved.",
+      "scopeId": "e1",
+      "status": "unknown"
+    },
+    {
+      "consequence": "Material disclosure scope may be unsupported.",
+      "existingEvidenceToCredit": "DMA methodology and results",
+      "firstAction": "Complete the process and record governance decisions.",
+      "gapId": "G-003",
+      "obligationTemplateId": "O-003",
+      "priority": "critical",
+      "readinessTest": "Double-materiality process is documented, performed, approved and current.",
+      "scopeId": "e1",
+      "status": "unknown"
+    },
+    {
+      "consequence": "Work remains unowned and evidence cannot be assured.",
+      "existingEvidenceToCredit": "Board charter, RACI, policy/KPI register",
+      "firstAction": "Baseline existing records, then fill ownership gaps.",
+      "gapId": "G-004",
+      "obligationTemplateId": "O-004",
+      "priority": "high",
+      "readinessTest": "Governance and disclosure ownership are named.",
+      "scopeId": "e1",
+      "status": "unknown"
+    },
+    {
+      "consequence": "The statutory sustainability package may be incomplete.",
+      "existingEvidenceToCredit": "Prior Taxonomy report/workbook",
+      "firstAction": "Run the linked Taxonomy module.",
+      "gapId": "G-005",
+      "obligationTemplateId": "O-005",
+      "priority": "high",
+      "readinessTest": "Taxonomy Article 8 workstream is operational.",
+      "scopeId": "e1",
+      "status": "unknown"
+    },
+    {
+      "consequence": "An assurance bottleneck can delay or qualify the report.",
+      "existingEvidenceToCredit": "Engagement letter and control matrix",
+      "firstAction": "Start provider appointment and evidence-control mapping.",
+      "gapId": "G-006",
+      "obligationTemplateId": "O-006",
+      "priority": "critical",
+      "readinessTest": "Assurance provider, scope, controls and evidence runway exist.",
+      "scopeId": "e1",
+      "status": "unknown"
+    },
+    {
+      "consequence": "A process obligation remains open.",
+      "existingEvidenceToCredit": "Minutes / consultation plan",
+      "firstAction": "Schedule consultation before governance approval.",
+      "gapId": "G-007",
+      "obligationTemplateId": "O-007",
+      "priority": "medium",
+      "readinessTest": "Worker consultation process is applicable and completed.",
+      "scopeId": "e1",
+      "status": "unknown"
+    },
+    {
+      "consequence": "Publication-format failure near the deadline.",
+      "existingEvidenceToCredit": "System validation / sample file",
+      "firstAction": "Create and validate a sample output.",
+      "gapId": "G-008",
+      "obligationTemplateId": "O-008",
+      "priority": "medium",
+      "readinessTest": "Electronic output is configured and tested.",
+      "scopeId": "e1",
+      "status": "satisfied"
+    },
+    {
+      "consequence": "A correct report may still be filed late or incorrectly.",
+      "existingEvidenceToCredit": "Country calendar and prior filing workflow",
+      "firstAction": "Load pilot-country rules and create dated tasks.",
+      "gapId": "G-009",
+      "obligationTemplateId": "O-009",
+      "priority": "critical",
+      "readinessTest": "Country-specific approval, filing, language and publication calendar is loaded.",
+      "scopeId": "e1",
+      "status": "open"
+    },
+    {
+      "consequence": "Assurance becomes a fire drill and posture is unsupported.",
+      "existingEvidenceToCredit": "Existing DMS links / control register",
+      "firstAction": "Create registry entries without forcing file migration.",
+      "gapId": "G-016",
+      "obligationTemplateId": "O-017",
+      "priority": "high",
+      "readinessTest": "Evidence registry records owner, pointer, freshness and acceptance.",
+      "scopeId": "e1",
+      "status": "unknown"
+    }
+  ],
+  "nextQuestions": [
+    {
+      "blockedDeterminations": [
+        "CSRD-S-013"
+      ],
+      "question": {
+        "factTypes": [
+          "entity.governing_member_state"
+        ],
+        "id": "Q-012",
+        "inputPath": "Derived + confirmation",
+        "module": "National law",
+        "order": 12,
+        "showWhen": {
+          "factInSet": {
+            "fact": "entity.incorporation_country",
+            "set": [
+              "AT",
+              "BE",
+              "BG",
+              "HR",
+              "CY",
+              "CZ",
+              "DK",
+              "EE",
+              "FI",
+              "FR",
+              "DE",
+              "GR",
+              "HU",
+              "IE",
+              "IT",
+              "LV",
+              "LT",
+              "LU",
+              "MT",
+              "NL",
+              "PL",
+              "PT",
+              "RO",
+              "SK",
+              "SI",
+              "ES",
+              "SE"
+            ]
+          }
+        },
+        "text": "Which Member State's accounting/reporting law governs this entity?",
+        "whyAsked": "Selects national transposition, options, filing and publication rules."
+      },
+      "weight": 3
+    },
+    {
+      "blockedDeterminations": [
+        "CSRD-S-003"
+      ],
+      "question": {
+        "factTypes": [
+          "entity.reported_csrd_fy2024"
+        ],
+        "id": "Q-011",
+        "inputPath": "Yes/no/unknown + report upload",
+        "module": "Wave history",
+        "order": 11,
+        "showWhen": {
+          "factInSet": {
+            "fact": "entity.incorporation_country",
+            "set": [
+              "AT",
+              "BE",
+              "BG",
+              "HR",
+              "CY",
+              "CZ",
+              "DK",
+              "EE",
+              "FI",
+              "FR",
+              "DE",
+              "GR",
+              "HU",
+              "IE",
+              "IT",
+              "LV",
+              "LT",
+              "LU",
+              "MT",
+              "NL",
+              "PL",
+              "PT",
+              "RO",
+              "SK",
+              "SI",
+              "ES",
+              "SE"
+            ]
+          }
+        },
+        "text": "Was this entity required to report under CSRD for financial year 2024?",
+        "whyAsked": "Identifies first-wave status and FY2025–26 transition questions."
+      },
+      "weight": 1
+    },
+    {
+      "blockedDeterminations": [],
+      "question": {
+        "factTypes": [],
+        "id": "Q-001",
+        "inputPath": "Manual",
+        "module": "Universal",
+        "order": 1,
+        "showWhen": {
+          "always": true
+        },
+        "text": "Which legal entity or parent group should DataStrata assess?",
+        "whyAsked": "Creates the legal scope anchor; internal business units cannot substitute."
+      },
+      "weight": 0.1
+    },
+    {
+      "blockedDeterminations": [],
+      "question": {
+        "factTypes": [],
+        "id": "Q-002",
+        "inputPath": "OCR/document extraction (candidate facts only; confirmation required)",
+        "module": "Document-assisted intake",
+        "order": 2,
+        "showWhen": {
+          "always": true
+        },
+        "text": "Upload the latest annual report, audited financial statements and — if relevant — group chart. You may continue manually.",
+        "whyAsked": "Pre-fills high-value facts but keeps them unconfirmed until reviewed."
+      },
+      "weight": 0.1
+    },
+    {
+      "blockedDeterminations": [],
+      "question": {
+        "factTypes": [
+          "entity.financial_year_start",
+          "entity.financial_year_end"
+        ],
+        "id": "Q-004",
+        "inputPath": "Manual or OCR",
+        "module": "Universal",
+        "order": 4,
+        "showWhen": {
+          "always": true
+        },
+        "text": "What financial year are you assessing?",
+        "whyAsked": "Determines threshold period, wave and deadlines."
+      },
+      "weight": 0.1
+    },
+    {
+      "blockedDeterminations": [],
+      "question": {
+        "factTypes": [
+          "entity.is_parent_undertaking",
+          "entity.is_subsidiary",
+          "entity.is_branch"
+        ],
+        "id": "Q-005",
+        "inputPath": "Manual or OCR",
+        "module": "Group structure",
+        "order": 5,
+        "showWhen": {
+          "always": true
+        },
+        "text": "Is the entity standalone, a parent undertaking, a subsidiary, a branch, or both a parent and a subsidiary?",
+        "whyAsked": "Selects the individual, consolidated, exemption and third-country modules."
+      },
+      "weight": 0.1
+    },
+    {
+      "blockedDeterminations": [],
+      "question": {
+        "factTypes": [
+          "entity.member_state_transposition_status",
+          "entity.member_state_transition_option"
+        ],
+        "id": "Q-013",
+        "inputPath": "System lookup (country pack) / analyst review — not a customer guess",
+        "module": "National law",
+        "order": 13,
+        "showWhen": {
+          "anyOf": [
+            {
+              "requirementResolved": {
+                "requirement": "CSRD-S-001"
+              }
+            },
+            {
+              "requirementResolved": {
+                "requirement": "CSRD-S-002"
+              }
+            }
+          ]
+        },
+        "text": "Has the relevant Member State implemented the amended CSRD rules, and any FY2025–26 relief?",
+        "whyAsked": "Prevents an EU-level screen from becoming a false final legal conclusion."
+      },
+      "weight": 0.1
+    },
+    {
+      "blockedDeterminations": [],
+      "question": {
+        "factTypes": [
+          "readiness.module_enabled"
+        ],
+        "id": "Q-026",
+        "inputPath": "Manual",
+        "module": "Readiness router",
+        "order": 26,
+        "showWhen": {
+          "anyOf": [
+            {
+              "requirementIs": {
+                "requirement": "CSRD-S-014",
+                "truth": "APPLIES"
+              }
+            },
+            {
+              "requirementIs": {
+                "requirement": "CSRD-S-008",
+                "truth": "APPLIES"
+              }
+            },
+            {
+              "requirementIs": {
+                "requirement": "CSRD-S-009",
+                "truth": "APPLIES"
+              }
+            },
+            {
+              "requirementIs": {
+                "requirement": "CSRD-S-010",
+                "truth": "APPLIES"
+              }
+            }
+          ]
+        },
+        "text": "Would you like DataStrata to assess readiness against the obligations that apply?",
+        "whyAsked": "Keeps applicability and execution separate."
+      },
+      "weight": 0.1
+    }
+  ],
+  "obligations": [
+    {
+      "actor": "Reporting legal entity",
+      "completionCriterion": "Section approved, assured where required, and included in the statutory report.",
+      "deadlineLogic": "National annual-report calendar (country pack)",
+      "defaultOwnerRole": "Financial reporting lead",
+      "derivedFrom": [
+        "CSRD-S-014"
+      ],
+      "evidenceExpectation": "Approved management-report template and published section",
+      "obligation": "Prepare a clearly identifiable sustainability section in the statutory management report.",
+      "scopeId": "e1",
+      "scopeName": "Alpine Industrie SAS",
+      "templateId": "O-001"
+    },
+    {
+      "actor": "Reporting organization",
+      "completionCriterion": "Applicable standard version and mapping approved.",
+      "deadlineLogic": "At reporting-cycle start and on standard change (see CSRD-S-012 selection)",
+      "defaultOwnerRole": "Sustainability reporting lead",
+      "derivedFrom": [
+        "CSRD-S-012",
+        "CSRD-S-014"
+      ],
+      "evidenceExpectation": "Basis-of-preparation memo and disclosure index",
+      "obligation": "Apply the legally applicable ESRS version and maintain a versioned requirement-to-disclosure mapping.",
+      "scopeId": "e1",
+      "scopeName": "Alpine Industrie SAS",
+      "templateId": "O-002"
+    },
+    {
+      "actor": "Reporting organization",
+      "completionCriterion": "Process approved and decision trail complete.",
+      "deadlineLogic": "Before detailed disclosure build",
+      "defaultOwnerRole": "Sustainability lead",
+      "derivedFrom": [
+        "CSRD-S-014"
+      ],
+      "evidenceExpectation": "DMA methodology, evidence, results and approvals",
+      "obligation": "Perform and approve the double-materiality process.",
+      "scopeId": "e1",
+      "scopeName": "Alpine Industrie SAS",
+      "templateId": "O-003"
+    },
+    {
+      "actor": "Reporting organization",
+      "completionCriterion": "Named owners and source links exist.",
+      "deadlineLogic": "Before reporting close",
+      "defaultOwnerRole": "Company secretary / sustainability",
+      "derivedFrom": [
+        "CSRD-S-014"
+      ],
+      "evidenceExpectation": "RACI, board materials and policy/KPI inventory",
+      "obligation": "Document governance roles and an owned inventory of policies, actions, targets, metrics and data sources.",
+      "scopeId": "e1",
+      "scopeName": "Alpine Industrie SAS",
+      "templateId": "O-004"
+    },
+    {
+      "actor": "Reporting organization",
+      "completionCriterion": "Linked module complete and reconciled.",
+      "deadlineLogic": "Same reporting cycle",
+      "defaultOwnerRole": "Finance / taxonomy lead",
+      "derivedFrom": [
+        "CSRD-S-014"
+      ],
+      "evidenceExpectation": "Taxonomy workbook and report section",
+      "obligation": "Prepare linked EU Taxonomy Article 8 disclosures.",
+      "scopeId": "e1",
+      "scopeName": "Alpine Industrie SAS",
+      "templateId": "O-005"
+    },
+    {
+      "actor": "Reporting legal entity",
+      "completionCriterion": "Opinion issued and published.",
+      "deadlineLogic": "Country-specific runway before the publication deadline",
+      "defaultOwnerRole": "Audit committee / finance",
+      "derivedFrom": [
+        "CSRD-S-015"
+      ],
+      "evidenceExpectation": "Engagement letter, control evidence and assurance opinion",
+      "obligation": "Appoint an eligible assurance provider, prepare evidence and obtain limited assurance.",
+      "scopeId": "e1",
+      "scopeName": "Alpine Industrie SAS",
+      "templateId": "O-006"
+    },
+    {
+      "actor": "Management",
+      "completionCriterion": "Consultation evidence accepted; a recorded basis exists where the provision is not applicable.",
+      "deadlineLogic": "Before final governance approval",
+      "defaultOwnerRole": "HR / company secretary",
+      "derivedFrom": [
+        "CSRD-S-014"
+      ],
+      "evidenceExpectation": "Notices, minutes and opinion",
+      "obligation": "Inform and consult workers' representatives and communicate their opinion where applicable.",
+      "scopeId": "e1",
+      "scopeName": "Alpine Industrie SAS",
+      "templateId": "O-007"
+    },
+    {
+      "actor": "Reporting legal entity",
+      "completionCriterion": "Required file passes validation.",
+      "deadlineLogic": "By publication",
+      "defaultOwnerRole": "Financial reporting IT",
+      "derivedFrom": [
+        "CSRD-S-014"
+      ],
+      "evidenceExpectation": "Validated digital output; do not assume sustainability tagging before the relevant tagging rules exist",
+      "obligation": "Prepare the management report in the applicable electronic format.",
+      "scopeId": "e1",
+      "scopeName": "Alpine Industrie SAS",
+      "templateId": "O-008"
+    },
+    {
+      "actor": "Reporting legal entity",
+      "completionCriterion": "Report filed and accessible.",
+      "deadlineLogic": "Member-State deadline (country pack)",
+      "defaultOwnerRole": "Company secretary",
+      "derivedFrom": [
+        "CSRD-S-014"
+      ],
+      "evidenceExpectation": "Board minutes, filing receipt and public URL",
+      "obligation": "Complete governance approval, filing, publication, language and accessibility steps.",
+      "scopeId": "e1",
+      "scopeName": "Alpine Industrie SAS",
+      "templateId": "O-009"
+    },
+    {
+      "actor": "Reporting organization",
+      "completionCriterion": "Critical evidence is current and accepted.",
+      "deadlineLogic": "Continuous; quarterly review",
+      "defaultOwnerRole": "Financial control / sustainability",
+      "derivedFrom": [
+        "CSRD-S-014"
+      ],
+      "evidenceExpectation": "Evidence registry records — never mandatory file custody",
+      "obligation": "Operate an evidence registry linking obligations to proof, owners, source locations, freshness and acceptance.",
+      "scopeId": "e1",
+      "scopeName": "Alpine Industrie SAS",
+      "templateId": "O-017"
+    }
+  ],
+  "summary": {
+    "headline": "Reporting duty active for Alpine Industrie SAS. 1 determination(s) unresolved and awaiting input. national-law status requires review — this is NOT a final legal conclusion.",
+    "nationalLawResolved": false,
+    "program": "CSRD",
+    "statusFlags": [
+      "reporting_duty_active",
+      "unresolved_items",
+      "national_review_required"
+    ]
+  }
+}
