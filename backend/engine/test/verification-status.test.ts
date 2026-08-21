@@ -5,7 +5,17 @@
  * these tests are written to fail against a plausible wrong implementation
  * rather than to confirm the obvious one.
  *
- * Two carry the load:
+ * **Half of this file no longer runs, and that is the point.** The defect this
+ * module was rebuilt to close was not a missing computation: it was that
+ * `deriveStatus(governing, [])` accepted an empty staleness set meaning *"I
+ * checked and nothing is stale"* at a call site where *"I did not check"* was
+ * true. Tests that used to assert "an unsigned entry ignores the staleness it
+ * was handed" are therefore gone as runtime tests — the value can no longer be
+ * handed — and are restated below as `@ts-expect-error` assertions. `tsconfig`
+ * includes `test`, so `npm run typecheck` compiles them, and each directive is
+ * proven load-bearing by deleting it and confirming the build fails.
+ *
+ * Three still carry the load:
  *
  *  - **No governing entry yields an empty reason set.** Asserted with
  *    `toEqual([])`, never a length check, because an implementation that
@@ -15,12 +25,15 @@
  *    sanctioned transformation is `ratificationStatus: 'draft'` to
  *    `derivedStatus: 'draft', statusReasons: []` — would have to normalise it
  *    away, which is how an invention becomes permanent.
- *  - **A revocation ignores staleness entirely.** Exercised by passing a
- *    *non-empty* staleness array alongside a revocation and asserting the
- *    reasons are exactly `['revoked']`. An implementation that computes
- *    staleness and merges it fails here; one that computes it and discards it
- *    passes, and is still wrong for a reason no test can see — hence the
- *    parameter is not consulted at all in the implementation.
+ *  - **An unchecked signature is `draft, ['freshness_unchecked']`, and
+ *    specifically not `draft, []`.** Asserted as the whole object, because the
+ *    two draft-producing paths must stay distinguishable: one means nobody
+ *    signed, the other means nobody looked.
+ *  - **A revocation cannot be told about staleness at all.** It used to be
+ *    exercised by passing a non-empty array and asserting it was discarded — a
+ *    test an implementation that computes staleness and throws it away still
+ *    passes. The union has no `freshness` on that member now, so the claim is
+ *    made by the compiler instead.
  *
  * The blocked case asserts the *whole* set rather than membership, because
  * the reasons travel with the status precisely so a surface can say why. An
@@ -39,7 +52,14 @@ import {
   type UnsignedLedgerEntry,
 } from '../src/verification/ledger';
 import { BLOCKING, type StalenessReason } from '../src/verification/staleness';
-import { deriveStatus, type StatusReason } from '../src/verification/status';
+import {
+  deriveStatus,
+  toStatusInput,
+  type CheckedFreshness,
+  type FreshnessAssessment,
+  type StatusInput,
+  type StatusReason,
+} from '../src/verification/status';
 
 const HASH = (c: string): string => c.repeat(64);
 
@@ -109,76 +129,91 @@ const EVERY_REASON: StalenessReason[] = [
   'stale_source_text',
 ];
 
+/** "I looked, and these are the reasons" — the only shape a resolver returns. */
+const checked = (reasons: StalenessReason[]): FreshnessAssessment => ({ checked: true, reasons });
+
+/** "I did not look." Supplied by a caller, never by a resolver. */
+const UNCHECKED: FreshnessAssessment = { checked: false };
+
 describe('deriveStatus, with no governing entry', () => {
   it('is draft with an EMPTY reason set, not an invented "unsigned"', () => {
-    const status = deriveStatus(null, []);
+    const status = deriveStatus(toStatusInput(null));
     expect(status.derivedStatus).toBe('draft');
     // toEqual([]), never a length check: ['unsigned'] passes toHaveLength(1).
     expect(status.statusReasons).toEqual([]);
   });
 
-  it('stays empty even when a staleness set is passed alongside', () => {
-    // Status and staleness are two axes. An unsigned requirement has nothing
-    // for staleness to be about, so no reason may leak through here either.
-    expect(deriveStatus(null, ['stale_render', 'stale_result']).statusReasons).toEqual([]);
-  });
-
-  it('never reports a reason for any staleness set at all', () => {
-    for (const reason of EVERY_REASON) {
-      expect(deriveStatus(null, [reason])).toEqual({ derivedStatus: 'draft', statusReasons: [] });
-    }
+  it('is not freshness_unchecked — nothing is signed, so there is nothing to check', () => {
+    // §4's compatibility row. `freshness_unchecked` describes our ignorance
+    // about a *signature*; an unsigned requirement has none, and inventing the
+    // reason here would redefine the state the migration golden pins.
+    expect(deriveStatus(toStatusInput(null))).toEqual({
+      derivedStatus: 'draft',
+      statusReasons: [],
+    });
   });
 });
 
 describe('deriveStatus, when a revocation governs', () => {
   it('is draft carrying exactly ["revoked"]', () => {
-    expect(deriveStatus(REVOKED, [])).toEqual({
+    expect(deriveStatus(toStatusInput(REVOKED))).toEqual({
       derivedStatus: 'draft',
       statusReasons: ['revoked'],
     });
   });
 
-  it('ignores a NON-EMPTY staleness set entirely', () => {
-    // The discriminating case: an implementation that merges staleness into a
-    // revocation's reasons reports four here rather than one. A revoked
-    // signature's freshness is irrelevant, and reporting it would imply
-    // otherwise — that the withdrawal might be undone by the world settling.
-    const status = deriveStatus(REVOKED, ['stale_source_text', 'stale_render', 'source_reissued']);
-    expect(status.statusReasons).toEqual(['revoked']);
-    expect(status.derivedStatus).toBe('draft');
+  it('is never freshness_unchecked, whatever the world did after the withdrawal', () => {
+    // A revoked signature's freshness is irrelevant: only a fresh signature
+    // restores authority, and reporting drift beside a withdrawal would imply
+    // the world settling back down might undo it.
+    expect(deriveStatus(toStatusInput(REVOKED)).statusReasons).toEqual(['revoked']);
+  });
+});
+
+describe('deriveStatus, for a signing entry whose freshness was never checked', () => {
+  it('is draft carrying exactly ["freshness_unchecked"] — NOT draft with no reasons', () => {
+    const status = deriveStatus(toStatusInput(VERIFIED, UNCHECKED));
+    expect(status).toEqual({ derivedStatus: 'draft', statusReasons: ['freshness_unchecked'] });
+    // The discriminating assertion. The defect being closed reported this same
+    // input as `verified, []`; a near-miss fix reports `draft, []`, which
+    // collapses "nobody looked" into "nobody signed".
+    expect(status).not.toEqual({ derivedStatus: 'draft', statusReasons: [] });
   });
 
-  it('ignores every staleness reason there is, one at a time', () => {
-    for (const reason of EVERY_REASON) {
-      expect(deriveStatus(REVOKED, [reason]).statusReasons).toEqual(['revoked']);
-    }
-  });
-
-  it('reports "revoked" whatever the whole vocabulary throws at it', () => {
-    expect(deriveStatus(REVOKED, EVERY_REASON).statusReasons).toEqual(['revoked']);
+  it('demotes a ratified signature too, rather than trusting the higher claim', () => {
+    expect(deriveStatus(toStatusInput(RATIFIED, UNCHECKED))).toEqual({
+      derivedStatus: 'draft',
+      statusReasons: ['freshness_unchecked'],
+    });
   });
 });
 
 describe('deriveStatus, for a signing entry with no blocking staleness', () => {
   it('keeps the entry kind "verified" on a fresh signature', () => {
-    expect(deriveStatus(VERIFIED, [])).toEqual({ derivedStatus: 'verified', statusReasons: [] });
+    expect(deriveStatus(toStatusInput(VERIFIED, checked([])))).toEqual({
+      derivedStatus: 'verified',
+      statusReasons: [],
+    });
   });
 
   it('keeps the entry kind "ratified" on a fresh signature', () => {
     // The kind is carried through rather than derived: ratification is a
     // second, higher assertion and status must not silently demote it.
-    expect(deriveStatus(RATIFIED, [])).toEqual({ derivedStatus: 'ratified', statusReasons: [] });
+    expect(deriveStatus(toStatusInput(RATIFIED, checked([])))).toEqual({
+      derivedStatus: 'ratified',
+      statusReasons: [],
+    });
   });
 
   it('keeps its kind and still reports an advisory source_reissued', () => {
     // The publisher reissued the file and the words are identical, so the
     // conclusion still rests on the text that was read — the reader is told,
     // and the signature stands.
-    expect(deriveStatus(RATIFIED, ['source_reissued'])).toEqual({
+    expect(deriveStatus(toStatusInput(RATIFIED, checked(['source_reissued'])))).toEqual({
       derivedStatus: 'ratified',
       statusReasons: ['source_reissued'],
     });
-    expect(deriveStatus(VERIFIED, ['source_reissued'])).toEqual({
+    expect(deriveStatus(toStatusInput(VERIFIED, checked(['source_reissued'])))).toEqual({
       derivedStatus: 'verified',
       statusReasons: ['source_reissued'],
     });
@@ -195,14 +230,14 @@ describe('deriveStatus, for a signing entry with blocking staleness', () => {
       'stale_render',
       'stale_source_text',
     ];
-    expect(deriveStatus(VERIFIED, reasons)).toEqual({
+    expect(deriveStatus(toStatusInput(VERIFIED, checked(reasons)))).toEqual({
       derivedStatus: 'draft',
       statusReasons: ['source_reissued', 'stale_encoding', 'stale_render', 'stale_source_text'],
     });
   });
 
   it('demotes a ratified entry too', () => {
-    expect(deriveStatus(RATIFIED, ['stale_result'])).toEqual({
+    expect(deriveStatus(toStatusInput(RATIFIED, checked(['stale_result'])))).toEqual({
       derivedStatus: 'draft',
       statusReasons: ['stale_result'],
     });
@@ -213,50 +248,151 @@ describe('deriveStatus, for a signing entry with blocking staleness', () => {
     // gain a projection that disagrees with it.
     for (const reason of EVERY_REASON) {
       const expected = BLOCKING.has(reason) ? 'draft' : 'verified';
-      expect(deriveStatus(VERIFIED, [reason]).derivedStatus).toBe(expected);
-      expect(deriveStatus(VERIFIED, [reason]).statusReasons).toEqual([reason]);
+      const status = deriveStatus(toStatusInput(VERIFIED, checked([reason])));
+      expect(status.derivedStatus).toBe(expected);
+      expect(status.statusReasons).toEqual([reason]);
     }
   });
 
   it('preserves the order deriveStaleness supplied', () => {
     // deriveStaleness returns sorted; the projection must not re-sort or
     // re-group, or two surfaces would disagree about the same set.
-    expect(deriveStatus(VERIFIED, EVERY_REASON).statusReasons).toEqual(EVERY_REASON);
+    expect(deriveStatus(toStatusInput(VERIFIED, checked(EVERY_REASON))).statusReasons).toEqual(
+      EVERY_REASON,
+    );
   });
 
-  it('never inserts "revoked" into a signing entry reason set', () => {
-    const reasons = deriveStatus(VERIFIED, EVERY_REASON).statusReasons;
+  it('never inserts "revoked" or "freshness_unchecked" into a checked reason set', () => {
+    // A checked signature's reasons come from the resolver and from nowhere
+    // else. Either extra reason appearing here would mean the projection is
+    // inventing epistemic state it was handed the answer to.
+    const reasons = deriveStatus(toStatusInput(VERIFIED, checked(EVERY_REASON))).statusReasons;
     expect(reasons).not.toContain('revoked');
+    expect(reasons).not.toContain('freshness_unchecked');
+  });
+});
+
+describe('toStatusInput', () => {
+  it('projects an absent governing entry onto the unsigned variant', () => {
+    expect(toStatusInput(null)).toEqual({ kind: 'unsigned' });
+  });
+
+  it('projects a revocation onto the revoked variant, carrying the entry', () => {
+    expect(toStatusInput(REVOKED)).toEqual({ kind: 'revoked', entry: REVOKED });
+  });
+
+  it('carries the freshness assessment through unexamined and unmodified', () => {
+    // §5's rule, at the adapter: the resolver's answer is not inspected,
+    // normalised or merged on the way in. A `CheckedFreshness` is the whole of
+    // what was learned, and re-deriving any part of it here would create a
+    // second, quietly different opinion about the same question.
+    expect(toStatusInput(VERIFIED, checked(['stale_result']))).toEqual({
+      kind: 'signed',
+      entry: VERIFIED,
+      freshness: { checked: true, reasons: ['stale_result'] },
+    });
+    expect(toStatusInput(VERIFIED, UNCHECKED)).toEqual({
+      kind: 'signed',
+      entry: VERIFIED,
+      freshness: { checked: false },
+    });
   });
 });
 
 describe('deriveStatus is pure and total', () => {
-  it('returns a value for every combination of governing entry and reason set', () => {
-    const governing: (LedgerEntry | null)[] = [null, VERIFIED, RATIFIED, REVOKED];
-    const sets: StalenessReason[][] = [[], EVERY_REASON, ...EVERY_REASON.map((r) => [r])];
-    for (const entry of governing) {
-      for (const set of sets) {
-        expect(() => deriveStatus(entry, set)).not.toThrow();
-        const status = deriveStatus(entry, set);
-        expect(['draft', 'verified', 'ratified']).toContain(status.derivedStatus);
-        expect(Array.isArray(status.statusReasons)).toBe(true);
-      }
+  it('returns a value for every representable input', () => {
+    const inputs: StatusInput[] = [
+      toStatusInput(null),
+      toStatusInput(REVOKED),
+      toStatusInput(VERIFIED, UNCHECKED),
+      toStatusInput(RATIFIED, UNCHECKED),
+      ...[VERIFIED, RATIFIED].flatMap((entry) => [
+        toStatusInput(entry, checked([])),
+        toStatusInput(entry, checked(EVERY_REASON)),
+        ...EVERY_REASON.map((reason) => toStatusInput(entry, checked([reason]))),
+      ]),
+    ];
+    for (const input of inputs) {
+      expect(() => deriveStatus(input)).not.toThrow();
+      const status = deriveStatus(input);
+      expect(['draft', 'verified', 'ratified']).toContain(status.derivedStatus);
+      expect(Array.isArray(status.statusReasons)).toBe(true);
     }
   });
 
-  it('does not mutate the staleness array it was given', () => {
+  it('does not mutate the reason array it was given', () => {
     const reasons: StalenessReason[] = ['stale_render', 'source_reissued'];
-    deriveStatus(VERIFIED, reasons);
-    deriveStatus(REVOKED, reasons);
-    deriveStatus(null, reasons);
+    deriveStatus(toStatusInput(VERIFIED, checked(reasons)));
+    deriveStatus(toStatusInput(REVOKED));
+    deriveStatus(toStatusInput(null));
     expect(reasons).toEqual(['stale_render', 'source_reissued']);
   });
 
   it('does not alias the caller array, so a later push cannot rewrite history', () => {
     const reasons: StalenessReason[] = ['stale_render'];
-    const status = deriveStatus(VERIFIED, reasons);
+    const status = deriveStatus(toStatusInput(VERIFIED, checked(reasons)));
     const escaped: StatusReason[] = status.statusReasons;
     escaped.push('revoked');
     expect(reasons).toEqual(['stale_render']);
   });
 });
+
+/**
+ * The compile-time boundary. Nothing below runs; `tsconfig.json` includes
+ * `test`, so `npm run typecheck` is what asserts it, and every directive has
+ * been proven load-bearing by deleting it and confirming the build fails.
+ *
+ * These are not decoration for the runtime tests above. Five assertions that
+ * used to be runtime tests live here now, because the values they passed can no
+ * longer be constructed — a stronger statement than observing they were
+ * discarded.
+ */
+
+// --- freshness_unchecked is epistemic status, never a way the world moved ---
+
+// @ts-expect-error freshness_unchecked is epistemic status, not staleness
+const impossible: StalenessReason = 'freshness_unchecked';
+const valid: StatusReason = 'freshness_unchecked';
+void impossible;
+void valid;
+
+/**
+ * §3.1's four illegal calls: the adapter's deliberate friction.
+ *
+ * Never invoked. The compiler is the whole assertion, and running them would
+ * be worse than useless — an illegal call's *runtime* behaviour is undefined
+ * by design, so observing it would test the one thing that is not the claim.
+ */
+function illegalAdapterCalls(governing: LedgerEntry | null, signed: SigningEntry): void {
+  // @ts-expect-error a caller holding governingEntry()'s union must branch first
+  toStatusInput(governing);
+
+  // @ts-expect-error a signature must say whether its freshness was checked
+  toStatusInput(signed);
+
+  // @ts-expect-error freshness is meaningless where nothing is signed
+  toStatusInput(null, { checked: true, reasons: [] });
+
+  // @ts-expect-error freshness is meaningless for a revocation
+  toStatusInput(REVOKED, { checked: true, reasons: [] });
+}
+
+void illegalAdapterCalls;
+
+// --- the two authority variants have no freshness to be told about ---
+
+// @ts-expect-error the unsigned variant carries nothing but its discriminant
+const unsignedWithFreshness: StatusInput = { kind: 'unsigned', freshness: { checked: false } };
+
+// @ts-expect-error a revocation's StatusInput has no freshness field at all
+const revokedWithFreshness: StatusInput = { kind: 'revoked', entry: REVOKED, freshness: UNCHECKED };
+
+void unsignedWithFreshness;
+void revokedWithFreshness;
+
+// --- and a resolver's answer can never be the caller's "I did not look" ---
+
+// @ts-expect-error CheckedFreshness is checked: true by construction (§5)
+const resolverCannotDecline: CheckedFreshness = { checked: false };
+
+void resolverCannotDecline;

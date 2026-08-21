@@ -241,6 +241,23 @@ export interface Requirement {
   obligationTemplates?: string[];
 }
 
+/**
+ * A requirement as the file authored it, before the loader projects a status.
+ *
+ * It lives here, beside `Requirement`, rather than in the loader that
+ * originally needed it. Two things want the concept and neither should have to
+ * ask the other for it: the loader holds this shape while it is deciding what
+ * the status *is*, and `verification/sign.ts` hashes this shape because
+ *
+ *     derived verification status is not an input to the content
+ *     whose verification status is being established.
+ *
+ * Exporting it from `knowledge/loader.ts` would make a verification primitive
+ * depend on the knowledge loader merely to describe the absence of two fields,
+ * which is a dependency direction nothing about the concept justifies.
+ */
+export type AuthoredRequirement = Omit<Requirement, 'derivedStatus' | 'statusReasons'>;
+
 export interface SourceRecord {
   id: string;
   title: string;

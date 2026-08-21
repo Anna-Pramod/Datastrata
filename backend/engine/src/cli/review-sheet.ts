@@ -94,7 +94,7 @@ import {
 } from '../verification/result';
 import { candidateConditionSha256, candidateRenderedConditionSha256 } from '../verification/sign';
 import { BLOCKING, type CurrentState, type StalenessReason } from '../verification/staleness';
-import { deriveStatus, type RequirementStatus } from '../verification/status';
+import { deriveStatus, toStatusInput, type RequirementStatus } from '../verification/status';
 import { factLabel, factsReferencedBy } from '../verification/vocabulary';
 import { cliFailure, outcomeFor, readLedgerOrFail, resolvedStaleness, type VerifyPaths } from './sign';
 import {
@@ -507,9 +507,13 @@ function gatherRequirement(input: GatherOneInput): SheetRequirement {
   let status: RequirementStatus | null;
 
   if (signature === null) {
-    // Nothing signed, or a revocation governs. `deriveStatus` consults
-    // staleness in neither case, so nothing needs to be computed for it.
-    status = deriveStatus(governing, []);
+    // Nothing signed, or a revocation governs. This used to be correct by
+    // comment — "deriveStatus consults staleness in neither case, so nothing
+    // needs to be computed for it" — beside a call that passed an empty
+    // staleness set anyway. It is now correct by construction: neither variant
+    // has anywhere to put a freshness assessment, so nothing has to be trusted
+    // to ignore one.
+    status = deriveStatus(revocation === null ? toStatusInput(null) : toStatusInput(revocation));
   } else {
     for (const pinned of signature.corpus) {
       if (!input.heldDocIds.has(pinned.docId)) {
@@ -552,7 +556,11 @@ function gatherRequirement(input: GatherOneInput): SheetRequirement {
       // Task 4's resolver, reused rather than reimplemented: this is the
       // surface where `normalizer_changed`'s narrowing actually pays off.
       staleness = resolvedStaleness(signature, current, corpus);
-      status = deriveStatus(signature, staleness);
+      // Checked, and here is what was found. The sheet is the other surface
+      // entitled to say so: it has the corpus, the closure and the pinned
+      // result in hand, and the two integrity branches above are where it
+      // refuses rather than guesses when it does not.
+      status = deriveStatus(toStatusInput(signature, { checked: true, reasons: staleness }));
     }
   }
 

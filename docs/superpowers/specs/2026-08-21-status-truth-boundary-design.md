@@ -143,6 +143,8 @@ There is no `toStatusInput(governing: LedgerEntry \| null, freshness?: …)` ove
 | signing | checked, blocking | `draft`, `[full reason set]` |
 | signing | check attempted, trusted material missing | **throw** — no projection |
 
+**The last row is the resolver's behaviour, not `deriveStatus`'s.** It happens in §5, before `deriveStatus` is reached. `deriveStatus` itself is **total**: every representable `StatusInput` returns a value, and it throws only from the unreachable `assertNever`. A task asked to test "every row of this table" therefore has six rows to cover, not seven.
+
 `draft, []` keeps its exact current meaning: **no governing signature**. `freshness_unchecked` must never appear merely because nothing is signed. That compatibility is asserted, not assumed — see §6.
 
 ---
@@ -179,7 +181,7 @@ interface FreshnessResolverInput {
   /** The governing entry whose freshness is in question. */
   entry: SigningEntry;
   /** `{ factTypes, catalogues }` from the pack being assembled. */
-  renderCtx: RenderContext;
+  renderContext: RenderContext;
 }
 
 type FreshnessResolver = (input: FreshnessResolverInput) => CheckedFreshness;
@@ -318,7 +320,7 @@ Steps 1 and 4 are the positive control and they are mandatory. "A stale signed r
 
 ### 7.3 The no-catch rule, given teeth
 
-A fixture resolver that throws `IntegrityFailureError('missing pinned result')`:
+A fixture resolver that throws an `IntegrityFailureError`. **Note the real constructor takes `Refusal[]`, not a string** — `new IntegrityFailureError([{ code: 'integrity_failure', detail: 'missing pinned result' }])`. An earlier draft of this section wrote a string form that does not compile:
 
 ```
 loadPack must throw that failure

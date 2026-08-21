@@ -105,7 +105,7 @@ import {
   type CurrentState,
   type StalenessReason,
 } from '../verification/staleness';
-import { deriveStatus } from '../verification/status';
+import { deriveStatus, toStatusInput } from '../verification/status';
 import {
   EXIT_FORENSICS_REQUIRED,
   EXIT_INTEGRITY_FAILURE,
@@ -568,14 +568,26 @@ export function verifyAfterWrite(
   }
 
   if (expected.kind === 'revoked') {
-    const status = deriveStatus(governing, []);
-    if (status.derivedStatus !== 'draft' || !status.statusReasons.includes('revoked')) {
+    // The narrowing *is* the check now. `toStatusInput` will not accept an
+    // unnarrowed ledger entry, and a governing signature where a revocation was
+    // expected is exactly what "the revocation did not take" looks like from
+    // here — so there is no status to project in that case, and the branch says
+    // so by construction rather than by deriving one and then disbelieving it.
+    // A revocation's projection is draft plus `revoked` by type, which leaves
+    // the assertion below unfalsifiable through this variant and load-bearing
+    // through the other; both halves are reported the same way as before.
+    const status = governing.kind === 'revoked' ? deriveStatus(toStatusInput(governing)) : null;
+    if (
+      status === null ||
+      status.derivedStatus !== 'draft' ||
+      !status.statusReasons.includes('revoked')
+    ) {
       return {
         exitCode: EXIT_INTEGRITY_FAILURE,
         lines: [
           'INTEGRITY FAILURE — the revocation was appended, but the projection does not read as revoked.',
-          `  derivedStatus  ${status.derivedStatus} (expected draft)`,
-          `  statusReasons  ${status.statusReasons.join(', ') || 'none'} (expected to contain revoked)`,
+          `  derivedStatus  ${status?.derivedStatus ?? governing.kind} (expected draft)`,
+          `  statusReasons  ${status?.statusReasons.join(', ') || 'none'} (expected to contain revoked)`,
         ],
       };
     }
@@ -597,7 +609,10 @@ export function verifyAfterWrite(
   const world = readWorld(paths, packId, requirementId);
   const result = readResultOrRefuse(paths, packId, requirementId);
   const staleness = resolvedStaleness(governing, currentStateOf(world, result), world.corpus);
-  const status = deriveStatus(governing, staleness);
+  // Checked, and here is what was found. This CLI is one of the two places that
+  // can honestly say so: it has just re-read the corpus, the result and the
+  // ledger from disk.
+  const status = deriveStatus(toStatusInput(governing, { checked: true, reasons: staleness }));
 
   if (staleness.length > 0) {
     return {

@@ -32,7 +32,7 @@
  * weaker signal.
  */
 
-import type { Condition, Requirement } from '../types';
+import type { AuthoredRequirement, Condition, Requirement } from '../types';
 import { sha256Hex } from '../corpus/hash';
 import { requirementSchema } from '../knowledge/schema';
 
@@ -117,8 +117,13 @@ export function conditionSha256(condition: Condition): string {
  * the spec, added here) so a boolean requirement's condition can never hash
  * identically to a selection requirement's single-case cases[]/defaultValue
  * shape by coincidence of structure.
+ *
+ * `AuthoredRequirement`, because the payload is authored logic and nothing the
+ * loader attaches afterwards may reach it. Its two siblings below still take a
+ * whole `Requirement`: `requirementSha256` parses through `requirementSchema`,
+ * which strips the projected fields itself.
  */
-export function logicalPayloadSha256(requirement: Requirement): string {
+export function logicalPayloadSha256(requirement: AuthoredRequirement): string {
   const payload =
     requirement.kind === 'boolean'
       ? { kind: 'boolean', condition: requirement.condition }

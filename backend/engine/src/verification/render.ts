@@ -65,7 +65,7 @@
  * verification pass diff renderings across pack versions.
  */
 
-import type { CmpOp, Condition, FactType, Requirement } from '../types';
+import type { AuthoredRequirement, CmpOp, Condition, FactType } from '../types';
 import { factLabel, factUnit, renderValue } from './vocabulary';
 
 /**
@@ -413,8 +413,12 @@ function renderCaseEntry(when: Condition, value: string, label: string | undefin
  * case in evaluation order (the evaluator takes the first match, so order is
  * meaningful and stated explicitly) followed by the explicit fallback to
  * `defaultValue`.
+ *
+ * The parameter is `AuthoredRequirement`: this text is what a signature hashes
+ * and what prosecutors argued against, and a status the loader attached after
+ * the fact is no part of it. A `Requirement` still satisfies it.
  */
-export function renderRequirement(requirement: Requirement, ctx: RenderContext): string {
+export function renderRequirement(requirement: AuthoredRequirement, ctx: RenderContext): string {
   const header = `${requirement.id} — ${requirement.title}`;
 
   if (requirement.kind === 'selection') {

@@ -62,7 +62,7 @@
 import { checkEvidenceSet, type EvidenceItem } from '../corpus/evidence';
 import { sha256Hex } from '../corpus/hash';
 import type { LoadedCorpus } from '../corpus/store';
-import type { Requirement } from '../types';
+import type { AuthoredRequirement, Requirement } from '../types';
 import { renderRequirement, type RenderContext } from './render';
 import {
   conditionSha256,
@@ -231,8 +231,17 @@ export interface SignabilityInput {
  * than buried, because the result and the entry must agree on which hash this
  * field holds; two callers guessing differently would produce a permanent,
  * silent candidate inconsistency for every selection requirement in the pack.
+ *
+ * **The parameter is `AuthoredRequirement`, and the width is the claim.**
+ *
+ *     Derived verification status is not an input to the content
+ *     whose verification status is being established.
+ *
+ * The loader holds only the authored shape at the moment it needs this hash, so
+ * a narrower parameter would be repaired at the call site by a cast — which
+ * states the same thing where nobody reads it, and states it once per caller.
  */
-export function candidateConditionSha256(requirement: Requirement): string {
+export function candidateConditionSha256(requirement: AuthoredRequirement): string {
   return requirement.condition === undefined
     ? logicalPayloadSha256(requirement)
     : conditionSha256(requirement.condition);
@@ -252,9 +261,12 @@ export function candidateConditionSha256(requirement: Requirement): string {
  * agree on this value — the result producer, the entry builder and the review
  * sheet — and two of them guessing differently would show up as a permanent,
  * silent candidate inconsistency rather than as an error anyone could read.
+ *
+ * `AuthoredRequirement` for the same reason as its sibling above: the English a
+ * signature hashes is authored English, and `derivedStatus` is not part of it.
  */
 export function candidateRenderedConditionSha256(
-  requirement: Requirement,
+  requirement: AuthoredRequirement,
   ctx: RenderContext,
 ): string {
   return sha256Hex(renderRequirement(requirement, ctx));

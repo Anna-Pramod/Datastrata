@@ -19,7 +19,7 @@
 - **Every file starts with a JSDoc block saying *why* it exists**, not what it does.
 - **Commit message style is imperative sentence-case with no prefix.** No `Co-Authored-By` trailer.
 - **The user runs every `git add` and `git commit`.** Leave work in the tree and hand over the commands.
-- Baseline: **7 frontend + 875 engine** green, `npm run typecheck` exit 0 for both workspaces. Each task's baseline is the previous task's finishing count.
+- Baseline: **7 frontend + 875 engine** green at plan start (**12 + 909** at completion), `npm run typecheck` exit 0 for both workspaces. Each task's baseline is the previous task's finishing count.
 
 ## Spec reference
 
@@ -51,8 +51,17 @@ B1a's plan supplied full reference implementations and eight defects were found 
 Spec §3 and §3.1. The defect is not that someone forgot to compute staleness — it is that `[]` is a valid value meaning the opposite of what the caller meant. This task removes the ability to say it.
 
 **Files:**
-- Modify: `src/types.ts`, `src/verification/status.ts`, `src/verification/sign.ts`, `src/cli/review-sheet.ts`
+- Modify: `src/types.ts`, `src/verification/status.ts`, `src/verification/sign.ts`, `src/cli/sign.ts`, `src/cli/review-sheet.ts`, `src/knowledge/loader.ts`
+- Modify (forced, see below): `src/verification/canonical.ts`, `src/verification/render.ts`
 - Test: `test/verification-status.test.ts`
+
+**Three file-list corrections found during execution.**
+
+`loader.ts` **must** change in Task 1 — removing the old signature breaks its compile — but its *behaviour* is Task 2's. Only two values are expressible there, and the transitional choice is `{ checked: true, reasons: [] }`, which preserves Task 1's green baseline. `{ checked: false }` is Task 2's behaviour change and would fail two `min-status.test.ts` tests asserting a signed ledger loads as `verified`/`ratified` — those tests are Task 2's to rewrite. **The transitional line must carry a comment stating plainly that the claim is false and naming what replaces it.** For one commit the defect is written out in full rather than hidden in an empty array, which is the more visible of two bad options.
+
+**Widening the two candidate producers necessarily widens two more functions.** `candidateConditionSha256` calls `logicalPayloadSha256(requirement: Requirement)`, and `candidateRenderedConditionSha256` calls `renderRequirement(requirement: Requirement)`. With casting forbidden, both widen to `AuthoredRequirement`. Neither reads a status field, so the widening makes the same honest claim — but §5.1 names only two functions, and an implementer following it literally would reach for a cast at exactly the point the design forbids one.
+
+**`toStatusInput` needs an implementation signature the design does not give**: `(governing: LedgerEntry | null, freshness?: FreshnessAssessment)`. That is textually the shape §3.1 prohibits, but TypeScript does not expose an implementation signature — only the three overloads are callable, which the teeth check confirms. Make the absent-`freshness` path fail closed (`?? { checked: false }`) so even JavaScript reaching through a refused overload cannot produce `verified`. A reviewer should not read this as the prohibited overload.
 
 **Interfaces:**
 - Produces:
@@ -121,7 +130,7 @@ Spec §5 and §5.1. The loader is the unsound call site, and this is where it be
 
 **Required behaviours:**
 
-1. **Stage pack construction before building the object.** §5.1 gives the block verbatim; use it. `attachDerivedStatus` currently runs at the `requirements:` property while `catalogues:` is parsed four properties later, so the render context does not exist when status is attached. Object literal properties evaluate in order.
+1. **Stage pack construction before building the object.** §5.1 gives the block verbatim; use it. **It silently renames a variable and that rename is dangerous.** The tree inherited from Task 1 names the *raw* array `authoredRequirements`; §5.1 uses `rawRequirements` for the raw and `authoredRequirements` for the **parsed**. The rename is a genuine improvement — the old name claimed raw JSON was authored records — but an implementer diffing against the old file could mistake it for two variables surviving side by side and hand the wrong one to `verifyIntegrity`, which is precisely the guarantee behaviour 2 warns can break silently. `attachDerivedStatus` currently runs at the `requirements:` property while `catalogues:` is parsed four properties later, so the render context does not exist when status is attached. Object literal properties evaluate in order.
 2. **`verifyIntegrity` keeps receiving the RAW `requirements.json` array.** That is what Task 6's leftover-`ratification` check reads, and zod strips it from the parsed record. Breaking this silently disables a guarantee; §5.1 says so and the test list below pins it.
 3. **The resolver is invoked only for a governing `SigningEntry`.** Unsigned and revoked requirements never call it.
 4. **No resolver → `toStatusInput(signing, { checked: false })`.** Never `verified`.
@@ -130,12 +139,14 @@ Spec §5 and §5.1. The loader is the unsound call site, and this is where it be
 7. **`loadPack` acquires no corpus or result I/O.** The resolver closes over external verification state; the loader supplies only pack-local deterministic inputs. This is an acceptance criterion, verified by grep in the report.
 8. **A damaged ledger never reaches the resolver.** `parseLedger` runs before `governingEntry`, so `LedgerIntegrityError` is thrown first. Assert the ordering rather than assuming it.
 
-**Required test cases:** unsigned requirement — resolver **not called** (spy asserts zero invocations); revoked requirement — resolver not called; signed with no resolver → `draft, ['freshness_unchecked']`, asserted with `toEqual` and specifically **not** `draft, []`; signed with a resolver returning `{ checked: true, reasons: [] }` → `verified, []`; signed with a resolver returning blocking reasons → `draft` with the full set; the resolver receives the **authored** requirement (no `derivedStatus` key present on the input object) and a render context whose `catalogues` is populated; a damaged ledger throws `LedgerIntegrityError` and the resolver is never called; the leftover-`ratification` check still fires after staging.
+**Required test cases:** unsigned requirement — resolver **not called** (spy asserts zero invocations); revoked requirement — resolver not called; signed with no resolver → `draft, ['freshness_unchecked']`, asserted with `toEqual` and specifically **not** `draft, []`; signed with a resolver returning `{ checked: true, reasons: [] }` → **`entry.kind`**`, []` — so a `ratified` entry returns `ratified`, not `verified`; cover both kinds; signed with a resolver returning blocking reasons → `draft` with the full set; the resolver receives the **authored** requirement (no `derivedStatus` key present on the input object) and a render context whose `catalogues` is populated; a damaged ledger throws `LedgerIntegrityError` and the resolver is never called; the leftover-`ratification` check still fires after staging.
+
+**A third check, added after execution found the first two insufficient.** A spy count of `0` is **trivially satisfied by a loader that never calls the resolver at all**. Mutate the loader to invoke the resolver for *every* requirement regardless of authority, and confirm the count assertions fail. Note what will **not** fail: every status assertion stays green, because `deriveStatus` discards the value for unsigned and revoked inputs. The call count is the only thing that catches over-calling — which makes this a new instance of failure mode 5, in a shape the standard does not yet name: **an assertion that something does not happen is satisfied when nothing happens at all.**
 
 **Teeth checks, two — the first is the one that matters most in this plan:**
 
 1. **Mutate the loader to catch the resolver's exception and substitute `{ checked: false }`.** The propagation test must fail **specifically because an `IntegrityFailureError` was expected to escape**. Read the message and confirm that is what it says. A red suite alone does not count — this is precisely the case §5 leaves to prose plus a test, so if the test does not discriminate, §5's rule is unenforced. If it does not bite, **stop and report**.
-2. **Revert the staging change** so `catalogues` is parsed after `requirements`, and confirm the render-context test fails naming the empty or missing catalogues rather than crashing elsewhere.
+2. **Revert the staging change** so `catalogues` is parsed after `requirements`, and confirm the render-context test fails naming the catalogues rather than crashing elsewhere. **Use `catalogues: {}`, not `undefined`** — the plan's original "empty *or* missing" left this open, and `undefined` produces a `TypeError` inside `Object.keys`, which is technically at the right assertion but is a crash rather than a named failure. `{}` is also what a pre-staging implementation would have had to write to compile at all.
 
 Record both verbatim.
 
@@ -176,6 +187,16 @@ Spec §7. The two previous tasks make the over-claim unrepresentable; this one p
 2. **Every red output in the sequence is read** and confirmed to name the intended assertion rather than an upstream version-integrity or pack-integrity gate. Task 2 of the previous phase found a mutation that reddened everything by tripping `loadPack`; the same trap exists here because these fixtures load a pack.
 
 3. **The migration golden stays green throughout, and this is an architectural test.** With an empty ledger, unsigned remains `draft, []`, byte-compatible with B1b-ii-b's expectation and its one sanctioned adapter mapping. It proves the new distinction does not retroactively redefine the unsigned state. **Do not regenerate either golden artifact.** No regeneration path exists in the repository and none may be added.
+
+**Four things Task 3's execution found that this section did not say.**
+
+**`lib/pack.ts` has no resolver seam at all, and closing the operational gate will require a production change.** `csrdPack()` calls `loadPack(dir)` with **no options** and memoises the result, so the site as shipped can never supply a resolver — which means `packStats().ratified` is structurally pinned at 0. Task 3 reached the public path without a production change by mocking at the module boundary, which is right for a test, but this section is written as though a resolver could already flow through the site. It cannot. **Carry this into B2's scope explicitly.**
+
+**"The public counts" is ambiguous and one reading is false.** §1 means `packStats()` in `lib/pack.ts`. But `CheckResponse.counts` is also literally named `counts`, and it is taken at the default `draft` floor, so it is **invariant** across all four stages by design. Exercise `packStats().ratified` as the varying count and `CheckResponse.counts` as the invariant counterexample in the same run. An implementer following "the public counts must follow the same fixture through all four stages" literally would write an assertion that is simply wrong.
+
+**`containsDraftContent` only discriminates against a fully-signed fixture.** With a partial ledger the unsigned remainder keeps it `true` in every stage and the assertion proves nothing — a latent failure-mode-5 instance. Sign all sixteen.
+
+**Which pin moves in stage 2 is load-bearing.** `['stale_result']` *specifically* requires moving `resultSha256` and nothing else: `conditionSha256` yields `['stale_encoding']`, and a corpus normalized hash yields `['stale_source_text']`. "Mutate pinned vs current result" does not say that the choice is what makes the expected array exact.
 
 4. **The public path exercises the same projection.** `containsDraftContent` and the public counts must follow the same fixture through all four stages, since those are the three places the over-claim propagated.
 

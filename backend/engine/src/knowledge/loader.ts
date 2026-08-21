@@ -15,12 +15,18 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
-import type { Condition, KnowledgePack, Requirement } from '../types';
+import type { AuthoredRequirement, Condition, KnowledgePack, Requirement } from '../types';
 import { assertFactVocabularyCoverage } from '../verification/vocabulary';
 import { requirementSha256 } from '../verification/canonical';
 import { assertVersionIntegrity, parseVersionRegistry, VersionIntegrityError } from '../verification/registry';
-import { governingEntry, parseLedger } from '../verification/ledger';
-import { deriveStatus } from '../verification/status';
+import { governingEntry, parseLedger, type SigningEntry } from '../verification/ledger';
+import type { RenderContext } from '../verification/render';
+import {
+  deriveStatus,
+  toStatusInput,
+  type CheckedFreshness,
+  type FreshnessAssessment,
+} from '../verification/status';
 import {
   catalogueSchema,
   factTypeSchema,
@@ -108,41 +114,106 @@ function defaultLedgerPath(packDir: string): string {
   return join(defaultVerificationDir(packDir), 'signatures.jsonl');
 }
 
+/**
+ * Everything the loader hands a resolver, and deliberately nothing more.
+ *
+ * The requirement is the **authored** shape: derived verification status is not
+ * an input to the content whose verification status is being established, and
+ * the type is what says so rather than a comment.
+ *
+ * `renderContext` is here because a live resolver has to compare the entry's
+ * pinned `conditionSha256` and `renderedConditionSha256` against *current*
+ * values, which means calling `candidateConditionSha256(requirement)` and
+ * `candidateRenderedConditionSha256(requirement, ctx)`. Were only the entry
+ * supplied, obtaining those current values would mean loading the very pack
+ * whose statuses are being resolved — a recursive `loadPack()`.
+ *
+ * **This is not "everything the resolver needs".** The loader supplies the
+ * pack-local deterministic inputs; the resolver closes over the external
+ * verification state it owns — corpus, result storage, verification paths.
+ * That division is the whole reason `loadPack` acquires no corpus or result
+ * I/O, and describing the input the other way is how someone later justifies
+ * adding exactly that.
+ */
+export interface FreshnessResolverInput {
+  packId: string;
+  /** The authored requirement, before any status is attached. */
+  requirement: AuthoredRequirement;
+  /** The governing entry whose freshness is in question. */
+  entry: SigningEntry;
+  /** `{ factTypes, catalogues }` from the pack being assembled. */
+  renderContext: RenderContext;
+}
+
+/**
+ * Answers "was this signature's freshness evaluated, and what was found?".
+ *
+ * It returns `CheckedFreshness` and never `FreshnessAssessment`, so no resolver
+ * outcome can produce `{ checked: false }`. That value keeps exactly one
+ * provenance — a caller deliberately did not supply a resolver — which is what
+ * stops *"I could not check"* and *"I did not check"* from collapsing into one
+ * another. A resolver that cannot complete its check throws; it does not report
+ * ignorance, and this loader does not convert one into the other.
+ */
+export type FreshnessResolver = (input: FreshnessResolverInput) => CheckedFreshness;
+
 export interface LoadPackOptions {
   /** Overrides the directory holding `<packId>.json`. Defaults to the convention above. */
   versionRegistryDir?: string;
   /** Overrides `verification/signatures.jsonl`. An absent file is an empty ledger. */
   ledgerPath?: string;
+  /**
+   * Evaluates the freshness of each governing signature. Absent means nothing
+   * was evaluated, which loads as `draft, ['freshness_unchecked']` — never as
+   * the signature's own `kind`.
+   */
+  freshnessResolver?: FreshnessResolver;
 }
-
-/** A requirement as the file authored it, before the loader projects a status. */
-type AuthoredRequirement = Omit<Requirement, 'derivedStatus' | 'statusReasons'>;
 
 /**
  * Every requirement's status, projected from the ledger at load time.
  *
- * **The loader answers from the ledger and from nothing else, and that boundary
- * is deliberate.** Staleness is the other axis of the §7 projection, and
+ * **The loader answers from the ledger, and about freshness it answers only
+ * what it was told.** Staleness is the other axis of the projection, and
  * computing it needs the corpus, the rendered condition and the pinned
- * verification result — none of which `loadPack` reads. Pulling them in would
- * make every page load depend on the corpus being intact, which is a far larger
- * change than this migration, and answering with a *partial* staleness set
- * would be worse still: a "fresh" claim from a check that only looked at half
- * the world. So a governing signature is reported at its own `kind`, and drift
- * is detected where the bytes are — the sign CLI's post-write check and the
- * review sheet, both of which call `deriveStaleness` and then this same
- * `deriveStatus`.
+ * verification result — none of which `loadPack` reads, and none of which it
+ * may acquire. So the loader does not compute freshness; it takes a resolver
+ * that owns that external state, and where no resolver is supplied it says so.
+ * `{ checked: false }` is the only value it can honestly produce on its own,
+ * and it produces `draft, ['freshness_unchecked']` rather than the signature's
+ * own `kind`. Until this seam existed the loader passed
+ * `{ checked: true, reasons: [] }` — *"I checked and nothing is stale"* —
+ * having checked nothing, which meant the moment the ledger held a signature
+ * that had since gone stale, the public site would have called it `verified`.
  *
  * An absent ledger file is an empty ledger: nothing has been signed, so every
  * requirement is `draft` with no reasons. A ledger that exists but cannot be
  * parsed is **not** treated as empty — `parseLedger` throws and the load fails,
  * because a damaged history reading as "nothing signed" is the one failure mode
- * an append-only record exists to prevent.
+ * an append-only record exists to prevent. That call sits above the map, so a
+ * damaged history is settled before any authority is resolved and before a
+ * resolver could be reached: a damaged ledger is not the resolver's to
+ * discover, and must not be folded into its integrity failures.
+ *
+ * **The resolver is asked only where the question has meaning.** An unsigned
+ * requirement has no signature for freshness to be about, and a revocation's
+ * freshness is irrelevant — only a fresh signature restores authority, never
+ * the world settling back down. Both would cost real work to produce a value
+ * `deriveStatus` discards, so neither branch calls it.
+ *
+ * **There is deliberately no `try` around the resolver.** A resolver throws
+ * when trusted material is missing or damaged, and catching that to substitute
+ * `{ checked: false }` would turn *"I checked and the record is broken"* into
+ * *"I have not checked"* — the one conversion §5 of the design forbids. A
+ * caller further out can still catch and lie, but that now takes visible code a
+ * reviewer can see rather than a silent fallback here.
  */
 function attachDerivedStatus(
   packId: string,
   requirements: AuthoredRequirement[],
   ledgerFile: string,
+  renderContext: RenderContext,
+  freshnessResolver?: FreshnessResolver,
 ): Requirement[] {
   let text: string;
   try {
@@ -151,7 +222,19 @@ function attachDerivedStatus(
     text = '';
   }
   const entries = parseLedger(text);
-  return requirements.map((r) => ({ ...r, ...deriveStatus(governingEntry(entries, packId, r.id), []) }));
+  return requirements.map((r) => {
+    const governing = governingEntry(entries, packId, r.id);
+    if (governing === null) return { ...r, ...deriveStatus(toStatusInput(null)) };
+    if (governing.kind === 'revoked') return { ...r, ...deriveStatus(toStatusInput(governing)) };
+    // The assessment goes in unexamined and unmodified: it is the whole of what
+    // the resolver found, and second-guessing any part of it here would create
+    // a quietly different opinion about the same question.
+    const freshness: FreshnessAssessment =
+      freshnessResolver === undefined
+        ? { checked: false }
+        : freshnessResolver({ packId, requirement: r, entry: governing, renderContext });
+    return { ...r, ...deriveStatus(toStatusInput(governing, freshness)) };
+  });
 }
 
 /**
@@ -181,25 +264,47 @@ export function loadPack(dir: string, options: LoadPackOptions = {}): KnowledgeP
   const read = (name: string) => JSON.parse(readFileSync(join(dir, name), 'utf8'));
 
   const m = manifestSchema.parse(read('pack.json'));
-  // Kept unparsed as well as parsed: zod strips unknown keys, so a deleted
-  // authored field such as `ratification` is invisible in the parsed record and
-  // has to be looked for in what the file actually said.
-  const authoredRequirements: unknown[] = read('requirements.json');
+
+  // Raw as well as parsed: zod strips unknown keys, so a deleted authored field
+  // such as `ratification` is invisible in the parsed record and has to be
+  // looked for in what the file actually said. `verifyIntegrity` below is
+  // handed this array and not `pack.requirements`.
+  const rawRequirements: unknown[] = read('requirements.json');
+
+  // Staged before construction rather than parsed inside the object literal.
+  // Object literal properties evaluate in order, and `attachDerivedStatus` ran
+  // at `requirements:` while `catalogues:` was parsed four properties later —
+  // so the render context a resolver needs did not yet exist at the moment
+  // status was attached. Beyond making the resolver possible, the staging says
+  // something the old shape obscured: status attachment is a projection over
+  // already-parsed authored knowledge, not a step halfway through building the
+  // pack.
+  const sources = z.array(sourceRecordSchema).parse(read('sources.json'));
+  const factTypes = z.array(factTypeSchema).parse(read('fact-types.json'));
+  const catalogues = z.record(catalogueSchema).parse(read('catalogues.json'));
+  const authoredRequirements = z.array(requirementSchema).parse(rawRequirements);
+
+  const renderContext: RenderContext = { factTypes, catalogues };
+
+  const requirements = attachDerivedStatus(
+    m.id,
+    authoredRequirements,
+    options.ledgerPath ?? defaultLedgerPath(dir),
+    renderContext,
+    options.freshnessResolver,
+  );
+
   const pack: KnowledgePack = {
     ...m,
-    sources: z.array(sourceRecordSchema).parse(read('sources.json')),
-    factTypes: z.array(factTypeSchema).parse(read('fact-types.json')),
-    requirements: attachDerivedStatus(
-      m.id,
-      z.array(requirementSchema).parse(authoredRequirements),
-      options.ledgerPath ?? defaultLedgerPath(dir),
-    ),
+    sources,
+    factTypes,
+    requirements,
     obligationTemplates: z.array(obligationTemplateSchema).parse(read('obligation-templates.json')),
     gapTests: z.array(gapTestSchema).parse(read('gap-tests.json')),
     questions: z.array(questionSchema).parse(read('questionnaire.json')),
-    catalogues: z.record(catalogueSchema).parse(read('catalogues.json')),
+    catalogues,
   };
-  verifyIntegrity(pack, authoredRequirements);
+  verifyIntegrity(pack, rawRequirements);
   assertFactVocabularyCoverage(pack);
   assertRequirementVersions(pack, options.versionRegistryDir ?? defaultVersionRegistryDir(dir));
   return pack;
