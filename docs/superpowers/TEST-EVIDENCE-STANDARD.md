@@ -50,8 +50,22 @@ property.
 The reviewer then made the same mistake mutating `sign.ts`, got a `TypeError`,
 and reddened five tests while proving nothing.
 
-*Counter-measure:* read the failure message. If it does not name your
-assertion, your mutation is wrong, not your code.
+**The same failure has a silent twin.** Verifying the public resolver seam's
+Task 0, the reviewer removed the *comment line* mentioning
+`requirement-versions` instead of the glob itself. The deployment gate passed —
+correctly, because the glob was still there — and the pass looked like clean
+evidence that the repair held. It proved nothing at all. The mutation had
+missed its target.
+
+*Counter-measure, both directions:*
+
+- **Read the failure message.** If it does not name your assertion, your
+  mutation is wrong, not your code.
+- **A mutation is evidence only after verifying that the intended semantic
+  property was actually changed.** "Run the mutant, the suite stays green" is
+  ambiguous until you know the mutant altered what you meant. Confirm the
+  change landed — grep for the construct you removed, diff the file, assert the
+  count went to zero — *before* interpreting either colour.
 
 ### 3. No test was ever observed failing
 
