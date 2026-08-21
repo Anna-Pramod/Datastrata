@@ -67,7 +67,8 @@ function requirement(id: string, shape: { condition?: Condition; cases?: Require
     cases: shape.cases,
     defaultValue: shape.defaultValue,
     legalStatus: 'in_force',
-    ratification: { status: 'draft' },
+    derivedStatus: 'draft',
+    statusReasons: [],
     sources: ['SRC-TEST'],
   };
 }

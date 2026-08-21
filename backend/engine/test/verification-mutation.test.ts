@@ -346,7 +346,8 @@ function syntheticRequirement(id: string, condition: Condition): Requirement {
     severity: 'high',
     kind: 'boolean',
     legalStatus: 'in_force',
-    ratification: { status: 'ratified' },
+    derivedStatus: 'ratified',
+    statusReasons: [],
     sources: [],
     condition,
   };

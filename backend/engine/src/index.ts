@@ -1,5 +1,6 @@
 export * from './types';
 export { assess, bestResult } from './engine/evaluate';
+export type { AssessOptions, MinStatus } from './engine/evaluate';
 export { evaluateCondition, cmpRange, EngineContentError } from './condition/evaluate';
 export { FactResolver } from './engine/facts';
 export { loadPack, verifyIntegrity, PackIntegrityError } from './knowledge/loader';

@@ -4,6 +4,11 @@
  * assess(pack, profile, ctx) → determinations + obligations + gaps + next
  * questions + program summary. Same inputs and pack version always produce the
  * same output (no clock reads, no randomness, no model calls).
+ *
+ * A requirement's verification status arrives already derived, attached by the
+ * loader from the signature ledger. Nothing here asks whether anyone signed
+ * anything; it reads `derivedStatus` the way it reads `severity`, which is what
+ * keeps the engine ignorant of the ledger's existence.
  */
 
 import type {
@@ -22,13 +27,33 @@ import { deriveGaps } from './gaps';
 import { rankNextQuestions } from './nextQuestion';
 import { summarise } from './summary';
 
+/**
+ * The lowest derived status a requirement may hold and still be evaluated.
+ *
+ * A distinct type from `DerivedStatus` although the members coincide: one is a
+ * floor a caller chooses, the other a state a requirement is in. Collapsing
+ * them would make `minStatus: 'ratified'` read as "requirements that are
+ * ratified" rather than "at least ratified", which is the same wrong guess the
+ * old boolean forced.
+ */
+export type MinStatus = 'draft' | 'verified' | 'ratified';
+
+/** Lowest first. A requirement is included when its rank is at or above the floor. */
+const STATUS_RANK: Record<MinStatus, number> = { draft: 0, verified: 1, ratified: 2 };
+
 export interface AssessOptions {
   /**
-   * Include draft (unratified) requirements. Default true for development.
-   * Customer-warranted output must run with includeDraft=false or clearly
-   * banner the prototype status (CLI does the latter).
+   * The lowest derived status to evaluate. Defaults to `'draft'`, which
+   * includes everything and is what makes the migration from `includeDraft`
+   * bit-identical: that boolean defaulted to `true` and no caller ever passed
+   * it, so the filter had never run and must not start running here.
+   *
+   * Customer-warranted output raises this floor, or clearly banners the
+   * prototype status (the CLI does the latter). Raising it is a product
+   * decision about what the surface claims, taken deliberately at the call
+   * site — never a side effect of a migration.
    */
-  includeDraft?: boolean;
+  minStatus?: MinStatus;
 }
 
 interface Memo {
@@ -37,9 +62,9 @@ interface Memo {
 }
 
 export function assess(pack: KnowledgePack, profile: Profile, ctx: AssessmentContext, opts: AssessOptions = {}): AssessmentResult {
-  const includeDraft = opts.includeDraft ?? true;
+  const floor = STATUS_RANK[opts.minStatus ?? 'draft'];
   const resolver = new FactResolver(profile, pack.factTypes);
-  const requirements = pack.requirements.filter((r) => includeDraft || r.ratification.status === 'ratified');
+  const requirements = pack.requirements.filter((r) => STATUS_RANK[r.derivedStatus] >= floor);
   const reqById = new Map(requirements.map((r) => [r.id, r]));
 
   const memo = new Map<string, Memo>();
@@ -169,7 +194,8 @@ export function assess(pack: KnowledgePack, profile: Profile, ctx: AssessmentCon
         provisions: req.provisions,
         caution: req.caution,
         legalStatus: req.legalStatus,
-        ratificationStatus: req.ratification.status,
+        derivedStatus: req.derivedStatus,
+        statusReasons: req.statusReasons,
         evaluatedAt: ctx.assessmentDate,
         packVersion: `${pack.id}@${pack.version} (legal snapshot ${pack.legalSnapshot})`,
       });
@@ -180,7 +206,7 @@ export function assess(pack: KnowledgePack, profile: Profile, ctx: AssessmentCon
   const gaps = deriveGaps(pack, obligations, resolver, profile);
   const nextQuestions = rankNextQuestions(pack, determinations, profile);
   const summary = summarise(pack, determinations);
-  const containsDraftContent = determinations.some((d) => d.ratificationStatus === 'draft');
+  const containsDraftContent = determinations.some((d) => d.derivedStatus === 'draft');
 
   return { context: ctx, determinations, obligations, gaps, nextQuestions, summary, changeWatch: pack.changeWatch, containsDraftContent };
 }

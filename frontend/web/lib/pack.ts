@@ -50,7 +50,10 @@ export function packStats() {
     legalSnapshot: pack.legalSnapshot,
     requirements: pack.requirements.length,
     inForce: pack.requirements.filter((r) => r.legalStatus === 'in_force').length,
-    ratified: pack.requirements.filter((r) => r.ratification.status === 'ratified').length,
+    // Derived from the signature ledger by the loader, never asserted in the
+    // authored content. Nothing sets `ratified` yet, so this reads 0 — which is
+    // the honest number and the same one the asserted field produced.
+    ratified: pack.requirements.filter((r) => r.derivedStatus === 'ratified').length,
     sources: pack.sources.length,
     obligationTemplates: pack.obligationTemplates.length,
     questions: pack.questions.length,

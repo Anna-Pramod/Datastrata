@@ -36,7 +36,8 @@ function requirement(overrides: Partial<Requirement> = {}): Requirement {
     kind: 'boolean',
     condition: { op: 'exists', fact: 'entity.turnover' },
     legalStatus: 'in_force',
-    ratification: { status: 'draft' },
+    derivedStatus: 'draft',
+    statusReasons: [],
     sources: ['SRC-TEST'],
     ...overrides,
   };
@@ -285,7 +286,6 @@ const AUTHORED_EDITS: Array<[string, Partial<Requirement>]> = [
   ['cases', { cases: [{ when: { op: 'exists', fact: 'entity.employees' }, value: 'set_2' }] }],
   ['defaultValue', { defaultValue: 'set_9' }],
   ['legalStatus', { legalStatus: 'proposed' }],
-  ['ratification', { ratification: { status: 'ratified' } }],
   ['sources', { sources: ['SRC-OTHER'] }],
   ['provisions', { provisions: 'Art. 19a(2)' }],
   ['caution', { caution: 'A different caution.' }],

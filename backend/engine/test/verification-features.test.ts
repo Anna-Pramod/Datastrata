@@ -88,7 +88,8 @@ function requirement(
     severity: 'high',
     kind: shape.cases ? 'selection' : 'boolean',
     legalStatus: 'in_force',
-    ratification: { status: 'ratified' },
+    derivedStatus: 'ratified',
+    statusReasons: [],
     sources: [],
     ...shape,
   };

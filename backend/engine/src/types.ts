@@ -7,7 +7,13 @@
  *  - every determination carries a derivation trace and source citations
  *  - facts are sourced objects, not form fields; unconfirmed facts are invisible to the evaluator
  *  - requirements are data; the engine contains no program-specific code paths
+ *  - a requirement's verification status is derived from the signature ledger
+ *    at load time, never asserted in the authored content
  */
+
+import type { DerivedStatus, StatusReason } from './verification/status';
+
+export type { DerivedStatus, StatusReason };
 
 export type Truth = 'APPLIES' | 'DOES_NOT_APPLY' | 'INDETERMINATE';
 
@@ -188,12 +194,6 @@ export type Condition =
 // Requirements (shared knowledge graph, versioned)
 // ---------------------------------------------------------------------------
 
-export interface Ratification {
-  status: 'draft' | 'ratified';
-  by?: string;
-  date?: string;
-}
-
 export interface SelectionCase {
   when: Condition;
   value: string;
@@ -226,7 +226,15 @@ export interface Requirement {
   defaultValue?: string;
   /** Legal status of the underlying rule. Only in_force requirements may instantiate obligations. */
   legalStatus: LegalStatus;
-  ratification: Ratification;
+  /**
+   * Attached by the loader from `verification/signatures.jsonl`, never
+   * authored. It is deliberately not part of `requirementSchema`, so zod's
+   * default strip behaviour keeps it out of `requirementSha256` — a status
+   * change must not read as a content revision and trip version integrity.
+   */
+  derivedStatus: DerivedStatus;
+  /** Why the status reads as it does. Empty when nothing has been signed. */
+  statusReasons: StatusReason[];
   sources: string[];
   provisions?: string;
   caution?: string;
@@ -367,7 +375,10 @@ export interface Determination {
   provisions?: string;
   caution?: string;
   legalStatus: LegalStatus;
-  ratificationStatus: 'draft' | 'ratified';
+  /** The requirement's derived verification status at the time of assessment. */
+  derivedStatus: DerivedStatus;
+  /** The reasons behind that status, carried so a surface can say why. */
+  statusReasons: StatusReason[];
   evaluatedAt: string;
   packVersion: string;
 }

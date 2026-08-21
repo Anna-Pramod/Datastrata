@@ -1,7 +1,7 @@
 [
   {
     "id": "CSRD-S-001",
-    "version": 1,
+    "version": 2,
     "ruleRef": "R-001",
     "title": "Individual Article 19a threshold scope",
     "program": "CSRD",
@@ -21,14 +21,13 @@
       ]
     },
     "legalStatus": "in_force",
-    "ratification": { "status": "draft" },
     "sources": ["SRC-004", "SRC-001"],
     "provisions": "Accounting Directive Art. 19a as amended by Directive (EU) 2026/470",
     "caution": "Threshold-crossing ranges are indeterminate — ask for the exact value. This is scope, not the final reporting duty (see CSRD-S-014); national transposition may vary timing and options."
   },
   {
     "id": "CSRD-S-002",
-    "version": 1,
+    "version": 2,
     "ruleRef": "R-002",
     "title": "Consolidated Article 29a threshold scope",
     "program": "CSRD",
@@ -49,14 +48,13 @@
       ]
     },
     "legalStatus": "in_force",
-    "ratification": { "status": "draft" },
     "sources": ["SRC-004", "SRC-001"],
     "provisions": "Accounting Directive Art. 29a as amended by Directive (EU) 2026/470",
     "caution": "Use the legal consolidation perimeter, not internal business units."
   },
   {
     "id": "CSRD-S-003",
-    "version": 1,
+    "version": 2,
     "ruleRef": "R-004",
     "title": "First-wave (FY2024) reporting history",
     "program": "CSRD",
@@ -68,13 +66,12 @@
     "kind": "boolean",
     "condition": { "op": "eq", "fact": "entity.reported_csrd_fy2024", "value": true },
     "legalStatus": "in_force",
-    "ratification": { "status": "draft" },
     "sources": ["SRC-004", "SRC-006"],
     "caution": "Never tell a former reporter to stop based only on an EU-level threshold screen (see CSRD-S-004 and CSRD-S-013)."
   },
   {
     "id": "CSRD-S-004",
-    "version": 1,
+    "version": 2,
     "ruleRef": "R-006",
     "title": "FY2025–26 national transition exemption",
     "program": "CSRD",
@@ -100,13 +97,12 @@
       ]
     },
     "legalStatus": "in_force",
-    "ratification": { "status": "draft" },
     "sources": ["SRC-004", "SRC-015"],
     "caution": "Requires the governing country pack — this is a national option, not a universal automatic exemption."
   },
   {
     "id": "CSRD-S-005",
-    "version": 1,
+    "version": 2,
     "ruleRef": "R-007",
     "title": "Subsidiary exemption via qualifying EU-parent consolidated report",
     "program": "CSRD",
@@ -128,13 +124,12 @@
       ]
     },
     "legalStatus": "in_force",
-    "ratification": { "status": "draft" },
     "sources": ["SRC-002", "SRC-004"],
     "caution": "Scope and exemption are separate determinations: 'threshold in scope but exempt' must never be summarised as 'CSRD does not apply'. Exemption evidence must remain current every year (O-011)."
   },
   {
     "id": "CSRD-S-006",
-    "version": 1,
+    "version": 2,
     "ruleRef": "R-007",
     "title": "Subsidiary exemption via qualifying non-EU parent report",
     "program": "CSRD",
@@ -157,13 +152,12 @@
       ]
     },
     "legalStatus": "in_force",
-    "ratification": { "status": "draft" },
     "sources": ["SRC-002", "SRC-004", "SRC-009"],
     "caution": "'EQUIVALENT' requires a formal equivalence basis — treat as legal judgment with a signed DecisionRecord until an equivalence decision exists."
   },
   {
     "id": "CSRD-S-007",
-    "version": 1,
+    "version": 2,
     "ruleRef": "R-009",
     "title": "Article 40a third-country group gate",
     "program": "CSRD",
@@ -182,13 +176,12 @@
       ]
     },
     "legalStatus": "in_force",
-    "ratification": { "status": "draft" },
     "sources": ["SRC-004", "SRC-001"],
     "provisions": "Accounting Directive Art. 40a as amended by Directive (EU) 2026/470"
   },
   {
     "id": "CSRD-S-008",
-    "version": 1,
+    "version": 2,
     "ruleRef": "R-010",
     "title": "Article 40a subsidiary gateway",
     "program": "CSRD",
@@ -208,13 +201,12 @@
       ]
     },
     "legalStatus": "in_force",
-    "ratification": { "status": "draft" },
     "sources": ["SRC-004"],
     "caution": "The subsidiary is a publication gateway, not necessarily the reporting parent. Art. 40a reporting runs for financial years beginning on or after 1 January 2028 (R-012)."
   },
   {
     "id": "CSRD-S-009",
-    "version": 1,
+    "version": 2,
     "ruleRef": "R-011",
     "title": "Article 40a branch gateway",
     "program": "CSRD",
@@ -233,13 +225,12 @@
       ]
     },
     "legalStatus": "in_force",
-    "ratification": { "status": "draft" },
     "sources": ["SRC-004"],
     "caution": "Evaluate the branch gateway only after the subsidiary gateway."
   },
   {
     "id": "CSRD-S-010",
-    "version": 1,
+    "version": 2,
     "ruleRef": "R-013",
     "title": "Protected value-chain undertaking",
     "program": "CSRD",
@@ -258,13 +249,12 @@
       ]
     },
     "legalStatus": "in_force",
-    "ratification": { "status": "draft" },
     "sources": ["SRC-004", "SRC-010"],
     "caution": "This is NOT a direct CSRD reporting duty and the cap is purpose-limited: it does not restrict requests made for due diligence, lending or other purposes (R-016). Do not infer purpose from the requestor's identity."
   },
   {
     "id": "CSRD-S-011",
-    "version": 1,
+    "version": 2,
     "ruleRef": "R-014",
     "title": "Above-cap request with decline right",
     "program": "CSRD",
@@ -282,13 +272,12 @@
       ]
     },
     "legalStatus": "in_force",
-    "ratification": { "status": "draft" },
     "sources": ["SRC-004", "SRC-010", "SRC-008"],
     "caution": "The cap protection does not extend to GHG emissions metrics — never advise declining emissions-data requests on cap grounds. The item catalogue versions against the voluntary-standard delegated act, which is adopted but not yet in force; mappings stay provisional until then."
   },
   {
     "id": "CSRD-S-012",
-    "version": 1,
+    "version": 2,
     "ruleRef": "R-018",
     "title": "Applicable ESRS version",
     "program": "CSRD",
@@ -323,13 +312,12 @@
     ],
     "defaultValue": "ESRS_2023",
     "legalStatus": "in_force",
-    "ratification": { "status": "draft" },
     "sources": ["SRC-005", "SRC-006", "SRC-007"],
     "caution": "The revised ESRS were adopted 3 Jul 2026 but were NOT in force at the pack snapshot; they must not alter current obligations until legal effectiveness (Change Watch CW-001)."
   },
   {
     "id": "CSRD-S-013",
-    "version": 1,
+    "version": 2,
     "ruleRef": "R-024",
     "title": "National-law completeness gate",
     "program": "CSRD",
@@ -348,13 +336,12 @@
       ]
     },
     "legalStatus": "in_force",
-    "ratification": { "status": "draft" },
     "sources": ["SRC-015", "SRC-001"],
     "caution": "CSRD is directive-based law. A negative EU-level threshold result with this gate unresolved must read 'EU-level threshold not met; national-law status requires review' — never 'CSRD does not apply'."
   },
   {
     "id": "CSRD-S-014",
-    "version": 1,
+    "version": 2,
     "ruleRef": "R-017",
     "title": "Reporting duty (post-exemption)",
     "program": "CSRD",
@@ -388,13 +375,12 @@
       ]
     },
     "legalStatus": "in_force",
-    "ratification": { "status": "draft" },
     "sources": ["SRC-002", "SRC-004"],
     "caution": "A standalone promotional sustainability report is not automatically sufficient. First reporting year and filing calendar resolve through the national overlay (S-013) and timing rules (R-005: generally FY beginning on or after 1 Jan 2027 for non-first-wave reporters)."
   },
   {
     "id": "CSRD-S-015",
-    "version": 1,
+    "version": 2,
     "ruleRef": "R-020",
     "title": "Limited assurance over sustainability reporting",
     "program": "CSRD",
@@ -406,13 +392,12 @@
     "kind": "boolean",
     "condition": { "op": "requirement_ref", "requirement": "CSRD-S-014", "expect": "APPLIES" },
     "legalStatus": "in_force",
-    "ratification": { "status": "draft" },
     "sources": ["SRC-002", "SRC-004"],
     "caution": "Provider eligibility and appointment rules require the national overlay. Limited assurance remains the mandatory level; the assurance standard is due by 1 July 2027."
   },
   {
     "id": "CSRD-S-016",
-    "version": 1,
+    "version": 2,
     "ruleRef": "R-023",
     "title": "First-three-years value-chain transition relief",
     "program": "CSRD",
@@ -431,7 +416,6 @@
       ]
     },
     "legalStatus": "in_force",
-    "ratification": { "status": "draft" },
     "sources": ["SRC-004"],
     "caution": "Track the first reporting year as a sourced fact."
   }

@@ -17,6 +17,12 @@
  * keeps validating exactly what it validated before, and there is one place
  * where "authored" is decided.
  *
+ * `ratification` was deleted from this schema when status became derived. The
+ * strip behaviour below is what makes that deletion *silent* in the authored
+ * JSON — a leftover key vanishes rather than failing — so `verifyIntegrity`
+ * carries an explicit check for it. That check exists because of this comment,
+ * not despite it: the guarantee in spec §7.4 is false without it.
+ *
  * Note that `requirementSchema` deliberately does **not** use `.strict()`.
  * zod's default strip behaviour is load-bearing here: it is what makes a
  * loader-attached field such as `derivedStatus` structurally incapable of
@@ -147,7 +153,6 @@ export const requirementSchema = z.object({
   cases: z.array(z.object({ when: conditionSchema, value: z.string(), label: z.string().optional() })).optional(),
   defaultValue: z.string().optional(),
   legalStatus: z.enum(['in_force', 'adopted_not_effective', 'proposed', 'superseded']),
-  ratification: z.object({ status: z.enum(['draft', 'ratified']), by: z.string().optional(), date: z.string().optional() }),
   sources: z.array(z.string()).min(1),
   provisions: z.string().optional(),
   caution: z.string().optional(),

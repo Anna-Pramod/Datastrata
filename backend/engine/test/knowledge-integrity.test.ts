@@ -27,8 +27,14 @@ describe('CSRD knowledge pack integrity', () => {
     for (const r of pack.requirements) expect(r.sources.length, r.id).toBeGreaterThan(0);
   });
 
-  it('all v0 content is honestly marked draft (unratified)', () => {
-    for (const r of pack.requirements) expect(r.ratification.status, r.id).toBe('draft');
+  it('all v0 content derives as draft — nothing has been signed', () => {
+    // Derived from the ledger by the loader, not asserted in the JSON. With an
+    // empty ledger this is spec §7.2's invariant, and it is the reason the
+    // prototype banner is still honest.
+    for (const r of pack.requirements) {
+      expect(r.derivedStatus, r.id).toBe('draft');
+      expect(r.statusReasons, r.id).toEqual([]);
+    }
   });
 
   it('no country pack is ratified yet — the national-law gate must stay closed', () => {
