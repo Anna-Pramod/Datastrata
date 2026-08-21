@@ -4,7 +4,7 @@
 project references this file from its Global Constraints, and every task's
 teeth check is judged against it.
 
-Derived from B1a, B1b-i, B1b-ii-a and B1b-ii-b. It is not theory: every rule
+Derived from B1a, B1b-i, B1b-ii-a, B1b-ii-b and the status truth boundary. It is not theory: every rule
 below is here because a specific check in this repository passed while proving
 nothing, and the incident is named.
 
@@ -23,7 +23,7 @@ line ran. It does not say the line decided anything.
 
 ---
 
-## Six ways a test passes while proving nothing
+## Seven ways a test passes while proving nothing
 
 Each has happened here. When writing or reviewing a test, check it against
 this list.
@@ -97,6 +97,32 @@ never called it.
 *Counter-measure:* a property nothing checks is a comment. Grep the spec for
 "enforces", "must", "cannot" and confirm each has a test that fails when
 violated.
+
+### 7. Negative observation without a positive control
+
+Asserting that something was **not** called, or did **not** appear, passes when
+the relevant path never executed at all.
+
+**Status truth boundary, Task 2:** spy counts proving the freshness resolver is
+not invoked for unsigned and revoked requirements were green — and would have
+been equally green against a loader that never invoked the resolver for
+*anything*. Mutating the loader to call it for every requirement failed the
+counts, while **every status assertion stayed green**, because `deriveStatus`
+discards the value for those variants. The call count was the only thing that
+could catch over-calling, and by itself it could not catch under-calling.
+
+This is the mirror of failure mode 5. There a positive claim was satisfied
+unconditionally; here a negative claim is satisfied vacuously.
+
+*Counter-measure:* pair every meaningful "must not happen" assertion with proof
+that the guarded path **does** happen under the corresponding positive case. A
+resolver call-count of zero is evidence only if another case in the same suite
+proves that same seam can and does invoke the resolver. Assert the positive
+count — `toHaveLength(1)`, and *which* input it received — beside the zero.
+
+The same rule covers "the output does not contain X", "the error was not
+thrown" and "the field is absent": each needs a sibling case where X appears,
+the error throws, or the field is present.
 
 ---
 
