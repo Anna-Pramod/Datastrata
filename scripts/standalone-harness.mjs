@@ -144,6 +144,11 @@ const FORBIDDEN_IN_ARTIFACT = [
     matches: (path) => path === 'test' || path.startsWith('test/'),
   },
   {
+    label: 'backend/engine/prompts/**',
+    why: 'agent prompt files are inputs to the verification pipeline, which runs offline against the repository; the site never executes a role, so a prompt reaching the artifact means something other than VERIFICATION_RUNTIME_INPUTS decided what ships. They are also the one directory under backend/engine that a statically foldable path in src/pipeline could emit recursively — the lib/pack.ts failure, one barrel export away',
+    matches: (path) => path === 'prompts' || path.startsWith('prompts/'),
+  },
+  {
     label: 'backend/engine/docs/**',
     why: 'design documentation is not a runtime input',
     matches: (path) => path === 'docs' || path.startsWith('docs/'),

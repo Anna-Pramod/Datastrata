@@ -7,6 +7,7 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:agents": "vitest run --config vitest.agents.config.ts",
     "typecheck": "tsc --noEmit",
     "assess": "tsx src/cli/assess.ts",
     "ingest": "tsx src/cli/ingest.ts",

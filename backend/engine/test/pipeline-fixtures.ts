@@ -1,0 +1,220 @@
+/**
+ * Shared fixtures for the B2 pipeline tests.
+ *
+ * **Nothing here is a reading, a challenge or an adjudication.** Task 1 builds
+ * infrastructure and produces no judgments, real or faked, so the role outputs
+ * below are structurally valid placeholders whose text says so in words. They
+ * exist to exercise a seam, a transcript and a tail; they must never be
+ * mistaken for, or promoted into, a fixture representing a real reading of any
+ * law. Tasks 2–4 produce real role outputs, and Task 5's replay fixtures are
+ * recorded from runs rather than written by hand.
+ *
+ * The corpus fixture is synthetic and program-agnostic for the same reason
+ * `verification-render.test.ts`'s is: the properties under test are about
+ * closure identity and pin derivation, not about any particular law.
+ */
+
+import { parseCorpusIndex } from '../src/corpus/schema';
+import type { CorpusDocument, CorpusEdge, CorpusIndex } from '../src/corpus/types';
+import { sha256Hex } from '../src/corpus/hash';
+import type { AuthoredRequirement, FactType } from '../src/types';
+import type { RenderContext } from '../src/verification/render';
+import type { EntitlementSource } from '../src/pipeline/entitlement';
+import type { CurrentCorpusSource } from '../src/verification/current-state';
+import type { AgentRunner, RoleResponse } from '../src/pipeline/runner';
+import type { RoleRequest } from '../src/pipeline/roles';
+import type {
+  AdjudicatorOutput,
+  ProsecutorOutput,
+  ReaderOutput,
+} from '../src/pipeline/role-outputs';
+
+// ---------------------------------------------------------------------------
+// Corpus
+// ---------------------------------------------------------------------------
+
+/** Deterministic per-document text, so every hash below is reproducible. */
+export function docText(docId: string): string {
+  return `Synthetic legal text for ${docId}. Article 1. The operative test is stated here.`;
+}
+
+function doc(docId: string, edges: CorpusEdge[] = [], serves: string[] = []): CorpusDocument {
+  const text = docText(docId);
+  return {
+    docId,
+    serves,
+    title: `Document ${docId}`,
+    url: `https://example.invalid/${docId}`,
+    versionLabel: 'consolidated 1 Jan 2026',
+    retrievedOn: '2026-08-21',
+    rawPath: `raw/${docId}.html`,
+    normalizedPath: `normalized/${docId}.txt`,
+    sha256Raw: sha256Hex(`raw:${text}`),
+    sha256Normalized: sha256Hex(text),
+    normalizerVersion: '1.0.0',
+    contentSelector: null,
+    edges,
+  };
+}
+
+function edge(edgeId: string, kind: CorpusEdge['kind'], from: string, to: string): CorpusEdge {
+  return {
+    edgeId,
+    kind,
+    from,
+    to,
+    provenance: { type: 'celex_metadata', source: 'fixture metadata', recordedOn: '2026-08-21' },
+  };
+}
+
+/**
+ * DOC-A serves SRC-100 and is amended by DOC-B; DOC-C is one reference hop out;
+ * DOC-Z is in the corpus and outside every closure built from SRC-100, which is
+ * what the entitlement refusal is tested against.
+ */
+export function fixtureIndex(): CorpusIndex {
+  return parseCorpusIndex({
+    updated: '2026-08-21',
+    documents: [
+      doc('DOC-A', [edge('E-1', 'amendedBy', 'DOC-A', 'DOC-B'), edge('E-2', 'references', 'DOC-A', 'DOC-C')], ['SRC-100']),
+      doc('DOC-B'),
+      doc('DOC-C'),
+      doc('DOC-Z', [], ['SRC-999']),
+    ],
+  });
+}
+
+/** Satisfies both `EntitlementSource` and `CurrentCorpusSource`. */
+export function fixtureCorpus(index: CorpusIndex = fixtureIndex()): EntitlementSource & CurrentCorpusSource {
+  const byId = new Map(index.documents.map((document) => [document.docId, document]));
+  return {
+    index,
+    document(docId: string): CorpusDocument {
+      const document = byId.get(docId);
+      if (document === undefined) throw new Error(`fixture corpus holds no ${docId}`);
+      return document;
+    },
+    normalizedText(docId: string): string {
+      return docText(docId);
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Requirement and render context
+// ---------------------------------------------------------------------------
+
+const FACT_TYPES: FactType[] = [
+  {
+    id: 'entity.turnover',
+    scopeType: 'legal_entity',
+    dataType: 'number_or_range',
+    module: 'Test module',
+    reusableAcrossPrograms: 'yes',
+    label: 'net turnover',
+    unit: 'EUR',
+  },
+];
+
+export function fixtureRenderContext(): RenderContext {
+  return { factTypes: FACT_TYPES, catalogues: {} };
+}
+
+export function fixtureRequirement(
+  overrides: Partial<AuthoredRequirement> = {},
+): AuthoredRequirement {
+  return {
+    id: 'TEST-R-001',
+    version: 1,
+    title: 'Test requirement',
+    program: 'TESTPROG',
+    decisionArea: 'Test area',
+    plainEnglish: 'A synthetic requirement used to exercise pin derivation.',
+    scopeType: 'legal_entity',
+    relationshipClass: 'direct',
+    severity: 'blocking',
+    kind: 'boolean',
+    condition: { op: 'cmp', fact: 'entity.turnover', cmp: 'gt', value: 450_000_000 },
+    legalStatus: 'in_force',
+    sources: ['SRC-100'],
+    provisions: 'Fixture Act Art. 1',
+    ...overrides,
+  } as AuthoredRequirement;
+}
+
+// ---------------------------------------------------------------------------
+// Placeholder role outputs — structurally valid, and judgments of nothing
+// ---------------------------------------------------------------------------
+
+const PLACEHOLDER = 'PLACEHOLDER — Task 1 produces no readings, challenges or adjudications.';
+
+export function stubReaderOutput(): ReaderOutput {
+  return {
+    elements: [
+      {
+        id: 'RE-STUB',
+        statement: PLACEHOLDER,
+        evidence: [
+          {
+            kind: 'quote',
+            docId: 'DOC-A',
+            sha256Normalized: sha256Hex(docText('DOC-A')),
+            text: 'The operative test is stated here.',
+          },
+        ],
+      },
+    ],
+    gaps: [],
+  };
+}
+
+export function stubProsecutorOutput(lens: string): ProsecutorOutput {
+  return { lens, coverage: [], challenges: [], gaps: [] };
+}
+
+export function stubAdjudicatorOutput(): AdjudicatorOutput {
+  return { adjudications: [], openQuestions: [], gaps: [] };
+}
+
+// ---------------------------------------------------------------------------
+// A runner that replays canned text, and records what it was asked
+// ---------------------------------------------------------------------------
+
+export interface StubRunner extends AgentRunner {
+  readonly requests: RoleRequest[];
+}
+
+/**
+ * Answers each role with the JSON it is given, and remembers every request.
+ *
+ * The recording half matters: several checks below are negative — "no live call
+ * happened", "the tail read no pin off a role" — and a negative observation
+ * needs something observing, or it passes because nothing ever ran.
+ */
+export function stubRunner(
+  responses: (request: RoleRequest) => string,
+): StubRunner {
+  const requests: RoleRequest[] = [];
+  return {
+    kind: 'replay',
+    requests,
+    run(request: RoleRequest): Promise<RoleResponse> {
+      requests.push(request);
+      return Promise.resolve({ outputJson: responses(request) });
+    },
+  };
+}
+
+/** The default stub: structurally valid placeholders for all three roles. */
+export function placeholderRunner(lensFor: (index: number) => string = () => 'stub_lens'): StubRunner {
+  return stubRunner((request) => {
+    switch (request.role) {
+      case 'reader':
+        return JSON.stringify(stubReaderOutput());
+      case 'prosecutor':
+        return JSON.stringify(stubProsecutorOutput(lensFor(request.index)));
+      case 'adjudicator':
+        return JSON.stringify(stubAdjudicatorOutput());
+    }
+  });
+}

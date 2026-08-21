@@ -58,7 +58,7 @@ export interface CurrentCorpusSource {
  * raises an integrity failure. Those are three different reports of one
  * condition, and folding them in here would force one of them onto all three.
  */
-export interface CurrentStateInput {
+export interface PinInput {
   /** The authored requirement, which is what every pinned hash is taken over. */
   requirement: AuthoredRequirement;
   /** `{ factTypes, catalogues }` — what the rendered condition is rendered with. */
@@ -67,25 +67,50 @@ export interface CurrentStateInput {
   closure: { sha256: string; docIds: readonly string[] };
   /** The corpus the closure's documents are read out of. */
   corpus: CurrentCorpusSource;
+}
+
+export interface CurrentStateInput extends PinInput {
   /** The pinned verification result, already parsed. */
   result: VerificationResult;
 }
 
 /**
- * Current state in the shape `deriveStaleness` compares an entry against.
+ * The pins that exist before a result does: `CurrentState` minus `resultSha256`.
+ *
+ * The subtraction is the point rather than a convenience. `resultSha256` is
+ * necessarily post-assembly — the result does not exist at the moment its own
+ * inputs are pinned — while these are computed from the requirement, the render
+ * context and the closure alone, which is exactly the set a producer of results
+ * needs before it has one.
+ */
+export type VerificationPins = Omit<CurrentState, 'resultSha256'>;
+
+/**
+ * The one producer of the result-independent pins.
+ *
+ * The module header above records what three constructions of this record
+ * already cost and why a fourth would have made agreement a coincidence. B2's
+ * pipeline is that fourth caller: its deterministic tail computes every pin the
+ * result it emits carries, and `src/cli/sign.ts` builds the candidate those
+ * pins are compared against out of these same helpers. Two constructions that
+ * drift do not surface as a diff anybody can read — they surface as
+ * `candidate_inconsistent` on every dossier the pipeline ever produces.
+ *
+ * So this is an extraction rather than a second implementation, and
+ * `currentStateOf` below is this function plus one more hash, computing exactly
+ * what it computed before.
  *
  * `versionLabel` is deliberately not carried: `CurrentCorpusDocument` has no
  * such field, because a publisher's label is display and comparing it would
  * make a re-labelled but byte-identical document look like drift.
  */
-export function currentStateOf(input: CurrentStateInput): CurrentState {
-  const { requirement, renderContext, closure, corpus, result } = input;
+export function producePins(input: PinInput): VerificationPins {
+  const { requirement, renderContext, closure, corpus } = input;
   return {
     requirementInputSha256: requirementInputSha256(requirement),
     conditionSha256: candidateConditionSha256(requirement),
     renderedConditionSha256: candidateRenderedConditionSha256(requirement, renderContext),
     corpusClosureSha256: closure.sha256,
-    resultSha256: resultSha256(result),
     corpus: closure.docIds.map((docId) => {
       const document = corpus.document(docId);
       return {
@@ -96,4 +121,13 @@ export function currentStateOf(input: CurrentStateInput): CurrentState {
       };
     }),
   };
+}
+
+/**
+ * Current state in the shape `deriveStaleness` compares an entry against: the
+ * shared pin producer, plus the one pin that can only be taken once the result
+ * it covers exists.
+ */
+export function currentStateOf(input: CurrentStateInput): CurrentState {
+  return { ...producePins(input), resultSha256: resultSha256(input.result) };
 }
