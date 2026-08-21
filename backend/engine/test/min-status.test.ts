@@ -290,6 +290,23 @@ describe('the loader reads the ledger, rather than answering draft unconditional
     return file;
   }
 
+  /**
+   * Three authority states, three distinguishable answers — and with no
+   * resolver supplied, every one of them is `draft`.
+   *
+   * That is the point rather than a weakening. Before the freshness seam this
+   * test asserted `verified` for a signature the loader had not checked, which
+   * was the over-claim itself written down as an expectation. What discriminates
+   * now is the *reason set*: a signature nobody evaluated says
+   * `['freshness_unchecked']`, a withdrawal says `['revoked']`, and an untouched
+   * requirement says `[]`. A loader that hardcoded `draft` would produce three
+   * empty arrays and fail here, so the block's original guarantee survives the
+   * behaviour change intact.
+   *
+   * The `[]` case is load-bearing in the other direction too: `draft, []` keeps
+   * its exact meaning of *"no governing signature"*, and `freshness_unchecked`
+   * must never appear merely because nothing is signed.
+   */
   it('projects a governing signature, a governing revocation and an absence', () => {
     const verified = signing('CSRD-S-001', 'verified');
     const ratified = signing('CSRD-S-004', 'ratified');
@@ -300,24 +317,73 @@ describe('the loader reads the ledger, rather than answering draft unconditional
     });
     const byId = new Map(pack.requirements.map((r) => [r.id, r]));
 
-    expect(byId.get('CSRD-S-001')?.derivedStatus).toBe('verified');
-    expect(byId.get('CSRD-S-001')?.statusReasons).toEqual([]);
-    expect(byId.get('CSRD-S-004')?.derivedStatus).toBe('ratified');
+    // Signed, but nobody evaluated the signature's freshness.
+    expect(byId.get('CSRD-S-001')?.derivedStatus).toBe('draft');
+    expect(byId.get('CSRD-S-001')?.statusReasons).toEqual(['freshness_unchecked']);
+    expect(byId.get('CSRD-S-004')?.derivedStatus).toBe('draft');
+    expect(byId.get('CSRD-S-004')?.statusReasons).toEqual(['freshness_unchecked']);
+    // Withdrawn: freshness is not consulted, so the reason is the withdrawal.
     expect(byId.get('CSRD-S-002')?.derivedStatus).toBe('draft');
     expect(byId.get('CSRD-S-002')?.statusReasons).toEqual(['revoked']);
-    // Untouched by the ledger, so still the unsigned answer.
+    // Untouched by the ledger, so still the unsigned answer — and specifically
+    // not `['freshness_unchecked']`, which would be a second vocabulary for
+    // "nobody signed this".
     expect(byId.get('CSRD-S-003')?.derivedStatus).toBe('draft');
     expect(byId.get('CSRD-S-003')?.statusReasons).toEqual([]);
   });
 
+  /**
+   * The positive control for the test above.
+   *
+   * "A signature the loader has not checked is never `verified`" is satisfied
+   * by a loader in which *nothing* is ever `verified`. Only the pair is
+   * evidence, so the same ledger is loaded again with a resolver that evaluated
+   * freshness and found nothing stale, and the entry's own `kind` comes back.
+   */
+  it('reports the entry kind once a resolver has actually evaluated freshness', () => {
+    const verified = signing('CSRD-S-001', 'verified');
+    const ratified = signing('CSRD-S-004', 'ratified');
+    const pack = loadPack(PACK_DIR, {
+      ledgerPath: ledgerFile(`${[verified, ratified].map((e) => JSON.stringify(e)).join('\n')}\n`),
+      freshnessResolver: () => ({ checked: true, reasons: [] }),
+    });
+    const byId = new Map(pack.requirements.map((r) => [r.id, r]));
+
+    expect(byId.get('CSRD-S-001')?.derivedStatus).toBe('verified');
+    expect(byId.get('CSRD-S-001')?.statusReasons).toEqual([]);
+    expect(byId.get('CSRD-S-004')?.derivedStatus).toBe('ratified');
+    expect(byId.get('CSRD-S-004')?.statusReasons).toEqual([]);
+  });
+
+  /**
+   * The status has to reach the engine, and it has to be a status the loader
+   * could only have arrived at by reading the ledger *and* being told the
+   * signature was fresh.
+   *
+   * The resolver is what makes `ratified` reachable at all now, so `minStatus:
+   * 'ratified'` selecting exactly one requirement is a statement about both
+   * halves of the seam rather than about the filter alone.
+   */
   it('carries those statuses through to minStatus and containsDraftContent', () => {
     const pack = loadPack(PACK_DIR, {
       ledgerPath: ledgerFile(`${JSON.stringify(signing('CSRD-S-003', 'ratified'))}\n`),
+      freshnessResolver: () => ({ checked: true, reasons: [] }),
     });
     const result = assess(pack, wideProfile(), CTX(), { minStatus: 'ratified' });
     expect(evaluatedIds(result)).toEqual(['CSRD-S-003']);
     expect(result.containsDraftContent).toBe(false);
     expect(result.determinations.every((d) => d.derivedStatus === 'ratified')).toBe(true);
+  });
+
+  it('withholds that same status when no resolver evaluated the signature', () => {
+    // The counterexample to the test above, on the identical ledger: without an
+    // evaluation the ratification does not clear a `ratified` floor, and the
+    // answer is empty rather than confidently wrong.
+    const pack = loadPack(PACK_DIR, {
+      ledgerPath: ledgerFile(`${JSON.stringify(signing('CSRD-S-003', 'ratified'))}\n`),
+    });
+    const result = assess(pack, wideProfile(), CTX(), { minStatus: 'ratified' });
+    expect(evaluatedIds(result)).toEqual([]);
   });
 
   it('refuses a damaged ledger rather than reading it as nothing signed', () => {
