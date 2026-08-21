@@ -323,6 +323,23 @@ describe('the real schemas', () => {
     expect(FIELD_ROLES['result.resultSchemaVersion']).toEqual(['integrity', 'audit']);
   });
 
+  it('holds the promotion ledger to account, with pipelineVersion signable', () => {
+    // The promotion schema arrived carrying three unclassified fields — the
+    // exact class §6 exists to close, reproduced by the change that added it.
+    // Signing refuses a `pipelineVersion` with no promotion record, so that
+    // field is `signability` at minimum.
+    expect(RECORD_SCHEMAS['promotion']).toBeDefined();
+    expect(FIELD_ROLES['promotion.pipelineVersion']).toContain('signability');
+    expect(FIELD_ROLES['promotion.by']).toEqual(['display', 'audit']);
+    expect(FIELD_ROLES['promotion.on']).toEqual(['display', 'audit']);
+  });
+
+  it('classifies a promotion `on` as display and audit, never authority', () => {
+    // Promotion is a set-membership question, not a recency one. This row is
+    // what stops a later reader deciding the most recent promotion wins.
+    expect(FIELD_ROLES['promotion.on']).not.toContain('authority');
+  });
+
   it('classifies `on` as display and audit, never authority', () => {
     // Task 3 orders by file position. This row is what stops a later reader
     // "improving" that into a date comparison.

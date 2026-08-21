@@ -61,6 +61,7 @@
 
 import { z } from 'zod';
 import { revocationEntrySchema, signingEntrySchema } from './ledger';
+import { promotionRecordSchema } from './promotions';
 import { verificationResultSchema } from './result';
 
 /**
@@ -213,6 +214,7 @@ export const RECORD_SCHEMAS: Record<string, z.ZodTypeAny> = {
   result: verificationResultSchema,
   'ledger.signing': signingEntrySchema,
   'ledger.revocation': revocationEntrySchema,
+  promotion: promotionRecordSchema,
 };
 
 /**
@@ -283,6 +285,32 @@ export const FIELD_ROLES: Record<string, FieldRole[]> = {
   'result.gaps[]': ['signability'],
   'result.pipelineVersion': ['signability', 'audit'],
   'result.resultSchemaVersion': ['integrity', 'audit'],
+
+  // ── promotion ledger ───────────────────────────────────────────────────
+  // `promotions.jsonl` entered the system carrying three fields no schema map
+  // walked, so none had a role — the exact class §6 exists to close, reproduced
+  // by the change that added the schema. Classified here rather than left for
+  // B3, because a field is unverified from the moment it exists, not from the
+  // moment it gains metrics beside it.
+  //
+  // `signability` because signing refuses a `pipelineVersion` with no promotion
+  // record: this string is the whole of what `isPromoted` matches, so it decides
+  // whether a candidate may be signed at all. Not `authority` — it selects no
+  // route and decides no status; the signature's own `kind` does that. `audit`
+  // because it names which pinned set of prompts, models and role configuration
+  // was approved, which is what a later reader re-derives the promotion from.
+  'promotion.pipelineVersion': ['signability', 'audit'],
+  // Who approved the pipeline. The gate asks only whether a record exists, never
+  // who wrote it, so this decides nothing — it is the accountable name a
+  // reviewer reads. Identical to `ledger.signing.by` because it is the same kind
+  // of claim: a person standing behind a decision.
+  'promotion.by': ['display', 'audit'],
+  // When it was approved. Deliberately `display + audit` and never `authority`,
+  // for the same reason the ledger's `on` is: nothing here orders by it,
+  // compares it, or parses it into a date, and this row is what stops a later
+  // reader deciding that the most recent promotion should win. Promotion is a
+  // set-membership question, not a recency one.
+  'promotion.on': ['display', 'audit'],
 
   // ── result, identity and pins ──────────────────────────────────────────
   // `packId`/`requirementId` route the record to the requirement it is a

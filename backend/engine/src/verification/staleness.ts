@@ -42,9 +42,13 @@
  *    here — deliberately, so that nobody mistakes a quiet staleness flag for
  *    the loud failure the situation warrants.
  *
- * Detection is also where `normalizer_changed` stops. Renormalising the
- * retained raw bytes to decide whether the text actually moved resolves it,
- * and that work belongs to the checker that owns the normalizer.
+ * **Detection is where `normalizer_changed` stops, and resolution is a second
+ * step.** `deriveStaleness` can see only that `normalizerVersion` moved, since
+ * a version string is all an entry carries. Factory §4.3 defines the state as
+ * the *outcome* of renormalising the retained raw bytes, which needs the bytes
+ * — so the caller that can open the raw store computes those hashes and hands
+ * them to `resolveNormalizerChanged` below, which does the comparing. Detection
+ * stays in one place and this file still reads nothing.
  *
  * Pure — no filesystem, no network, no clock, and no mutation of either
  * argument.
@@ -185,4 +189,81 @@ export function deriveStaleness(entry: SigningEntry, current: CurrentState): Sta
   }
 
   return [...reasons].sort();
+}
+
+/**
+ * The hash of each pinned document's retained raw bytes, renormalised under the
+ * *current* normalizer, keyed by `docId`.
+ *
+ * A map rather than a callback. A callback would let this module reach the
+ * filesystem by proxy while still looking pure, and the constraint that
+ * `src/verification/` reads nothing is worth more than the convenience: the CLI
+ * opens the raw store, this function only compares.
+ *
+ * A `docId` absent from the map means the question could not be answered — the
+ * corpus no longer holds the document, or its recorded selector no longer
+ * matches. That is not the same as "the text is unchanged", and it is treated
+ * as the former.
+ */
+export type Renormalisation = ReadonlyMap<string, string>;
+
+/**
+ * Narrows `normalizer_changed` from a version difference to the outcome of
+ * renormalising — factory §4.3's actual definition.
+ *
+ * `deriveStaleness` can only detect that `normalizerVersion` moved, because it
+ * is pure and a version string is all an entry carries. §4.3 defines the state
+ * as something else entirely:
+ *
+ * > the checker **renormalises the stored raw bytes** under the new normalizer
+ * > and compares. Identical means still `fresh`. Different means the
+ * > normalizer's opinion of the text changed — a distinct, blocking state for a
+ * > human to adjudicate.
+ *
+ * **Why the distinction is not cosmetic.** The normalizer *will* change; that
+ * is why raw bytes are retained at all. Treating every bump as blocking would
+ * withhold `verified` from every signature in the pack at once, on a day when
+ * nothing about any law moved — the alarm-fatigue failure the raw-versus-
+ * normalized split exists to prevent. An alarm that fires on cosmetic churn is
+ * an alarm that gets ignored, and then it has stopped working.
+ *
+ * **Detection stays where it is.** This function resolves an already-derived
+ * set; it does not re-derive one. `deriveStaleness` is unchanged and remains the
+ * single place a reason is *found*, so there is no second, subtly different
+ * detector for a later reader to consult by accident.
+ *
+ * **It fails closed, in two directions.** The reason survives unless *every*
+ * document that triggered it renormalises to exactly the hash the entry pinned:
+ * a document missing from `renormalised` keeps it, and one whose renormalised
+ * hash differs keeps it. Proving freshness requires evidence; the absence of
+ * evidence is not the evidence of absence.
+ *
+ * Every other reason passes through untouched. `normalizer_changed` is the only
+ * state whose definition needs bytes.
+ */
+export function resolveNormalizerChanged(
+  entry: SigningEntry,
+  current: CurrentState,
+  reasons: readonly StalenessReason[],
+  renormalised: Renormalisation,
+): StalenessReason[] {
+  const kept = new Set<StalenessReason>(reasons);
+  if (!kept.has('normalizer_changed')) return [...kept].sort();
+
+  const now = new Map(current.corpus.map((doc) => [doc.docId, doc]));
+  // The trigger condition, stated once more rather than imported: it is the
+  // first branch of `documentReason`, and the two must agree about which
+  // documents are in question. A document whose version did not move never
+  // contributed the reason, so its renormalisation says nothing about it.
+  const inQuestion = entry.corpus.filter((pinned) => {
+    const found = now.get(pinned.docId);
+    return found !== undefined && found.normalizerVersion !== pinned.normalizerVersion;
+  });
+
+  const allReproduce =
+    inQuestion.length > 0 &&
+    inQuestion.every((pinned) => renormalised.get(pinned.docId) === pinned.sha256Normalized);
+
+  if (allReproduce) kept.delete('normalizer_changed');
+  return [...kept].sort();
 }

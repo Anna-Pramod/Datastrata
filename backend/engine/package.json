@@ -3,13 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "DataStrata applicability engine v1 — deterministic, three-valued, source-cited requirement evaluation. Program knowledge (CSRD first) ships as data packs; the engine is program-agnostic.",
+  "description": "DataStrata applicability engine v1 \u2014 deterministic, three-valued, source-cited requirement evaluation. Program knowledge (CSRD first) ships as data packs; the engine is program-agnostic.",
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "assess": "tsx src/cli/assess.ts",
-    "ingest": "tsx src/cli/ingest.ts"
+    "ingest": "tsx src/cli/ingest.ts",
+    "verify": "tsx src/cli/verify.ts"
   },
   "dependencies": {
     "zod": "^3.23.8"
