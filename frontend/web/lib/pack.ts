@@ -58,17 +58,42 @@ import type {
 const PACK_ID = 'csrd';
 
 /**
- * Where the engine's state lives, relative to the process's working directory.
+ * Where the engine's state lives, relative to the process's working directory —
+ * named by the **manifest file** that identifies a root, never by the directory.
  *
  * The candidates are computed per call rather than frozen at module load: the
  * value they are built from is `process.cwd()`, and a constant captured at
  * import time silently answers for the directory the module happened to be
  * loaded in.
+ *
+ * **Why a file path, where one would naturally write a directory path.** Next's
+ * build tracer runs `@vercel/nft` over this module's transpiled source, and nft
+ * folds `join(process.cwd(), …)` — it knows what `process.cwd()` is. A folded
+ * path that turns out to be a **directory** is treated as a whole-directory
+ * runtime dependency and emitted recursively. So an expression naming
+ * `backend/engine` silently packaged the entire engine tree into
+ * `.next/standalone` — sources, `test/**`, `docs/**`, `CLAUDE.md`, unrelated
+ * review artefacts — and, far worse, `VERIFICATION_RUNTIME_INPUTS` stopped
+ * governing what shipped, because everything shipped either way. The
+ * declaration was still there, still consumed by the config, and had no effect
+ * anything could observe. Naming the pack directory instead of the engine root
+ * had merely made the same emit small enough to look deliberate.
+ *
+ * Naming the manifest keeps nft's contribution to exactly one file — itself a
+ * declared closure member — and leaves the engine root opaque to static
+ * analysis, which is the honest position: *what this site reads at runtime is
+ * not statically knowable, and that is the entire reason
+ * `verification-runtime-inputs.mjs` exists.*
+ *
+ * **Do not reintroduce a directory path here or anywhere else in this module**,
+ * and do not "simplify" the derivation below back into a folded `join`. The
+ * artifact-hygiene guard in `npm run test:standalone` fails if this regresses,
+ * and the gate's two declaration-level trace mutants stop meaning anything.
  */
-function candidateRoots(): string[] {
+function candidatePackManifests(): string[] {
   return [
-    join(process.cwd(), '..', '..', 'backend', 'engine'),
-    join(process.cwd(), 'backend', 'engine'),
+    join(process.cwd(), '..', '..', 'backend', 'engine', 'knowledge', PACK_ID, 'pack.json'),
+    join(process.cwd(), 'backend', 'engine', 'knowledge', PACK_ID, 'pack.json'),
   ];
 }
 
@@ -80,17 +105,21 @@ function candidateRoots(): string[] {
  * same root as the authored knowledge. Probing separately for the pack and for
  * the verification state would be two answers to one question, and they would
  * disagree exactly once, in production.
+ *
+ * The root is *derived from the manifest that was found* rather than probed for
+ * directly, for the packaging reason set out above. It is the same root either
+ * way: `<root>/knowledge/<packId>/pack.json` sits three levels down.
  */
 export function engineRoot(): string {
-  const candidates = candidateRoots();
-  const found = candidates.find((root) => existsSync(join(root, 'knowledge', PACK_ID, 'pack.json')));
+  const candidates = candidatePackManifests();
+  const found = candidates.find((manifest) => existsSync(manifest));
   if (found === undefined) {
     throw new Error(
-      `CSRD knowledge pack not found. Looked for knowledge/${PACK_ID}/pack.json under:\n${candidates.join('\n')}\n` +
+      `CSRD knowledge pack not found. Looked for knowledge/${PACK_ID}/pack.json at:\n${candidates.join('\n')}\n` +
         'The site expects the engine at backend/engine relative to the repository root.',
     );
   }
-  return found;
+  return resolve(found, '..', '..', '..');
 }
 
 /** The four conventional locations, all derived from the one root. */
