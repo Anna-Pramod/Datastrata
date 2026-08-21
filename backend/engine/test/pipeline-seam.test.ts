@@ -86,8 +86,8 @@ function tailInput(roleOutputs: Parameters<typeof runDeterministicTail>[0]['role
     closure: { sha256: closure.sha256, docIds: closure.docIds },
     corpus: fixtureCorpus(),
     pipelineVersion: 'pipeline-v1-unpromoted',
-    rendererVersion: '1.1.0',
-    resultSchemaVersion: '1.0.0',
+    rendererVersion: 'renderer-1.1.0',
+    resultSchemaVersion: '1.1.0',
     roleOutputs,
   };
 }

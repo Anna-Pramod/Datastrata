@@ -710,6 +710,10 @@ export function runSign(args: SignArgs, paths: VerifyPaths, hooks: WriteHooks = 
       assertSignable(candidate, {
         result,
         corpus: world.corpus,
+        // The pack's source register, so the gate can tell a source id from a
+        // document id in a gap's identity. Read from the same `world` as
+        // everything else, once.
+        sourceIds: world.pack.sources.map((source) => source.id),
         registry,
         promotions,
         existing:

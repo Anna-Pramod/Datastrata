@@ -175,7 +175,7 @@ function result(overrides: Record<string, unknown> = {}): VerificationResult {
     packId: 'testpack',
     requirementId: 'REQ-001',
     requirementVersion: 1,
-    resultSchemaVersion: '1.0.0',
+    resultSchemaVersion: '1.1.0',
     pipelineVersion: 'pipeline-1.0.0',
     rendererVersion: 'renderer-1.1.0',
     requirementInputSha256: requirementInputSha256(req),
@@ -253,10 +253,19 @@ const PROMOTIONS: PromotionRecord[] = [
   { pipelineVersion: 'pipeline-1.0.0', by: 'A. Promoter', on: '2026-08-01' },
 ];
 
+/**
+ * The pack's source register, as the gate sees it. `SRC-001` is the fixture
+ * requirement's own source; `SRC-005` is a registered source the fixture corpus
+ * serves with no document, which is the shape a source-level `corpus_gap`
+ * names.
+ */
+const SOURCE_IDS: readonly string[] = ['SRC-001', 'SRC-005'];
+
 function checks(overrides: Partial<SignabilityInput> = {}): SignabilityInput {
   return {
     result: result(),
     corpus,
+    sourceIds: SOURCE_IDS,
     registry: registryFor(),
     promotions: PROMOTIONS,
     existing: null,
@@ -660,6 +669,81 @@ describe('the nine refusals', () => {
     const candidate = buildSignature(signatureInput({ result: r }));
     expect(refusalCodes(candidate, checks({ result: r }))).toEqual(['unresolved_gap']);
     expect(refusalDetail(candidate, checks({ result: r }))).toContain('closure_gap');
+  });
+
+  it('refuses a corpus_gap that names a source rather than a document, saying so', () => {
+    // The gap shape B2's first producer actually found: `sources[]` resolving
+    // to no document at all. There is no missing file to name, and the refusal
+    // has to say which register the signer must go and fix — a message reading
+    // `corpus_gap on undefined` would be the old shape leaking through.
+    const r = result({
+      gaps: [{ kind: 'corpus_gap', sourceId: 'SRC-005', detail: 'no document in the corpus serves it' }],
+    });
+    const candidate = buildSignature(signatureInput({ result: r }));
+    expect(refusalCodes(candidate, checks({ result: r }))).toEqual(['unresolved_gap']);
+    const detail = refusalDetail(candidate, checks({ result: r }));
+    expect(detail).toContain('sourceId SRC-005');
+    expect(detail).not.toContain('undefined');
+    // The counterexample in the same suite: a document-identified gap still
+    // says `docId`, so the branch above is not printing one label for both.
+    const byDoc = result({ gaps: [{ kind: 'corpus_gap', docId: 'DOC-Z', detail: 'not held' }] });
+    expect(refusalDetail(buildSignature(signatureInput({ result: byDoc })), checks({ result: byDoc }))).toContain(
+      'docId DOC-Z',
+    );
+  });
+
+  it('refuses a gap that names no identity as invalid_result, and prints no undefined', () => {
+    // The consistency pass rejects it, and the refusal loop still runs over it.
+    const r = result({ gaps: [{ kind: 'corpus_gap', detail: 'something is missing' }] });
+    const candidate = buildSignature(signatureInput({ result: r }));
+    const codes = refusalCodes(candidate, checks({ result: r }));
+    expect(codes).toContain('invalid_result');
+    expect(codes).toContain('unresolved_gap');
+    expect(refusalDetail(candidate, checks({ result: r }))).not.toContain('undefined');
+  });
+
+  it('refuses a gap whose docId is really a source id, naming the register violation', () => {
+    // The lie schema 1.1.0 exists to remove, checked at the one place whose job
+    // is to refuse a result that lies about itself. Cardinality alone cannot
+    // catch it — `docId: 'SRC-005'` names exactly one identity — so this passes
+    // only if the gate consulted the two registers.
+    const r = result({ gaps: [{ kind: 'corpus_gap', docId: 'SRC-005', detail: 'no document serves it' }] });
+    const candidate = buildSignature(signatureInput({ result: r }));
+    const c = checks({ result: r });
+    expect(refusalCodes(candidate, c)).toEqual(['invalid_result', 'unresolved_gap']);
+    const detail = refusalDetail(candidate, c);
+    expect(detail).toContain('invalid_result');
+    expect(detail).toContain('names an entry in the source register');
+    expect(detail).toContain('SRC-005');
+  });
+
+  it('does not raise invalid_result when the same source is recorded as a sourceId', () => {
+    // The positive control for the case above. The gate still refuses — every
+    // outstanding gap does — but it refuses as `unresolved_gap` only, so the
+    // register violation above is the register rule firing rather than a gap
+    // being present.
+    const r = result({ gaps: [{ kind: 'corpus_gap', sourceId: 'SRC-005', detail: 'no document serves it' }] });
+    const candidate = buildSignature(signatureInput({ result: r }));
+    const c = checks({ result: r });
+    expect(refusalCodes(candidate, c)).toEqual(['unresolved_gap']);
+    expect(refusalDetail(candidate, c)).not.toContain('source register');
+  });
+
+  it('refuses a closure_gap over a document the corpus does not hold', () => {
+    // The document register the gate uses is `corpus.index` itself, not a list
+    // handed in beside it, so this cannot pass over a corpus the gate is not
+    // also re-finding every quote against.
+    const r = result({ gaps: [{ kind: 'closure_gap', docId: 'DOC-Z', detail: 'not entitled' }] });
+    const candidate = buildSignature(signatureInput({ result: r }));
+    const c = checks({ result: r });
+    expect(refusalCodes(candidate, c)).toEqual(['invalid_result', 'unresolved_gap']);
+    expect(refusalDetail(candidate, c)).toContain('the corpus index does not hold');
+    // And the counterexample in the same suite: DOC-B is held, so the same
+    // shape over a real document raises no `invalid_result`.
+    const held = result({ gaps: [{ kind: 'closure_gap', docId: 'DOC-B', detail: 'not entitled' }] });
+    expect(
+      refusalCodes(buildSignature(signatureInput({ result: held })), checks({ result: held })),
+    ).toEqual(['unresolved_gap']);
   });
 
   it('refuses a structurally invalid result', () => {

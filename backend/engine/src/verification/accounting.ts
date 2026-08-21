@@ -430,10 +430,21 @@ export const FIELD_ROLES: Record<string, FieldRole[]> = {
 
   // ── result, gaps ───────────────────────────────────────────────────────
   // The sign CLI must refuse an unresolved gap, and it branches on the kind,
-  // so the kind is `signability`; the document and the prose are what a person
+  // so the kind is `signability`; the identity and the prose are what a person
   // reads to resolve it.
+  //
+  // `docId` and `sourceId` are the two halves of one question — *what* is
+  // missing — and carry the same roles because they exercise the same
+  // authority: whether `gaps[]` is empty is what refuses a signature, and
+  // neither identity changes that answer. `assertResultConsistency` checks each
+  // against the register it belongs to, but that is well-formedness of the
+  // record rather than a second authority: the check decides whether the record
+  // can be read at all, and it is `result.gaps[]` that decides signability.
+  // Classified as one pair so that a reader cannot conclude the newer field is
+  // the weaker one.
   'result.gaps[].kind': ['signability', 'display'],
   'result.gaps[].docId': ['display', 'audit'],
+  'result.gaps[].sourceId': ['display', 'audit'],
   'result.gaps[].detail': ['display', 'audit'],
 
   // ── result, narrative ──────────────────────────────────────────────────

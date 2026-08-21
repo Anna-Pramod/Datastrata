@@ -139,16 +139,42 @@ const challengeSchema = z
 const openQuestionSchema = z.object({ id: z.string(), statement: z.string() }).strict();
 
 /**
- * A structural gap in what was available to read: a document the corpus does
- * not hold, or one the closure never reached. Structured rather than left to
- * the narrative because the sign CLI must refuse an unresolved gap, and a
+ * A structural gap in what was available to read. Structured rather than left
+ * to the narrative because the sign CLI must refuse an unresolved gap, and a
  * refusal that depends on parsing prose is not a refusal. An empty array is
  * the normal case.
+ *
+ * **Three populations, and the third has no document to name.** Schema 1.0.0
+ * required a `docId`, on the assumption that everything missing is a missing
+ * file. B2's first producer found the counterexample: a requirement whose
+ * `sources[]` resolve to no document at all — `docsForSources` returns `[]`,
+ * `computeClosure` builds a closure over nothing and throws nothing, and what
+ * is missing is *source coverage*, not a named document. Recording `SRC-005`
+ * in a field called `docId` was the available workaround and is exactly the
+ * defect this shape removes: the structured record would say "document" while
+ * the prose beside it said "source", leaving `detail` to correct the field
+ * that a machine reads.
+ *
+ *     corpus_gap  + sourceId   nothing in the corpus serves this source
+ *     corpus_gap  + docId      an expected document is absent from the corpus
+ *     closure_gap + docId      the document exists; traversal did not reach it
+ *
+ * **Both identities are optional here, and a discriminated union is not an
+ * option.** "Exactly one of the two, and which one depends on `kind`" is a
+ * cross-field rule, so by this module's standing rule it lives in
+ * `assertResultConsistency` rather than in the schema. A
+ * `z.discriminatedUnion` at the element level would not merely be a stylistic
+ * alternative: the accounting walker takes its path set from these runtime
+ * nodes and a wrapped composite emits one row while every field beneath it
+ * goes unaccounted — the hole that guard exists to close. `ZodOptional` is a
+ * kind the walker already descends through, so two optional fields stay
+ * individually visible to it.
  */
 const gapSchema = z
   .object({
     kind: z.enum(['corpus_gap', 'closure_gap']),
-    docId: z.string(),
+    docId: z.string().optional(),
+    sourceId: z.string().optional(),
     detail: z.string(),
   })
   .strict();
@@ -165,7 +191,7 @@ export const verificationResultSchema = z
     packId: z.string(),
     requirementId: z.string(),
     requirementVersion: z.number().int().min(1),
-    resultSchemaVersion: z.literal('1.0.0'),
+    resultSchemaVersion: z.literal('1.1.0'),
     pipelineVersion: z.string(),
     rendererVersion: z.string(),
     requirementInputSha256: z.string(),
@@ -193,6 +219,23 @@ export class ResultConsistencyError extends Error {
     this.name = 'ResultConsistencyError';
     this.problems = problems;
   }
+}
+
+/**
+ * The two registers a gap identity may name, handed in rather than read.
+ *
+ * `src/verification` touches no filesystem, no network and no clock, and both
+ * of these live in files — `corpus/index.json` and the pack's `sources.json`.
+ * So the caller that has already loaded them supplies them, and a caller that
+ * has not can still run every rule that does not need them. What the registers
+ * buy is the one rule structure cannot state: that an identifier is recorded in
+ * the field belonging to its own register.
+ */
+export interface GapIdentityRegisters {
+  /** Every `docId` the corpus index holds. */
+  docIds: readonly string[];
+  /** Every source id the source register holds. */
+  sourceIds: readonly string[];
 }
 
 /** Whether a string is present and carries something other than whitespace. */
@@ -307,10 +350,46 @@ function shortHash(hash: string): string {
  *    about the world, or right about the world and internally incoherent.
  *    Both checks are wanted and neither substitutes for the other.
  *
+ *  - **A gap names exactly one identity, and in the field its register owns.**
+ *    `gaps[].docId` and `gaps[].sourceId` are both structurally optional
+ *    because "which one" depends on `kind`, so the rule is here:
+ *
+ *        corpus_gap   exactly one of docId and sourceId
+ *        closure_gap  docId required, sourceId absent
+ *
+ *    A `corpus_gap` naming both states two different defects as one and leaves
+ *    a reader to guess which; naming neither states nothing at all. A
+ *    `closure_gap` naming a source is a category error rather than an omission:
+ *    traversal walks documents, so a source has no position in the closure to
+ *    be excluded from.
+ *
+ *    Cardinality alone does not close the original defect, because
+ *    `docId: 'SRC-005'` satisfies it. That is why `registers` exists: given the
+ *    corpus index and the source register, an identifier can be checked against
+ *    the register it belongs to, and a source id recorded as a document is
+ *    rejected outright rather than merely discouraged.
+ *
+ *    The register rules come in **mirrored pairs**, and the symmetry is the
+ *    point: a rule that policed only one direction would leave the same lie
+ *    expressible the other way round. A `docId` naming a source is rejected and
+ *    so is a `sourceId` naming a document; a `closure_gap` over a document the
+ *    index does *not* hold is rejected and so is a `corpus_gap` over one it
+ *    *does*, because each kind asserts the opposite membership and a gap
+ *    contradicting its own kind says nothing a reader can act on. Each
+ *    identifier yields at most one problem, so an id in the wrong field is one
+ *    defect rather than two.
+ *
+ *    The registers are optional because they are files and this module reads
+ *    none; the cardinality rules above run either way, and only the
+ *    cross-register checks need them.
+ *
  * Every problem is collected before throwing, so a result can be repaired in
  * one pass rather than one round trip per defect.
  */
-export function assertResultConsistency(result: VerificationResult): void {
+export function assertResultConsistency(
+  result: VerificationResult,
+  registers?: GapIdentityRegisters,
+): void {
   const problems: string[] = [];
   const challengeIds = new Set(result.challenges.map((c) => c.id));
   const readingElementIds = new Set(result.reading.elements.map((e) => e.id));
@@ -441,6 +520,70 @@ export function assertResultConsistency(result: VerificationResult): void {
     }
   });
 
+  const knownDocIds = registers === undefined ? undefined : new Set(registers.docIds);
+  const knownSourceIds = registers === undefined ? undefined : new Set(registers.sourceIds);
+
+  result.gaps.forEach((gap, i) => {
+    const label = `gaps[${i}]`;
+    const docId = gap.docId;
+    const sourceId = gap.sourceId;
+
+    // Cardinality first, and per kind. `closure_gap` gets its own two messages
+    // rather than sharing the `corpus_gap` one, because the reasons differ: a
+    // closure gap always has a document, and never has a source.
+    if (gap.kind === 'closure_gap') {
+      if (docId === undefined) {
+        problems.push(
+          `${label}: a closure_gap carries no docId; the document exists and traversal did not reach it, so there is always a document to name`,
+        );
+      }
+      if (sourceId !== undefined) {
+        problems.push(
+          `${label}: a closure_gap may not name a sourceId (${sourceId}); entitlement traversal walks documents, so a source has no position in the closure to be excluded from`,
+        );
+      }
+    } else if ((docId === undefined) === (sourceId === undefined)) {
+      problems.push(
+        `${label}: a corpus_gap must name exactly one of docId and sourceId, and this one names ${
+          docId === undefined ? 'neither' : `both (docId ${docId}, sourceId ${sourceId})`
+        }; a document the corpus does not hold and a source no document serves are different populations, and a gap that names both or neither states neither`,
+      );
+    }
+
+    // Then the registers, which are the only thing that can tell a document id
+    // from a source id. Each identifier yields at most one problem: an id in
+    // the wrong field is one defect, and reporting it again as "absent from the
+    // register it is not in" would be the same defect counted twice.
+    if (knownDocIds !== undefined && knownSourceIds !== undefined) {
+      if (docId !== undefined) {
+        if (knownSourceIds.has(docId)) {
+          problems.push(
+            `${label}: docId ${docId} names an entry in the source register, not a document; record it as sourceId — a source id sitting in a field called docId makes the structured record say "document" while meaning "source"`,
+          );
+        } else if (gap.kind === 'closure_gap' && !knownDocIds.has(docId)) {
+          problems.push(
+            `${label}: closure_gap names docId ${docId}, which the corpus index does not hold; a document the corpus does not hold is a corpus_gap, not a document the closure failed to reach`,
+          );
+        } else if (gap.kind === 'corpus_gap' && knownDocIds.has(docId)) {
+          problems.push(
+            `${label}: corpus_gap names docId ${docId}, which the corpus index does hold; a corpus_gap asserts the document is absent, so naming a held document contradicts the record's own kind — a document the corpus holds but the traversal did not reach is a closure_gap`,
+          );
+        }
+      }
+      if (sourceId !== undefined) {
+        if (knownDocIds.has(sourceId)) {
+          problems.push(
+            `${label}: sourceId ${sourceId} names a document in the corpus index, not a source; record it as docId — the mirror of a source id recorded as a document`,
+          );
+        } else if (!knownSourceIds.has(sourceId)) {
+          problems.push(
+            `${label}: sourceId ${sourceId} matches no entry in the source register; a gap in source coverage has to name a source that was actually cited`,
+          );
+        }
+      }
+    }
+  });
+
   if (problems.length > 0) throw new ResultConsistencyError(problems);
 }
 
@@ -448,9 +591,12 @@ export function assertResultConsistency(result: VerificationResult): void {
  * Structure, then consistency, in that order — a cross-field rule cannot be
  * evaluated over a value whose fields have not been checked.
  */
-export function parseVerificationResult(raw: unknown): VerificationResult {
+export function parseVerificationResult(
+  raw: unknown,
+  registers?: GapIdentityRegisters,
+): VerificationResult {
   const parsed = verificationResultSchema.parse(raw);
-  assertResultConsistency(parsed);
+  assertResultConsistency(parsed, registers);
   return parsed;
 }
 

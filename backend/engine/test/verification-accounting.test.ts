@@ -319,6 +319,12 @@ describe('the real schemas', () => {
     expect(FIELD_ROLES['result.challenges[].verdict']).toEqual(['signability', 'display']);
     expect(FIELD_ROLES['result.challenges[].evidence[]']).toEqual(['signability', 'audit']);
     expect(FIELD_ROLES['result.gaps[]']).toEqual(['signability']);
+    // The two gap identities carry one classification between them: whether
+    // `gaps[]` is empty is what refuses a signature, and neither identity
+    // changes that answer. Asserted as a pair so a later reader cannot conclude
+    // the newer field is the weaker one.
+    expect(FIELD_ROLES['result.gaps[].sourceId']).toEqual(FIELD_ROLES['result.gaps[].docId']);
+    expect(FIELD_ROLES['result.gaps[].sourceId']).toEqual(['display', 'audit']);
     expect(FIELD_ROLES['result.pipelineVersion']).toEqual(['signability', 'audit']);
     expect(FIELD_ROLES['result.resultSchemaVersion']).toEqual(['integrity', 'audit']);
   });

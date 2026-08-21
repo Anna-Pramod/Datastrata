@@ -214,6 +214,22 @@ export interface SignabilityInput {
   result: VerificationResult;
   /** Loaded once by the CLI; used to re-find every quote and re-run every absence search. */
   corpus: LoadedCorpus;
+  /**
+   * Every source id the pack's source register carries.
+   *
+   * The gate's job is to refuse a result that lies about itself, and one of the
+   * lies is a `SRC-###` recorded in a gap's `docId`. Telling a source id from a
+   * document id needs both registers, and only this one is otherwise absent
+   * here: the corpus register is derived from `corpus.index` below rather than
+   * passed alongside it, so a caller cannot hand the gate a document register
+   * that disagrees with the corpus it re-finds every quote against.
+   *
+   * Not optional. `assertResultConsistency` may take the registers or not,
+   * because most of its callers are hashing or displaying a record rather than
+   * judging it; the gate is the caller that judges, and a gate that can be
+   * constructed without the means to check is a gate that will be.
+   */
+  sourceIds: readonly string[];
   registry: VersionRegistry;
   promotions: readonly PromotionRecord[];
   existing: ExistingSignature | null;
@@ -383,7 +399,10 @@ export function assertSignable(candidate: SignatureCandidate, checks: Signabilit
     }
   } else {
     try {
-      assertResultConsistency(structural.data);
+      assertResultConsistency(structural.data, {
+        docIds: checks.corpus.index.documents.map((document) => document.docId),
+        sourceIds: checks.sourceIds,
+      });
     } catch (error) {
       if (!(error instanceof ResultConsistencyError)) throw error;
       for (const problem of error.problems) refuse('invalid_result', problem);
@@ -413,8 +432,18 @@ export function assertSignable(candidate: SignatureCandidate, checks: Signabilit
       refuse('open_question', `${question.id}: ${question.statement}`);
     }
 
+    // The identity is named with the field that carries it, so a refusal says
+    // which register the signer has to go and fix. A gap carrying neither — or
+    // both — has already been reported as `invalid_result` by the consistency
+    // pass above, and this loop still runs, so it must not print `undefined`.
     for (const gap of result.gaps) {
-      refuse('unresolved_gap', `${gap.kind} on ${gap.docId}: ${gap.detail}`);
+      const identity =
+        gap.docId !== undefined
+          ? `docId ${gap.docId}`
+          : gap.sourceId !== undefined
+            ? `sourceId ${gap.sourceId}`
+            : 'no identity';
+      refuse('unresolved_gap', `${gap.kind} on ${identity}: ${gap.detail}`);
     }
 
     // ── the evidence ──────────────────────────────────────────────────────

@@ -46,7 +46,7 @@ function result(overrides: Record<string, unknown> = {}): Record<string, unknown
     packId: 'testpack',
     requirementId: 'REQ-001',
     requirementVersion: 1,
-    resultSchemaVersion: '1.0.0',
+    resultSchemaVersion: '1.1.0',
     pipelineVersion: 'pipeline-1.0.0',
     rendererVersion: 'renderer-1.0.0',
     requirementInputSha256: HASH('b'),
@@ -164,8 +164,18 @@ describe('verificationResultSchema — structure', () => {
     }
   });
 
-  it('rejects a resultSchemaVersion other than 1.0.0', () => {
-    expect(() => verificationResultSchema.parse(result({ resultSchemaVersion: '1.1.0' }))).toThrow();
+  it('rejects a resultSchemaVersion other than 1.1.0, naming the version rather than a downstream field', () => {
+    // The literal is what rejects a record written against a different shape,
+    // so it has to move with the shape. 1.0.0 is the shape whose `gaps[]`
+    // required a `docId`, and a 1.0.0 record read as if it were this one would
+    // be read by a validator that no longer knows what its docId meant.
+    for (const version of ['1.0.0', '2.0.0']) {
+      const parsed = verificationResultSchema.safeParse(result({ resultSchemaVersion: version }));
+      expect(parsed.success, `accepted ${version}`).toBe(false);
+      if (parsed.success) continue;
+      expect(parsed.error.issues).toHaveLength(1);
+      expect(parsed.error.issues[0]?.path).toEqual(['resultSchemaVersion']);
+    }
   });
 
   it('accepts an optional narrative', () => {
@@ -521,6 +531,193 @@ describe('assertResultConsistency — verdict and resolution', () => {
       resolution: '\t ',
     });
     expect(() => parseVerificationResult(raw)).toThrow(ResultConsistencyError);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Gap identity — the ontology installed by the 1.1.0 migration
+// ---------------------------------------------------------------------------
+
+describe('assertResultConsistency — a gap names exactly one identity', () => {
+  /**
+   * `corpus_gap` covers two populations that a single `docId` could not tell
+   * apart, and one of them has no document to name at all: a requirement whose
+   * `sources[]` resolve to no document is missing *source coverage*, not a
+   * named file. Recording `SRC-005` in a field called `docId` made the
+   * structured record say "document" while the prose beside it said "source",
+   * which is the semantic debt `.strict()` exists to prevent.
+   *
+   * So the identity is two optional fields, and which one a kind may carry is a
+   * cross-field rule here rather than a discriminated union in the schema — a
+   * union at the element level would hide every field beneath it from the
+   * accounting walker, which is the hole that guard exists to close.
+   *
+   * The registers are passed in, never read: `src/verification` touches no
+   * filesystem, and the ids' home registers are files.
+   */
+  const registers = {
+    docIds: ['DOC-32013L0034', 'DOC-1'],
+    sourceIds: ['SRC-001', 'SRC-005', 'SRC-006', 'SRC-007'],
+  };
+
+  /** The problems one gap produces, or `[]` when it is accepted. */
+  function problemsFor(gap: Record<string, unknown>): string[] {
+    try {
+      parseVerificationResult(result({ gaps: [gap] }), registers);
+      return [];
+    } catch (error) {
+      if (error instanceof ResultConsistencyError) return error.problems;
+      throw error;
+    }
+  }
+
+  // ── the three valid shapes ────────────────────────────────────────────
+
+  it('accepts a corpus_gap naming a sourceId that no document serves', () => {
+    // CSRD-S-012's real shape: SRC-005/006/007 are registered sources and the
+    // corpus serves none of them, so there is no missing document to name.
+    expect(problemsFor({ kind: 'corpus_gap', sourceId: 'SRC-005', detail: 'no document serves it' })).toEqual([]);
+  });
+
+  it('accepts a corpus_gap naming a docId the corpus does not hold', () => {
+    expect(problemsFor({ kind: 'corpus_gap', docId: 'DOC-X', detail: 'the consolidating act is not held' })).toEqual([]);
+  });
+
+  it('accepts a closure_gap naming a docId the corpus holds', () => {
+    expect(problemsFor({ kind: 'closure_gap', docId: 'DOC-1', detail: 'reachable but not entitled' })).toEqual([]);
+  });
+
+  // ── the four lies, each rejected by its own rule ──────────────────────
+
+  it('rejects a corpus_gap whose docId is really a source id — the lie this migration exists for', () => {
+    const problems = problemsFor({ kind: 'corpus_gap', docId: 'SRC-005', detail: 'no document serves it' });
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('source register');
+    expect(problems[0]).toContain('SRC-005');
+    expect(problems[0]).toContain('sourceId');
+  });
+
+  it('rejects a closure_gap naming a sourceId', () => {
+    // Entitlement traversal walks documents. A source has no position in the
+    // closure graph, so a closure gap has no source identity to report.
+    const problems = problemsFor({ kind: 'closure_gap', sourceId: 'SRC-005', detail: 'not entitled' });
+    expect(problems.join('\n')).toContain('a closure_gap may not name a sourceId');
+    expect(problems.join('\n')).toContain('carries no docId');
+  });
+
+  it('rejects a gap carrying both a docId and a sourceId', () => {
+    const problems = problemsFor({
+      kind: 'corpus_gap',
+      docId: 'DOC-X',
+      sourceId: 'SRC-005',
+      detail: 'both',
+    });
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('exactly one of docId and sourceId');
+    expect(problems[0]).toContain('both');
+  });
+
+  it('rejects a gap carrying neither a docId nor a sourceId', () => {
+    const problems = problemsFor({ kind: 'corpus_gap', detail: 'something is missing' });
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('exactly one of docId and sourceId');
+    expect(problems[0]).toContain('neither');
+  });
+
+  // ── the register cross-check, in both directions ──────────────────────
+
+  it('rejects a sourceId that is really a document id', () => {
+    // The mirror of the lie above, and asserted separately: a rule that only
+    // policed `docId` would leave the new field free to carry the old error.
+    const problems = problemsFor({ kind: 'corpus_gap', sourceId: 'DOC-1', detail: 'unserved' });
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('corpus index');
+    expect(problems[0]).toContain('docId');
+  });
+
+  it('rejects a sourceId in neither register', () => {
+    const problems = problemsFor({ kind: 'corpus_gap', sourceId: 'SRC-999', detail: 'unserved' });
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('no entry in the source register');
+  });
+
+  it('rejects a corpus_gap over a docId the corpus index does hold', () => {
+    // The mirror of the rule below, and the same defect in reverse: a
+    // corpus_gap asserts the document is absent, so naming a held document
+    // contradicts the record's own kind. Without this the two document rules
+    // were asymmetric — a closure_gap over an absent document was rejected
+    // while a corpus_gap over a held one validated.
+    const problems = problemsFor({ kind: 'corpus_gap', docId: 'DOC-1', detail: 'not held' });
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('the corpus index does hold');
+    expect(problems[0]).toContain('closure_gap');
+  });
+
+  it('rejects a closure_gap over a docId the corpus index does not hold', () => {
+    // A document the corpus does not hold is a corpus_gap by definition; a
+    // closure gap asserts the document exists and traversal did not reach it.
+    const problems = problemsFor({ kind: 'closure_gap', docId: 'DOC-X', detail: 'not entitled' });
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('the corpus index does not hold');
+  });
+
+  // ── the registers are the only thing that makes the check possible ────
+
+  it('leaves the register cross-check unrun when no registers are supplied, and still enforces cardinality', () => {
+    // The positive control for the four cross-register cases above: they fail
+    // because the registers were consulted, not because the shape is odd.
+    expect(() => parseVerificationResult(result({ gaps: [{ kind: 'corpus_gap', docId: 'SRC-005', detail: 'x' }] }))).not.toThrow();
+    expect(() => parseVerificationResult(result({ gaps: [{ kind: 'corpus_gap', detail: 'x' }] }))).toThrow(
+      ResultConsistencyError,
+    );
+  });
+
+  it('reports every gap defect in one pass, across several gaps', () => {
+    let problems: string[] = [];
+    try {
+      parseVerificationResult(
+        result({
+          gaps: [
+            { kind: 'corpus_gap', docId: 'SRC-005', detail: 'a' },
+            { kind: 'closure_gap', docId: 'DOC-1', sourceId: 'SRC-001', detail: 'b' },
+          ],
+        }),
+        registers,
+      );
+    } catch (error) {
+      problems = (error as ResultConsistencyError).problems;
+    }
+    expect(problems.length).toBe(2);
+    expect(problems[0]).toContain('gaps[0]');
+    expect(problems[1]).toContain('gaps[1]');
+  });
+});
+
+describe('verificationResultSchema — the gap identity is structurally optional', () => {
+  it('accepts a gap carrying only a sourceId', () => {
+    const raw = result({ gaps: [{ kind: 'corpus_gap', sourceId: 'SRC-005', detail: 'unserved' }] });
+    expect(() => verificationResultSchema.parse(raw)).not.toThrow();
+  });
+
+  it('accepts a gap carrying neither identity — the cardinality rule is semantic, not structural', () => {
+    // Deliberate: the structural stage must stay a plain walkable ZodObject,
+    // so "exactly one" cannot be expressed here. The seam is load-bearing.
+    const raw = result({ gaps: [{ kind: 'corpus_gap', detail: 'unserved' }] });
+    expect(() => verificationResultSchema.parse(raw)).not.toThrow();
+  });
+
+  it('still rejects an unknown key on a gap', () => {
+    const raw = result({ gaps: [{ kind: 'corpus_gap', srcId: 'SRC-005', detail: 'unserved' }] });
+    expect(() => verificationResultSchema.parse(raw)).toThrow();
+  });
+
+  it('keeps gaps[] a plain object schema, not a discriminated union', () => {
+    // A union at the element level emits one row to the accounting walker while
+    // every field beneath it goes unaccounted — the exact hole that guard
+    // exists to close. `result.ts` records the reason; this is the check.
+    const shape = verificationResultSchema._def.shape() as Record<string, z.ZodTypeAny>;
+    const element = (shape['gaps'] as z.ZodArray<z.ZodTypeAny>)._def.type;
+    expect(element._def.typeName).toBe('ZodObject');
   });
 });
 

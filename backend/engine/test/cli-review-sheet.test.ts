@@ -157,7 +157,7 @@ function makeResult(id: string, overrides: Record<string, unknown> = {}): Verifi
     packId: PACK_ID,
     requirementId: id,
     requirementVersion: requirement.version,
-    resultSchemaVersion: '1.0.0',
+    resultSchemaVersion: '1.1.0',
     pipelineVersion: PIPELINE,
     rendererVersion: RENDERER_VERSION,
     requirementInputSha256: requirementInputSha256(requirement),

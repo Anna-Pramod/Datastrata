@@ -176,8 +176,15 @@ vouch for. The right response is forensics on the file, not another append.
 
 ## Open questions for later, not blocking
 
-- **`gaps[].docId` is required even for a `closure_gap`**, which may not always
-  have one document to name. A B2 question.
+- ~~**`gaps[].docId` is required even for a `closure_gap`**, which may not always
+  have one document to name. A B2 question.~~ **Settled in B2 Task 1.5, and the
+  pressing case was not the one posed.** A `closure_gap` always has a document —
+  the document exists and traversal did not reach it. The shape with no document
+  identity to name is a *source-level* `corpus_gap`: a requirement whose
+  `sources[]` are served by no document at all, where what is missing is source
+  coverage rather than a file. Schema `1.1.0` makes `docId` and `sourceId` both
+  optional, with the cardinality per kind and a register cross-check in
+  `assertResultConsistency`.
 - **Ledger field formats are unconstrained**: `on` has no date format, and the
   hash fields are plain `z.string()` with no hex regex, unlike `registry.ts`'s
   `SHA256_HEX`. For `entryId` the recompute-and-compare is strictly stronger, but

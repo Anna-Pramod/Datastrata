@@ -243,7 +243,21 @@ describe('pipelineVersion is derived', () => {
   });
 
   it('moves when the result schema version moves', () => {
-    expect(buildPipelineIdentity({ ...baseline(), resultSchemaVersion: '1.1.0' })).not.toBe(before);
+    // This probed a single hard-coded '1.1.0'. The 1.0.0 → 1.1.0 schema bump made
+    // that value equal `RESULT_SCHEMA_VERSION`, so the assertion became "this
+    // identity differs from itself" and **failed** — an ordinary red the
+    // migration had to answer, not a vacuity that passed unnoticed.
+    //
+    // Rewritten to probe both directions from the live version, which no future
+    // bump can defeat: whatever `RESULT_SCHEMA_VERSION` becomes, a version below
+    // it and a version above it must both yield a different identity. The guard
+    // on the line below is what keeps '1.0.0' a real probe rather than the
+    // baseline in disguise, and it will fail loudly if the schema ever returns
+    // to 1.0.0.
+    expect(RESULT_SCHEMA_VERSION).not.toBe('1.0.0');
+    for (const version of ['1.0.0', '2.0.0']) {
+      expect(buildPipelineIdentity({ ...baseline(), resultSchemaVersion: version })).not.toBe(before);
+    }
   });
 
   it('moves when the closure policy’s reference depth moves', () => {
