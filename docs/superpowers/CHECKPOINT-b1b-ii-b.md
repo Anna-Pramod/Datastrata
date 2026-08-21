@@ -6,8 +6,9 @@ worktree on branch `feature/b1b-ii-a-record`; the last task is **uncommitted**
 
 State: **7 frontend + 875 engine tests green, `tsc --noEmit` exit 0** across
 both workspaces.
-705 at phase start → 709/7+4 (T1) → 7+708 (T2) → 7+774 (T3) → 7+814 (T4) →
-7+855 (T5) → 7+875 (T6).
+Engine suite: 705 at phase start → 705 (T1, which added the frontend's first
+4 tests) → 708 (T2) → 774 (T3) → 814 (T4) → 855 (T5) → 875 (T6).
+Frontend suite: 0 → 4 (T1) → 7 (T2), unchanged thereafter.
 
 `grep -ri csrd backend/engine/src/` unchanged at **five**. `src/verification/`
 still free of filesystem, network and clock.
@@ -26,7 +27,9 @@ still free of filesystem, network and clock.
 | 6. The migration | Done, verified independently |
 
 Every teeth check was re-run by the parent rather than accepted from the
-report. The plan, `docs/superpowers/plans/2026-08-21-b1b-ii-b-signing-surfaces-migration.md`,
+report. The standard those checks were judged against is now
+`docs/superpowers/TEST-EVIDENCE-STANDARD.md`, promoted out of this checkpoint
+so it governs every subsequent plan rather than being read once. The plan, `docs/superpowers/plans/2026-08-21-b1b-ii-b-signing-surfaces-migration.md`,
 was amended during execution and is authoritative over this file.
 
 ---
@@ -69,7 +72,16 @@ signature still holds*; the second half is unenforced at this surface.
   (`SRC-005`, `SRC-006`, `SRC-007`) resolve to **zero** corpus documents — the
   only one of the sixteen — so no quote evidence can ever be produced for it.
   It is also the only `selection` requirement with no top-level `condition`.
-  This is a content and corpus-ingest backlog item, not a code defect.
+
+  **Treat this as a content and corpus-completeness blocker, and do not work
+  around it in signing logic.** The two are separate problems and only one has
+  a legitimate code answer: `candidateConditionSha256` resolves the *shape*
+  question (a selection requirement genuinely has no condition subtree, and
+  every selection requirement in every future pack will have the same shape).
+  The zero-document closure is not a shape question — it means the corpus does
+  not hold the law this requirement rests on, and no hash, fallback or gate
+  can substitute for ingesting it. A signing path that tolerated it would be
+  issuing signatures over reasoning nobody could have performed.
 - **Benchmark metrics and `verification/pipeline/<version>.json` are B3's.**
   The promotion *gate* exists (sign refuses a `pipelineVersion` with no
   promotion record) and the review sheet prints the metrics as unavailable

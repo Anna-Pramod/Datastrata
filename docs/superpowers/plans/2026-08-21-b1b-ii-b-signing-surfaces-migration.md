@@ -16,6 +16,8 @@ This plan gives exact interfaces, exact behaviours and exact test cases, and lea
 
 ## Global Constraints
 
+- **`docs/superpowers/TEST-EVIDENCE-STANDARD.md` governs what counts as evidence in every task of this plan.** Read it before writing a teeth check. It is a standing standard, not a note on this phase.
+
 - **No new runtime dependencies.** `zod` only; `node:*` builtins fine. `vitest` may be added to `frontend/web` as a **devDependency**.
 - **TypeScript strict, with `noUncheckedIndexedAccess: true`.**
 - **Program-agnostic.** No regulation name in `backend/engine/src/`. `grep -ri csrd backend/engine/src/` must stay at exactly **five** hits: `types.ts` (1), `cli/assess.ts` (1), `verification/render.ts` (2, both `CSRD-S-013`), `engine/summary.ts` (1).
