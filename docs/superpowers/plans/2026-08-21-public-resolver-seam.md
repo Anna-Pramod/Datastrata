@@ -95,7 +95,7 @@ uncorrected standalone
 
 Spec §4. The closure is defined by what it is *for*, not by the files known today.
 
-**Files:** `frontend/web/verification-runtime-inputs.mjs`, `next.config.mjs`, plus a source-level coverage test.
+**Files:** `frontend/web/verification-runtime-inputs.mjs`, `next.config.mjs`. **No test file** — see behaviour 4.
 
 **Required behaviours:**
 
@@ -108,17 +108,18 @@ Spec §4. The closure is defined by what it is *for*, not by the files known tod
 
 5. **Task 1's demonstration must use a dependency that actually exists at this point.** The masking teeth check below is performed against a real current runtime dependency — the version registry — not against a corpus or result path nothing reads yet.
 
-**Teeth check, two parts.**
+**Teeth check — one check, two halves.**
 
 **The masking demonstration**, which is the assumption everything rests on. Leave one input untraced. Start the server **with the repository reachable** and show the request **succeeds anyway**. Then run the authoritative isolated form and watch the same configuration fail. That is the masking condition shown rather than asserted, and it is why §9.1 exists.
 
 There is no coverage mutant in this task, because there is no coverage test in this task. It arrives with Task 2.
 
-- [ ] **Step 1: Write the coverage test**, failing
-- [ ] **Step 2: Run it; confirm it fails for the reason you intended**
-- [ ] **Step 3: Create `verification-runtime-inputs.mjs`** and consume it from the config
-- [ ] **Step 4: Perform both teeth checks**; record every output
-- [ ] **Step 5: `npm test && npm run typecheck && npm run test:standalone`**, then hand over the commit
+- [ ] **Step 1: Create `verification-runtime-inputs.mjs`** as member records, and consume its flat projection from the config
+- [ ] **Step 2: Confirm `npm run test:standalone` still passes** — Task 0's repair must survive the migration
+- [ ] **Step 3: Empty the registry member's globs**, and **confirm the mutation landed** by asserting on the *emitted globs*, not by grepping the file — its prose names `requirement-versions` and a grep will lie
+- [ ] **Step 4: Half A** — checkout-resident server: request succeeds, and **record the read** of the untraced file from the repository
+- [ ] **Step 5: Half B** — isolated artifact: same configuration fails naming the missing dependency
+- [ ] **Step 6: Restore, confirm by hash, prove all three gates green**, then hand over the commit
 
 ---
 

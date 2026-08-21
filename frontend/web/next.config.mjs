@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { verificationTracingGlobs } from './verification-runtime-inputs.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(here, '..', '..');
@@ -19,21 +20,15 @@ const nextConfig = {
   // checked. The source repository is outside the runtime contract: if the standalone
   // server cannot answer with the repository absent, the build is not deployable.
   output: 'standalone',
-  // The engine loads its knowledge pack from disk at runtime. Trace those JSON files
-  // into the standalone output so /api/check works in a deployed build, not just dev.
+  // The engine reads its knowledge and its verification state from disk at runtime,
+  // through computed paths no static analysis can follow. *What that state is* is
+  // declared once in `verification-runtime-inputs.mjs` — semantically, by member,
+  // with the reason each member is load-bearing — and this is only where the
+  // declaration is spent. A glob added here instead of there would be a second
+  // closure, and on the first disagreement the narrower one becomes the real one.
   outputFileTracingRoot: repoRoot,
   outputFileTracingIncludes: {
-    '/api/check': [
-      '../../backend/engine/knowledge/**/*.json',
-      // `assertVersionIntegrity` reads `verification/requirement-versions/<packId>.json`
-      // through a computed `join(dir, …)`, which no static analysis can follow, and it
-      // throws `VersionIntegrityError` when the file is absent — deliberately, because
-      // an integrity check that can be switched off by deleting a file is not an
-      // integrity check. So `loadPack` hard-fails without it and it is mandatory today.
-      // Observed, not predicted: the uncorrected standalone artifact failed on exactly
-      // this file. See `npm run test:standalone`.
-      '../../backend/engine/verification/requirement-versions/**/*.json',
-    ],
+    '/api/check': verificationTracingGlobs(),
   },
 };
 

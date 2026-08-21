@@ -200,8 +200,11 @@ Anything the resolver or the loader reads at runtime is a member by definition. 
 
 ```js
 // verification-runtime-inputs.mjs — the deployable verification-state closure
-export const VERIFICATION_RUNTIME_INPUTS = [ /* globs covering the five members */ ];
+export const VERIFICATION_RUNTIME_INPUTS = [ /* one record per member */ ];
+export function verificationTracingGlobs() { /* flat projection for the config */ }
 ```
+
+**Member records, not a flat glob array.** Corrected at Task 1. A bare list cannot satisfy Task 2's requirement that recorded reads **span resolver-owned members**, because a glob carries no member identity. Each record names the member, what it is *for*, its `onAbsence` behaviour (`fatal` or `silent` — the ledger is the silent one, per §4.3), and its current globs. The config consumes the flat projection, so there is still exactly one declaration.
 
 ```js
 outputFileTracingIncludes: { '/api/check': VERIFICATION_RUNTIME_INPUTS }
@@ -365,7 +368,11 @@ npm run test:standalone   deployment-artifact truth
 
 The harness must not copy or install the repository beside the standalone server after the build. Doing so recreates the exact masking condition the test exists to remove. The runtime process gets the standalone artifact, whatever Next traced into it, and normal environment variables — nothing else.
 
-**This rule gets its own teeth check**, because it is the assumption everything else rests on: start once **with** the repository reachable and an input deliberately untraced, and demonstrate that the request succeeds anyway. That is the masking condition, shown rather than asserted. Then run the authoritative isolated form and watch the same configuration fail.
+**This rule gets its own teeth check**, because it is the assumption everything else rests on: with an input deliberately untraced, demonstrate that the request **succeeds anyway** where the repository is reachable, then watch the same configuration fail in isolation.
+
+**The masking server must be checkout-resident, not an unguarded artifact.** Corrected at Task 1, which found the obvious reading does not work. Next's generated `server.js` begins with `process.chdir(__dirname)`, and `lib/pack.ts` resolves `CANDIDATE_ROOTS` through `process.cwd()` — so the standalone artifact always finds its pack **inside itself**, and switching the isolation guard off changes nothing. An implementer following the earlier wording would see the demonstration fail and reasonably conclude the design's premise had collapsed.
+
+The masking condition is real and lives one layer out: a server running **inside the source checkout** — which is precisely what `npm test`, `npm run dev` and a pre-deploy `next start` are. Demonstrate it there, and make the evidence a **recorded read** of the untraced file from the checkout, not merely a 200. A successful response says the request tolerated the omission; the read record says it resolved the dependency out of the repository.
 
 ---
 
