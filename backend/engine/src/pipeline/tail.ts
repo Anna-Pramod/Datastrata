@@ -44,13 +44,25 @@
 import { producePins, type CurrentCorpusSource, type VerificationPins } from '../verification/current-state';
 import type { AuthoredRequirement } from '../types';
 import type { RenderContext } from '../verification/render';
-import type { RoleGap, ReaderOutput, ProsecutorOutput, AdjudicatorOutput } from './role-outputs';
+import type { PipelineGap } from './gaps';
+import type { ReaderOutput, ProsecutorOutput, AdjudicatorOutput } from './role-outputs';
 
-/** Everything the three roles produced, in the shape the tail consumes it. */
+/**
+ * Everything the roles produced, in the shape the tail consumes it.
+ *
+ * `adjudication` is nullable because agent verification stops at a gap: a run
+ * that halted in the reader has no adjudication, and the alternative to `null`
+ * is a synthetic empty one — a role output nobody produced, indistinguishable
+ * in the record from an adjudicator that ran and decided nothing.
+ *
+ * `reading` is *not* nullable, and the asymmetry is the record's shape rather
+ * than an oversight: the result schema requires `reading`, so a halted run's
+ * reading is the canonically empty one, not an absent one.
+ */
 export interface PipelineRoleOutputs {
   reading: ReaderOutput;
   prosecutions: readonly ProsecutorOutput[];
-  adjudication: AdjudicatorOutput;
+  adjudication: AdjudicatorOutput | null;
 }
 
 export interface TailInput {
@@ -67,6 +79,15 @@ export interface TailInput {
   rendererVersion: string;
   resultSchemaVersion: string;
   roleOutputs: PipelineRoleOutputs;
+  /**
+   * Gaps produced by the pipeline itself rather than by a role.
+   *
+   * A role can only name a document, so the `corpus_gap` shape that names a
+   * *source* — nothing in the corpus serves it, and the entitled closure is
+   * therefore empty — has no role output to arrive in. It is discovered before
+   * the first call and handed in here.
+   */
+  gaps?: readonly PipelineGap[];
 }
 
 export interface TailOutcome {
@@ -85,7 +106,7 @@ export interface TailOutcome {
    * refuses on an unresolved one (§4.5); deciding whether it is resolved is
    * nobody's business here.
    */
-  gaps: RoleGap[];
+  gaps: PipelineGap[];
 }
 
 export function runDeterministicTail(input: TailInput): TailOutcome {
@@ -97,10 +118,11 @@ export function runDeterministicTail(input: TailInput): TailOutcome {
   });
 
   const { reading, prosecutions, adjudication } = input.roleOutputs;
-  const gaps: RoleGap[] = [
+  const gaps: PipelineGap[] = [
+    ...(input.gaps ?? []),
     ...reading.gaps,
     ...prosecutions.flatMap((prosecution) => prosecution.gaps),
-    ...adjudication.gaps,
+    ...(adjudication === null ? [] : adjudication.gaps),
   ];
 
   return {

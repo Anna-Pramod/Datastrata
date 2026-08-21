@@ -68,9 +68,34 @@ function edge(edgeId: string, kind: CorpusEdge['kind'], from: string, to: string
 }
 
 /**
- * DOC-A serves SRC-100 and is amended by DOC-B; DOC-C is one reference hop out;
- * DOC-Z is in the corpus and outside every closure built from SRC-100, which is
- * what the entitlement refusal is tested against.
+ * A corpus with an outside, which the real one does not have.
+ *
+ * Every requirement in the real corpus closes over both documents it holds, so
+ * "the reader read only the entitled closure" is *vacuously* true there and
+ * `closure_gap` cannot occur at all — there is no document outside any closure
+ * to fail to reach. Both properties therefore have to be exercised here, and
+ * this index is shaped to make each of the three outcomes reachable:
+ *
+ *     DOC-A   serves SRC-100; the entry document
+ *     DOC-B   amendedBy from DOC-A — structural, free, inside
+ *     DOC-C   one `references` hop from DOC-A — depth 1, inside
+ *     DOC-D   one further `references` hop from DOC-C — depth 2, and the
+ *             reference-depth bound is 1, so the corpus holds it and the
+ *             traversal policy does not entitle it: a `closure_gap`
+ *     DOC-Z   in the corpus, connected to nothing — also outside, and the
+ *             case the entitlement refusal has always been tested against
+ *
+ * A document id the index does not hold at all is the `corpus_gap` case, and
+ * `SRC-900`/`SRC-901` (served by nothing) are the empty-closure case.
+ *
+ * **It runs the real machinery.** This is a different `index.json`, not a
+ * different code path: `docsForSources`, `computeClosure` and
+ * `CLOSURE_POLICY_V0` are the production ones. A hand-rolled stand-in would
+ * make these tests prove things about test code.
+ *
+ * DOC-D changes no existing closure hash: the SRC-100 closure is still
+ * {DOC-A, DOC-B, DOC-C}, and E-3 is excluded from the hash because one of its
+ * endpoints sits outside.
  */
 export function fixtureIndex(): CorpusIndex {
   return parseCorpusIndex({
@@ -78,11 +103,18 @@ export function fixtureIndex(): CorpusIndex {
     documents: [
       doc('DOC-A', [edge('E-1', 'amendedBy', 'DOC-A', 'DOC-B'), edge('E-2', 'references', 'DOC-A', 'DOC-C')], ['SRC-100']),
       doc('DOC-B'),
-      doc('DOC-C'),
+      doc('DOC-C', [edge('E-3', 'references', 'DOC-C', 'DOC-D')]),
+      doc('DOC-D'),
       doc('DOC-Z', [], ['SRC-999']),
     ],
   });
 }
+
+/** A document id the fixture corpus does not hold — the `corpus_gap` case. */
+export const NOT_INGESTED = 'DOC-NOT-INGESTED';
+
+/** Sources the fixture corpus serves with nothing — the empty-closure case. */
+export const UNSERVED_SOURCE_IDS: readonly string[] = ['SRC-900', 'SRC-901'];
 
 /** Satisfies both `EntitlementSource` and `CurrentCorpusSource`. */
 export function fixtureCorpus(index: CorpusIndex = fixtureIndex()): EntitlementSource & CurrentCorpusSource {

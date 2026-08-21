@@ -34,10 +34,12 @@ import type { CurrentCorpusSource } from '../verification/current-state';
 import { renderRequirement, RENDERER_VERSION, type RenderContext } from '../verification/render';
 import { createAgentRole } from './agent-role';
 import { lensFor, type RoleConfig } from './config';
-import type { EntitledClosure } from './entitlement';
+import { renderEntitledClosure, type EntitledClosure } from './entitlement';
+import type { PipelineGap } from './gaps';
 import { buildPipelineIdentity, RESULT_SCHEMA_VERSION } from './identity';
 import type { PromptSet } from './prompts';
 import { promptHashes } from './prompts';
+import { readerInputFor, runBlindReader, type ReaderInput, type ReaderOutcome } from './reader';
 import {
   parseRoleOutput,
   type AdjudicatorOutput,
@@ -54,16 +56,14 @@ import {
 } from './transcript';
 
 /**
- * What the reader receives: the provision citation and the capability.
+ * Re-exported so callers reach one `ReaderInput`, and it is the projection.
  *
- * The condition, `plainEnglish`, `caution`, the facts and the obligation
- * templates are absent, which is §3.1's blindness. Task 2 makes the absence a
- * compile-time projection rather than a shape somebody remembered to build.
+ * The type itself lives in `reader.ts` beside the function that builds it,
+ * because blindness is a property of the projection and its builder together: a
+ * shape declared here and populated there is a shape somebody can populate a
+ * second way.
  */
-export interface ReaderInput {
-  provisions: string | undefined;
-  closure: EntitledClosure;
-}
+export type { ReaderInput };
 
 export interface ProsecutorInput {
   reading: ReaderOutput;
@@ -99,18 +99,40 @@ export interface PipelineRunInput {
   resultSchemaVersion?: string;
 }
 
+/**
+ * The executions that happened, and `null` for the ones that did not.
+ *
+ * Nullable rather than absent-by-convention because agent verification stops at
+ * a gap (§3.0): a run that halted in the reader has no prosecutor and no
+ * adjudicator, and a shape that could not say so would force a synthetic empty
+ * adjudication into the record — a role output nobody produced, indistinguishable
+ * from an adjudicator that ran and found nothing.
+ *
+ * `reader` is nullable for the sharper case still: a requirement whose entitled
+ * closure is empty has no evidence surface, so no agent runs at all.
+ */
 export interface PipelineExecutions {
-  reader: RoleExecution<ReaderOutput>;
+  reader: RoleExecution<ReaderOutput> | null;
   prosecutors: RoleExecution<ProsecutorOutput>[];
-  adjudicator: RoleExecution<AdjudicatorOutput>;
+  adjudicator: RoleExecution<AdjudicatorOutput> | null;
 }
 
 export interface PipelineRunOutcome {
   runId: string;
   pipelineVersion: string;
+  /** What the reader was entitled to, what it returned, and its gaps. */
+  reader: ReaderOutcome;
   executions: PipelineExecutions;
   transcript: RunTranscript;
   tail: TailOutcome;
+  /**
+   * Whether agent verification stopped at a gap.
+   *
+   * Derived from `reader.gaps`, never asserted by a caller and never taken from
+   * a role: a run that halted is a run whose gap list is non-empty, and the two
+   * cannot be made to disagree.
+   */
+  halted: boolean;
 }
 
 /**
@@ -120,26 +142,14 @@ export interface PipelineRunOutcome {
  * content, so it has to be reproducible, and it is what a human reads when a
  * replayed run disagrees with a live one.
  */
-function renderClosure(closure: EntitledClosure): string {
-  return closure
-    .documents()
-    .map((document) => `## ${document.docId} — ${document.title} (${document.versionLabel})\n\n${document.text}`)
-    .join('\n\n');
-}
 
-function renderReaderInput(input: ReaderInput): string {
-  return [
-    `# Provisions\n\n${input.provisions ?? '(none cited)'}`,
-    `# Entitled closure (${input.closure.sha256})\n\n${renderClosure(input.closure)}`,
-  ].join('\n\n');
-}
 
 function renderProsecutorInput(input: ProsecutorInput): string {
   return [
     `# Lens\n\n${input.lens}`,
     `# Blind reading\n\n${JSON.stringify(input.reading, null, 2)}`,
     `# Rendered condition\n\n${input.renderedCondition}`,
-    `# Entitled closure (${input.closure.sha256})\n\n${renderClosure(input.closure)}`,
+    `# Entitled closure (${input.closure.sha256})\n\n${renderEntitledClosure(input.closure)}`,
   ].join('\n\n');
 }
 
@@ -148,8 +158,22 @@ function renderAdjudicatorInput(input: AdjudicatorInput): string {
     `# Blind reading\n\n${JSON.stringify(input.reading, null, 2)}`,
     `# Rendered condition\n\n${input.renderedCondition}`,
     `# Prosecutions\n\n${JSON.stringify(input.prosecutions, null, 2)}`,
-    `# Entitled closure (${input.closure.sha256})\n\n${renderClosure(input.closure)}`,
+    `# Entitled closure (${input.closure.sha256})\n\n${renderEntitledClosure(input.closure)}`,
   ].join('\n\n');
+}
+
+/**
+ * The gaps that name a source rather than a document.
+ *
+ * The tail collates every gap a *role* produced out of the role outputs it is
+ * handed, and a role only ever names a document. The source-shaped gap is
+ * produced before the first call — there is no role to have produced it — so it
+ * is handed to the tail separately. Filtering on the absence of `docId` rather
+ * than on `kind` keeps the two independent: `corpus_gap` covers both shapes, and
+ * a filter on `kind` would swallow the document-shaped half and count it twice.
+ */
+function sourceShapedGaps(gaps: readonly PipelineGap[]): PipelineGap[] {
+  return gaps.filter((gap) => gap.docId === undefined);
 }
 
 /** The identity this configuration and these prompt files add up to. */
@@ -190,22 +214,32 @@ export async function runVerificationPipeline(
 
   const renderedCondition = renderRequirement(input.requirement, input.renderContext);
 
-  const reader = createAgentRole<ReaderInput, ReaderOutput>({
-    name: 'reader',
-    index: 0,
-    model: input.config.models.reader,
+  // The projection, built once and by the one function that is allowed to read
+  // an `AuthoredRequirement` on the reader's behalf. Nothing below reaches for
+  // `input.requirement` again on the reader's account.
+  const reader = await runBlindReader({
+    input: readerInputFor({
+      packId: input.packId,
+      requirement: input.requirement,
+      closure: input.closure,
+    }),
+    sourceIds: input.requirement.sources,
     prompt: input.prompts.reader,
+    model: input.config.models.reader,
     runner,
-    renderInput: renderReaderInput,
-    parse: (raw) => parseRoleOutput('reader', 0, raw),
-  });
-  const readerExecution = await reader.run({
-    provisions: input.requirement.provisions,
-    closure: input.closure,
   });
 
+  // §3.0: agent verification stops at the gap. Not "halt and write" — the
+  // deterministic tail below still computes pins and collates, because a dossier
+  // that cannot be parsed is Invalid whatever else is true of it. What stops is
+  // substantive judgment: no prosecutor is asked to compare a reading that was
+  // discarded, and no adjudicator is asked to decide between challenges nobody
+  // made. A reading produced under an incomplete surface cannot be topped up,
+  // so the repair is to fix the corpus and restart from the reader.
+  const halted = reader.gaps.length > 0;
+
   const prosecutorExecutions: RoleExecution<ProsecutorOutput>[] = [];
-  for (let index = 0; index < input.config.prosecutorCount; index += 1) {
+  for (let index = 0; halted === false && index < input.config.prosecutorCount; index += 1) {
     const lens = lensFor(input.config, index);
     const prosecutor = createAgentRole<ProsecutorInput, ProsecutorOutput>({
       name: 'prosecutor',
@@ -218,7 +252,7 @@ export async function runVerificationPipeline(
     });
     prosecutorExecutions.push(
       await prosecutor.run({
-        reading: readerExecution.output,
+        reading: reader.output,
         renderedCondition,
         lens,
         closure: input.closure,
@@ -226,21 +260,24 @@ export async function runVerificationPipeline(
     );
   }
 
-  const adjudicator = createAgentRole<AdjudicatorInput, AdjudicatorOutput>({
-    name: 'adjudicator',
-    index: 0,
-    model: input.config.models.adjudicator,
-    prompt: input.prompts.adjudicator,
-    runner,
-    renderInput: renderAdjudicatorInput,
-    parse: (raw) => parseRoleOutput('adjudicator', 0, raw),
-  });
-  const adjudicatorExecution = await adjudicator.run({
-    reading: readerExecution.output,
-    renderedCondition,
-    prosecutions: prosecutorExecutions.map((execution) => execution.output),
-    closure: input.closure,
-  });
+  let adjudicatorExecution: RoleExecution<AdjudicatorOutput> | null = null;
+  if (halted === false) {
+    const adjudicator = createAgentRole<AdjudicatorInput, AdjudicatorOutput>({
+      name: 'adjudicator',
+      index: 0,
+      model: input.config.models.adjudicator,
+      prompt: input.prompts.adjudicator,
+      runner,
+      renderInput: renderAdjudicatorInput,
+      parse: (raw) => parseRoleOutput('adjudicator', 0, raw),
+    });
+    adjudicatorExecution = await adjudicator.run({
+      reading: reader.output,
+      renderedCondition,
+      prosecutions: prosecutorExecutions.map((execution) => execution.output),
+      closure: input.closure,
+    });
+  }
 
   const tail = runDeterministicTail({
     packId: input.packId,
@@ -253,10 +290,13 @@ export async function runVerificationPipeline(
     rendererVersion,
     resultSchemaVersion,
     roleOutputs: {
-      reading: readerExecution.output,
+      reading: reader.output,
       prosecutions: prosecutorExecutions.map((execution) => execution.output),
-      adjudication: adjudicatorExecution.output,
+      adjudication: adjudicatorExecution === null ? null : adjudicatorExecution.output,
     },
+    // The gaps no role could have named: the shape that names a *source*
+    // rather than a document is produced before the first call.
+    gaps: sourceShapedGaps(reader.gaps),
   });
 
   const runId = buildRunId({
@@ -278,21 +318,23 @@ export async function runVerificationPipeline(
     renderedConditionSha256: tail.pins.renderedConditionSha256,
     corpusClosureSha256: tail.pins.corpusClosureSha256,
     roles: [
-      readerExecution.transcript,
+      ...(reader.execution === null ? [] : [reader.execution.transcript]),
       ...prosecutorExecutions.map((execution) => execution.transcript),
-      adjudicatorExecution.transcript,
+      ...(adjudicatorExecution === null ? [] : [adjudicatorExecution.transcript]),
     ],
   };
 
   return {
     runId,
     pipelineVersion,
+    reader,
     executions: {
-      reader: readerExecution,
+      reader: reader.execution,
       prosecutors: prosecutorExecutions,
       adjudicator: adjudicatorExecution,
     },
     transcript,
     tail,
+    halted,
   };
 }

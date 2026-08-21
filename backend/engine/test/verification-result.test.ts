@@ -40,6 +40,25 @@ function quote(text = 'the undertaking shall disclose sustainability information
   return { kind: 'quote', docId: 'DOC-1', sha256Normalized: HASH('a'), text };
 }
 
+/**
+ * The canonical gap-bearing record: the required containers empty, `gaps[]`
+ * carrying the explanation.
+ *
+ * `reading`, `coverage`, `challenges` and `openQuestions` are all required by
+ * the schema, so "the reading is absent" is not representable and this is what
+ * a halted run actually looks like. Callers still pass `gaps`; everything else
+ * is the empty shape.
+ */
+function haltedResult(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return result({
+    reading: { elements: [] },
+    coverage: { cells: [] },
+    challenges: [],
+    openQuestions: [],
+    ...overrides,
+  });
+}
+
 /** A minimal, valid, self-consistent result. Overrides replace whole keys. */
 function result(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -560,10 +579,19 @@ describe('assertResultConsistency — a gap names exactly one identity', () => {
     sourceIds: ['SRC-001', 'SRC-005', 'SRC-006', 'SRC-007'],
   };
 
-  /** The problems one gap produces, or `[]` when it is accepted. */
+  /**
+   * The problems one gap produces, or `[]` when it is accepted.
+   *
+   * Over a *gap-bearing* record — the containers canonically empty — because
+   * that is the only shape a gap is representable in: a gap says the evidence
+   * surface was incomplete, so agent verification stopped and nothing was
+   * judged. Asserting gap identity over a record carrying a full reading would
+   * be asserting it over a record that is inconsistent for a different reason,
+   * and every message below would arrive with four unrelated ones beside it.
+   */
   function problemsFor(gap: Record<string, unknown>): string[] {
     try {
-      parseVerificationResult(result({ gaps: [gap] }), registers);
+      parseVerificationResult(haltedResult({ gaps: [gap] }), registers);
       return [];
     } catch (error) {
       if (error instanceof ResultConsistencyError) return error.problems;
@@ -666,8 +694,10 @@ describe('assertResultConsistency — a gap names exactly one identity', () => {
   it('leaves the register cross-check unrun when no registers are supplied, and still enforces cardinality', () => {
     // The positive control for the four cross-register cases above: they fail
     // because the registers were consulted, not because the shape is odd.
-    expect(() => parseVerificationResult(result({ gaps: [{ kind: 'corpus_gap', docId: 'SRC-005', detail: 'x' }] }))).not.toThrow();
-    expect(() => parseVerificationResult(result({ gaps: [{ kind: 'corpus_gap', detail: 'x' }] }))).toThrow(
+    expect(() =>
+      parseVerificationResult(haltedResult({ gaps: [{ kind: 'corpus_gap', docId: 'SRC-005', detail: 'x' }] })),
+    ).not.toThrow();
+    expect(() => parseVerificationResult(haltedResult({ gaps: [{ kind: 'corpus_gap', detail: 'x' }] }))).toThrow(
       ResultConsistencyError,
     );
   });
@@ -676,7 +706,7 @@ describe('assertResultConsistency — a gap names exactly one identity', () => {
     let problems: string[] = [];
     try {
       parseVerificationResult(
-        result({
+        haltedResult({
           gaps: [
             { kind: 'corpus_gap', docId: 'SRC-005', detail: 'a' },
             { kind: 'closure_gap', docId: 'DOC-1', sourceId: 'SRC-001', detail: 'b' },

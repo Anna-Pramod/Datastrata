@@ -27,9 +27,21 @@
  * whatever the author of the day forgot.
  *
  * **An entry document the corpus does not hold is not swallowed.**
- * `computeClosure` throws `ClosureEntryNotFoundError`, which is a `corpus_gap`
- * answered by ingesting the document (§4.2) — never by closing over it anyway.
- * That throw is deliberately allowed to escape.
+ * `computeClosure` throws `ClosureEntryNotFoundError`, and that throw is
+ * deliberately allowed to escape rather than being caught and recorded as a
+ * gap. The distinction is between a run that *halted* and a run that never
+ * began: a gap is a recorded verification outcome, carried in a dossier whose
+ * `corpusClosureSha256` pins the surface the run was entitled to — and here
+ * there is no such surface, because the closure could not be built. Converting
+ * it would mean writing a dossier that pins an entitlement over a document
+ * nobody has, which is the exact failure `ClosureEntryNotFoundError` exists to
+ * prevent one document at a time. It is answered by ingesting the document
+ * (§4.2) and re-running, never by closing over it anyway.
+ *
+ * In practice it cannot arise through this class at all: `forSources` seeds
+ * `computeClosure` only with ids `docsForSources` found in the index. The throw
+ * guards the direct callers of `computeClosure`, which pass entry ids of their
+ * own.
  *
  * Reading text is delegated to the source it is handed, so this module opens no
  * file itself; `LoadedCorpus` satisfies the accessor structurally.
@@ -93,15 +105,54 @@ export class OutsideEntitlementError extends Error {
 }
 
 /**
+ * The entitled closure as a role sees it: every document, in closure order.
+ *
+ * One function, here, because this is *transcript content*. Reader, prosecutors
+ * and adjudicator are all shown the same surface, and two renderers that drifted
+ * would silently change what one role sees while both still looked right — a
+ * replayed run would then disagree with the live one it was recorded from, and
+ * the diff would be in a heading nobody was comparing. It renders through
+ * `documents()`, so it can only ever emit what the closure entitles.
+ */
+export function renderEntitledClosure(closure: EntitledClosure): string {
+  return closure
+    .documents()
+    .map(
+      (document) =>
+        `## ${document.docId} — ${document.title} (${document.versionLabel})\n\n${document.text}`,
+    )
+    .join('\n\n');
+}
+
+/**
  * The capability. Construct it once per run; hand the same object to every role.
  */
 export class EntitledClosure {
+  /**
+   * The corpus, and the traversal's answer, as **genuine** private fields.
+   *
+   * `#` rather than TypeScript's `private`, and the difference is the whole
+   * point of the class. `private` is erased at compile time, so
+   * `(closure as any).source.normalizedText(docId)` hands back the text of a
+   * document the closure excludes — a capability boundary that evaporates under
+   * one cast is weaker than "everything the agents were entitled to know is
+   * exactly what the signature pins" claims. `#` is enforced by the runtime: the
+   * property is not reachable by any name, cast, `Object.keys` or index access
+   * from outside this class body, so `document()` really is the only route to
+   * text and `OutsideEntitlementError` really is unavoidable.
+   */
+  readonly #source: EntitlementSource;
+  readonly #closure: Closure;
+
   private constructor(
-    private readonly source: EntitlementSource,
+    source: EntitlementSource,
     readonly policy: ClosurePolicy,
     readonly entryDocIds: readonly string[],
-    private readonly closure: Closure,
-  ) {}
+    closure: Closure,
+  ) {
+    this.#source = source;
+    this.#closure = closure;
+  }
 
   /**
    * Builds the entitlement a requirement's `sources[]` opens onto.
@@ -125,32 +176,50 @@ export class EntitledClosure {
 
   /** Sorted. Every document a role may open. */
   get docIds(): readonly string[] {
-    return this.closure.docIds;
+    return this.#closure.docIds;
   }
 
   /** Sorted. Every edge with both endpoints inside. */
   get edgeIds(): readonly string[] {
-    return this.closure.edgeIds;
+    return this.#closure.edgeIds;
   }
 
   /** What a signature pins, and what `producePins` is handed. */
   get sha256(): string {
-    return this.closure.sha256;
+    return this.#closure.sha256;
   }
 
   /** The shape `producePins` and `currentStateOf` take. */
   get pinInput(): { sha256: string; docIds: readonly string[] } {
-    return { sha256: this.closure.sha256, docIds: this.closure.docIds };
+    return { sha256: this.#closure.sha256, docIds: this.#closure.docIds };
   }
 
   entitled(docId: string): boolean {
-    return this.closure.docIds.includes(docId);
+    return this.#closure.docIds.includes(docId);
+  }
+
+  /**
+   * Whether the corpus holds this document at all — and nothing more.
+   *
+   * The one discriminator between the two refusals: a document the corpus does
+   * not hold is a `corpus_gap`, answered by ingesting it; a document it holds
+   * that traversal did not reach is a `closure_gap`, answered by recording the
+   * relationship or widening the policy. Without it the two kinds collapse into
+   * one, and §4.2's two populations become uncountable.
+   *
+   * **Not a corpus handle.** It answers one boolean and hands out no document,
+   * no text, no edge and no index, so a role holding this object still cannot
+   * express reading outside the closure — the property the whole class exists
+   * for. `document()` remains the only route to text, and it still refuses.
+   */
+  corpusHolds(docId: string): boolean {
+    return this.#source.index.documents.some((document) => document.docId === docId);
   }
 
   /** The document, or a refusal. There is no unchecked accessor by design. */
   document(docId: string): EntitledDocument {
-    if (!this.entitled(docId)) throw new OutsideEntitlementError(docId, this.closure.sha256);
-    const document = this.source.document(docId);
+    if (!this.entitled(docId)) throw new OutsideEntitlementError(docId, this.#closure.sha256);
+    const document = this.#source.document(docId);
     return {
       docId,
       title: document.title,
@@ -158,7 +227,7 @@ export class EntitledClosure {
       sha256Raw: document.sha256Raw,
       sha256Normalized: document.sha256Normalized,
       normalizerVersion: document.normalizerVersion,
-      text: this.source.normalizedText(docId),
+      text: this.#source.normalizedText(docId),
     };
   }
 
@@ -169,6 +238,6 @@ export class EntitledClosure {
 
   /** Everything a role may read, in closure order. */
   documents(): EntitledDocument[] {
-    return this.closure.docIds.map((docId) => this.document(docId));
+    return this.#closure.docIds.map((docId) => this.document(docId));
   }
 }

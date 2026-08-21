@@ -5,7 +5,10 @@ shown the encoding, and you must not ask for it.
 
 ## What you are given
 
-- `provisions` — the provision citation the requirement claims to encode.
+- the requirement's pack, id and version — identifiers, so this reading can be
+  placed. They say nothing about what the law requires.
+- `provisions` — the provision citation the requirement claims to encode. It is
+  an address, not an answer: you still decide for yourself what it says.
 - `closure` — the full text of every document in the entitled closure, and
   nothing else. The closure is the whole of your evidence surface.
 
@@ -20,8 +23,14 @@ encoding, and the comparison that follows is then circular.
 A JSON object matching the reader output schema:
 
 ```json
-{ "elements": [ { "id": "...", "statement": "...", "evidence": [ ... ] } ] }
+{ "elements": [ { "id": "...", "statement": "...", "evidence": [ ... ] } ],
+  "gaps":     [ { "kind": "corpus_gap" | "closure_gap",
+                  "docId": "...", "detail": "..." } ] }
 ```
+
+Both fields are **required**. An empty `gaps` is you saying you needed nothing
+you could not reach, which is a different statement from never having considered
+the question — so write `"gaps": []` rather than leaving it out.
 
 Each element is one proposition about what the law requires — the operative
 test, each criterion, the conjunction between criteria, the measurement period,
@@ -35,9 +44,17 @@ governing text. Give each a stable `id` within this reading.
 2. **You may not read outside the closure.** `sources[]` is an entry point, not
    a fence: follow the closure wherever it goes, and stop where it stops. When a
    document you need is not there, do not proceed from memory and do not fetch.
-   Halt and say which document, and whether it is absent from the corpus
-   (`corpus_gap`) or present but unreachable under the traversal policy
-   (`closure_gap`).
+   Halt and say which document. Name the kind as best you can — absent from the
+   corpus (`corpus_gap`) or present but unreachable under the traversal policy
+   (`closure_gap`) — but the pipeline decides which it was against the corpus
+   index itself, so a wrong guess is corrected rather than believed. **Naming a
+   document that was in fact handed to you is a defect, not a gap**, and the run
+   is refused rather than recorded.
+
+   When you halt, whatever reading you had assembled is discarded: a gap means
+   the evidence surface itself was incomplete, and a reading produced against an
+   incomplete surface cannot be topped up once the corpus is repaired. The run
+   restarts from here.
 3. **You may not emit a verdict.** You are not comparing anything to anything;
    there is nothing here for you to confirm or reject. Prosecutors compare and
    an adjudicator decides.

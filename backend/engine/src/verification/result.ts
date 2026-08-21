@@ -238,6 +238,34 @@ export interface GapIdentityRegisters {
   sourceIds: readonly string[];
 }
 
+/**
+ * The digest of an entitled closure over nothing: SHA-256 of the empty string.
+ *
+ * Computed rather than transcribed, so it cannot drift from what
+ * `computeClosure` actually returns for an empty entry set. It is a *faithful*
+ * hash — the entitled set really is empty — which is why the rule below is
+ * about the company it keeps rather than about the value itself.
+ */
+export const EMPTY_CLOSURE_SHA256 = sha256Hex('');
+
+/**
+ * Whether a conclusion's whole evidence set is absence claims.
+ *
+ * Exported so that the role boundary and the record boundary are two gates over
+ * **one** rule rather than two rules that agree today. A reading arriving from
+ * an agent is refused at the reader's seam by this predicate, and the assembled
+ * record is refused here by the same one; written separately, the seam could
+ * relax while this stayed strict, and the disagreement would surface as a role
+ * output that parses and a dossier that cannot be signed, with nothing naming
+ * the rule the two differ about.
+ *
+ * An empty set returns `false`: it carries no absence claim to object to, and
+ * cardinality is a different rule, enforced structurally by `.min(1)`.
+ */
+export function evidenceIsSolelyAbsence(items: readonly EvidenceItem[]): boolean {
+  return items.length > 0 && items.every((item) => item.kind === 'absence');
+}
+
 /** Whether a string is present and carries something other than whitespace. */
 function isAdjudicated(resolution: string | undefined): boolean {
   return resolution !== undefined && resolution.trim().length > 0;
@@ -383,6 +411,44 @@ function shortHash(hash: string): string {
  *    none; the cardinality rules above run either way, and only the
  *    cross-register checks need them.
  *
+ *  - **A gap-bearing dossier carries no judgment at all.**
+ *
+ *        gaps.length > 0  =>  reading.elements == []  and  coverage.cells == []
+ *                             and challenges == []    and  openQuestions == []
+ *
+ *    `reading`, `coverage`, `challenges` and `openQuestions` are all required
+ *    by the schema, so "the reading is absent" is not a representable record.
+ *    The truthful gap-bearing shape is the required containers *canonically
+ *    empty* with `gaps[]` carrying the explanation: no agent judgment was
+ *    successfully produced, so the judgment-bearing containers hold nothing and
+ *    `gaps[]` says why.
+ *
+ *    **Unconditional on where the run stopped, deliberately.** The record
+ *    carries no field saying which role halted, so a rule conditioned on that
+ *    would be unenforceable — and it would be the wrong rule anyway. A gap says
+ *    the evidence surface itself was incomplete, and §3.0 forbids topping a
+ *    reading up: a repaired closure restarts verification from the reader.
+ *    Preserving judgments past a gap would give the dossier a hybrid
+ *    provenance — some formed under the old closure, some under the new — with
+ *    `corpusClosureSha256` able to describe only one of them. An
+ *    `OPEN_QUESTION` is the opposite case and carries no such problem: the
+ *    surface was complete and simply did not settle the proposition, so a
+ *    completed run keeps its whole dossier.
+ *
+ *    Each container is reported separately rather than as one conjunction,
+ *    because a single combined message would let three empty containers mask
+ *    the fourth that is not.
+ *
+ *  - **An empty closure never travels alone.** `computeClosure` over an empty
+ *    entry set returns `EMPTY_CLOSURE_SHA256` rather than throwing, and that
+ *    digest is *faithful*: the entitled set really is empty. So the rule is not
+ *    "never compute it" — a gap-bearing dossier still has to fill
+ *    `corpusClosureSha256` and there is no other value it could carry. The rule
+ *    is that an empty closure with an empty `gaps[]` is unrepresentable.
+ *    Unaccompanied, that digest is a dossier claiming an evidence surface it
+ *    never had; accompanied, it is the honest record of a requirement whose
+ *    sources serve no document.
+ *
  * Every problem is collected before throwing, so a result can be repaired in
  * one pass rather than one round trip per defect.
  */
@@ -433,10 +499,12 @@ export function assertResultConsistency(
 
   /** The evidence rules, applied to one conclusion's evidence set. */
   const checkEvidence = (items: readonly EvidenceItem[], label: string): void => {
+    // Through the shared predicate rather than inline, so the reader's seam and
+    // this boundary cannot come to disagree about what "sole evidence" means.
     // `.min(1)` makes an empty set unreachable through the schema, but this
-    // function is exported and callable directly: an empty set has no absence
-    // item to object to, and `every` over it would report one.
-    if (items.length > 0 && items.every((item) => item.kind === 'absence')) {
+    // function is exported and callable directly, and the predicate handles the
+    // empty case: it has no absence item to object to.
+    if (evidenceIsSolelyAbsence(items)) {
       problems.push(
         `${label}: every evidence item is an absence claim; lexical absence cannot establish that no equivalent criterion exists under different words, so it may not be the sole evidence for a conclusion`,
       );
@@ -583,6 +651,38 @@ export function assertResultConsistency(
       }
     }
   });
+
+  // A gap-bearing dossier carries no substantive judgment. Reported one
+  // container at a time rather than as a single conjunction, so each half of
+  // the rule can fail on its own: a combined message would let three empty
+  // containers cover for the fourth that is not.
+  if (result.gaps.length > 0) {
+    const populated: ReadonlyArray<readonly [string, number]> = [
+      ['reading.elements[]', result.reading.elements.length],
+      ['coverage.cells[]', result.coverage.cells.length],
+      ['challenges[]', result.challenges.length],
+      ['openQuestions[]', result.openQuestions.length],
+    ];
+    for (const [path, count] of populated) {
+      if (count === 0) continue;
+      problems.push(
+        `gaps[]: the record carries ${result.gaps.length} gap${
+          result.gaps.length === 1 ? '' : 's'
+        } and ${path} carries ${count} entr${
+          count === 1 ? 'y' : 'ies'
+        }; a gap means the evidence surface itself was incomplete, so agent verification stopped and every judgment-bearing container must be canonically empty — a repaired closure restarts the run rather than topping the reading up, and a completed run that merely wished for another document records an OPEN_QUESTION, not a gap`,
+      );
+    }
+  }
+
+  // The empty closure never travels alone.
+  if (result.corpusClosureSha256 === EMPTY_CLOSURE_SHA256 && result.gaps.length === 0) {
+    problems.push(
+      `corpusClosureSha256: the entitled closure is empty (${shortHash(
+        EMPTY_CLOSURE_SHA256,
+      )}, the digest of the empty string) and gaps[] is empty too; an empty closure is a faithful hash of an evidence surface that holds nothing, so it is only ever truthful accompanied by the gap that says why — unaccompanied it is a dossier claiming an entitlement it never had`,
+    );
+  }
 
   if (problems.length > 0) throw new ResultConsistencyError(problems);
 }

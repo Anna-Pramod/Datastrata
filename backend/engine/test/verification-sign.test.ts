@@ -167,6 +167,25 @@ const RENDERED = HASH('d');
  * A result that is valid, self-consistent, and agrees with both the corpus on
  * disk and the requirement above. Overrides replace whole keys.
  */
+/**
+ * The canonical gap-bearing record: every judgment-bearing container empty and
+ * `gaps[]` carrying the explanation.
+ *
+ * A gap says the evidence surface itself was incomplete, so agent verification
+ * stopped and nothing was judged — a result pairing a gap with a full reading is
+ * inconsistent for that reason alone, and every gap refusal asserted below would
+ * arrive with an `invalid_result` beside it that has nothing to do with the gap.
+ */
+function haltedResult(overrides: Record<string, unknown> = {}): VerificationResult {
+  return result({
+    reading: { elements: [] },
+    coverage: { cells: [] },
+    challenges: [],
+    openQuestions: [],
+    ...overrides,
+  });
+}
+
 function result(overrides: Record<string, unknown> = {}): VerificationResult {
   const req = requirement();
   const a = corpus.document('DOC-A');
@@ -652,7 +671,7 @@ describe('the nine refusals', () => {
   });
 
   it('refuses an unresolved corpus_gap', () => {
-    const r = result({
+    const r = haltedResult({
       gaps: [{ kind: 'corpus_gap', docId: 'DOC-Z', detail: 'the consolidating act is not held' }],
     });
     const candidate = buildSignature(signatureInput({ result: r }));
@@ -663,7 +682,7 @@ describe('the nine refusals', () => {
   it('refuses an unresolved closure_gap', () => {
     // Distinct from a corpus gap, and reported as itself: collapsing the two
     // would hide the population B3 counts to judge the traversal bound.
-    const r = result({
+    const r = haltedResult({
       gaps: [{ kind: 'closure_gap', docId: 'DOC-B', detail: 'reachable but not entitled' }],
     });
     const candidate = buildSignature(signatureInput({ result: r }));
@@ -676,7 +695,7 @@ describe('the nine refusals', () => {
     // to no document at all. There is no missing file to name, and the refusal
     // has to say which register the signer must go and fix — a message reading
     // `corpus_gap on undefined` would be the old shape leaking through.
-    const r = result({
+    const r = haltedResult({
       gaps: [{ kind: 'corpus_gap', sourceId: 'SRC-005', detail: 'no document in the corpus serves it' }],
     });
     const candidate = buildSignature(signatureInput({ result: r }));
@@ -686,7 +705,7 @@ describe('the nine refusals', () => {
     expect(detail).not.toContain('undefined');
     // The counterexample in the same suite: a document-identified gap still
     // says `docId`, so the branch above is not printing one label for both.
-    const byDoc = result({ gaps: [{ kind: 'corpus_gap', docId: 'DOC-Z', detail: 'not held' }] });
+    const byDoc = haltedResult({ gaps: [{ kind: 'corpus_gap', docId: 'DOC-Z', detail: 'not held' }] });
     expect(refusalDetail(buildSignature(signatureInput({ result: byDoc })), checks({ result: byDoc }))).toContain(
       'docId DOC-Z',
     );
@@ -694,7 +713,7 @@ describe('the nine refusals', () => {
 
   it('refuses a gap that names no identity as invalid_result, and prints no undefined', () => {
     // The consistency pass rejects it, and the refusal loop still runs over it.
-    const r = result({ gaps: [{ kind: 'corpus_gap', detail: 'something is missing' }] });
+    const r = haltedResult({ gaps: [{ kind: 'corpus_gap', detail: 'something is missing' }] });
     const candidate = buildSignature(signatureInput({ result: r }));
     const codes = refusalCodes(candidate, checks({ result: r }));
     expect(codes).toContain('invalid_result');
@@ -707,7 +726,7 @@ describe('the nine refusals', () => {
     // is to refuse a result that lies about itself. Cardinality alone cannot
     // catch it — `docId: 'SRC-005'` names exactly one identity — so this passes
     // only if the gate consulted the two registers.
-    const r = result({ gaps: [{ kind: 'corpus_gap', docId: 'SRC-005', detail: 'no document serves it' }] });
+    const r = haltedResult({ gaps: [{ kind: 'corpus_gap', docId: 'SRC-005', detail: 'no document serves it' }] });
     const candidate = buildSignature(signatureInput({ result: r }));
     const c = checks({ result: r });
     expect(refusalCodes(candidate, c)).toEqual(['invalid_result', 'unresolved_gap']);
@@ -722,7 +741,7 @@ describe('the nine refusals', () => {
     // outstanding gap does — but it refuses as `unresolved_gap` only, so the
     // register violation above is the register rule firing rather than a gap
     // being present.
-    const r = result({ gaps: [{ kind: 'corpus_gap', sourceId: 'SRC-005', detail: 'no document serves it' }] });
+    const r = haltedResult({ gaps: [{ kind: 'corpus_gap', sourceId: 'SRC-005', detail: 'no document serves it' }] });
     const candidate = buildSignature(signatureInput({ result: r }));
     const c = checks({ result: r });
     expect(refusalCodes(candidate, c)).toEqual(['unresolved_gap']);
@@ -733,14 +752,14 @@ describe('the nine refusals', () => {
     // The document register the gate uses is `corpus.index` itself, not a list
     // handed in beside it, so this cannot pass over a corpus the gate is not
     // also re-finding every quote against.
-    const r = result({ gaps: [{ kind: 'closure_gap', docId: 'DOC-Z', detail: 'not entitled' }] });
+    const r = haltedResult({ gaps: [{ kind: 'closure_gap', docId: 'DOC-Z', detail: 'not entitled' }] });
     const candidate = buildSignature(signatureInput({ result: r }));
     const c = checks({ result: r });
     expect(refusalCodes(candidate, c)).toEqual(['invalid_result', 'unresolved_gap']);
     expect(refusalDetail(candidate, c)).toContain('the corpus index does not hold');
     // And the counterexample in the same suite: DOC-B is held, so the same
     // shape over a real document raises no `invalid_result`.
-    const held = result({ gaps: [{ kind: 'closure_gap', docId: 'DOC-B', detail: 'not entitled' }] });
+    const held = haltedResult({ gaps: [{ kind: 'closure_gap', docId: 'DOC-B', detail: 'not entitled' }] });
     expect(
       refusalCodes(buildSignature(signatureInput({ result: held })), checks({ result: held })),
     ).toEqual(['unresolved_gap']);
@@ -814,14 +833,37 @@ describe('the nine refusals', () => {
   });
 
   it('reports two refusals arising from the result itself', () => {
+    // `open_question` and `unresolved_gap` cannot co-occur any more, and that is
+    // a property rather than an inconvenience: a gap means agent verification
+    // stopped, so there is no completed dossier to hold an outstanding
+    // question, while an `OPEN_QUESTION` is precisely a *complete* surface that
+    // did not settle a proposition. So the pair here is the open question and a
+    // failing evidence check — both borne by the result, neither borrowed from
+    // the world around it.
     const r = result({
       openQuestions: [{ id: 'Q1', statement: 'Which balance sheet dates?' }],
-      gaps: [{ kind: 'corpus_gap', docId: 'DOC-Z', detail: 'not held' }],
+      reading: {
+        elements: [
+          {
+            id: 'R1',
+            statement: 'A large undertaking must report.',
+            evidence: [
+              {
+                kind: 'quote',
+                docId: 'DOC-A',
+                sha256Normalized: corpus.document('DOC-A').sha256Normalized,
+                text: 'a net turnover of EUR 40 000 000',
+              },
+              { kind: 'absence', docIds: ['DOC-B'], term: 'value added tax' },
+            ],
+          },
+        ],
+      },
     });
     const candidate = buildSignature(signatureInput({ result: r }));
     expect(refusalCodes(candidate, checks({ result: r }))).toEqual([
+      'evidence_failed',
       'open_question',
-      'unresolved_gap',
     ]);
   });
 });
