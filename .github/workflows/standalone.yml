@@ -1,0 +1,54 @@
+# The deployment-artifact gate — the repository's first CI, and the layer that
+# `npm test` and `npm run typecheck` are structurally incapable of replacing.
+#
+# Both of those run inside the source checkout, where every runtime file is
+# reachable whether or not the build traced it. That masking condition is why the
+# version-integrity registry could be missing from the standalone output while the
+# suite stayed green: 12 + 909 tests passed and typecheck exited 0 against an
+# artifact whose /api/check was a 500 in every deployable form.
+#
+# One recipe, two callers: this workflow and a human before a deploy both run the
+# same `npm run test:standalone`. A CI-only shell recipe would be a second, weaker
+# definition of "isolated standalone", and the weaker one becomes the real one.
+
+name: Deployment artifact
+
+on:
+  pull_request:
+    # Deliberately wide, and deliberately NOT narrowed to next.config.mjs. The
+    # registry omission is exactly the case where an *engine* change alters the web
+    # application's runtime file closure without touching any Next configuration:
+    # a new `readFileSync` in backend/engine adds a member to the deployable set
+    # that no frontend diff would show. If this ever costs too much, fix it with
+    # dependency caching — never by narrowing which semantic changes trigger it.
+    paths:
+      - 'frontend/web/**'
+      - 'backend/engine/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/standalone.yml'
+  push:
+    # Unfiltered on the deployment branch: everything that could ship is checked.
+    branches: [main]
+
+jobs:
+  standalone:
+    name: /api/check answers from the isolated artifact
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # The floor declared in the root package.json `engines` field.
+          node-version: '20'
+          cache: npm
+
+      - run: npm ci
+
+      # Builds the production standalone output, copies it to a directory outside
+      # this checkout, proves the isolation guard is live, then requires a correct
+      # /api/check answer with the checkout forbidden. See scripts/test-standalone.mjs.
+      - run: npm run test:standalone

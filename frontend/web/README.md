@@ -131,10 +131,37 @@ No packaging changes were made to the engine — it stays a plain library with n
 - `tsconfig.json` maps `@datastrata/engine` → `../../backend/engine/src/index.ts`
 - `next.config.mjs` sets `experimental.externalDir` so Next compiles that source
 - `zod` is duplicated here because the engine's loader needs it resolvable from this app
-- `outputFileTracingIncludes` ships `knowledge/**/*.json` into a standalone build
+- `outputFileTracingIncludes` ships the engine's runtime files into the standalone build
 
 `lib/pack.ts` loads the pack once through the engine's own validating loader. If the content
 firewall rejects the pack, the site fails loudly rather than answering from a half-loaded record.
+
+## Deployment
+
+**The deployable artifact is `.next/standalone`, not this checkout.** `next.config.mjs` sets
+`output: 'standalone'`, so `next build` assembles a self-contained server tree. Because
+`outputFileTracingRoot` is the repository root, that tree mirrors the repository beneath it and
+**the server entry point is `.next/standalone/frontend/web/server.js`**, not
+`.next/standalone/server.js`. Next omits `.next/static` and `public/` from the tree by
+convention; copy them alongside for anything that serves a page.
+
+**The source checkout is outside the runtime contract.** If the standalone server cannot answer
+with the repository absent, the build is not deployable — so anything the engine reads at
+runtime through a computed path must be named in `outputFileTracingIncludes`. Today that means
+authored knowledge plus `verification/requirement-versions/`, which `assertVersionIntegrity`
+requires and whose absence is a hard `VersionIntegrityError`.
+
+```
+npm run test:standalone
+```
+
+builds the artifact, copies it to a directory outside the repository, proves its isolation guard
+is live, and requires `/api/check` to answer correctly with this checkout forbidden. It is
+**deliberately excluded from `npm test`**: the fast suite and `npm run typecheck` both run where
+the repository is reachable, so neither can see a missing traced file — both were green against
+an artifact whose `/api/check` was a 500. CI runs this same recipe
+(`.github/workflows/standalone.yml`) on every PR touching `frontend/web/`, `backend/engine/` or
+the root build files, and on every push to `main`.
 
 ## Company page — what still needs filling in
 

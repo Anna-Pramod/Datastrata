@@ -1,0 +1,43 @@
+# The two fast layers of design §9, kept in their own workflow so a deployment
+# failure never arrives buried among 900 engine tests.
+#
+#   npm test           fast behavioural tests
+#   npm run typecheck  compile-time contracts
+#   npm run standalone deployment-artifact truth  -> standalone.yml
+#
+# Unfiltered on purpose: unlike the artifact gate these are cheap, and there is no
+# path in this repository whose change is guaranteed not to move behaviour.
+
+name: Checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    name: npm test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  typecheck:
+    name: npm run typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
