@@ -32,6 +32,7 @@ import { DEFAULT_ROLE_CONFIG, lensFor } from '../src/pipeline/config';
 import { loadPromptSet } from '../src/pipeline/prompts';
 import { runVerificationPipeline } from '../src/pipeline/orchestrate';
 import { replayRunner, TranscriptReplayError } from '../src/pipeline/runner';
+import { ProsecutorTranscriptMissingError } from '../src/pipeline/prosecutors';
 import {
   fixtureCorpus,
   fixtureRenderContext,
@@ -105,9 +106,17 @@ describe('a run, recorded and replayed', () => {
 
   it('a recording that does not cover a role fails loudly rather than substituting one', async () => {
     const live = await runVerificationPipeline(runInput(placeholderRunner()));
+    // Missing the adjudicator: the replay runner itself refuses.
+    const noAdjudicator = { ...live.transcript, roles: live.transcript.roles.slice(0, 4) };
+    await expect(
+      runVerificationPipeline(runInput(replayRunner(noAdjudicator))),
+    ).rejects.toBeInstanceOf(TranscriptReplayError);
+    // Missing two prosecutors: the same refusal, renamed by the prosecutor
+    // machinery so the message says which *lens* had no exchange rather than
+    // only which index. Task 3 owns that translation.
     const short = { ...live.transcript, roles: live.transcript.roles.slice(0, 2) };
     await expect(runVerificationPipeline(runInput(replayRunner(short)))).rejects.toBeInstanceOf(
-      TranscriptReplayError,
+      ProsecutorTranscriptMissingError,
     );
     // Positive control: the complete recording drives the same run cleanly.
     await expect(runVerificationPipeline(runInput(replayRunner(live.transcript)))).resolves.toBeDefined();

@@ -200,8 +200,35 @@ export function stubReaderOutput(): ReaderOutput {
   };
 }
 
-export function stubProsecutorOutput(lens: string): ProsecutorOutput {
-  return { lens, coverage: [], challenges: [], gaps: [] };
+/**
+ * A structurally valid bidirectional table over placeholder material.
+ *
+ * Both directions are present because Task 3 refuses a one-directional table,
+ * and every cell is `MAPPED` between the placeholder reading element and the
+ * fixture requirement's only condition address. It is a judgment of nothing: it
+ * says a placeholder statement corresponds to a placeholder encoding, which is
+ * true of any two placeholders and says nothing about any law. It exists so the
+ * seam, the transcript and the tail have a well-formed table to carry.
+ *
+ * The ids default to the fixture reading's element and the fixture
+ * requirement's single atom address (`root`, from `conditionPathsFor`), and are
+ * overridable so a caller over a different requirement can address its own.
+ */
+export function stubProsecutorOutput(
+  lens: string,
+  address: { readingElementId?: string; conditionPath?: string } = {},
+): ProsecutorOutput {
+  const readingElementId = address.readingElementId ?? 'RE-STUB';
+  const conditionPath = address.conditionPath ?? 'root';
+  return {
+    lens,
+    coverage: [
+      { direction: 'reading_to_condition', readingElementId, conditionPath, verdict: 'MAPPED' },
+      { direction: 'condition_to_reading', conditionPath, readingElementId, verdict: 'MAPPED' },
+    ],
+    challenges: [],
+    gaps: [],
+  };
 }
 
 export function stubAdjudicatorOutput(): AdjudicatorOutput {
@@ -237,14 +264,36 @@ export function stubRunner(
   };
 }
 
+/**
+ * The lens a prosecutor request was actually handed, read off the request.
+ *
+ * Read from the rendered input rather than from a configuration this fixture
+ * also holds, so a stub answers under whatever lens the run under test
+ * configured — for any count and any lens set. A stub with its own idea of the
+ * lens would make `assertEveryLensRan` a check against the fixture rather than
+ * against the configuration.
+ */
+export function lensFromRequest(request: RoleRequest): string {
+  const rendered = request.messages.find((message) => message.from === 'input')?.content ?? '';
+  const match = /^# Lens\n\n(.+)$/m.exec(rendered);
+  if (match?.[1] === undefined) {
+    throw new Error(`prosecutor[${request.index}] was sent no lens heading; the stub cannot echo one`);
+  }
+  return match[1];
+}
+
 /** The default stub: structurally valid placeholders for all three roles. */
-export function placeholderRunner(lensFor: (index: number) => string = () => 'stub_lens'): StubRunner {
+export function placeholderRunner(lensFor?: (index: number) => string): StubRunner {
   return stubRunner((request) => {
     switch (request.role) {
       case 'reader':
         return JSON.stringify(stubReaderOutput());
       case 'prosecutor':
-        return JSON.stringify(stubProsecutorOutput(lensFor(request.index)));
+        return JSON.stringify(
+          stubProsecutorOutput(
+            lensFor === undefined ? lensFromRequest(request) : lensFor(request.index),
+          ),
+        );
       case 'adjudicator':
         return JSON.stringify(stubAdjudicatorOutput());
     }

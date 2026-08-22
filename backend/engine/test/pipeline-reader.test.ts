@@ -65,7 +65,9 @@ import {
   fixtureIndex,
   fixtureRenderContext,
   fixtureRequirement,
+  lensFromRequest,
   NOT_INGESTED,
+  stubProsecutorOutput,
   stubRunner,
   UNSERVED_SOURCE_IDS,
 } from './pipeline-fixtures';
@@ -570,7 +572,13 @@ describe('a reader that halts on a document stops the pipeline exactly once', ()
       request.role === 'reader'
         ? JSON.stringify(wholeReading())
         : request.role === 'prosecutor'
-          ? JSON.stringify({ lens: 'x', coverage: [], challenges: [], gaps: [] })
+          ? // The lens is echoed from the request and the table addresses the
+            // reading element `wholeReading` actually carries: Task 3 refuses a
+            // prosecutor answering under an unconfigured lens, and refuses a
+            // cell naming an element the reading never made.
+            JSON.stringify(
+              stubProsecutorOutput(lensFromRequest(request), { readingElementId: 'RE-1' }),
+            )
           : JSON.stringify({ adjudications: [], openQuestions: [], gaps: [] }),
     );
     const requirement = fixtureRequirement();
@@ -918,7 +926,10 @@ describe('a requirement whose sources serve no document (the real corpus)', () =
       request.role === 'reader'
         ? JSON.stringify({ elements: [], gaps: [] })
         : request.role === 'prosecutor'
-          ? JSON.stringify({ lens: 'x', coverage: [], challenges: [], gaps: [] })
+          ? // An empty table over an empty reading: there are no reading
+            // elements to walk from, so Task 3's bidirectionality guard has no
+            // material and does not demand cells.
+            JSON.stringify({ lens: lensFromRequest(request), coverage: [], challenges: [], gaps: [] })
           : JSON.stringify({ adjudications: [], openQuestions: [], gaps: [] }),
     );
     const whole = await runVerificationPipeline({

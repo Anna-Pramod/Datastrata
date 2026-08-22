@@ -7,9 +7,16 @@ different lens, and none of you sees any other's work or any defence.
 
 - `reading` — the blind reader's independent reading of the law.
 - `renderedCondition` — the encoding, in English, exactly as the reviewer reads it.
+- `conditionPaths` — the structural addresses of that same encoding, under the
+  heading `# Condition addresses`. This is not extra evidence: it is the index of
+  the condition you already hold, so that a cell can say *which part* of the
+  encoding it is about. `root` is the condition as a whole; `all[0]` is the first
+  branch of a top-level conjunction; `all[1].any[0]` nests.
 - `lens` — the single angle you work this pass.
 - `closure` — the full text of every document in the entitled closure, and
   nothing else.
+
+You are not given any other prosecutor's output, and there is no defence.
 
 ## Your lens
 
@@ -32,8 +39,26 @@ A JSON object matching the prosecutor output schema, carrying two things.
 
 Walk it in both directions. One direction alone cannot see invented encoding.
 
+A cell is refused unless it obeys all of the following:
+
+- It names the axis it was walked along: a `reading_to_condition` cell carries a
+  `readingElementId` from `reading.elements[]`; a `condition_to_reading` cell
+  carries a `conditionPath` from `# Condition addresses`.
+- `UNMAPPED` belongs only to `reading_to_condition`, `UNSUPPORTED` only to
+  `condition_to_reading`.
+- A `MAPPED` cell names *both* — the thing it mapped to as well as the thing it
+  was walked from. A mapping to nothing is not a mapping.
+- `UNMAPPED` and `UNSUPPORTED` name only their own axis: they are precisely the
+  case where there is no counterpart.
+- **Every non-`MAPPED` cell names the `challengeId` of a challenge you raised in
+  the same output**, and no `MAPPED` cell names one. Adverse coverage with no
+  challenge behind it is a defect nobody argued.
+
 **Challenges**, each with a stable `id`, the lens it was raised through, a
-statement of the defect, and `evidence[]` quoting the closure.
+statement of the defect, and `evidence[]` quoting the closure. Ids must be
+unique within your output; you need not coordinate with any other prosecutor,
+because the pipeline qualifies your ids with your own index. Every challenge's
+`lens` is your assigned lens.
 
 ## Rules
 

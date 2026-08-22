@@ -54,8 +54,20 @@ export const coverageDirectionSchema = z.enum(['reading_to_condition', 'conditio
  * The adverse verdicts. Each one is a claim that the reading and the encoding
  * did not meet, and each therefore has to name the challenge that adjudicated
  * it — see `assertResultConsistency`.
+ *
+ * **Exported because it is the authority, and there must be exactly one.** The
+ * pipeline's prosecutor seam demands a `challengeId` on adverse coverage, and
+ * that demand only means something if "adverse" is the same word in both places:
+ * a fifth coverage verdict that this set did not learn about would have the seam
+ * requiring a link the record boundary never checks, or the boundary refusing a
+ * link the seam never asked for. `src/pipeline/prosecutors.ts` derives its list
+ * from this set rather than restating it.
  */
-const ADVERSE_COVERAGE: ReadonlySet<string> = new Set(['UNMAPPED', 'UNSUPPORTED', 'UNCERTAIN']);
+export const ADVERSE_COVERAGE: ReadonlySet<string> = new Set([
+  'UNMAPPED',
+  'UNSUPPORTED',
+  'UNCERTAIN',
+]);
 
 /** The verdicts for which an adjudication has been reached and must be stated. */
 const RESOLVED_VERDICTS: ReadonlySet<string> = new Set(['CONFIRMED', 'MISMATCH']);

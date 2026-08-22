@@ -33,13 +33,19 @@ import type { AuthoredRequirement } from '../types';
 import type { CurrentCorpusSource } from '../verification/current-state';
 import { renderRequirement, RENDERER_VERSION, type RenderContext } from '../verification/render';
 import { createAgentRole } from './agent-role';
-import { lensFor, type RoleConfig } from './config';
+import type { RoleConfig } from './config';
 import { renderEntitledClosure, type EntitledClosure } from './entitlement';
 import type { PipelineGap } from './gaps';
 import { buildPipelineIdentity, RESULT_SCHEMA_VERSION } from './identity';
 import type { PromptSet } from './prompts';
 import { promptHashes } from './prompts';
 import { readerInputFor, runBlindReader, type ReaderInput, type ReaderOutcome } from './reader';
+import {
+  conditionPathsFor,
+  runProsecutors,
+  type ProsecutorInput,
+  type ProsecutorsOutcome,
+} from './prosecutors';
 import {
   parseRoleOutput,
   type AdjudicatorOutput,
@@ -65,13 +71,12 @@ import {
  */
 export type { ReaderInput };
 
-export interface ProsecutorInput {
-  reading: ReaderOutput;
-  /** The exact English the reviewer reads, from `renderRequirement`. */
-  renderedCondition: string;
-  lens: string;
-  closure: EntitledClosure;
-}
+/**
+ * Re-exported for the same reason `ReaderInput` is: the type lives beside the
+ * function that builds it, because what a prosecutor may be handed is a property
+ * of the projection and its builder together.
+ */
+export type { ProsecutorInput };
 
 export interface AdjudicatorInput {
   reading: ReaderOutput;
@@ -122,6 +127,15 @@ export interface PipelineRunOutcome {
   pipelineVersion: string;
   /** What the reader was entitled to, what it returned, and its gaps. */
   reader: ReaderOutcome;
+  /**
+   * The prosecutors' executions, their gaps, and the assembled bidirectional
+   * coverage table.
+   *
+   * Carried on the outcome rather than reassembled by a caller: the table's
+   * challenge ids are qualified by the prosecutor that raised them, and a second
+   * assembly would have to reproduce that qualification to make the same links.
+   */
+  prosecution: ProsecutorsOutcome;
   executions: PipelineExecutions;
   transcript: RunTranscript;
   tail: TailOutcome;
@@ -143,15 +157,6 @@ export interface PipelineRunOutcome {
  * replayed run disagrees with a live one.
  */
 
-
-function renderProsecutorInput(input: ProsecutorInput): string {
-  return [
-    `# Lens\n\n${input.lens}`,
-    `# Blind reading\n\n${JSON.stringify(input.reading, null, 2)}`,
-    `# Rendered condition\n\n${input.renderedCondition}`,
-    `# Entitled closure (${input.closure.sha256})\n\n${renderEntitledClosure(input.closure)}`,
-  ].join('\n\n');
-}
 
 function renderAdjudicatorInput(input: AdjudicatorInput): string {
   return [
@@ -236,29 +241,31 @@ export async function runVerificationPipeline(
   // discarded, and no adjudicator is asked to decide between challenges nobody
   // made. A reading produced under an incomplete surface cannot be topped up,
   // so the repair is to fix the corpus and restart from the reader.
-  const halted = reader.gaps.length > 0;
+  const readerHalted = reader.gaps.length > 0;
 
-  const prosecutorExecutions: RoleExecution<ProsecutorOutput>[] = [];
-  for (let index = 0; halted === false && index < input.config.prosecutorCount; index += 1) {
-    const lens = lensFor(input.config, index);
-    const prosecutor = createAgentRole<ProsecutorInput, ProsecutorOutput>({
-      name: 'prosecutor',
-      index,
-      model: input.config.models.prosecutor,
-      prompt: input.prompts.prosecutor,
-      runner,
-      renderInput: renderProsecutorInput,
-      parse: (raw) => parseRoleOutput('prosecutor', index, raw),
-    });
-    prosecutorExecutions.push(
-      await prosecutor.run({
+  // The address vocabulary of the encoding, derived from the same requirement
+  // `renderedCondition` was rendered from. Not a fifth input: it is the
+  // structural index of something the prosecutor is already shown, and it is
+  // what anchors the `condition_to_reading` direction to the real tree.
+  const conditionPaths = conditionPathsFor(input.requirement, input.renderContext);
+
+  const prosecution: ProsecutorsOutcome = readerHalted
+    ? { executions: [], outputs: [], gaps: [], halted: false, table: { cells: [], challenges: [] } }
+    : await runProsecutors({
         reading: reader.output,
         renderedCondition,
-        lens,
+        conditionPaths,
         closure: input.closure,
-      }),
-    );
-  }
+        config: input.config,
+        prompt: input.prompts.prosecutor,
+        runner,
+      });
+
+  // §3.0 binds the prosecutors to the same closure as the reader, so a run can
+  // stop in either place. `halted` is derived from the gap lists rather than
+  // asserted, so it and the gaps it describes cannot disagree.
+  const halted = readerHalted || prosecution.halted;
+  const prosecutorExecutions = prosecution.executions;
 
   let adjudicatorExecution: RoleExecution<AdjudicatorOutput> | null = null;
   if (halted === false) {
@@ -274,7 +281,7 @@ export async function runVerificationPipeline(
     adjudicatorExecution = await adjudicator.run({
       reading: reader.output,
       renderedCondition,
-      prosecutions: prosecutorExecutions.map((execution) => execution.output),
+      prosecutions: prosecution.outputs,
       closure: input.closure,
     });
   }
@@ -291,7 +298,7 @@ export async function runVerificationPipeline(
     resultSchemaVersion,
     roleOutputs: {
       reading: reader.output,
-      prosecutions: prosecutorExecutions.map((execution) => execution.output),
+      prosecutions: prosecution.outputs,
       adjudication: adjudicatorExecution === null ? null : adjudicatorExecution.output,
     },
     // The gaps no role could have named: the shape that names a *source*
@@ -328,6 +335,7 @@ export async function runVerificationPipeline(
     runId,
     pipelineVersion,
     reader,
+    prosecution,
     executions: {
       reader: reader.execution,
       prosecutors: prosecutorExecutions,

@@ -80,7 +80,7 @@
  * Pure: no filesystem, network or clock.
  */
 
-import type { Condition, FactType, Requirement } from '../types';
+import type { AuthoredRequirement, Condition, FactType } from '../types';
 import { factLabel, factUnit } from './vocabulary';
 
 /** The slice of the render context this module needs. Structural, so a `RenderContext` satisfies it. */
@@ -296,7 +296,18 @@ export function featuresFromCondition(condition: Condition, ctx: FeatureContext)
   return assemble(conditionToNode(condition, ctx));
 }
 
-export function featuresFromRequirement(requirement: Requirement, ctx: FeatureContext): RequirementFeatures {
+/**
+ * Widened to `AuthoredRequirement` — the authored fields are all this reads.
+ *
+ * `derivedStatus` and `statusReasons` are attached by the loader and are not
+ * content, so demanding them would force a caller holding an authored
+ * requirement (the verification pipeline does) to invent a status it has no
+ * business asserting. A `Requirement` still satisfies the narrower type.
+ */
+export function featuresFromRequirement(
+  requirement: AuthoredRequirement,
+  ctx: FeatureContext,
+): RequirementFeatures {
   if (requirement.kind === 'selection') {
     return {
       id: requirement.id,
