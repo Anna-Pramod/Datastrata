@@ -47,7 +47,12 @@ import {
   type ProsecutorsOutcome,
 } from './prosecutors';
 import {
-  parseRoleOutput,
+  runAdjudicator,
+  adjudicatorInputFor,
+  type AdjudicatorInput,
+  type AdjudicatorOutcome,
+} from './adjudicator';
+import {
   type AdjudicatorOutput,
   type ProsecutorOutput,
   type ReaderOutput,
@@ -78,12 +83,14 @@ export type { ReaderInput };
  */
 export type { ProsecutorInput };
 
-export interface AdjudicatorInput {
-  reading: ReaderOutput;
-  renderedCondition: string;
-  prosecutions: readonly ProsecutorOutput[];
-  closure: EntitledClosure;
-}
+/**
+ * Re-exported for the same reason `ReaderInput` and `ProsecutorInput` are: the
+ * type lives beside the function that builds it, because what an adjudicator
+ * may be handed is a property of the projection and its builder together. A
+ * shape declared here and populated there is a shape somebody can populate a
+ * second way — and the second way is where a prosecutor's execution arrives.
+ */
+export type { AdjudicatorInput };
 
 export interface PipelineRunInput {
   packId: string;
@@ -138,6 +145,15 @@ export interface PipelineRunOutcome {
   prosecution: ProsecutorsOutcome;
   executions: PipelineExecutions;
   transcript: RunTranscript;
+  /**
+   * The adjudication, and `null` when no adjudicator ran.
+   *
+   * Carried on the outcome rather than reassembled by a caller because
+   * `openQuestions[]` is a projection with exactly one producer: a caller
+   * deriving its own from `challenges[]` would be the second author the
+   * projection exists to prevent, and the two would be free to disagree.
+   */
+  adjudication: AdjudicatorOutcome | null;
   tail: TailOutcome;
   /**
    * Whether agent verification stopped at a gap.
@@ -147,24 +163,6 @@ export interface PipelineRunOutcome {
    * cannot be made to disagree.
    */
   halted: boolean;
-}
-
-/**
- * How a role's inputs are written into the message it receives.
- *
- * Plain, stable text rather than a bespoke format per role: it is transcript
- * content, so it has to be reproducible, and it is what a human reads when a
- * replayed run disagrees with a live one.
- */
-
-
-function renderAdjudicatorInput(input: AdjudicatorInput): string {
-  return [
-    `# Blind reading\n\n${JSON.stringify(input.reading, null, 2)}`,
-    `# Rendered condition\n\n${input.renderedCondition}`,
-    `# Prosecutions\n\n${JSON.stringify(input.prosecutions, null, 2)}`,
-    `# Entitled closure (${input.closure.sha256})\n\n${renderEntitledClosure(input.closure)}`,
-  ].join('\n\n');
 }
 
 /**
@@ -264,27 +262,36 @@ export async function runVerificationPipeline(
   // §3.0 binds the prosecutors to the same closure as the reader, so a run can
   // stop in either place. `halted` is derived from the gap lists rather than
   // asserted, so it and the gaps it describes cannot disagree.
-  const halted = readerHalted || prosecution.halted;
+  const agentHalted = readerHalted || prosecution.halted;
   const prosecutorExecutions = prosecution.executions;
 
-  let adjudicatorExecution: RoleExecution<AdjudicatorOutput> | null = null;
-  if (halted === false) {
-    const adjudicator = createAgentRole<AdjudicatorInput, AdjudicatorOutput>({
-      name: 'adjudicator',
-      index: 0,
-      model: input.config.models.adjudicator,
-      prompt: input.prompts.adjudicator,
-      runner,
-      renderInput: renderAdjudicatorInput,
-      parse: (raw) => parseRoleOutput('adjudicator', 0, raw),
-    });
-    adjudicatorExecution = await adjudicator.run({
-      reading: reader.output,
-      renderedCondition,
-      prosecutions: prosecution.outputs,
-      closure: input.closure,
-    });
-  }
+  // §3.3, and the projection is built here rather than inline: `adjudicatorInputFor`
+  // is the only function allowed to assemble what an adjudicator is shown, and
+  // it takes the *assembled table* — Task 3's cells and its narrow challenge
+  // seeds — never a `ProsecutorOutput`, a `RoleExecution` or a transcript. The
+  // adjudicator settles claims; the arguments that produced them are not its
+  // business and have nowhere in its input to sit.
+  const adjudication: AdjudicatorOutcome | null =
+    agentHalted === false
+      ? await runAdjudicator({
+          input: adjudicatorInputFor({
+            reading: reader.output,
+            renderedCondition,
+            table: prosecution.table,
+            closure: input.closure,
+          }),
+          prompt: input.prompts.adjudicator,
+          model: input.config.models.adjudicator,
+          runner,
+        })
+      : null;
+  const adjudicatorExecution: RoleExecution<AdjudicatorOutput> | null =
+    adjudication === null ? null : adjudication.execution;
+
+  // §3.0 binds all three roles to the same closure, so a run can stop in any of
+  // the three places. Derived from the gap lists rather than asserted, so
+  // `halted` and the gaps it describes cannot disagree.
+  const halted = agentHalted || (adjudication !== null && adjudication.halted);
 
   const tail = runDeterministicTail({
     packId: input.packId,
@@ -299,7 +306,7 @@ export async function runVerificationPipeline(
     roleOutputs: {
       reading: reader.output,
       prosecutions: prosecution.outputs,
-      adjudication: adjudicatorExecution === null ? null : adjudicatorExecution.output,
+      adjudication: adjudication === null ? null : adjudication.output,
     },
     // The gaps no role could have named: the shape that names a *source*
     // rather than a document is produced before the first call.
@@ -336,6 +343,7 @@ export async function runVerificationPipeline(
     pipelineVersion,
     reader,
     prosecution,
+    adjudication,
     executions: {
       reader: reader.execution,
       prosecutors: prosecutorExecutions,

@@ -232,7 +232,7 @@ export function stubProsecutorOutput(
 }
 
 export function stubAdjudicatorOutput(): AdjudicatorOutput {
-  return { adjudications: [], openQuestions: [], gaps: [] };
+  return { adjudications: [], gaps: [] };
 }
 
 // ---------------------------------------------------------------------------

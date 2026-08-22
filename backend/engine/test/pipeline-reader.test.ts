@@ -579,7 +579,7 @@ describe('a reader that halts on a document stops the pipeline exactly once', ()
             JSON.stringify(
               stubProsecutorOutput(lensFromRequest(request), { readingElementId: 'RE-1' }),
             )
-          : JSON.stringify({ adjudications: [], openQuestions: [], gaps: [] }),
+          : JSON.stringify({ adjudications: [], gaps: [] }),
     );
     const requirement = fixtureRequirement();
     const outcome = await runVerificationPipeline({
@@ -933,7 +933,7 @@ describe('a requirement whose sources serve no document (the real corpus)', () =
             // elements to walk from, so Task 3's bidirectionality guard has no
             // material and does not demand cells.
             JSON.stringify({ lens: lensFromRequest(request), coverage: [], challenges: [], gaps: [] })
-          : JSON.stringify({ adjudications: [], openQuestions: [], gaps: [] }),
+          : JSON.stringify({ adjudications: [], gaps: [] }),
     );
     const whole = await runVerificationPipeline({
       packId: pack.id,

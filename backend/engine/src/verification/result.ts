@@ -69,8 +69,18 @@ export const ADVERSE_COVERAGE: ReadonlySet<string> = new Set([
   'UNCERTAIN',
 ]);
 
-/** The verdicts for which an adjudication has been reached and must be stated. */
-const RESOLVED_VERDICTS: ReadonlySet<string> = new Set(['CONFIRMED', 'MISMATCH']);
+/**
+ * The verdicts for which an adjudication has been reached and must be stated.
+ *
+ * Exported for the same reason `ADVERSE_COVERAGE` and `evidenceIsSolelyAbsence`
+ * are: the adjudicator's role seam (`pipeline/adjudicator.ts`) applies the same
+ * rule at the boundary of the role that produced the verdict, and two gates over
+ * **one** set is a different thing from two sets that agree today. Written
+ * separately, the seam could relax while this stayed strict, and the
+ * disagreement would surface as a role output that parses and a dossier that
+ * cannot be signed, with nothing naming the rule the two differ about.
+ */
+export const RESOLVED_VERDICTS: ReadonlySet<string> = new Set(['CONFIRMED', 'MISMATCH']);
 
 /**
  * A pinned corpus document, as the closure held it at verification time. Both

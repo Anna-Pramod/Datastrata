@@ -118,7 +118,16 @@ export const prosecutorOutputSchema = z
 
 export type ProsecutorOutput = z.infer<typeof prosecutorOutputSchema>;
 
-/** One adjudication, bound to evidence. */
+/**
+ * One adjudication, bound to evidence.
+ *
+ * `resolution` is `.optional()` structurally for `result.ts`'s reason exactly:
+ * the obligation is conditional on `verdict`, and an `OPEN_QUESTION` is
+ * precisely the case where there is nothing to resolve. Requiring one
+ * structurally would either demand a resolution for an open question or wrap
+ * this object in a refinement, which would hide every field here from the
+ * accounting walker. `assertAdjudication` enforces the conditional rule.
+ */
 const adjudicationSchema = z
   .object({
     challengeId: z.string(),
@@ -128,10 +137,25 @@ const adjudicationSchema = z
   })
   .strict();
 
+/**
+ * The adjudicator's output, *without* an `openQuestions` list.
+ *
+ * The omission is the rule (§3.3): `openQuestions[]` is a deterministic
+ * projection of the `OPEN_QUESTION` verdicts, computed by
+ * `pipeline/adjudicator.ts`, and one concept has one producer. An adjudicator
+ * that could author its own list would give the record two lists that can
+ * disagree — and because `sign.ts` refuses on the verdicts *and* on the list,
+ * the disagreement would be invisible: both refusals fire together whichever
+ * producer wrote it.
+ *
+ * `.strict()` makes the absence enforced rather than merely intended, exactly
+ * as it does for the `verdict` key a prosecutor may not emit: an adjudicator
+ * returning an `openQuestions` key is refused at this seam rather than having
+ * the field quietly stripped.
+ */
 export const adjudicatorOutputSchema = z
   .object({
     adjudications: z.array(adjudicationSchema),
-    openQuestions: z.array(z.object({ id: z.string(), statement: z.string() }).strict()),
     gaps: z.array(roleGapSchema),
   })
   .strict();

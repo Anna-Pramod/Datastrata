@@ -829,7 +829,7 @@ describe('three configured lenses require three recorded exchanges', () => {
             ? JSON.stringify(stubReaderOutput())
             : request.role === 'prosecutor'
               ? JSON.stringify(stubProsecutorOutput(lensFromRequest(request)))
-              : JSON.stringify({ adjudications: [], openQuestions: [], gaps: [] }),
+              : JSON.stringify({ adjudications: [], gaps: [] }),
         ),
         config,
       ),
@@ -942,7 +942,7 @@ describe('a prosecutor is bound by the same closure and halts on a gap', () => {
                 gaps: [{ kind: 'corpus_gap', docId, detail: 'the prosecutor needed this' }],
               })
             : JSON.stringify(stubProsecutorOutput(lensFromRequest(request)))
-          : JSON.stringify({ adjudications: [], openQuestions: [], gaps: [] }),
+          : JSON.stringify({ adjudications: [], gaps: [] }),
     );
   }
 
@@ -985,7 +985,7 @@ describe('a prosecutor is bound by the same closure and halts on a gap', () => {
         ? JSON.stringify(stubReaderOutput())
         : request.role === 'prosecutor'
           ? JSON.stringify(stubProsecutorOutput(lensFromRequest(request)))
-          : JSON.stringify({ adjudications: [], openQuestions: [], gaps: [] }),
+          : JSON.stringify({ adjudications: [], gaps: [] }),
     );
     const outcome = await runVerificationPipeline(pipelineInput(runner));
     expect(outcome.halted).toBe(false);
