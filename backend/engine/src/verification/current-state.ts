@@ -115,8 +115,9 @@ export interface CurrentStateInput extends PinInput {
  * requirement, the render context and the closure alone, which is exactly the
  * set a producer of results needs before it has one.
  *
- * `corpus` is `CorpusPin[]`, the five-field pin `signingEntrySchema` and
- * `corpusPinSchema` both require, and **not** `CurrentCorpusDocument[]`. This is
+ * `corpus` is `CorpusPin[]`, the five-field pin `corpus-pin.ts` defines once and
+ * both the record and the ledger require, and **not**
+ * `CurrentCorpusDocument[]`. This is
  * the richer of the two shapes, so the freshness record is derived from it by
  * `pinsForFreshness` below and never the other way round: a producer that
  * emitted the narrow shape would leave every record-shaped caller to widen it,

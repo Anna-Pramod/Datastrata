@@ -21,21 +21,30 @@
  * rather than every record-shaped caller widening it. Two obligations follow,
  * and each is tested against something this module did not author:
  *
- *  - what the producer emits must satisfy `corpusPinSchema` and
- *    `signingEntrySchema` — checked through `parseVerificationResult` and
- *    `signingEntrySchema.parse`, never against a field list restated here;
+ *  - what the producer emits must satisfy the record contract and the ledger
+ *    contract — checked through `parseVerificationResult` and
+ *    `signingEntrySchema.parse`, never against a field list restated here.
+ *    Those two contracts pin the corpus through **one** shared
+ *    `corpusPinSchema` object, so this is a claim about the producer's width
+ *    and no longer a watch for two definitions drifting apart;
  *  - the narrowing must not become a freshness trigger — checked through
  *    `deriveStaleness`, with positive controls, because "nothing moved" is
  *    also what a harness that can never report movement says.
  */
 
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import {
   currentStateOf,
   pinsForFreshness,
   producePins,
 } from '../src/verification/current-state';
-import { parseVerificationResult, resultSha256 } from '../src/verification/result';
+import {
+  parseVerificationResult,
+  resultSha256,
+  verificationResultSchema,
+} from '../src/verification/result';
+import { corpusPinSchema } from '../src/verification/corpus-pin';
 import { requirementInputSha256 } from '../src/verification/canonical';
 import { signingEntrySchema, type SigningEntry } from '../src/verification/ledger';
 import { deriveStaleness } from '../src/verification/staleness';
@@ -208,14 +217,12 @@ describe('the record width and the freshness width', () => {
       on: '2026-08-21',
     };
     expect(signingEntrySchema.parse(entry).corpus).toEqual(pins.corpus);
-    // The same counterexample, against the other of the two schemas that
-    // independently define this pin.
-    expect(() =>
-      signingEntrySchema.parse({
-        ...(entry as Record<string, unknown>),
-        corpus: pinsForFreshness(pins).corpus,
-      }),
-    ).toThrow(/versionLabel/);
+    // No counterexample is restated here. It used to be: the freshness
+    // projection was pushed through this schema too, so that two independent
+    // definitions of the pin drifting apart would redden. There is one
+    // definition now, and the identity assertion below is what closes vacuity —
+    // structurally, rather than by re-running the record's counterexample
+    // against an object that is provably the same object.
   });
 
   it('the freshness projection drops versionLabel and nothing else', () => {
@@ -251,6 +258,44 @@ describe('the record width and the freshness width', () => {
     // The positive control for that negative: the label is in the world, and the
     // producer did see it. Otherwise the line above passes on an empty closure.
     expect(JSON.stringify(producePins(pinInput))).toContain('versionLabel');
+  });
+});
+
+/**
+ * One pin contract, two artefacts.
+ *
+ * `result.ts` and `ledger.ts` each used to define this five-field object for
+ * themselves, byte-identically, and the sign gate compared a result's pins
+ * against an entry's pins field by field on the strength of that coincidence.
+ * `src/verification/corpus-pin.ts` is now the single definition — a module
+ * owned by neither artefact, so neither one's idea of a pin governs the other's.
+ *
+ * What is asserted here is **object identity**, not structural agreement.
+ * Structural agreement is what the old arrangement already had.
+ */
+describe('one corpus-pin contract, two artefacts', () => {
+  it('is the identical object at the corpus position of both artefact schemas', () => {
+    const resultShape = verificationResultSchema._def.shape() as Record<string, z.ZodTypeAny>;
+    const ledgerShape = signingEntrySchema._def.shape() as Record<string, z.ZodTypeAny>;
+
+    const inTheRecord = (resultShape['corpus'] as z.ZodArray<z.ZodTypeAny>)._def.type;
+    const inTheLedger = (ledgerShape['corpus'] as z.ZodArray<z.ZodTypeAny>)._def.type;
+
+    // `toBe`, never `toEqual`. Two separately-written definitions of the same
+    // five fields satisfy `toEqual` — that is precisely the arrangement this
+    // replaced — and only reference identity makes divergence unwritable.
+    expect(inTheRecord).toBe(corpusPinSchema);
+    expect(inTheLedger).toBe(corpusPinSchema);
+    expect(inTheRecord).toBe(inTheLedger);
+  });
+
+  it('and the shared object is still a plain strict ZodObject', () => {
+    // The walker in `accounting.ts` descends into this node from **both**
+    // roots. Wrapping it in a `ZodEffects` for some cross-pin rule would hide
+    // all five fields from two artefacts at once, so the constraint the two
+    // module headers state is asserted here against the one object they share.
+    expect(corpusPinSchema._def.typeName).toBe('ZodObject');
+    expect(corpusPinSchema._def.unknownKeys).toBe('strict');
   });
 });
 

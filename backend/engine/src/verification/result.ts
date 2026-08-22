@@ -40,6 +40,7 @@ import { z } from 'zod';
 import { sha256Hex } from '../corpus/hash';
 import { evidenceItemSchema, type EvidenceItem, type QuoteEvidence } from '../corpus/evidence';
 import { canonicalJson } from './canonical';
+import { corpusPinSchema } from './corpus-pin';
 
 /** A challenge's adjudicated verdict. */
 export const challengeVerdictSchema = z.enum(['CONFIRMED', 'MISMATCH', 'OPEN_QUESTION']);
@@ -81,22 +82,6 @@ export const ADVERSE_COVERAGE: ReadonlySet<string> = new Set([
  * cannot be signed, with nothing naming the rule the two differ about.
  */
 export const RESOLVED_VERDICTS: ReadonlySet<string> = new Set(['CONFIRMED', 'MISMATCH']);
-
-/**
- * A pinned corpus document, as the closure held it at verification time. Both
- * hashes are retained: `sha256Normalized` is the text a conclusion rests on,
- * and `sha256Raw` moving alone means the publisher reissued the file without
- * changing the words — advisory, not invalidating.
- */
-const corpusPinSchema = z
-  .object({
-    docId: z.string(),
-    versionLabel: z.string(),
-    sha256Raw: z.string(),
-    sha256Normalized: z.string(),
-    normalizerVersion: z.string(),
-  })
-  .strict();
 
 /**
  * One proposition from the blind reading of the law, with the text behind it.

@@ -71,6 +71,7 @@ import {
   requirementSha256,
 } from './canonical';
 import { entryId, type SigningEntry } from './ledger';
+import type { CorpusPin } from './corpus-pin';
 import { isPromoted, type PromotionRecord } from './promotions';
 import type { VersionRegistry } from './registry';
 import {
@@ -143,8 +144,16 @@ export class IntegrityFailureError extends RefusalError {
   }
 }
 
-/** A corpus document as the closure holds it now. Structurally the entry's pin. */
-export type CorpusPin = SigningEntry['corpus'][number];
+/**
+ * A corpus document as the closure holds it now — re-exported, not redefined.
+ *
+ * It used to read `SigningEntry['corpus'][number]`, which was correct but made
+ * the pin's identity depend on the ledger's copy of a shape the record carries
+ * too. `corpus-pin.ts` is now the single definition both artefacts import, and
+ * this name stays exported here because every caller already reaches for it
+ * through the signing module.
+ */
+export type { CorpusPin };
 
 /**
  * Everything `buildSignature` needs, all of it already read.

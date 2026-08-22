@@ -54,6 +54,7 @@
 import { z } from 'zod';
 import { sha256Hex } from '../corpus/hash';
 import { canonicalJson } from './canonical';
+import { corpusPinSchema } from './corpus-pin';
 
 /**
  * The one definition of "carries an authority value", shared by the schemas
@@ -96,22 +97,6 @@ export function carriesAuthority(value: string): boolean {
 function authorityString(blankMeans: string): z.ZodString {
   return z.string().regex(CARRIES_AUTHORITY, blankMeans);
 }
-
-/**
- * A pinned corpus document, as the closure held it when the signature was
- * made. Both hashes are retained: `sha256Normalized` is the text the
- * conclusion rests on, and `sha256Raw` moving alone means the publisher
- * reissued the file without changing the words — advisory, not invalidating.
- */
-const corpusPinSchema = z
-  .object({
-    docId: z.string(),
-    versionLabel: z.string(),
-    sha256Raw: z.string(),
-    sha256Normalized: z.string(),
-    normalizerVersion: z.string(),
-  })
-  .strict();
 
 /**
  * A human's positive judgement, with everything it was a judgement *about*
