@@ -772,7 +772,7 @@ describe('the prosecutor count and the lens set are configuration', () => {
 describe('both configured inputs reach pipelineVersion, one at a time', () => {
   const closure = fixtureClosure();
   const identity = (config: RoleConfig) =>
-    pipelineVersionFor({ prompts, config, closure, resultSchemaVersion: '1.1.0' });
+    pipelineVersionFor({ prompts, config, closure, resultSchemaVersion: '1.2.0' });
   const before = identity(DEFAULT_ROLE_CONFIG);
 
   it('varying neither leaves it byte-identical', () => {

@@ -318,6 +318,19 @@ describe('the real schemas', () => {
     expect(FIELD_ROLES['result.openQuestions[]']).toEqual(['signability', 'display']);
     expect(FIELD_ROLES['result.challenges[].verdict']).toEqual(['signability', 'display']);
     expect(FIELD_ROLES['result.challenges[].evidence[]']).toEqual(['signability', 'audit']);
+    // The adjudicator's array carries the prosecutor's classification, and is
+    // asserted as a pair for the same reason the two gap identities below are:
+    // both are sign-gate conditions and both are re-derivable afterwards, so a
+    // later reader must not be able to conclude the newer array is the weaker
+    // one. The walk already refuses an unclassified path; this pins *which*
+    // roles, which the walk cannot.
+    expect(FIELD_ROLES['result.challenges[].adjudicationEvidence[]']).toEqual(
+      FIELD_ROLES['result.challenges[].evidence[]'],
+    );
+    expect(FIELD_ROLES['result.challenges[].adjudicationEvidence[]']).toEqual([
+      'signability',
+      'audit',
+    ]);
     expect(FIELD_ROLES['result.gaps[]']).toEqual(['signability']);
     // The two gap identities carry one classification between them: whether
     // `gaps[]` is empty is what refuses a signature, and neither identity

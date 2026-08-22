@@ -130,7 +130,7 @@ function makeResult(overrides: Record<string, unknown> = {}): VerificationResult
     packId: PACK_ID,
     requirementId: REQ_ID,
     requirementVersion: requirement.version,
-    resultSchemaVersion: '1.1.0',
+    resultSchemaVersion: '1.2.0',
     pipelineVersion: PIPELINE,
     rendererVersion: RENDERER_VERSION,
     requirementInputSha256: requirementInputSha256(requirement),
@@ -169,6 +169,10 @@ function makeResult(overrides: Record<string, unknown> = {}): VerificationResult
           { kind: 'quote', docId: DOC_B, sha256Normalized: b.sha256Normalized, text: QUOTE_B },
         ],
         resolution: 'The threshold is as encoded.',
+        // E-A: a different document and different words from the E-P above.
+        adjudicationEvidence: [
+          { kind: 'quote', docId: DOC_A, sha256Normalized: a.sha256Normalized, text: QUOTE_A },
+        ],
       },
     ],
     openQuestions: [],
@@ -457,6 +461,14 @@ describe('verification after write', () => {
                 },
               ],
               resolution: 'A different adjudication entirely.',
+              adjudicationEvidence: [
+                {
+                  kind: 'quote',
+                  docId: DOC_A,
+                  sha256Normalized: corpus.document(DOC_A).sha256Normalized,
+                  text: QUOTE_A,
+                },
+              ],
             },
           ],
         });
@@ -599,6 +611,42 @@ describe('exit codes', () => {
     const outcome = runSign(signArgs(), paths);
     expect(outcome.exitCode).toBe(EXIT_REFUSED);
     expect(outcome.lines.join('\n')).toContain('open_question');
+    expect(readFileSync(ledgerPath(), 'utf8')).toBe('');
+  });
+
+  it('1 for an adjudication resting entirely on an absence claim', () => {
+    // End to end through the real CLI, which is the only thing that proves the
+    // rule is wired rather than merely written: `runSign` → `assertSignable` →
+    // `assertResultConsistency`. The prosecutor's `evidence` here is the same
+    // sound quote the clean fixture carries, so nothing but the adjudicator's
+    // array can be producing this refusal.
+    writeResult(
+      makeResult({
+        challenges: [
+          {
+            id: 'C1',
+            lens: 'threshold',
+            statement: 'Does the amending Directive move the threshold?',
+            verdict: 'CONFIRMED',
+            evidence: [
+              {
+                kind: 'quote',
+                docId: DOC_B,
+                sha256Normalized: corpus.document(DOC_B).sha256Normalized,
+                text: QUOTE_B,
+              },
+            ],
+            resolution: 'The threshold is as encoded.',
+            adjudicationEvidence: [{ kind: 'absence', docIds: [DOC_A], term: 'value added tax' }],
+          },
+        ],
+      }),
+    );
+    const outcome = runSign(signArgs(), paths);
+    const printed = outcome.lines.join('\n');
+    expect(outcome.exitCode).toBe(EXIT_REFUSED);
+    expect(printed).toContain('invalid_result');
+    expect(printed).toContain('adjudicationEvidence');
     expect(readFileSync(ledgerPath(), 'utf8')).toBe('');
   });
 

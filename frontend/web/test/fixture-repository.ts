@@ -97,7 +97,7 @@ function resultFor(
     packId: pack.id,
     requirementId: requirement.id,
     requirementVersion: requirement.version,
-    resultSchemaVersion: '1.1.0',
+    resultSchemaVersion: '1.2.0',
     pipelineVersion: 'fixture-pipeline-0.1.0',
     rendererVersion: 'fixture-renderer-0.1.0',
     requirementInputSha256: requirementInputSha256(requirement),

@@ -421,6 +421,19 @@ export const FIELD_ROLES: Record<string, FieldRole[]> = {
   // — that is a sign-gate condition. It is also the sentence a human reads to
   // decide whether to sign, so `display` too.
   'result.challenges[].resolution': ['signability', 'display'],
+  // The adjudicator's own evidence, classified identically to the prosecutor's
+  // `result.challenges[].evidence[]` rather than more weakly: `.min(1)` and the
+  // absence-sole rule are sign-gate conditions on this array exactly as on that
+  // one (`signability`), and it is re-derivable against the pinned corpus
+  // afterwards (`audit`). Matching that row is the point — a reader must not be
+  // able to conclude the newer array is the weaker one, when the reason it
+  // exists is that §3.3 binds an adjudicated verdict to evidence just as §2.2
+  // binds a raised challenge.
+  //
+  // Deliberately not `display`. What a reviewer reads to decide is
+  // `resolution`; this array is what that sentence can be checked against, and
+  // marking it `display` would claim a second authority nothing exercises.
+  'result.challenges[].adjudicationEvidence[]': ['signability', 'audit'],
 
   // ── result, open questions ─────────────────────────────────────────────
   // Deliberately no `blocking` flag exists to classify: *any* outstanding open
@@ -467,59 +480,83 @@ export const FIELD_ROLES: Record<string, FieldRole[]> = {
   // refused. That is routing plus a gate condition.
   'result.reading.elements[].evidence[].kind': ['authority', 'signability'],
   'result.challenges[].evidence[].kind': ['authority', 'signability'],
+  'result.challenges[].adjudicationEvidence[].kind': ['authority', 'signability'],
   // A quote's document and hash must name a pin this record carries and agree
   // with it; `checkEvidenceSet` additionally re-finds the text on disk.
   'result.reading.elements[].evidence[].docId': ['signability', 'integrity'],
   'result.challenges[].evidence[].docId': ['signability', 'integrity'],
+  'result.challenges[].adjudicationEvidence[].docId': ['signability', 'integrity'],
   'result.reading.elements[].evidence[].sha256Normalized': ['signability', 'integrity'],
   'result.challenges[].evidence[].sha256Normalized': ['signability', 'integrity'],
+  'result.challenges[].adjudicationEvidence[].sha256Normalized': ['signability', 'integrity'],
   // The quoted words. Checked as a literal substring of the named document
   // before signing, and shown to the reviewer as the thing the conclusion
   // rests on.
   'result.reading.elements[].evidence[].text': ['signability', 'display'],
   'result.challenges[].evidence[].text': ['signability', 'display'],
+  'result.challenges[].adjudicationEvidence[].text': ['signability', 'display'],
   // An amendment chain: the hops must chain, and each hop's edge must exist in
   // the corpus, so both the container and the edge id are gate conditions.
   'result.reading.elements[].evidence[].hops[]': ['signability', 'audit'],
   'result.challenges[].evidence[].hops[]': ['signability', 'audit'],
+  'result.challenges[].adjudicationEvidence[].hops[]': ['signability', 'audit'],
   'result.reading.elements[].evidence[].hops[].edgeId': ['signability', 'integrity'],
   'result.challenges[].evidence[].hops[].edgeId': ['signability', 'integrity'],
+  'result.challenges[].adjudicationEvidence[].hops[].edgeId': ['signability', 'integrity'],
   'result.reading.elements[].evidence[].hops[].quote.kind': ['authority', 'signability'],
   'result.challenges[].evidence[].hops[].quote.kind': ['authority', 'signability'],
+  'result.challenges[].adjudicationEvidence[].hops[].quote.kind': ['authority', 'signability'],
   'result.reading.elements[].evidence[].hops[].quote.docId': ['signability', 'integrity'],
   'result.challenges[].evidence[].hops[].quote.docId': ['signability', 'integrity'],
+  'result.challenges[].adjudicationEvidence[].hops[].quote.docId': ['signability', 'integrity'],
   'result.reading.elements[].evidence[].hops[].quote.sha256Normalized': [
     'signability',
     'integrity',
   ],
   'result.challenges[].evidence[].hops[].quote.sha256Normalized': ['signability', 'integrity'],
+  'result.challenges[].adjudicationEvidence[].hops[].quote.sha256Normalized': [
+    'signability',
+    'integrity',
+  ],
   'result.reading.elements[].evidence[].hops[].quote.text': ['signability', 'display'],
   'result.challenges[].evidence[].hops[].quote.text': ['signability', 'display'],
+  'result.challenges[].adjudicationEvidence[].hops[].quote.text': ['signability', 'display'],
   // A cross-reference: the edge must exist and both ends must quote real text.
   'result.reading.elements[].evidence[].edgeId': ['signability', 'integrity'],
   'result.challenges[].evidence[].edgeId': ['signability', 'integrity'],
+  'result.challenges[].adjudicationEvidence[].edgeId': ['signability', 'integrity'],
   'result.reading.elements[].evidence[].from.kind': ['authority', 'signability'],
   'result.challenges[].evidence[].from.kind': ['authority', 'signability'],
+  'result.challenges[].adjudicationEvidence[].from.kind': ['authority', 'signability'],
   'result.reading.elements[].evidence[].from.docId': ['signability', 'integrity'],
   'result.challenges[].evidence[].from.docId': ['signability', 'integrity'],
+  'result.challenges[].adjudicationEvidence[].from.docId': ['signability', 'integrity'],
   'result.reading.elements[].evidence[].from.sha256Normalized': ['signability', 'integrity'],
   'result.challenges[].evidence[].from.sha256Normalized': ['signability', 'integrity'],
+  'result.challenges[].adjudicationEvidence[].from.sha256Normalized': ['signability', 'integrity'],
   'result.reading.elements[].evidence[].from.text': ['signability', 'display'],
   'result.challenges[].evidence[].from.text': ['signability', 'display'],
+  'result.challenges[].adjudicationEvidence[].from.text': ['signability', 'display'],
   'result.reading.elements[].evidence[].to.kind': ['authority', 'signability'],
   'result.challenges[].evidence[].to.kind': ['authority', 'signability'],
+  'result.challenges[].adjudicationEvidence[].to.kind': ['authority', 'signability'],
   'result.reading.elements[].evidence[].to.docId': ['signability', 'integrity'],
   'result.challenges[].evidence[].to.docId': ['signability', 'integrity'],
+  'result.challenges[].adjudicationEvidence[].to.docId': ['signability', 'integrity'],
   'result.reading.elements[].evidence[].to.sha256Normalized': ['signability', 'integrity'],
   'result.challenges[].evidence[].to.sha256Normalized': ['signability', 'integrity'],
+  'result.challenges[].adjudicationEvidence[].to.sha256Normalized': ['signability', 'integrity'],
   'result.reading.elements[].evidence[].to.text': ['signability', 'display'],
   'result.challenges[].evidence[].to.text': ['signability', 'display'],
+  'result.challenges[].adjudicationEvidence[].to.text': ['signability', 'display'],
   // An absence claim: the documents searched must be pinned by this record,
   // and the term is re-searched mechanically before signing.
   'result.reading.elements[].evidence[].docIds[]': ['signability', 'integrity'],
   'result.challenges[].evidence[].docIds[]': ['signability', 'integrity'],
+  'result.challenges[].adjudicationEvidence[].docIds[]': ['signability', 'integrity'],
   'result.reading.elements[].evidence[].term': ['signability', 'display'],
   'result.challenges[].evidence[].term': ['signability', 'display'],
+  'result.challenges[].adjudicationEvidence[].term': ['signability', 'display'],
 };
 
 /**

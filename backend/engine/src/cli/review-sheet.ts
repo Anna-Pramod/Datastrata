@@ -566,11 +566,42 @@ function gatherRequirement(input: GatherOneInput): SheetRequirement {
             statement: element.statement,
             items: element.evidence.map((item) => describeEvidence(item, corpus)),
           })),
-          ...result.challenges.map((challenge) => ({
-            label: `challenge ${challenge.id}`,
-            statement: challenge.statement,
-            items: challenge.evidence.map((item) => describeEvidence(item, corpus)),
-          })),
+          // **Two sets per challenge, because the record carries two
+          // conclusions under one id.** `evidence` is why the challenge was
+          // raised and `adjudicationEvidence` is why it was decided, and this
+          // sheet exists so a human can see what a signature would attest to.
+          // Rendering only the first showed the reviewer why every argument
+          // started and nothing at all about why any of them ended — worst
+          // exactly where it matters most, because an `OPEN_QUESTION` has no
+          // `resolution` for the challenges table to print either, so the two
+          // omissions compounded into a verdict with no visible basis.
+          //
+          // Labelled apart rather than concatenated. Two arrays with two
+          // producers, merged under one heading, would leave a reviewer unable
+          // to say which role stood behind any given quote — the same reason
+          // the sign gate reports them as separate sets and the record names
+          // them separately in every consistency message.
+          ...result.challenges.flatMap((challenge) => [
+            {
+              label: `challenge ${challenge.id} — why it was raised`,
+              statement: challenge.statement,
+              items: challenge.evidence.map((item) => describeEvidence(item, corpus)),
+            },
+            {
+              label: `challenge ${challenge.id} — why it was decided (${challenge.verdict})`,
+              // An adjudicated verdict states its resolution; an open question
+              // has none, and the sentence below is what stops the sheet
+              // implying the adjudicator had nothing. It did not: the evidence
+              // under this heading is precisely what establishes that the
+              // record cannot settle the challenge, which is the finding a
+              // reviewer is here to weigh.
+              statement:
+                challenge.resolution !== undefined && challenge.resolution.trim().length > 0
+                  ? challenge.resolution
+                  : 'not adjudicated — the evidence below is what establishes that this record cannot settle the challenge',
+              items: challenge.adjudicationEvidence.map((item) => describeEvidence(item, corpus)),
+            },
+          ]),
         ];
 
   const facts = factsReferencedBy(requirement).map((factType) => ({

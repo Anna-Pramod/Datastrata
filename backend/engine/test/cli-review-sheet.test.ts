@@ -57,6 +57,7 @@ import {
   renderRequirement,
   type RenderContext,
 } from '../src/verification/render';
+import type { EvidenceItem } from '../src/corpus/evidence';
 import { resultSha256, type VerificationResult } from '../src/verification/result';
 import {
   candidateConditionSha256,
@@ -99,6 +100,25 @@ const DOC_A = 'DOC-32013L0034';
 const DOC_B = 'DOC-32026L0470';
 const QUOTE_A = 'DIRECTIVE 2013/34/EU OF THE EUROPEAN PARLIAMENT AND OF THE COUNCIL';
 const QUOTE_B = 'DIRECTIVE (EU) 2026/470 OF THE EUROPEAN PARLIAMENT AND OF THE COUNCIL';
+
+/**
+ * The adjudicators' quotes, and the point of them is that they appear **in no
+ * other field of this fixture**.
+ *
+ * `QUOTE_A` and `QUOTE_B` each reach the page through a reading element and
+ * through a prosecutor's `evidence` as well, and C1 and C2 use them inverted.
+ * So a sheet that rendered `adjudicationEvidence` nowhere at all would still
+ * show every one of those strings, and an assertion over them would be green
+ * against a page missing half the record's evidence — failure mode 5, a
+ * positive claim satisfied by something other than the thing it names.
+ *
+ * These two strings are reachable only through `challenges[].adjudicationEvidence`.
+ * Their presence on the page is therefore evidence that *that array* was
+ * rendered, and `adjudicationQuotesAreUniqueToTheirArray` below fails if a
+ * later edit ever reuses one elsewhere and quietly destroys that premise.
+ */
+const ADJUDICATION_ONLY_C1 = 'applies from the financial year beginning on 1 January 2024';
+const ADJUDICATION_ONLY_C2 = 'the balance sheet date is nowhere defined in this Directive';
 
 /** The exact sentence factory §4.6 obliges until B3 exists. */
 const NO_METRICS = 'no benchmark metrics — pipeline promotion records carry none until B3';
@@ -157,7 +177,7 @@ function makeResult(id: string, overrides: Record<string, unknown> = {}): Verifi
     packId: PACK_ID,
     requirementId: id,
     requirementVersion: requirement.version,
-    resultSchemaVersion: '1.1.0',
+    resultSchemaVersion: '1.2.0',
     pipelineVersion: PIPELINE,
     rendererVersion: RENDERER_VERSION,
     requirementInputSha256: requirementInputSha256(requirement),
@@ -210,6 +230,16 @@ function makeResult(id: string, overrides: Record<string, unknown> = {}): Verifi
           { kind: 'quote', docId: DOC_B, sha256Normalized: b.sha256Normalized, text: QUOTE_B },
         ],
         resolution: 'The threshold is as encoded.',
+        // E-A: a different document and different words from the E-P above,
+        // and a text that occurs nowhere else in this fixture.
+        adjudicationEvidence: [
+          {
+            kind: 'quote',
+            docId: DOC_A,
+            sha256Normalized: a.sha256Normalized,
+            text: ADJUDICATION_ONLY_C1,
+          },
+        ],
       },
       {
         id: 'C2',
@@ -218,6 +248,19 @@ function makeResult(id: string, overrides: Record<string, unknown> = {}): Verifi
         verdict: 'OPEN_QUESTION',
         evidence: [
           { kind: 'quote', docId: DOC_A, sha256Normalized: a.sha256Normalized, text: QUOTE_A },
+        ],
+        // An OPEN_QUESTION is evidence-bound too, and its evidence is not the
+        // prosecutor's: it is what establishes the record cannot settle this.
+        // This is the case the sheet was blindest to — no `resolution` for the
+        // challenges table to print either, so before the fix an OPEN_QUESTION
+        // reached the reviewer with no visible basis whatsoever.
+        adjudicationEvidence: [
+          {
+            kind: 'quote',
+            docId: DOC_B,
+            sha256Normalized: b.sha256Normalized,
+            text: ADJUDICATION_ONLY_C2,
+          },
         ],
       },
     ],
@@ -563,6 +606,191 @@ describe('the dossier sections', () => {
     expect(section).toContain(DOC_A);
     expect(section).toContain(escapeForTest(document.title));
     expect(section).toContain(document.url);
+  });
+
+  /**
+   * **Evidence completeness: every item the record carries reaches the page.**
+   *
+   * The expectation is *derived from the result itself* rather than written out
+   * beside it. A hand-listed set of expected quotes is built from the same
+   * mental model as the renderer and agrees with its omissions — which is
+   * exactly how `challenges[].adjudicationEvidence` came to be absent from this
+   * sheet while every existing assertion stayed green. Walking the record and
+   * demanding each item appear makes the obligation grow on its own the next
+   * time the record gains an evidence-bearing field.
+   */
+  const everyEvidenceItemIn = (
+    result: VerificationResult,
+  ): Array<{ path: string; text: string }> => {
+    const out: Array<{ path: string; text: string }> = [];
+    const push = (path: string, items: readonly EvidenceItem[]): void => {
+      items.forEach((item, i) => {
+        // A `switch` over `kind` rather than a chain of `if`s, and with the
+        // `never` assignment in `default` that makes the exhaustiveness real.
+        //
+        // The switch alone is not enough here and the distinction matters. This
+        // callback returns `void` with nothing after the switch, so TypeScript
+        // has no missing-return to complain about: a fifth `EvidenceItem` kind
+        // would fall through `default` in silence, and this walker — the guard
+        // built precisely to detect an evidence consumer that skipped
+        // something — would under-count while reporting success. Assigning
+        // `item` to `never` is what turns "I handled the four I know about"
+        // into "I handled all of them", and it fails **here**, in the guard,
+        // rather than relying on an unrelated production file failing first.
+        //
+        // `describeEvidence` renders the quoted words, or the searched-for term
+        // for an `absence` claim; both are the string a reviewer reads.
+        switch (item.kind) {
+          case 'quote':
+            out.push({ path: `${path}[${i}]`, text: item.text });
+            break;
+          case 'amendment_chain':
+            item.hops.forEach((hop, h) =>
+              out.push({ path: `${path}[${i}].hops[${h}]`, text: hop.quote.text }),
+            );
+            break;
+          case 'cross_reference':
+            out.push({ path: `${path}[${i}].from`, text: item.from.text });
+            out.push({ path: `${path}[${i}].to`, text: item.to.text });
+            break;
+          case 'absence':
+            out.push({ path: `${path}[${i}]`, text: item.term });
+            break;
+          default: {
+            // Unreachable at runtime, load-bearing at compile time: an evidence
+            // kind added without a case here makes this assignment fail `tsc`.
+            const unhandled: never = item;
+            throw new Error(
+              `the evidence walker does not handle kind ${JSON.stringify(
+                (unhandled as { kind: string }).kind,
+              )}; the completeness assertion would silently under-count it`,
+            );
+          }
+        }
+      });
+    };
+    result.reading.elements.forEach((element) =>
+      push(`reading.elements[${element.id}].evidence`, element.evidence),
+    );
+    result.challenges.forEach((challenge) => {
+      push(`challenges[${challenge.id}].evidence`, challenge.evidence);
+      push(`challenges[${challenge.id}].adjudicationEvidence`, challenge.adjudicationEvidence);
+    });
+    return out;
+  };
+
+  it('renders every evidence item the record carries, both arrays of every challenge', () => {
+    const result = makeResult(FRESH);
+    const section = sectionFor(sheetHtml(), FRESH);
+    const items = everyEvidenceItemIn(result);
+
+    // The premise, asserted rather than assumed: the walk found the second
+    // array. Without this the loop below would pass vacuously against a walk
+    // that never looked at `adjudicationEvidence` — failure mode 7, a claim
+    // green because the path never executed.
+    expect(items.filter((i) => i.path.includes('adjudicationEvidence'))).toHaveLength(2);
+    expect(items.length).toBe(6);
+
+    for (const { path, text } of items) {
+      expect(section, `${path} is missing from the rendered sheet`).toContain(escapeForTest(text));
+    }
+  });
+
+  it('keeps the adjudication quotes unique to their array, so the check above can fail', () => {
+    // The positive control for the two markers. If a later edit reuses either
+    // string in a reading element or a prosecutor's `evidence`, the assertion
+    // above would still pass with `adjudicationEvidence` unrendered, and this
+    // is what says so instead of letting it rot silently.
+    const result = makeResult(FRESH);
+    const elsewhere = [
+      ...result.reading.elements.flatMap((e) => e.evidence),
+      ...result.challenges.flatMap((c) => c.evidence),
+    ].map((item) => (item.kind === 'quote' ? item.text : ''));
+
+    for (const marker of [ADJUDICATION_ONLY_C1, ADJUDICATION_ONLY_C2]) {
+      expect(elsewhere).not.toContain(marker);
+    }
+    expect(result.challenges[0]?.adjudicationEvidence[0]).toMatchObject({
+      text: ADJUDICATION_ONLY_C1,
+    });
+    expect(result.challenges[1]?.adjudicationEvidence[0]).toMatchObject({
+      text: ADJUDICATION_ONLY_C2,
+    });
+  });
+
+  it('shows an OPEN_QUESTION the basis of its own verdict, not only that it has none', () => {
+    // The case the omission hurt most. The challenges table prints "not
+    // adjudicated" in the Resolution column, which is true and, alone, reads as
+    // "the adjudicator had nothing". It did not — this array is what
+    // establishes the record cannot settle the challenge, and that is the
+    // finding a reviewer is here to weigh.
+    const section = sectionFor(sheetHtml(), FRESH);
+    expect(section).toContain('not adjudicated');
+    expect(section).toContain(escapeForTest(ADJUDICATION_ONLY_C2));
+    expect(section).toContain('cannot settle the challenge');
+  });
+
+  it('labels the two evidence arrays of a challenge apart', () => {
+    // Two producers under one challenge id. Merged under one heading a reviewer
+    // could not say which role stood behind any quote.
+    const section = sectionFor(sheetHtml(), FRESH);
+    expect(section).toContain('challenge C1 — why it was raised');
+    expect(section).toContain('challenge C1 — why it was decided (CONFIRMED)');
+    expect(section).toContain('challenge C2 — why it was decided (OPEN_QUESTION)');
+    // The adjudication heading carries the resolution, so the sentence and the
+    // evidence behind it sit together rather than in two distant sections.
+    expect(section).toContain('The threshold is as encoded.');
+  });
+
+  it('renders every text-bearing shape of adjudicationEvidence, not only a bare quote', () => {
+    // `FIELD_ROLES` classifies five paths under this array as `display`:
+    // `.text`, `.hops[].quote.text`, `.from.text`, `.to.text` and `.term`. A
+    // role is a claim that something exercises that authority, so each one has
+    // to be a page a human can actually read — otherwise the table describes a
+    // rendering nobody performs, which is the class of error §6 exists to
+    // close. The default fixture carries bare quotes only, so the composite
+    // shapes and the absence term would go unrendered and unnoticed.
+    const a = corpus.document(DOC_A);
+    const b = corpus.document(DOC_B);
+    const q = (text: string) => ({
+      kind: 'quote' as const,
+      docId: DOC_A,
+      sha256Normalized: a.sha256Normalized,
+      text,
+    });
+    const texts = {
+      hop: 'the hop quote inside an amendment chain',
+      from: 'the near end of a cross reference',
+      to: 'the far end of a cross reference',
+      term: 'a term searched for and not found',
+    };
+    const base = makeResult(FRESH);
+    writeResult(FRESH, {
+      ...base,
+      challenges: [
+        {
+          ...base.challenges[0],
+          adjudicationEvidence: [
+            { kind: 'amendment_chain', hops: [{ edgeId: 'E-CHAIN', quote: q(texts.hop) }] },
+            {
+              kind: 'cross_reference',
+              edgeId: 'E-XREF',
+              from: q(texts.from),
+              to: { ...q(texts.to), docId: DOC_B, sha256Normalized: b.sha256Normalized },
+            },
+            { kind: 'absence', docIds: [DOC_A], term: texts.term },
+          ],
+        },
+        base.challenges[1],
+      ],
+    });
+
+    const section = sectionFor(sheetHtml(), FRESH);
+    for (const [path, text] of Object.entries(texts)) {
+      expect(section, `adjudicationEvidence ${path} text is not on the page`).toContain(
+        escapeForTest(text),
+      );
+    }
   });
 
   it('names the entitled evidence surface, and warns when it is empty', () => {

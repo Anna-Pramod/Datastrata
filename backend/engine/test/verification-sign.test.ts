@@ -194,7 +194,7 @@ function result(overrides: Record<string, unknown> = {}): VerificationResult {
     packId: 'testpack',
     requirementId: 'REQ-001',
     requirementVersion: 1,
-    resultSchemaVersion: '1.1.0',
+    resultSchemaVersion: '1.2.0',
     pipelineVersion: 'pipeline-1.0.0',
     rendererVersion: 'renderer-1.1.0',
     requirementInputSha256: requirementInputSha256(req),
@@ -239,6 +239,16 @@ function result(overrides: Record<string, unknown> = {}): VerificationResult {
           },
         ],
         resolution: 'The threshold is as encoded.',
+        // E-A: a different document and different words from the E-P above, so
+        // that a defect crossing the two fields shows up as the wrong docId.
+        adjudicationEvidence: [
+          {
+            kind: 'quote',
+            docId: 'DOC-A',
+            sha256Normalized: a.sha256Normalized,
+            text: 'on their balance sheet dates',
+          },
+        ],
       },
     ],
     openQuestions: [],
@@ -576,6 +586,14 @@ describe('the nine refusals', () => {
             },
           ],
           resolution: 'The encoding states 450m; the law now states 40m.',
+          adjudicationEvidence: [
+            {
+              kind: 'quote',
+              docId: 'DOC-A',
+              sha256Normalized: corpus.document('DOC-A').sha256Normalized,
+              text: 'on their balance sheet dates',
+            },
+          ],
         },
       ],
     });
@@ -610,6 +628,16 @@ describe('the nine refusals', () => {
               text: 'on their balance sheet dates',
             },
           ],
+          // An OPEN_QUESTION is still evidence-bound: this array is what
+          // establishes that the record cannot settle the challenge.
+          adjudicationEvidence: [
+            {
+              kind: 'quote',
+              docId: 'DOC-B',
+              sha256Normalized: corpus.document('DOC-B').sha256Normalized,
+              text: 'substitutes the opening words',
+            },
+          ],
         },
       ],
     });
@@ -641,6 +669,116 @@ describe('the nine refusals', () => {
     const candidate = buildSignature(signatureInput({ result: r }));
     expect(refusalCodes(candidate, checks({ result: r }))).toEqual(['evidence_failed']);
     expect(refusalDetail(candidate, checks({ result: r }))).toMatch(/not found in DOC-A/);
+  });
+
+  /**
+   * The adjudication's own evidence, at the gate that actually runs.
+   *
+   * These are **run-level** checks, not direct calls: they go through
+   * `assertSignable`, which is the only production entry point that reaches
+   * `assertResultConsistency` and `checkEvidenceSet` at all. Removing either
+   * call from `assertSignable` must redden something here — a rule the sign
+   * gate never invokes is a comment, whatever its own unit tests say.
+   *
+   * Every fixture keeps E-P and E-A on different documents with different
+   * words, so a refusal naming one array is evidence that the gate read *that*
+   * array and not the other.
+   */
+  it('refuses an adjudicationEvidence set that is nothing but absence claims', () => {
+    // Through the sign gate, so this fails if `assertSignable` stops calling
+    // `assertResultConsistency`. The prosecutor's `evidence` is impeccable, so
+    // nothing but the second array can be producing the refusal.
+    const r = result({
+      challenges: [
+        {
+          id: 'C1',
+          lens: 'threshold',
+          statement: 'Is the turnover threshold EUR 450 000 000?',
+          verdict: 'CONFIRMED',
+          evidence: [
+            {
+              kind: 'quote',
+              docId: 'DOC-B',
+              sha256Normalized: corpus.document('DOC-B').sha256Normalized,
+              text: 'substitutes the opening words',
+            },
+          ],
+          resolution: 'The threshold is as encoded.',
+          adjudicationEvidence: [{ kind: 'absence', docIds: ['DOC-B'], term: 'value added tax' }],
+        },
+      ],
+    });
+    const candidate = buildSignature(signatureInput({ result: r }));
+    // Two gates catch this independently and both are asserted: the record
+    // contract (`invalid_result`, from `assertResultConsistency`) and the
+    // corpus re-check (`evidence_failed`, from `checkEvidenceSet`). Asserting
+    // the pair rather than one of them is deliberate — either call being
+    // dropped from `assertSignable` loses its code here, so neither can hide
+    // behind the other.
+    expect(refusalCodes(candidate, checks({ result: r }))).toEqual([
+      'evidence_failed',
+      'invalid_result',
+    ]);
+    const detail = refusalDetail(candidate, checks({ result: r }));
+    expect(detail).toContain('invalid_result');
+    expect(detail).toContain('adjudicationEvidence');
+    expect(detail).toContain('absence');
+    // The prosecutor's array is not implicated, which is what tells the signer
+    // which of the two producers has to repair its work.
+    expect(detail).not.toContain('(C1).evidence:');
+  });
+
+  it('refuses an adjudicationEvidence quote that cannot be re-found in the corpus', () => {
+    // The other production call: `checkEvidenceSet` over the corpus on disk.
+    // The prosecutor's quote is real; only the adjudicator's is invented, so a
+    // gate that checked `evidence` alone would sign this.
+    const r = result({
+      challenges: [
+        {
+          id: 'C1',
+          lens: 'threshold',
+          statement: 'Is the turnover threshold EUR 450 000 000?',
+          verdict: 'CONFIRMED',
+          evidence: [
+            {
+              kind: 'quote',
+              docId: 'DOC-B',
+              sha256Normalized: corpus.document('DOC-B').sha256Normalized,
+              text: 'substitutes the opening words',
+            },
+          ],
+          resolution: 'The threshold is as encoded.',
+          adjudicationEvidence: [
+            {
+              kind: 'quote',
+              docId: 'DOC-A',
+              sha256Normalized: corpus.document('DOC-A').sha256Normalized,
+              text: 'a sentence this directive does not contain',
+            },
+          ],
+        },
+      ],
+    });
+    const candidate = buildSignature(signatureInput({ result: r }));
+    expect(refusalCodes(candidate, checks({ result: r }))).toEqual(['evidence_failed']);
+    const detail = refusalDetail(candidate, checks({ result: r }));
+    expect(detail).toMatch(/not found in DOC-A/);
+    // Named as the adjudication rather than as the challenge, so the signer
+    // repairs the right array.
+    expect(detail).toContain('challenge C1 adjudication');
+  });
+
+  it('signs a challenge whose two evidence arrays are both sound and distinct', () => {
+    // The positive control for the two refusals above. Without it they would
+    // pass equally against a gate that refused every challenge with two
+    // arrays, or one that never looked at `adjudicationEvidence` and was
+    // refusing for some unrelated reason.
+    const r = result();
+    const challenge = r.challenges[0];
+    expect(challenge?.adjudicationEvidence).toHaveLength(1);
+    expect(challenge?.adjudicationEvidence).not.toEqual(challenge?.evidence);
+    const candidate = buildSignature(signatureInput({ result: r }));
+    expect(refusalCodes(candidate, checks({ result: r }))).toEqual([]);
   });
 
   it('refuses a failing absence re-search', () => {

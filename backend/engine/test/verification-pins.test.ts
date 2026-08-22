@@ -114,7 +114,7 @@ function minimalResult(): Parameters<typeof currentStateOf>[0]['result'] {
     packId: 'testpack',
     requirementId: 'TEST-R-001',
     requirementVersion: 1,
-    resultSchemaVersion: '1.1.0',
+    resultSchemaVersion: '1.2.0',
     pipelineVersion: 'pipeline-v1-unpromoted',
     rendererVersion: 'renderer-1.1.0',
     requirementInputSha256: 'a'.repeat(64),
@@ -174,7 +174,7 @@ describe('the deterministic tail', () => {
       corpus,
       pipelineVersion: 'pipeline-v1-unpromoted',
       rendererVersion: 'renderer-1.1.0',
-      resultSchemaVersion: '1.1.0',
+      resultSchemaVersion: '1.2.0',
       roleOutputs: {
         reading: stubReaderOutput(),
         prosecutions: [stubProsecutorOutput('stub_lens')],

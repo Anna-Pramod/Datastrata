@@ -87,7 +87,7 @@ function tailInput(roleOutputs: Parameters<typeof runDeterministicTail>[0]['role
     corpus: fixtureCorpus(),
     pipelineVersion: 'pipeline-v1-unpromoted',
     rendererVersion: 'renderer-1.1.0',
-    resultSchemaVersion: '1.1.0',
+    resultSchemaVersion: '1.2.0',
     roleOutputs,
   };
 }

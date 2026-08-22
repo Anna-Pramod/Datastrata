@@ -452,15 +452,29 @@ export function assertSignable(candidate: SignatureCandidate, checks: Signabilit
     // `absence` search re-run. One refusal per conclusion whose evidence
     // failed, carrying all of that conclusion's problems: the signer repairs a
     // conclusion, not a quote.
+    //
+    // **A challenge contributes two sets, not one.** `evidence` is why it was
+    // raised and `adjudicationEvidence` is why it was decided, and each is a
+    // conclusion in its own right with its own producer. Concatenating them
+    // would be worse than merely untidy: the refusal would name a challenge
+    // without saying which of its two arrays the signer has to repair, and one
+    // array's clean quotes cannot answer for the other's. Leaving the second
+    // out would be worse still — an adjudication could then cite text that is
+    // not in the corpus at all and be signed, which is the whole of what this
+    // re-check exists to prevent, applied to the field §3.3 binds the verdict
+    // to.
     const sets: Array<{ label: string; items: EvidenceItem[] }> = [
       ...result.reading.elements.map((element) => ({
         label: `reading element ${element.id}`,
         items: element.evidence,
       })),
-      ...result.challenges.map((challenge) => ({
-        label: `challenge ${challenge.id}`,
-        items: challenge.evidence,
-      })),
+      ...result.challenges.flatMap((challenge) => [
+        { label: `challenge ${challenge.id}`, items: challenge.evidence },
+        {
+          label: `challenge ${challenge.id} adjudication`,
+          items: challenge.adjudicationEvidence,
+        },
+      ]),
     ];
     for (const { label, items } of sets) {
       const checked = checkEvidenceSet(items, checks.corpus);

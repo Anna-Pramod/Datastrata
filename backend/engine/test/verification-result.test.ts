@@ -41,6 +41,23 @@ function quote(text = 'the undertaking shall disclose sustainability information
 }
 
 /**
+ * The adjudicator's evidence, and **deliberately not the prosecutor's**.
+ *
+ * Every fixture below fills `evidence` with `quote()` and `adjudicationEvidence`
+ * with this, so the two arrays never hold the same item. A fixture that used one
+ * quote for both would make a field-crossing defect invisible: an implementation
+ * that read `evidence` where it meant `adjudicationEvidence`, or copied one into
+ * the other on the way through, would satisfy every assertion about "some
+ * evidence" and every hash comparison, because the two would be identical.
+ * `assertAttributed` below is what turns that difference into a check.
+ */
+function adjudicationQuote(
+  text = 'Article 3(4) of Directive 2013/34/EU fixes the thresholds "large" refers to',
+): EvidenceItem {
+  return { kind: 'quote', docId: 'DOC-1', sha256Normalized: HASH('a'), text };
+}
+
+/**
  * The canonical gap-bearing record: the required containers empty, `gaps[]`
  * carrying the explanation.
  *
@@ -65,7 +82,7 @@ function result(overrides: Record<string, unknown> = {}): Record<string, unknown
     packId: 'testpack',
     requirementId: 'REQ-001',
     requirementVersion: 1,
-    resultSchemaVersion: '1.1.0',
+    resultSchemaVersion: '1.2.0',
     pipelineVersion: 'pipeline-1.0.0',
     rendererVersion: 'renderer-1.0.0',
     requirementInputSha256: HASH('b'),
@@ -99,6 +116,7 @@ function result(overrides: Record<string, unknown> = {}): Record<string, unknown
         verdict: 'CONFIRMED',
         evidence: [quote()],
         resolution: 'Confirmed against Article 3(4) of Directive 2013/34/EU.',
+        adjudicationEvidence: [adjudicationQuote()],
       },
     ],
     openQuestions: [],
@@ -158,6 +176,7 @@ describe('verificationResultSchema — structure', () => {
           evidence: [quote()],
           resolution: 'Resolved.',
           confidence: 0.9,
+          adjudicationEvidence: [adjudicationQuote()],
         },
       ],
     });
@@ -183,12 +202,22 @@ describe('verificationResultSchema — structure', () => {
     }
   });
 
-  it('rejects a resultSchemaVersion other than 1.1.0, naming the version rather than a downstream field', () => {
+  it('rejects a resultSchemaVersion other than 1.2.0, naming the version rather than a downstream field', () => {
     // The literal is what rejects a record written against a different shape,
     // so it has to move with the shape. 1.0.0 is the shape whose `gaps[]`
     // required a `docId`, and a 1.0.0 record read as if it were this one would
     // be read by a validator that no longer knows what its docId meant.
-    for (const version of ['1.0.0', '2.0.0']) {
+    //
+    // **1.1.0 is the case this list exists for now.** It is the immediately
+    // preceding shape, whose `challenges[]` carried one evidence array, owned
+    // by the prosecutor, and no `adjudicationEvidence` at all. A 1.1.0 record
+    // read as if it were this one would be a record in which every adjudicated
+    // verdict is unbound to evidence, read by a validator that believes §3.3 is
+    // satisfied — the proposition the bump exists to make unstateable. It fails
+    // the other way too: had the field been added silently under 1.1.0, two
+    // structurally different records would claim one schema identity and
+    // `pipelineVersion`, which pins that identity, would pin neither.
+    for (const version of ['1.0.0', '1.1.0', '2.0.0']) {
       const parsed = verificationResultSchema.safeParse(result({ resultSchemaVersion: version }));
       expect(parsed.success, `accepted ${version}`).toBe(false);
       if (parsed.success) continue;
@@ -211,7 +240,15 @@ describe('verificationResultSchema — evidence must exist', () => {
   it('rejects a challenge with an empty evidence set', () => {
     const raw = result({
       challenges: [
-        { id: 'C1', lens: 'scope', statement: 'S.', verdict: 'CONFIRMED', evidence: [], resolution: 'R.' },
+        {
+          id: 'C1',
+          lens: 'scope',
+          statement: 'S.',
+          verdict: 'CONFIRMED',
+          evidence: [],
+          resolution: 'R.',
+          adjudicationEvidence: [adjudicationQuote()],
+        },
       ],
     });
     expect(() => verificationResultSchema.parse(raw)).toThrow();
@@ -283,7 +320,15 @@ describe('the structural/semantic seam', () => {
         ],
       },
       challenges: [
-        { id: 'C1', lens: 'scope', statement: 'S.', verdict: 'MISMATCH', evidence: [quote()], resolution: '   ' },
+        {
+          id: 'C1',
+          lens: 'scope',
+          statement: 'S.',
+          verdict: 'MISMATCH',
+          evidence: [quote()],
+          resolution: '   ',
+          adjudicationEvidence: [adjudicationQuote()],
+        },
       ],
     });
     const parsed = verificationResultSchema.parse(raw);
@@ -368,6 +413,7 @@ describe('assertResultConsistency — an id must name exactly one thing', () => 
     evidence: [quote()],
     resolution: 'Confirmed against Article 3(4) of Directive 2013/34/EU.',
     ...overrides,
+    adjudicationEvidence: [adjudicationQuote()],
   });
 
   const element = (id: string, statement = 'A large undertaking must report.'): Record<string, unknown> => ({
@@ -506,7 +552,14 @@ describe('assertResultConsistency — verdict and resolution', () => {
     result({ challenges: [challenge], coverage: { cells: [] } });
 
   it('rejects a CONFIRMED challenge with no resolution', () => {
-    const raw = withChallenge({ id: 'C1', lens: 'scope', statement: 'S.', verdict: 'CONFIRMED', evidence: [quote()] });
+    const raw = withChallenge({
+      id: 'C1',
+      lens: 'scope',
+      statement: 'S.',
+      verdict: 'CONFIRMED',
+      evidence: [quote()],
+      adjudicationEvidence: [adjudicationQuote()],
+    });
     expect(() => verificationResultSchema.parse(raw)).not.toThrow();
     expect(() => parseVerificationResult(raw)).toThrow(ResultConsistencyError);
   });
@@ -519,12 +572,20 @@ describe('assertResultConsistency — verdict and resolution', () => {
       verdict: 'MISMATCH',
       evidence: [quote()],
       resolution: '   ',
+      adjudicationEvidence: [adjudicationQuote()],
     });
     expect(() => parseVerificationResult(raw)).toThrow(ResultConsistencyError);
   });
 
   it('rejects a MISMATCH challenge with no resolution', () => {
-    const raw = withChallenge({ id: 'C1', lens: 'scope', statement: 'S.', verdict: 'MISMATCH', evidence: [quote()] });
+    const raw = withChallenge({
+      id: 'C1',
+      lens: 'scope',
+      statement: 'S.',
+      verdict: 'MISMATCH',
+      evidence: [quote()],
+      adjudicationEvidence: [adjudicationQuote()],
+    });
     expect(() => parseVerificationResult(raw)).toThrow(ResultConsistencyError);
   });
 
@@ -535,6 +596,7 @@ describe('assertResultConsistency — verdict and resolution', () => {
       statement: 'S.',
       verdict: 'OPEN_QUESTION',
       evidence: [quote()],
+      adjudicationEvidence: [adjudicationQuote()],
     });
     expect(() => parseVerificationResult(raw)).not.toThrow();
   });
@@ -548,8 +610,270 @@ describe('assertResultConsistency — verdict and resolution', () => {
       verdict: 'OPEN_QUESTION',
       evidence: [quote()],
       resolution: '\t ',
+      adjudicationEvidence: [adjudicationQuote()],
     });
     expect(() => parseVerificationResult(raw)).toThrow(ResultConsistencyError);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Adjudication evidence — the second array installed by the 1.2.0 migration
+// ---------------------------------------------------------------------------
+
+/**
+ * The two arrays are two propositions with two owners, and the fixtures here
+ * keep them **textually distinguishable end to end**.
+ *
+ *     E-P  the prosecutor's:  why there is something here worth challenging
+ *     E-A  the adjudicator's: why that challenge was decided as it was
+ *
+ * E-P is a quote from `DOC-1`; E-A is a quote from `DOC-2`, with different
+ * words. Two different documents *and* two different texts, so that no single
+ * substitution can make one pass for the other: a defect that read the wrong
+ * field would surface as the wrong `docId`, and a defect that copied one array
+ * into the other as the wrong `text`. Had both arrays held `quote()` — the
+ * cheap fixture — every assertion below would pass against an implementation
+ * that ignored `adjudicationEvidence` entirely and echoed `evidence` twice.
+ */
+describe('assertResultConsistency — adjudicated challenges carry their own evidence', () => {
+  const E_P_TEXT = 'a large undertaking shall disclose sustainability information';
+  const E_A_TEXT = 'thresholds in Article 3(4) determine which undertakings are large';
+
+  /** E-P: the prosecutor's, on DOC-1. */
+  const eP = (): EvidenceItem => ({
+    kind: 'quote',
+    docId: 'DOC-1',
+    sha256Normalized: HASH('a'),
+    text: E_P_TEXT,
+  });
+
+  /** E-A: the adjudicator's, on a different document and in different words. */
+  const eA = (): EvidenceItem => ({
+    kind: 'quote',
+    docId: 'DOC-2',
+    sha256Normalized: HASH('8'),
+    text: E_A_TEXT,
+  });
+
+  const absenceItem = (docIds: string[] = ['DOC-2'], term = 'consolidated turnover'): EvidenceItem => ({
+    kind: 'absence',
+    docIds,
+    term,
+  });
+
+  /** Both documents pinned, because E-A cites a document E-P does not. */
+  const twoPins = [
+    {
+      docId: 'DOC-1',
+      versionLabel: '2024-01-01',
+      sha256Raw: HASH('f'),
+      sha256Normalized: HASH('a'),
+      normalizerVersion: '1',
+    },
+    {
+      docId: 'DOC-2',
+      versionLabel: '2013-06-26',
+      sha256Raw: HASH('7'),
+      sha256Normalized: HASH('8'),
+      normalizerVersion: '1',
+    },
+  ];
+
+  /** A record whose one challenge carries exactly the arrays handed in. */
+  const withArrays = (
+    evidence: unknown,
+    adjudicationEvidence: unknown,
+    overrides: Record<string, unknown> = {},
+  ): Record<string, unknown> =>
+    result({
+      corpus: twoPins,
+      coverage: { cells: [] },
+      challenges: [
+        {
+          id: 'C1',
+          lens: 'scope',
+          statement: 'Does "large" carry the Accounting Directive meaning?',
+          verdict: 'CONFIRMED',
+          evidence,
+          resolution: 'Confirmed against Article 3(4) of Directive 2013/34/EU.',
+          adjudicationEvidence,
+          ...overrides,
+        },
+      ],
+    });
+
+  const problemsOf = (raw: Record<string, unknown>): string[] => {
+    const parsed = verificationResultSchema.parse(raw);
+    try {
+      assertResultConsistency(parsed);
+    } catch (e) {
+      return (e as ResultConsistencyError).problems;
+    }
+    return [];
+  };
+
+  it('carries E-P and E-A through to the parsed record, each in its own field', () => {
+    // The attribution check. Both arrays survive, and neither has become the
+    // other: this is what a field-crossing defect breaks and a "there is some
+    // evidence somewhere" assertion cannot see.
+    const parsed = parseVerificationResult(withArrays([eP()], [eA()]));
+    const challenge = parsed.challenges[0];
+
+    expect(challenge?.evidence).toEqual([eP()]);
+    expect(challenge?.adjudicationEvidence).toEqual([eA()]);
+
+    // Stated positively as well as by equality, so a future refactor that made
+    // both arrays the *same* object would fail here rather than pass twice.
+    expect(challenge?.evidence).not.toEqual(challenge?.adjudicationEvidence);
+
+    const evidenceDocs = (challenge?.evidence ?? []).map((i) => (i.kind === 'quote' ? i.docId : null));
+    const adjudicationDocs = (challenge?.adjudicationEvidence ?? []).map((i) =>
+      i.kind === 'quote' ? i.docId : null,
+    );
+    expect(evidenceDocs).toEqual(['DOC-1']);
+    expect(adjudicationDocs).toEqual(['DOC-2']);
+  });
+
+  it('survives a canonicalising round trip with the two arrays still apart', () => {
+    // `resultSha256` re-parses, and canonical JSON sorts keys. Neither may
+    // merge the arrays or reorder one into the other.
+    const parsed = parseVerificationResult(withArrays([eP()], [eA()]));
+    const reparsed = parseVerificationResult(JSON.parse(JSON.stringify(parsed)));
+    expect(reparsed.challenges[0]?.evidence).toEqual([eP()]);
+    expect(reparsed.challenges[0]?.adjudicationEvidence).toEqual([eA()]);
+  });
+
+  it('gives a different resultSha256 when only adjudicationEvidence changes', () => {
+    // The field is inside the signed hash, not beside it. If it were dropped on
+    // the way to canonicalisation these two digests would be equal, and a
+    // signature would be a signature of a record missing its adjudication.
+    const base = resultSha256(parseVerificationResult(withArrays([eP()], [eA()])));
+    const moved = resultSha256(
+      parseVerificationResult(withArrays([eP()], [{ ...eA(), text: 'entirely different words' }])),
+    );
+    expect(moved).not.toBe(base);
+  });
+
+  it('rejects a challenge carrying no adjudicationEvidence at all, under every verdict', () => {
+    // Structural, not semantic: the obligation is unconditional on `verdict`,
+    // so it belongs to `.min(1)` and there is no refinement anywhere.
+    for (const verdict of ['CONFIRMED', 'MISMATCH', 'OPEN_QUESTION']) {
+      const raw = result({
+        corpus: twoPins,
+        coverage: { cells: [] },
+        challenges: [
+          {
+            id: 'C1',
+            lens: 'scope',
+            statement: 'S.',
+            verdict,
+            evidence: [eP()],
+            ...(verdict === 'OPEN_QUESTION' ? {} : { resolution: 'R.' }),
+          },
+        ],
+      });
+      const parsed = verificationResultSchema.safeParse(raw);
+      expect(parsed.success, `accepted ${verdict} with no adjudicationEvidence`).toBe(false);
+      if (parsed.success) continue;
+      expect(parsed.error.issues.some((i) => i.path.includes('adjudicationEvidence'))).toBe(true);
+    }
+  });
+
+  it('rejects an empty adjudicationEvidence array, under every verdict', () => {
+    for (const verdict of ['CONFIRMED', 'MISMATCH', 'OPEN_QUESTION']) {
+      const raw = withArrays([eP()], [], {
+        verdict,
+        ...(verdict === 'OPEN_QUESTION' ? { resolution: undefined } : {}),
+      });
+      const parsed = verificationResultSchema.safeParse(raw);
+      expect(parsed.success, `accepted ${verdict} with []`).toBe(false);
+    }
+  });
+
+  it('requires adjudicationEvidence of an OPEN_QUESTION, which has no resolution to hang it on', () => {
+    // The load-bearing line, and the reason the field is not called
+    // `resolutionEvidence`. An open question must never be readable as "the
+    // adjudicator had nothing": it is the finding that the record *cannot*
+    // settle the challenge, and that finding is itself evidence-bound.
+    const withEvidence = withArrays([eP()], [eA()], { verdict: 'OPEN_QUESTION', resolution: undefined });
+    expect(() => parseVerificationResult(withEvidence)).not.toThrow();
+
+    const withoutEvidence = withArrays([eP()], [], { verdict: 'OPEN_QUESTION', resolution: undefined });
+    expect(verificationResultSchema.safeParse(withoutEvidence).success).toBe(false);
+  });
+
+  it('accepts CONFIRMED and MISMATCH only with both a non-blank resolution and adjudicationEvidence', () => {
+    // The two halves of the rule, each shown to fail on its own so neither can
+    // mask the other. `MISMATCH` is refused by the *sign gate* rather than by
+    // the record, so it is well-formed here — that is a different rule, in a
+    // different place.
+    for (const verdict of ['CONFIRMED', 'MISMATCH']) {
+      expect(problemsOf(withArrays([eP()], [eA()], { verdict }))).toEqual([]);
+
+      const blankResolution = problemsOf(withArrays([eP()], [eA()], { verdict, resolution: '  ' }));
+      expect(blankResolution.length).toBe(1);
+      expect(blankResolution[0]).toContain('resolution');
+
+      expect(
+        verificationResultSchema.safeParse(withArrays([eP()], [], { verdict })).success,
+      ).toBe(false);
+    }
+  });
+
+  it('rejects adjudicationEvidence that is nothing but absence claims', () => {
+    // The same rule as everywhere else evidence is bound. A search that found
+    // nothing cannot be the whole of why a verdict was reached, and `.min(1)`
+    // counts items without being able to tell one kind from another.
+    const problems = problemsOf(withArrays([eP()], [absenceItem()]));
+    expect(problems.length).toBe(1);
+    expect(problems[0]).toContain('adjudicationEvidence');
+    expect(problems[0]).toContain('absence');
+    // Named apart from the prosecutor's array, so a reader knows which
+    // producer's evidence to repair.
+    expect(problems[0]).not.toContain('.evidence:');
+  });
+
+  it('rejects two absence claims in adjudicationEvidence, because the rule is over kinds', () => {
+    const problems = problemsOf(
+      withArrays([eP()], [absenceItem(['DOC-2'], 'turnover'), absenceItem(['DOC-2'], 'balance sheet total')]),
+    );
+    expect(problems.length).toBe(1);
+    expect(problems[0]).toContain('adjudicationEvidence');
+  });
+
+  it('accepts an absence claim in adjudicationEvidence alongside a quote', () => {
+    // The counterexample: the rule is not "ban absence from this array", which
+    // would delete the one evidence kind able to say what the law does not say
+    // — and saying so is often exactly why a challenge stays open.
+    expect(problemsOf(withArrays([eP()], [eA(), absenceItem()]))).toEqual([]);
+    expect(problemsOf(withArrays([eP()], [absenceItem(), eA()]))).toEqual([]);
+  });
+
+  it('checks adjudicationEvidence against corpus[] independently of evidence', () => {
+    // The pinning rules run over the new array on its own. A record whose
+    // prosecutor evidence is impeccable and whose adjudication evidence cites
+    // an unpinned document is rejected, and the message names the second array
+    // — otherwise a reader repairs the wrong field.
+    const unpinned: EvidenceItem = {
+      kind: 'quote',
+      docId: 'DOC-GHOST',
+      sha256Normalized: HASH('8'),
+      text: 'a sentence from nowhere',
+    };
+    const problems = problemsOf(withArrays([eP()], [unpinned]));
+    expect(problems.length).toBe(1);
+    expect(problems[0]).toContain('adjudicationEvidence[0]');
+    expect(problems[0]).toContain('DOC-GHOST');
+  });
+
+  it('reports a defect in each array separately, so neither masks the other', () => {
+    // Two faults, one in each array. A validator that checked the concatenation
+    // of the two would report one problem, or none: the prosecutor's quote
+    // would rescue an all-absence adjudication.
+    const problems = problemsOf(withArrays([absenceItem(['DOC-1'], 'large')], [absenceItem()]));
+    expect(problems.length).toBe(2);
+    expect(problems.some((p) => p.includes('.evidence:'))).toBe(true);
+    expect(problems.some((p) => p.includes('.adjudicationEvidence:'))).toBe(true);
   });
 });
 
@@ -816,6 +1140,7 @@ describe('assertResultConsistency — evidence rests on the corpus this record p
           verdict: 'CONFIRMED',
           evidence,
           resolution: 'Confirmed against Article 3(4) of Directive 2013/34/EU.',
+          adjudicationEvidence: [adjudicationQuote()],
         },
       ],
     });
@@ -980,6 +1305,7 @@ describe('assertResultConsistency — evidence rests on the corpus this record p
           verdict: 'CONFIRMED',
           evidence: [{ kind: 'quote', docId: 'DOC-GHOST', sha256Normalized: HASH('a'), text: 'a sentence' }],
           resolution: 'Confirmed against Article 3(4) of Directive 2013/34/EU.',
+          adjudicationEvidence: [adjudicationQuote()],
         },
       ],
     });
@@ -1038,7 +1364,15 @@ describe('resultSha256 — canonical and semantic', () => {
       parseVerificationResult(
         result({
           challenges: [
-            { id: 'C1', lens: 'scope', statement: 'S.', verdict: 'MISMATCH', evidence: [quote()], resolution: 'R.' },
+            {
+              id: 'C1',
+              lens: 'scope',
+              statement: 'S.',
+              verdict: 'MISMATCH',
+              evidence: [quote()],
+              resolution: 'R.',
+              adjudicationEvidence: [adjudicationQuote()],
+            },
           ],
           coverage: { cells: [] },
         }),
@@ -1060,6 +1394,7 @@ describe('resultSha256 — canonical and semantic', () => {
               verdict: 'CONFIRMED',
               evidence: [quote('a different sentence entirely')],
               resolution: 'Confirmed against Article 3(4) of Directive 2013/34/EU.',
+              adjudicationEvidence: [adjudicationQuote()],
             },
           ],
         }),

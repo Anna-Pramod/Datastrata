@@ -635,7 +635,7 @@ function resultOver(overrides: Partial<VerificationResult>): VerificationResult 
     packId: 'testpack',
     requirementId: 'REQ-001',
     requirementVersion: 1,
-    resultSchemaVersion: '1.1.0',
+    resultSchemaVersion: '1.2.0',
     pipelineVersion: 'pipeline-1.0.0',
     rendererVersion: 'renderer-1.1.0',
     requirementInputSha256: 'a'.repeat(64),
@@ -706,6 +706,9 @@ describe('a gap-bearing dossier carries no judgment', () => {
             verdict: 'OPEN_QUESTION',
             evidence: [
               { kind: 'quote', docId: 'DOC-X', sha256Normalized: 'e'.repeat(64), text: 'x' },
+            ],
+            adjudicationEvidence: [
+              { kind: 'quote', docId: 'DOC-X', sha256Normalized: 'e'.repeat(64), text: 'y' },
             ],
           },
         ],

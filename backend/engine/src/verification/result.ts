@@ -125,6 +125,36 @@ const coverageCellSchema = z
  * there is nothing to resolve, and requiring a resolution structurally would
  * either demand one for an open question or wrap this object in a refinement
  * — which would hide every field here from the accounting walker.
+ *
+ * **Two evidence arrays, because there are two propositions and one producer
+ * each.** Neither is a redundancy and neither is a superset of the other:
+ *
+ *     evidence              "There is something here worth challenging."
+ *     adjudicationEvidence  "Here is why that challenge is confirmed,
+ *                            rejected, or unresolved."
+ *
+ * The prosecutor owns the first and the adjudicator owns the second, so making
+ * one array serve both would require ownership to be shared — which dissolves
+ * the rule that every field in this record has a single producer, and leaves a
+ * reader unable to tell which role stood behind any given quote. §3.3 binds
+ * every adjudicated verdict to evidence, and before this field existed the
+ * record could state why a challenge was *raised* and had no way to state why
+ * it was *decided*.
+ *
+ * **`adjudicationEvidence` and not `resolutionEvidence`, and `.min(1)` under
+ * all three verdicts including `OPEN_QUESTION`.** An open question has no
+ * resolution and is still an adjudicated outcome. `OPEN_QUESTION` must never
+ * be readable as "the adjudicator had nothing": it means the evidence in hand
+ * was sufficient to establish that *this record cannot settle the challenge*,
+ * which is precisely the finding B4's human reviewer inspects. A name tied to
+ * `resolution` would have implied the field is absent exactly where the
+ * requirement bites hardest, and `.optional()` would have let an empty
+ * adjudication pass itself off as an open question.
+ *
+ * `.min(1)` is the structural half only. The absence-sole rule applies here as
+ * to every other evidence-bound conclusion and lives in
+ * `assertResultConsistency`: a search that found nothing can no more be the
+ * whole of why a challenge was decided than the whole of why it was raised.
  */
 const challengeSchema = z
   .object({
@@ -134,6 +164,7 @@ const challengeSchema = z
     verdict: challengeVerdictSchema,
     evidence: z.array(evidenceItemSchema).min(1),
     resolution: z.string().optional(),
+    adjudicationEvidence: z.array(evidenceItemSchema).min(1),
   })
   .strict();
 
@@ -203,7 +234,7 @@ export const verificationResultSchema = z
     packId: z.string(),
     requirementId: z.string(),
     requirementVersion: z.number().int().min(1),
-    resultSchemaVersion: z.literal('1.1.0'),
+    resultSchemaVersion: z.literal('1.2.0'),
     pipelineVersion: z.string(),
     rendererVersion: z.string(),
     requirementInputSha256: z.string(),
@@ -355,11 +386,23 @@ function shortHash(hash: string): string {
  *    would sign it, with the adjudicator's judgement silently bypassed. The
  *    converse is enforced too: a `MAPPED` cell citing a challenge is claiming
  *    an adjudication for something that did not need one.
- *  - **A reached verdict must state what was reached.** `CONFIRMED` and
- *    `MISMATCH` are adjudications and require a resolution; `OPEN_QUESTION`
- *    is the absence of one and does not. A present-but-blank resolution is
- *    rejected under any verdict — whitespace is not an adjudication, and
- *    accepting it would let the requirement be satisfied by a spacebar.
+ *  - **A reached verdict must state what was reached, and every verdict must
+ *    say what it rests on.** `CONFIRMED` and `MISMATCH` are adjudications and
+ *    require a resolution; `OPEN_QUESTION` is the absence of one and does not.
+ *    A present-but-blank resolution is rejected under any verdict — whitespace
+ *    is not an adjudication, and accepting it would let the requirement be
+ *    satisfied by a spacebar. The evidence obligation is not conditional in the
+ *    same way:
+ *
+ *        CONFIRMED      non-blank resolution        adjudicationEvidence >= 1
+ *        MISMATCH       non-blank resolution        adjudicationEvidence >= 1
+ *        OPEN_QUESTION  no resolution, or non-blank adjudicationEvidence >= 1
+ *
+ *    `.min(1)` on `adjudicationEvidence` carries the third column structurally,
+ *    for all three verdicts alike, which is why no rule about cardinality
+ *    appears here. What this stage adds is the absence-sole rule below applied
+ *    to that array as well, so that an adjudication resting entirely on a
+ *    search that found nothing is refused exactly as a raised challenge is.
  *  - **`absence` may never be the sole evidence for a conclusion.** Factory
  *    spec §2.2 states this and claims the schema enforces it; the schema
  *    cannot. `.min(1)` counts items and cannot tell one kind from another, so
@@ -509,7 +552,15 @@ export function assertResultConsistency(
     pinnedHashes.set(pin.docId, hashes);
   }
 
-  /** The evidence rules, applied to one conclusion's evidence set. */
+  /**
+   * The evidence rules, applied to one conclusion's evidence set.
+   *
+   * `label` is the path of the **array**, not of the conclusion, so that a
+   * challenge's two arrays are told apart in every message. Reporting both as
+   * `challenges[0] (C1)` would leave a reader who has to repair the record
+   * unable to see which producer's evidence is at fault — and the two have
+   * different owners, so "somewhere in this challenge" is not an address.
+   */
   const checkEvidence = (items: readonly EvidenceItem[], label: string): void => {
     // Through the shared predicate rather than inline, so the reader's seam and
     // this boundary cannot come to disagree about what "sole evidence" means.
@@ -523,7 +574,7 @@ export function assertResultConsistency(
     }
 
     items.forEach((item, i) => {
-      const itemLabel = `${label}.evidence[${i}]`;
+      const itemLabel = `${label}[${i}]`;
 
       for (const { quote, path } of quotesOf(item, itemLabel)) {
         const hashes = pinnedHashes.get(quote.docId);
@@ -553,10 +604,19 @@ export function assertResultConsistency(
   };
 
   result.reading.elements.forEach((element, i) => {
-    checkEvidence(element.evidence, `reading.elements[${i}] (${element.id})`);
+    checkEvidence(element.evidence, `reading.elements[${i}] (${element.id}).evidence`);
   });
   result.challenges.forEach((challenge, i) => {
-    checkEvidence(challenge.evidence, `challenges[${i}] (${challenge.id})`);
+    // Both arrays, through the same function and separately. Checking only one
+    // would leave the other's quotes unpinned against `corpus[]`, and checking
+    // their concatenation would let a sole-absence adjudication hide behind the
+    // prosecutor's quote — the two conclusions are separate and each must stand
+    // on evidence of its own.
+    checkEvidence(challenge.evidence, `challenges[${i}] (${challenge.id}).evidence`);
+    checkEvidence(
+      challenge.adjudicationEvidence,
+      `challenges[${i}] (${challenge.id}).adjudicationEvidence`,
+    );
   });
 
   result.coverage.cells.forEach((cell, i) => {

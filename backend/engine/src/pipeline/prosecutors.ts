@@ -87,11 +87,18 @@ type ResultChallenge = VerificationResult['challenges'][number];
  * year must not silently reach a blind role; here the danger runs the other way.
  * A field added to `challengeSchema` is a field the record expects a challenge
  * to carry, and the prosecutor is the only producer of everything except the
- * adjudication — so it *should* flow here automatically, and the two fields the
- * adjudicator owns are named as the exceptions. Adding a third adjudicator-owned
- * field without naming it here makes the witness below fail to compile.
+ * adjudication — so it *should* flow here automatically, and the three fields
+ * the adjudicator owns are named as the exceptions. Adding a fourth
+ * adjudicator-owned field without naming it here makes the witness below fail
+ * to compile, and that is how `adjudicationEvidence` arrived: schema 1.2.0 gave
+ * the adjudicated verdict its own evidence array, and the line below stopped
+ * compiling until the new field was named as the adjudicator's. Note the
+ * asymmetry the list encodes — `evidence` is the prosecutor's own and stays,
+ * `adjudicationEvidence` is the adjudicator's and goes; a seed carrying both
+ * would let a prosecutor pre-supply the reasoning for a verdict it is forbidden
+ * to reach.
  */
-export type ChallengeSeed = Omit<ResultChallenge, 'verdict' | 'resolution'>;
+export type ChallengeSeed = Omit<ResultChallenge, 'verdict' | 'resolution' | 'adjudicationEvidence'>;
 
 /**
  * The prosecutor's challenge is exactly the record's, minus the adjudication.
