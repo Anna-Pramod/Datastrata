@@ -14,7 +14,15 @@
  * verification-shaped payload would make withdrawing a signature depend on the
  * very thing being withdrawn. So the only input is the ledger itself, and the
  * only checks are the four §3 states — target exists, appears earlier, shares
- * the pack and requirement, and is a signature rather than another revocation.
+ * the pack and requirement, and is a signature rather than another revocation —
+ * plus the two authority fields the entry itself must carry.
+ *
+ * **`by` and `reason` are refused here, blank, before the append.** They join
+ * the same `problems` list as the §3 states rather than forming a second policy
+ * beside it, so one re-run still answers every objection at once. The ledger
+ * schema rejects a blank of either on the way back in, which is what catches a
+ * line written by hand; this is what stops the sanctioned path from creating
+ * one, in a file where the alternative to refusing is a permanent bad entry.
  *
  * **But it does refuse on an unreadable ledger, and that is not a contradiction
  * of the paragraph above.** A tampered `entryId` fails the whole load, so there
@@ -42,7 +50,7 @@
 import { appendFileSync } from 'node:fs';
 
 import { canonicalJson } from '../verification/canonical';
-import { entryId, type RevocationEntry } from '../verification/ledger';
+import { carriesAuthority, entryId, type RevocationEntry } from '../verification/ledger';
 import { EXIT_REFUSED, type CliOutcome } from './exit-codes';
 import {
   ledgerPath,
@@ -111,7 +119,15 @@ export function runRevoke(
     }
   }
 
-  if (args.reason.trim().length === 0) {
+  // The two authority fields, refused here rather than discovered on the next
+  // read. The predicate is `carriesAuthority`, the same one the ledger schema
+  // applies, imported rather than restated so a blank the CLI lets through and
+  // a blank the reader rejects cannot become two different sets.
+  if (!carriesAuthority(args.by)) {
+    problems.push('carries no signatory; a withdrawal nobody can attribute is not a record of one');
+  }
+
+  if (!carriesAuthority(args.reason)) {
     problems.push('carries no reason; a withdrawal nobody can account for is not a record of one');
   }
 

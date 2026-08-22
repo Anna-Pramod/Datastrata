@@ -60,7 +60,14 @@ import {
   candidateConditionSha256,
   candidateRenderedConditionSha256,
 } from '../src/verification/sign';
-import { entryId, parseLedger, type LedgerEntry, type SigningEntry } from '../src/verification/ledger';
+import {
+  entryId,
+  LedgerIntegrityError,
+  parseLedger,
+  type LedgerEntry,
+  type RevocationEntry,
+  type SigningEntry,
+} from '../src/verification/ledger';
 import {
   deriveStaleness,
   resolveNormalizerChanged,
@@ -967,5 +974,368 @@ describe('dispatch', () => {
     expect(positional).toEqual(['sign', 'p', 'r']);
     expect(flags['by']).toBe('A. N.');
     expect(flags['skip-suite']).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Authority provenance — who stood behind what, propagated exactly and never
+// blank
+// ---------------------------------------------------------------------------
+
+/**
+ * Two properties, three layers, and a note about what they are *not*.
+ *
+ * **Property A — the line on disk carries the caller's values.** The existing
+ * post-write check proves `candidate == line written`: `runSign` freezes one
+ * object and appends that same object, so comparing entry ids shows that what
+ * was checked is what landed. It says nothing about where the candidate's
+ * fields came from. Substituting `by: args.by -> by: 'WRONG-SIGNER'` inside the
+ * `buildSignature` call left the whole suite green, because every id, hash and
+ * status assertion moves with the substitution. The missing link is *CLI input
+ * == candidate == line written*, and only reading the appended line back off
+ * disk and comparing it against the arguments supplies it.
+ *
+ * Each field gets its own case, deliberately. A single "the entry equals what
+ * was supplied" assertion reddens on all four substitutions and names none of
+ * them, which is the difference between knowing a value was corrupted and
+ * knowing which one.
+ *
+ * **Property B — blank authority is impossible, in three distinct places.**
+ *
+ * ```
+ * CLI, before the append   friendly refusal, and no bytes written
+ * schema, on the way in    a hand-authored blank makes the ledger unreadable
+ * propagation, after       the supplied value is the value stored
+ * ```
+ *
+ * The middle layer is not redundant with the first. A ledger produced outside
+ * the sanctioned CLIs — hand-edited, migrated, inherited from before the rule —
+ * still has to announce its damage. The first layer is not redundant with the
+ * middle either, and that is the more important direction: post-write detection
+ * in an append-only file is a report that an unreadable line is now permanent.
+ *
+ * **`note` is not authority.** It carries no non-blank rule and must not
+ * acquire one; what is proved about it is only that a supplied value survives.
+ */
+describe('authority provenance', () => {
+  const SIGNER = 'A. Reviewer';
+  const SIGNED_ON = '2026-08-21';
+  const SIGNING_NOTE = 'Read the amending Directive twice before signing.';
+  const REVOKER = 'R. Revoker';
+  const REVOKED_ON = '2026-08-22';
+  const REVOCATION_REASON = 'The encoding was corrected.';
+
+  /**
+   * The last line of the ledger as it actually landed, parsed as plain JSON.
+   *
+   * Deliberately not `readLedger()`. The property is what reached the bytes on
+   * disk, and routing the read through the entry schema would let a contract
+   * change decide the answer to a question about propagation.
+   */
+  function appendedLine(): Record<string, unknown> {
+    const written = readFileSync(ledgerPath(), 'utf8')
+      .split('\n')
+      .filter((line) => line !== '');
+    const last = written.at(-1);
+    if (last === undefined) throw new Error('the ledger carries no appended line');
+    return JSON.parse(last) as Record<string, unknown>;
+  }
+
+  /** Seeds a signature and withdraws it, returning the arguments actually used. */
+  function revokeOver(overrides: Record<string, unknown> = {}) {
+    expect(runSign(signArgs(), paths).exitCode).toBe(EXIT_OK);
+    const signed = readLedger()[0];
+    if (signed === undefined) throw new Error('seed failed');
+    const args = {
+      packId: PACK_ID,
+      requirementId: REQ_ID,
+      revokes: signed.entryId,
+      by: REVOKER,
+      on: REVOKED_ON,
+      reason: REVOCATION_REASON,
+      ...overrides,
+    };
+    return { args, outcome: runRevoke(args, paths) };
+  }
+
+  /**
+   * A two-line ledger — one signature, then a revocation of it — that is
+   * correct in every other respect.
+   *
+   * Everything else being valid is the point: a fixture that also mis-named the
+   * pack would throw for a reason unrelated to the blank field, and the test
+   * would pass while proving nothing about authority.
+   */
+  function ledgerWithRevocation(overrides: Partial<Omit<RevocationEntry, 'entryId'>> = {}): string {
+    const signed = rivalEntry('E. Earlier');
+    const unsigned: Omit<RevocationEntry, 'entryId'> = {
+      kind: 'revoked',
+      packId: PACK_ID,
+      requirementId: REQ_ID,
+      revokes: signed.entryId,
+      by: REVOKER,
+      on: REVOKED_ON,
+      reason: REVOCATION_REASON,
+      ...overrides,
+    };
+    const revocation: RevocationEntry = { ...unsigned, entryId: entryId(unsigned) };
+    return `${JSON.stringify(signed)}\n${JSON.stringify(revocation)}\n`;
+  }
+
+  // -------------------------------------------------------------------------
+  // Property A — exact propagation through the sanctioned write paths
+  // -------------------------------------------------------------------------
+
+  describe('runSign propagates each supplied value into the appended line', () => {
+    function signOnce(): void {
+      const outcome = runSign(
+        signArgs({ by: SIGNER, on: SIGNED_ON, note: SIGNING_NOTE }),
+        paths,
+      );
+      expect(outcome.exitCode).toBe(EXIT_OK);
+    }
+
+    it('`by` — the appended signatory is the one the caller named', () => {
+      signOnce();
+      expect(appendedLine()['by'], 'signing `by` is not the value runSign was handed').toBe(SIGNER);
+    });
+
+    it('`on` — the appended date is the one the caller supplied', () => {
+      signOnce();
+      expect(appendedLine()['on'], 'signing `on` is not the value runSign was handed').toBe(
+        SIGNED_ON,
+      );
+    });
+
+    it('`note` — the appended note is the one the caller supplied', () => {
+      signOnce();
+      expect(appendedLine()['note'], 'signing `note` is not the value runSign was handed').toBe(
+        SIGNING_NOTE,
+      );
+    });
+  });
+
+  describe('runRevoke propagates each supplied value into the appended line', () => {
+    it('`by` — the appended revoker is the one the caller named', () => {
+      const { args, outcome } = revokeOver();
+      expect(outcome.exitCode).toBe(EXIT_OK);
+      expect(appendedLine()['by'], 'revocation `by` is not the value runRevoke was handed').toBe(
+        args.by,
+      );
+    });
+
+    it('`on` — the appended date is the one the caller supplied', () => {
+      const { args, outcome } = revokeOver();
+      expect(outcome.exitCode).toBe(EXIT_OK);
+      expect(appendedLine()['on'], 'revocation `on` is not the value runRevoke was handed').toBe(
+        args.on,
+      );
+    });
+
+    it('`reason` — the appended reason is the one the caller supplied', () => {
+      const { args, outcome } = revokeOver();
+      expect(outcome.exitCode).toBe(EXIT_OK);
+      expect(
+        appendedLine()['reason'],
+        'revocation `reason` is not the value runRevoke was handed',
+      ).toBe(args.reason);
+    });
+
+    it('`revokes` — the appended target is the named signature, not another valid one', () => {
+      // **Two signatures, because one makes this assertion untestable.** Over a
+      // single-entry ledger the only substitution available for `revokes` is an
+      // id that resolves to nothing, and that fails `verifyLedgerIntegrity` at
+      // the post-write read: every revocation test then dies on its exit code
+      // having compared no field at all, which is TEST-EVIDENCE-STANDARD §2 —
+      // the mutation killing the test for the wrong reason.
+      //
+      // With a second signature present, a *valid alternative* target exists.
+      // Substituting it leaves the reference resolvable, the pack and
+      // requirement matching, the target earlier in the file and a signature
+      // rather than a revocation — so integrity stays satisfied and the exit
+      // code stays `EXIT_OK`. The only thing wrong is that the line withdraws
+      // the wrong signature, which is precisely what this assertion is for.
+      expect(runSign(signArgs({ by: 'E. Earlier' }), paths).exitCode).toBe(EXIT_OK);
+      expect(runSign(signArgs({ by: SIGNER }), paths).exitCode).toBe(EXIT_OK);
+      const seeded = readLedger();
+      const earlier = seeded[0];
+      const target = seeded[1];
+      if (earlier === undefined || target === undefined) throw new Error('seed failed');
+      // Both are genuine, distinct, resolvable targets, so "any valid id" is
+      // not an answer this assertion accepts.
+      expect(earlier.entryId).not.toBe(target.entryId);
+
+      const args = {
+        packId: PACK_ID,
+        requirementId: REQ_ID,
+        revokes: target.entryId,
+        by: REVOKER,
+        on: REVOKED_ON,
+        reason: REVOCATION_REASON,
+      };
+      const outcome = runRevoke(args, paths);
+
+      // Asserted before the propagation check, and in this order deliberately:
+      // together they say the ledger is still well-formed and the operation
+      // still succeeded, so anything the next assertion catches was caught by
+      // the comparison itself rather than by integrity or by an exit code.
+      expect(outcome.exitCode).toBe(EXIT_OK);
+      expect(readLedger()).toHaveLength(3);
+
+      expect(
+        appendedLine()['revokes'],
+        'revocation `revokes` is not the value runRevoke was handed',
+      ).toBe(args.revokes);
+      expect(appendedLine()['revokes']).not.toBe(earlier.entryId);
+    });
+  });
+
+  describe('the non-blank rule tests the value without rewriting it', () => {
+    const PADDED_SIGNER = '  A. Reviewer  ';
+    const PADDED_REASON = '\tThe encoding was corrected.\n';
+
+    it('stores a signing `by` byte for byte, surrounding whitespace included', () => {
+      expect(runSign(signArgs({ by: PADDED_SIGNER, on: SIGNED_ON }), paths).exitCode).toBe(EXIT_OK);
+
+      expect(appendedLine()['by']).toBe(PADDED_SIGNER);
+      // The counterexample. Without it the assertion above is also satisfied by
+      // a schema that trims, whenever the fixture happens to carry no padding.
+      expect(appendedLine()['by']).not.toBe(PADDED_SIGNER.trim());
+      // And the stored value is the value hashed: a rewrite between the id and
+      // the bytes would make the entry fail its own recomputation on read.
+      expect(readLedger()).toHaveLength(1);
+    });
+
+    it('stores a revocation `reason` byte for byte, surrounding whitespace included', () => {
+      const { outcome } = revokeOver({ reason: PADDED_REASON });
+      expect(outcome.exitCode).toBe(EXIT_OK);
+
+      expect(appendedLine()['reason']).toBe(PADDED_REASON);
+      expect(appendedLine()['reason']).not.toBe(PADDED_REASON.trim());
+      expect(readLedger()).toHaveLength(2);
+    });
+
+    it('leaves `note` unconstrained — commentary is not authority', () => {
+      // A blank note claims nothing. A blank `by` claims a judgement with
+      // nobody behind it. Only the second is damage, and this pins the
+      // difference so the rule cannot spread to the field it does not govern.
+      expect(runSign(signArgs({ by: SIGNER, note: '   ' }), paths).exitCode).toBe(EXIT_OK);
+      expect(appendedLine()['note']).toBe('   ');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Property B, layer 1 — the CLI refuses before the irreversible append
+  // -------------------------------------------------------------------------
+
+  describe('the CLI refuses blank authority before writing anything', () => {
+    const BLANKS: Array<[string, string]> = [
+      ['empty', ''],
+      ['three spaces', '   '],
+      ['a tab and a newline', '\t\n'],
+    ];
+
+    it.each(BLANKS)('runSign refuses %s `by`, and the ledger bytes do not move', (_label, blank) => {
+      const before = readFileSync(ledgerPath(), 'utf8');
+      const outcome = runSign(signArgs({ by: blank }), paths);
+
+      expect(outcome.exitCode).toBe(EXIT_REFUSED);
+      expect(outcome.lines.join('\n')).toMatch(/by is blank/);
+      expect(readFileSync(ledgerPath(), 'utf8')).toBe(before);
+    });
+
+    it('positive control: the same path writes when `by` names somebody', () => {
+      // Required. Every case above is satisfied by a CLI that refuses every
+      // signature, which would be a different defect wearing the same green.
+      const before = readFileSync(ledgerPath(), 'utf8');
+      const outcome = runSign(signArgs({ by: SIGNER }), paths);
+
+      expect(outcome.exitCode).toBe(EXIT_OK);
+      expect(readFileSync(ledgerPath(), 'utf8')).not.toBe(before);
+      expect(readLedger()).toHaveLength(1);
+    });
+
+    it.each(BLANKS)(
+      'runRevoke refuses %s `by`, and the ledger bytes do not move',
+      (_label, blank) => {
+        expect(runSign(signArgs(), paths).exitCode).toBe(EXIT_OK);
+        const before = readFileSync(ledgerPath(), 'utf8');
+        const { outcome } = revokeOverExisting({ by: blank });
+
+        expect(outcome.exitCode).toBe(EXIT_REFUSED);
+        expect(outcome.lines.join('\n')).toMatch(/no signatory/);
+        expect(readFileSync(ledgerPath(), 'utf8')).toBe(before);
+      },
+    );
+
+    it.each(BLANKS)(
+      'runRevoke refuses %s `reason`, and the ledger bytes do not move',
+      (_label, blank) => {
+        expect(runSign(signArgs(), paths).exitCode).toBe(EXIT_OK);
+        const before = readFileSync(ledgerPath(), 'utf8');
+        const { outcome } = revokeOverExisting({ reason: blank });
+
+        expect(outcome.exitCode).toBe(EXIT_REFUSED);
+        expect(outcome.lines.join('\n')).toMatch(/no reason/);
+        expect(readFileSync(ledgerPath(), 'utf8')).toBe(before);
+      },
+    );
+
+    it('positive control: the same path writes when both fields carry a value', () => {
+      expect(runSign(signArgs(), paths).exitCode).toBe(EXIT_OK);
+      const before = readFileSync(ledgerPath(), 'utf8');
+      const { outcome } = revokeOverExisting({});
+
+      expect(outcome.exitCode).toBe(EXIT_OK);
+      expect(readFileSync(ledgerPath(), 'utf8')).not.toBe(before);
+      expect(readLedger()).toHaveLength(2);
+    });
+
+    /** Withdraws whatever signature is already at the head of the ledger. */
+    function revokeOverExisting(overrides: Record<string, unknown>) {
+      const signed = readLedger()[0];
+      if (signed === undefined) throw new Error('seed failed');
+      const args = {
+        packId: PACK_ID,
+        requirementId: REQ_ID,
+        revokes: signed.entryId,
+        by: REVOKER,
+        on: REVOKED_ON,
+        reason: REVOCATION_REASON,
+        ...overrides,
+      };
+      return { args, outcome: runRevoke(args, paths) };
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // Property B, layer 2 — the read path refuses a ledger it did not write
+  // -------------------------------------------------------------------------
+
+  describe('a blank authority already in the ledger makes it unreadable', () => {
+    it('positive control: the same fixtures parse when every authority carries a value', () => {
+      // Without this, every case below is satisfied by a fixture that is broken
+      // for some other reason entirely.
+      expect(parseLedger(`${JSON.stringify(rivalEntry('E. Earlier'))}\n`)).toHaveLength(1);
+      expect(parseLedger(ledgerWithRevocation())).toHaveLength(2);
+    });
+
+    it('refuses a signing entry whose `by` is whitespace', () => {
+      const text = `${JSON.stringify(sealed({ ...rivalEntry(), by: '   ' }))}\n`;
+      expect(() => parseLedger(text)).toThrow(LedgerIntegrityError);
+      expect(() => parseLedger(text)).toThrow(/by: is blank/);
+    });
+
+    it('refuses a revocation whose `by` is whitespace', () => {
+      const text = ledgerWithRevocation({ by: ' ' });
+      expect(() => parseLedger(text)).toThrow(LedgerIntegrityError);
+      expect(() => parseLedger(text)).toThrow(/line 2: .*by: is blank/);
+    });
+
+    it('refuses a revocation whose `reason` is whitespace', () => {
+      const text = ledgerWithRevocation({ reason: '\t' });
+      expect(() => parseLedger(text)).toThrow(LedgerIntegrityError);
+      expect(() => parseLedger(text)).toThrow(/line 2: .*reason: is blank/);
+    });
   });
 });

@@ -32,6 +32,14 @@
  * and 1-based, counted before anything is discarded, because a misreported
  * number in a file nobody may rewrite sends the repairer to the wrong entry.
  *
+ * **Blank authority is damage too.** A `by` of `'   '` on either variant, or a
+ * revocation `reason` of `''`, parses as a perfectly well-formed line while
+ * saying nothing about who stood behind the judgement — the one thing this file
+ * exists to record. The read path refuses it, independently of any CLI, because
+ * a ledger assembled by hand or inherited from before the rule still has to
+ * announce its damage. `carriesAuthority` below is the single definition, and
+ * the sanctioned CLIs apply the same one before they append.
+ *
  * **Structure and reference are two stages**, as in `result.ts` and for the
  * same reason: the field-accounting guard walks the exported schemas and
  * refuses any node kind it does not recognise, so no schema here may be
@@ -46,6 +54,48 @@
 import { z } from 'zod';
 import { sha256Hex } from '../corpus/hash';
 import { canonicalJson } from './canonical';
+
+/**
+ * The one definition of "carries an authority value", shared by the schemas
+ * below and by the CLIs that refuse before they append.
+ *
+ * This file is the record of *who stood behind what*, and a `by` of `''` or
+ * `'   '` says nobody — a record of authority recording none. So the rule
+ * belongs to the contract rather than to whichever writer happens to remember
+ * it, and it has exactly one definition here so that a CLI's pre-write refusal
+ * and the read path's rejection cannot drift into two different ideas of what
+ * "blank" means.
+ *
+ * **It tests; it does not transform.** `\S` asks whether the string carries a
+ * single non-whitespace character and answers without touching the value. That
+ * matters twice over: a schema that trimmed would rewrite `' Alice '` to
+ * `'Alice'` somewhere between the caller and the file, defeating the exact
+ * propagation the ledger exists to hold; and hashing a value other than the one
+ * written would make `entryId` a digest of something no reader of the line can
+ * reproduce. The pattern carries no `g` flag, so `.test` holds no state between
+ * calls.
+ *
+ * Expressed as `.regex()` rather than `.refine()` deliberately. A refinement
+ * wraps the schema in a `ZodEffects` and hides every field beneath it from the
+ * field-accounting walker, which is why the header above forbids one; `.regex()`
+ * leaves the node a plain `ZodString` that the walker still sees and that
+ * `FIELD_ROLES` still accounts for.
+ */
+export const CARRIES_AUTHORITY = /\S/;
+
+/** True when the value names somebody, or states something, rather than nothing. */
+export function carriesAuthority(value: string): boolean {
+  return CARRIES_AUTHORITY.test(value);
+}
+
+/**
+ * A ledger string that may not be blank. `blankMeans` completes the sentence
+ * zod prefixes with the field path, so a parse error says which authority is
+ * missing and why its absence is damage rather than an omission.
+ */
+function authorityString(blankMeans: string): z.ZodString {
+  return z.string().regex(CARRIES_AUTHORITY, blankMeans);
+}
 
 /**
  * A pinned corpus document, as the closure held it when the signature was
@@ -91,8 +141,13 @@ export const signingEntrySchema = z
     corpus: z.array(corpusPinSchema),
     resultSha256: z.string(),
     pipelineVersion: z.string(),
-    by: z.string(),
+    by: authorityString(
+      'is blank; a signature records who stood behind the judgement, and nobody is not an answer',
+    ),
     on: z.string(),
+    // `note` stays an ordinary string. It is optional commentary, not
+    // authority: an entry carrying no note claims nothing, whereas an entry
+    // carrying no `by` claims a judgement with no one behind it.
     note: z.string().optional(),
   })
   .strict();
@@ -118,9 +173,13 @@ export const revocationEntrySchema = z
     packId: z.string(),
     requirementId: z.string(),
     revokes: z.string(),
-    by: z.string(),
+    by: authorityString(
+      'is blank; a withdrawal records who withdrew the signature, and nobody is not an answer',
+    ),
     on: z.string(),
-    reason: z.string(),
+    reason: authorityString(
+      'is blank; a withdrawal nobody can account for is not a record of one',
+    ),
   })
   .strict();
 

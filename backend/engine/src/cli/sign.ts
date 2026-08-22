@@ -73,6 +73,7 @@ import { loadPack, PackIntegrityError } from '../knowledge/loader';
 import type { KnowledgePack, Requirement } from '../types';
 import { canonicalJson } from '../verification/canonical';
 import {
+  carriesAuthority,
   governingEntry,
   LedgerIntegrityError,
   parseLedger,
@@ -667,6 +668,22 @@ export function verifyAfterWrite(
  * assert on. The entry point is the only thing that calls `process.exit`.
  */
 export function runSign(args: SignArgs, paths: VerifyPaths, hooks: WriteHooks = {}): CliOutcome {
+  // Before the world is read, and long before anything is appended. The ledger
+  // schema refuses a blank `by` as well, but only on the way back *in*: by then
+  // the line is in a file nothing may rewrite, and the repository has acquired a
+  // permanently unreadable entry. Post-write detection is not a substitute for
+  // the refusal — it is the record of having failed to make one. Same predicate
+  // as the schema's, imported rather than restated, so the two cannot drift.
+  if (!carriesAuthority(args.by)) {
+    return {
+      exitCode: EXIT_REFUSED,
+      lines: [
+        'REFUSED — the signature would name nobody, so it is not written.',
+        '  - by is blank; a signature records who stood behind the judgement, and nobody is not an answer',
+      ],
+    };
+  }
+
   try {
     const world = readWorld(paths, args.packId, args.requirementId);
     const entries = readLedgerOrFail(paths);
