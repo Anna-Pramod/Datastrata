@@ -1160,15 +1160,12 @@ describe('the record carries the adjudicator\'s own evidence, not only the prose
       resultSchemaVersion: outcome.tail.resultSchemaVersion,
       pipelineVersion: outcome.pipelineVersion,
       rendererVersion: outcome.tail.rendererVersion,
+      // Spread verbatim, `corpus[]` included. `producePins` used to omit
+      // `versionLabel`, which `corpusPinSchema` requires, and this test patched
+      // it back in from the corpus; the producer now emits the record-shaped pin
+      // and the patch is gone. Restoring it would hide the producer's shape
+      // behind the test's, which is the whole reason the gap survived.
       ...outcome.tail.pins,
-      // `producePins` omits `versionLabel`, which `corpusPinSchema` requires —
-      // a gap in the tail's assembly that belongs to Task 5, not here. Filled
-      // in from the corpus so this test is about the challenges it is checking
-      // rather than about an unrelated missing field.
-      corpus: outcome.tail.pins.corpus.map((pin) => ({
-        ...pin,
-        versionLabel: corpus.document(pin.docId).versionLabel,
-      })),
       reading: { elements: outcome.reader.output.elements },
       coverage: { cells: outcome.prosecution.table.cells },
       challenges: outcome.adjudication!.challenges,

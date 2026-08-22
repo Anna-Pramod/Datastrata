@@ -71,7 +71,7 @@ import { loadCorpus, type LoadedCorpus } from '../corpus/store';
 import { CorpusIntegrityError } from '../corpus/schema';
 import { loadPack, PackIntegrityError } from '../knowledge/loader';
 import type { KnowledgePack, Requirement } from '../types';
-import { canonicalJson, requirementInputSha256 } from '../verification/canonical';
+import { canonicalJson } from '../verification/canonical';
 import {
   governingEntry,
   LedgerIntegrityError,
@@ -94,12 +94,14 @@ import { verificationResultSchema, type VerificationResult } from '../verificati
 import {
   assertSignable,
   buildSignature,
-  candidateConditionSha256,
-  candidateRenderedConditionSha256,
   IntegrityFailureError,
   RefusalError,
 } from '../verification/sign';
-import { currentStateOf } from '../verification/current-state';
+import {
+  currentStateOf,
+  producePins,
+  type VerificationPins,
+} from '../verification/current-state';
 import {
   deriveStaleness,
   resolveNormalizerChanged,
@@ -234,18 +236,28 @@ function readIfPresent(path: string): string | null {
   }
 }
 
-/** Everything current state is derived from, read once. */
+/**
+ * Everything current state is derived from, read once.
+ *
+ * The pins arrive as one `VerificationPins` from `producePins`, rather than as
+ * four hashes computed here beside a walk of the closure written here. That
+ * literal was the **second** construction of the record B2's deterministic tail
+ * also produces, and it differed from the first by exactly one field. Two
+ * constructions that drift do not surface as a diff anybody can read: they
+ * surface as `verify sign` refusing every dossier the pipeline produces with
+ * `candidate_inconsistent`.
+ *
+ * Two of the four hashes were also dead — `requirementInputSha256` and
+ * `conditionSha256` were computed on every read and never consulted — which is
+ * what a hand-maintained copy of a record tends to become.
+ */
 interface CurrentWorld {
   pack: KnowledgePack;
   requirement: Requirement;
   corpus: LoadedCorpus;
   renderCtx: RenderContext;
-  requirementInputSha256: string;
-  conditionSha256: string;
-  renderedConditionSha256: string;
-  closureSha256: string;
-  /** The closure's documents as the corpus holds them now. */
-  pins: SigningEntry['corpus'];
+  /** Every pin. `pins.corpus` is the closure's documents as the corpus holds them now. */
+  pins: VerificationPins;
 }
 
 function readWorld(paths: VerifyPaths, packId: string, requirementId: string): CurrentWorld {
@@ -305,27 +317,20 @@ function readWorld(paths: VerifyPaths, packId: string, requirementId: string): C
     throw error;
   }
 
-  const pins = closure.docIds.map((docId) => {
-    const document = corpus.document(docId);
-    return {
-      docId,
-      versionLabel: document.versionLabel,
-      sha256Raw: document.sha256Raw,
-      sha256Normalized: document.sha256Normalized,
-      normalizerVersion: document.normalizerVersion,
-    };
-  });
-
+  // The shared producer, not a walk of the closure written here. `producePins`
+  // computes exactly these five values for the pipeline's tail, and the
+  // candidate frozen below is what a result's own pins are compared against.
   return {
     pack,
     requirement,
     corpus,
     renderCtx,
-    requirementInputSha256: requirementInputSha256(requirement),
-    conditionSha256: candidateConditionSha256(requirement),
-    renderedConditionSha256: candidateRenderedConditionSha256(requirement, renderCtx),
-    closureSha256: closure.sha256,
-    pins,
+    pins: producePins({
+      requirement,
+      renderContext: renderCtx,
+      closure: { sha256: closure.sha256, docIds: closure.docIds },
+      corpus,
+    }),
   };
 }
 
@@ -505,7 +510,10 @@ function currentWorldState(world: CurrentWorld, result: VerificationResult): Cur
   return currentStateOf({
     requirement: world.requirement,
     renderContext: world.renderCtx,
-    closure: { sha256: world.closureSha256, docIds: world.pins.map((pin) => pin.docId) },
+    closure: {
+      sha256: world.pins.corpusClosureSha256,
+      docIds: world.pins.corpus.map((pin) => pin.docId),
+    },
     corpus: world.corpus,
     result,
   });
@@ -697,10 +705,10 @@ export function runSign(args: SignArgs, paths: VerifyPaths, hooks: WriteHooks = 
       packVersion: world.pack.version,
       requirement: world.requirement,
       result,
-      renderedConditionSha256: world.renderedConditionSha256,
+      renderedConditionSha256: world.pins.renderedConditionSha256,
       rendererVersion: RENDERER_VERSION,
-      corpusClosureSha256: world.closureSha256,
-      corpus: world.pins,
+      corpusClosureSha256: world.pins.corpusClosureSha256,
+      corpus: world.pins.corpus,
       by: args.by,
       on: args.on,
       ...(args.note === undefined ? {} : { note: args.note }),

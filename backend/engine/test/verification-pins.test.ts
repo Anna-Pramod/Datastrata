@@ -1,5 +1,5 @@
 /**
- * The shared pin producer — one construction, four callers.
+ * The shared pin producer — one construction, four callers, two widths.
  *
  * `currentStateOf`'s header records what three constructions of this record
  * already cost. B2's deterministic tail is the fourth caller, and it is the one
@@ -14,12 +14,31 @@
  * That is recorded in the task report. What is asserted here is the shape of the
  * split and the agreement between the producer, the canonical helpers and the
  * tail.
+ *
+ * **The second half of this file is about the two widths.** A pinned corpus
+ * document is *recorded* five fields wide and *compared* four fields wide, and
+ * the producer emits the wider shape so that `pinsForFreshness` can narrow it
+ * rather than every record-shaped caller widening it. Two obligations follow,
+ * and each is tested against something this module did not author:
+ *
+ *  - what the producer emits must satisfy `corpusPinSchema` and
+ *    `signingEntrySchema` — checked through `parseVerificationResult` and
+ *    `signingEntrySchema.parse`, never against a field list restated here;
+ *  - the narrowing must not become a freshness trigger — checked through
+ *    `deriveStaleness`, with positive controls, because "nothing moved" is
+ *    also what a harness that can never report movement says.
  */
 
 import { describe, expect, it } from 'vitest';
-import { currentStateOf, producePins } from '../src/verification/current-state';
-import { resultSha256 } from '../src/verification/result';
+import {
+  currentStateOf,
+  pinsForFreshness,
+  producePins,
+} from '../src/verification/current-state';
+import { parseVerificationResult, resultSha256 } from '../src/verification/result';
 import { requirementInputSha256 } from '../src/verification/canonical';
+import { signingEntrySchema, type SigningEntry } from '../src/verification/ledger';
+import { deriveStaleness } from '../src/verification/staleness';
 import {
   candidateConditionSha256,
   candidateRenderedConditionSha256,
@@ -102,6 +121,193 @@ describe('producePins', () => {
         .corpusClosureSha256,
     ).toBe('a'.repeat(64));
   });
+
+  it('pins each document at its record width, reading versionLabel from the corpus', () => {
+    const pins = producePins(pinInput);
+    expect(pins.corpus.length).toBeGreaterThan(0);
+    for (const pin of pins.corpus) {
+      const document = corpus.document(pin.docId);
+      // Value-asserted against the corpus, not merely present: a producer that
+      // wrote a constant, the docId, or the empty string would satisfy
+      // "has a versionLabel" and fail here.
+      expect(pin.versionLabel).toBe(document.versionLabel);
+      expect(pin.sha256Raw).toBe(document.sha256Raw);
+      expect(pin.sha256Normalized).toBe(document.sha256Normalized);
+      expect(pin.normalizerVersion).toBe(document.normalizerVersion);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The two widths
+// ---------------------------------------------------------------------------
+
+/**
+ * A schema-valid result, with the producer's pins spread in **verbatim**.
+ *
+ * Nothing is patched, widened or filled in on the way. That is the point: this
+ * is not a fixture standing in for what Task 5 will assemble, it is the question
+ * "does the record contract accept exactly what the one producer emits?", and a
+ * test that reached into the corpus to top up a field would answer a different
+ * question and hide the answer to this one. (It did, once — see
+ * `pipeline-adjudicator.test.ts`.)
+ */
+function resultOverPins(pins = producePins(pinInput)): Record<string, unknown> {
+  return {
+    packId: 'testpack',
+    requirementId: 'TEST-R-001',
+    requirementVersion: 1,
+    resultSchemaVersion: '1.2.0',
+    pipelineVersion: 'pipeline-v1-unpromoted',
+    rendererVersion: 'renderer-1.1.0',
+    ...pins,
+    reading: { elements: [] },
+    coverage: { cells: [] },
+    challenges: [],
+    openQuestions: [],
+    gaps: [],
+  };
+}
+
+describe('the record width and the freshness width', () => {
+  it('the record contract accepts the producer’s pins as they stand', () => {
+    const pins = producePins(pinInput);
+    // `parseVerificationResult`, the current authoritative shape, rather than a
+    // field list restated here. A restated list agrees with whatever the test
+    // author believed on the day, including after the schema has moved.
+    const parsed = parseVerificationResult(resultOverPins(pins));
+    expect(parsed.resultSchemaVersion).toBe('1.2.0');
+    expect(parsed.corpus).toEqual(pins.corpus);
+  });
+
+  it('and refuses the freshness projection — so the previous test is not vacuous', () => {
+    // The counterexample in the same shape. Without it, "the record accepts the
+    // producer's pins" would pass equally against a schema that required
+    // nothing at all.
+    const narrowed = pinsForFreshness(producePins(pinInput));
+    expect(() => parseVerificationResult(resultOverPins(narrowed as never))).toThrow(
+      /versionLabel/,
+    );
+  });
+
+  it('the ledger contract accepts them too, unwidened', () => {
+    const pins = producePins(pinInput);
+    const entry: unknown = {
+      entryId: 'E-0001',
+      kind: 'verified',
+      packId: 'testpack',
+      packVersion: '0.1.0',
+      requirementId: requirement.id,
+      requirementVersion: requirement.version,
+      requirementSha256: 'f'.repeat(64),
+      ...pins,
+      rendererVersion: 'renderer-1.1.0',
+      resultSha256: 'e'.repeat(64),
+      pipelineVersion: 'pipeline-v1-unpromoted',
+      by: 'fixture',
+      on: '2026-08-21',
+    };
+    expect(signingEntrySchema.parse(entry).corpus).toEqual(pins.corpus);
+    // The same counterexample, against the other of the two schemas that
+    // independently define this pin.
+    expect(() =>
+      signingEntrySchema.parse({
+        ...(entry as Record<string, unknown>),
+        corpus: pinsForFreshness(pins).corpus,
+      }),
+    ).toThrow(/versionLabel/);
+  });
+
+  it('the freshness projection drops versionLabel and nothing else', () => {
+    const pins = producePins(pinInput);
+    const narrowed = pinsForFreshness(pins);
+
+    // Teeth. `{ ...pin }` and `const { versionLabel, ...rest } = pin` both keep
+    // the key set open, and both would pass a test that only checked the four
+    // survivors are correct. An exact key set is what reddens against them.
+    expect(narrowed.corpus.length).toBe(pins.corpus.length);
+    for (const document of narrowed.corpus) {
+      expect(Object.keys(document).sort()).toEqual([
+        'docId',
+        'normalizerVersion',
+        'sha256Normalized',
+        'sha256Raw',
+      ]);
+    }
+
+    // And nothing else about the record moved: same scalars, same documents in
+    // the same order, same values on every surviving field.
+    const { corpus: producedCorpus, ...producedHashes } = pins;
+    const { corpus: narrowedCorpus, ...narrowedHashes } = narrowed;
+    expect(narrowedHashes).toEqual(producedHashes);
+    expect(narrowedCorpus).toEqual(
+      producedCorpus.map(({ versionLabel: _dropped, ...rest }) => rest),
+    );
+  });
+
+  it('so no versionLabel survives anywhere into current state', () => {
+    const state = currentStateOf({ ...pinInput, result: minimalResult() });
+    expect(JSON.stringify(state)).not.toContain('versionLabel');
+    // The positive control for that negative: the label is in the world, and the
+    // producer did see it. Otherwise the line above passes on an empty closure.
+    expect(JSON.stringify(producePins(pinInput))).toContain('versionLabel');
+  });
+});
+
+describe('a re-labelled document is still fresh', () => {
+  /** An entry pinning exactly the world `pinInput` describes. */
+  function matchingEntry(over: Partial<SigningEntry['corpus'][number]> = {}): SigningEntry {
+    const pins = producePins(pinInput);
+    return {
+      entryId: 'E-0001',
+      kind: 'verified',
+      packId: 'testpack',
+      packVersion: '0.1.0',
+      requirementId: requirement.id,
+      requirementVersion: requirement.version,
+      requirementSha256: 'f'.repeat(64),
+      requirementInputSha256: pins.requirementInputSha256,
+      conditionSha256: pins.conditionSha256,
+      renderedConditionSha256: pins.renderedConditionSha256,
+      rendererVersion: 'renderer-1.1.0',
+      corpusClosureSha256: pins.corpusClosureSha256,
+      corpus: pins.corpus.map((pin) => ({ ...pin, ...over })),
+      resultSha256: resultSha256(minimalResult()),
+      pipelineVersion: 'pipeline-v1-unpromoted',
+      by: 'fixture',
+      on: '2026-08-21',
+    };
+  }
+
+  const state = () => currentStateOf({ ...pinInput, result: minimalResult() });
+
+  it('the publisher relabels the file and the signature does not go stale', () => {
+    // The producer now knows `versionLabel`. This is the property that must not
+    // have changed because of it: a re-labelled but byte-identical document
+    // reads as fresh, and there is no such thing as a `stale_version_label`.
+    expect(deriveStaleness(matchingEntry(), state())).toEqual([]);
+    expect(
+      deriveStaleness(
+        matchingEntry({ versionLabel: 'consolidated 4 Jul 2027 — bytes untouched' }),
+        state(),
+      ),
+    ).toEqual([]);
+  });
+
+  it('but each field freshness *does* compare moves it, one at a time', () => {
+    // Failure mode #7: an empty set is also what a harness incapable of ever
+    // reporting movement returns. These three prove this one can move, and that
+    // the fields it moves on are exactly the three the projection keeps.
+    expect(deriveStaleness(matchingEntry({ sha256Raw: '9'.repeat(64) }), state())).toEqual([
+      'source_reissued',
+    ]);
+    expect(deriveStaleness(matchingEntry({ sha256Normalized: '9'.repeat(64) }), state())).toEqual([
+      'stale_source_text',
+    ]);
+    expect(deriveStaleness(matchingEntry({ normalizerVersion: '0.0.0-other' }), state())).toEqual([
+      'normalizer_changed',
+    ]);
+  });
 });
 
 /**
@@ -130,16 +336,46 @@ function minimalResult(): Parameters<typeof currentStateOf>[0]['result'] {
   };
 }
 
+/**
+ * Everything `deriveStaleness` is allowed to compare, written out.
+ *
+ * **Deliberately a literal, and deliberately not derived from
+ * `pinsForFreshness`, `CurrentState` or `producePins`.** The assertion below is
+ * the one standing between a scalar added to the *record* contract and the
+ * *freshness* comparison, and a version of it that read its expected key set
+ * back out of the projection agreed with the projection by construction —
+ * failure mode #1, the check reproducing the mechanism it checks. Widening
+ * `VerificationPins` by one scalar passed it.
+ *
+ * The cost of a literal is that it must be edited when the freshness contract
+ * genuinely changes. That is the entire point: it converts "a field appeared in
+ * `CurrentState`" from something nothing observes into a line somebody has to
+ * write on purpose.
+ */
+const FRESHNESS_FIELDS = [
+  'requirementInputSha256',
+  'conditionSha256',
+  'renderedConditionSha256',
+  'corpusClosureSha256',
+  'corpus',
+  'resultSha256',
+] as const;
+
 describe('currentStateOf', () => {
-  it('is the producer plus the one pin that needs a result', () => {
+  it('compares exactly the freshness fields, and no field the record added', () => {
     const result = minimalResult();
     const state = currentStateOf({ ...pinInput, result });
-    const pins = producePins(pinInput);
-    expect(Object.keys(state).sort()).toEqual(
-      [...Object.keys(pins), 'resultSha256'].sort(),
-    );
-    for (const key of Object.keys(pins) as Array<keyof typeof pins>) {
-      expect(state[key]).toEqual(pins[key]);
+
+    // Against the literal above, so the two sides can disagree. A scalar added
+    // to `VerificationPins` and inherited by the projection reddens here,
+    // naming itself.
+    expect(Object.keys(state).sort()).toEqual([...FRESHNESS_FIELDS].sort());
+
+    // The values still come from the producer: naming the fields must not turn
+    // this into a shape test that any record of the right shape would pass.
+    const projected = pinsForFreshness(producePins(pinInput));
+    for (const key of Object.keys(projected) as Array<keyof typeof projected>) {
+      expect(state[key]).toEqual(projected[key]);
     }
     // Value-asserted, not merely typed: `typeof … === 'string'` is satisfied
     // by any hash of anything, including a hash of the wrong record.

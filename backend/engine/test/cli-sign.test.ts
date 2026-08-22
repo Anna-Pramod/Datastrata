@@ -292,6 +292,36 @@ describe('runSign', () => {
     expect(outcome.lines.join('\n')).toContain(written?.entryId ?? 'no entry');
   });
 
+  it('pins, in the line it appended, exactly what the world says — every field', () => {
+    // The run-level half of "the sign CLI derives its pins from `producePins`".
+    // Every assertion above is satisfied by an entry whose pins are wrong: they
+    // read `kind`, `requirementId` and `entryId`, and nothing the producer
+    // computed. Nulling `versionLabel` inside `producePins` left this entire
+    // file green — which is how a wrong label could reach the ledger unobserved.
+    //
+    // `currentPins()` and the three hash helpers are derived here from the pack
+    // and the corpus **independently** of the producer, so this reddens when the
+    // producer drifts rather than moving along with it.
+    runSign(signArgs(), paths);
+    const written = readLedger()[0] as SigningEntry;
+
+    expect(written.corpus).toEqual(currentPins());
+    expect(written.requirementInputSha256).toBe(requirementInputSha256(requirement));
+    expect(written.conditionSha256).toBe(candidateConditionSha256(requirement));
+    expect(written.renderedConditionSha256).toBe(
+      candidateRenderedConditionSha256(requirement, renderCtx),
+    );
+    expect(written.corpusClosureSha256).toBe(closureSha256);
+
+    // The counterexample that stops `toEqual` from being satisfied by a pin
+    // shape carrying nothing: the closure is non-empty, and every label really
+    // is this corpus's.
+    expect(written.corpus.length).toBeGreaterThan(0);
+    for (const pin of written.corpus) {
+      expect(pin.versionLabel).toBe(corpus.document(pin.docId).versionLabel);
+    }
+  });
+
   it('appends exactly one line plus a newline, in the framing parseLedger requires', () => {
     runSign(signArgs(), paths);
     const text = readFileSync(ledgerPath(), 'utf8');
