@@ -41,6 +41,7 @@ import { sha256Hex } from '../corpus/hash';
 import { evidenceItemSchema, type EvidenceItem, type QuoteEvidence } from '../corpus/evidence';
 import { canonicalJson } from './canonical';
 import { corpusPinSchema } from './corpus-pin';
+import { evidenceSetsOf } from './evidence-sets';
 
 /** A challenge's adjudicated verdict. */
 export const challengeVerdictSchema = z.enum(['CONFIRMED', 'MISMATCH', 'OPEN_QUESTION']);
@@ -598,21 +599,18 @@ export function assertResultConsistency(
     });
   };
 
-  result.reading.elements.forEach((element, i) => {
-    checkEvidence(element.evidence, `reading.elements[${i}] (${element.id}).evidence`);
-  });
-  result.challenges.forEach((challenge, i) => {
-    // Both arrays, through the same function and separately. Checking only one
-    // would leave the other's quotes unpinned against `corpus[]`, and checking
-    // their concatenation would let a sole-absence adjudication hide behind the
-    // prosecutor's quote — the two conclusions are separate and each must stand
-    // on evidence of its own.
-    checkEvidence(challenge.evidence, `challenges[${i}] (${challenge.id}).evidence`);
-    checkEvidence(
-      challenge.adjudicationEvidence,
-      `challenges[${i}] (${challenge.id}).adjudicationEvidence`,
-    );
-  });
+  // Every evidence set the record carries, from the one enumeration, each
+  // checked under its own address. Separately, because a challenge's two arrays
+  // checked as a concatenation would let a sole-absence adjudication hide
+  // behind the prosecutor's quote — the two conclusions are distinct and each
+  // must stand on evidence of its own. And from `evidenceSetsOf` rather than
+  // from a list written here, because this function keeping its own list is how
+  // the list came to exist in three places: `adjudicationEvidence` reached the
+  // record while two of the three went on describing a challenge with one
+  // evidence array, and neither said so.
+  for (const set of evidenceSetsOf(result)) {
+    checkEvidence(set.items, set.recordPath);
+  }
 
   result.coverage.cells.forEach((cell, i) => {
     const label = `coverage.cells[${i}]`;

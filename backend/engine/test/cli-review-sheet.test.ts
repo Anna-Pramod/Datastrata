@@ -742,6 +742,36 @@ describe('the dossier sections', () => {
     expect(section).toContain('The threshold is as encoded.');
   });
 
+  it('renders each array of a challenge under its own label, not merely both somewhere', () => {
+    // The assertion above is satisfied by a sheet that prints both labels and
+    // then puts the prosecutor's quotes under the adjudication heading — the
+    // labels would still both be present, and both quotes would still be on the
+    // page. Since one enumeration now feeds every consumer, that is exactly the
+    // mistake a crossed accessor would make and nothing else here would catch:
+    // failure mode 5, a positive claim satisfied unconditionally.
+    //
+    // So each block is read from its own heading up to the next one, and the
+    // quote that belongs to it has to be inside.
+    const section = sectionFor(sheetHtml(), FRESH);
+    const blockUnder = (label: string): string => {
+      const start = section.indexOf(escapeForTest(label));
+      if (start === -1) throw new Error(`the sheet carries no evidence set labelled ${label}`);
+      const next = section.indexOf('<p class="evidence-set">', start + 1);
+      return next === -1 ? section.slice(start) : section.slice(start, next);
+    };
+
+    const raised = blockUnder('challenge C1 — why it was raised');
+    const decided = blockUnder('challenge C1 — why it was decided (CONFIRMED)');
+
+    expect(decided).toContain(escapeForTest(ADJUDICATION_ONLY_C1));
+    expect(raised).not.toContain(escapeForTest(ADJUDICATION_ONLY_C1));
+    // The prosecutor's own quote, in the block that raised the challenge and
+    // not in the one that decided it: without this half, a sheet that rendered
+    // the adjudication twice would pass.
+    expect(raised).toContain(escapeForTest(QUOTE_B));
+    expect(decided).not.toContain(escapeForTest(QUOTE_B));
+  });
+
   it('renders every text-bearing shape of adjudicationEvidence, not only a bare quote', () => {
     // `FIELD_ROLES` classifies five paths under this array as `display`:
     // `.text`, `.hops[].quote.text`, `.from.text`, `.to.text` and `.term`. A

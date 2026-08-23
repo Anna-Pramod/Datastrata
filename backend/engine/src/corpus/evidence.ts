@@ -181,8 +181,18 @@ function edgeById(corpus: LoadedCorpus, edgeId: string) {
  * per quote: this function checks that a quote pins the hash the corpus holds,
  * and `loadCorpus` is what makes that hash a fact about the bytes. Handed a
  * corpus assembled some other way, these checks are only as good as it is.
+ *
+ * `items` is `readonly` because nothing here writes to it, and because the sign
+ * gate now hands in a set drawn from `evidenceSetsOf`, whose sets are immutable
+ * views onto the record rather than copies of it. A mutable parameter would
+ * have obliged every caller to copy the record's own array to satisfy the
+ * compiler — a copy whose only purpose is to satisfy a promise this function
+ * never needed to make.
  */
-export function checkEvidenceSet(items: EvidenceItem[], corpus: LoadedCorpus): EvidenceCheckResult {
+export function checkEvidenceSet(
+  items: readonly EvidenceItem[],
+  corpus: LoadedCorpus,
+): EvidenceCheckResult {
   const problems: string[] = [];
 
   if (items.length === 0) {

@@ -59,7 +59,7 @@
  * per defect. Refusal is the feature.
  */
 
-import { checkEvidenceSet, type EvidenceItem } from '../corpus/evidence';
+import { checkEvidenceSet } from '../corpus/evidence';
 import { sha256Hex } from '../corpus/hash';
 import type { LoadedCorpus } from '../corpus/store';
 import type { AuthoredRequirement, Requirement } from '../types';
@@ -70,6 +70,7 @@ import {
   requirementInputSha256,
   requirementSha256,
 } from './canonical';
+import { evidenceSetsOf } from './evidence-sets';
 import { entryId, type SigningEntry } from './ledger';
 import type { CorpusPin } from './corpus-pin';
 import { isPromoted, type PromotionRecord } from './promotions';
@@ -472,22 +473,17 @@ export function assertSignable(candidate: SignatureCandidate, checks: Signabilit
     // not in the corpus at all and be signed, which is the whole of what this
     // re-check exists to prevent, applied to the field §3.3 binds the verdict
     // to.
-    const sets: Array<{ label: string; items: EvidenceItem[] }> = [
-      ...result.reading.elements.map((element) => ({
-        label: `reading element ${element.id}`,
-        items: element.evidence,
-      })),
-      ...result.challenges.flatMap((challenge) => [
-        { label: `challenge ${challenge.id}`, items: challenge.evidence },
-        {
-          label: `challenge ${challenge.id} adjudication`,
-          items: challenge.adjudicationEvidence,
-        },
-      ]),
-    ];
-    for (const { label, items } of sets) {
-      const checked = checkEvidenceSet(items, checks.corpus);
-      if (!checked.ok) refuse('evidence_failed', `${label}: ${checked.problems.join('; ')}`);
+    //
+    // The sets come from `evidenceSetsOf`, the record's one enumeration, and
+    // this gate keeps no list of its own. The list it used to keep is exactly
+    // how `adjudicationEvidence` came to be unchecked here for the whole of
+    // 1.2.0's first life: the array existed, the record required it, and the
+    // gate went on iterating the surface it had been written against. A
+    // fabricated adjudication would have signed clean. The completeness guard
+    // over `evidenceSetsOf` is what now makes that class of miss loud.
+    for (const set of evidenceSetsOf(result)) {
+      const checked = checkEvidenceSet(set.items, checks.corpus);
+      if (!checked.ok) refuse('evidence_failed', `${set.label}: ${checked.problems.join('; ')}`);
     }
   }
 

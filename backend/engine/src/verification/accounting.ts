@@ -117,6 +117,23 @@ const UNIONS: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * One accountable position: the path, and the zod node standing at it.
+ *
+ * The node travels with the path because a second consumer of this traversal
+ * has to ask a question a string cannot answer. `accountablePaths` only ever
+ * needed "what addresses exist"; the evidence-completeness guard needs "which
+ * of these arrays holds `evidenceItemSchema`", and the only honest answer is
+ * node identity against that schema object. Re-deriving it from a path spelling
+ * would be a second walker written against a naming convention — the
+ * hand-maintained list this whole file exists to abolish, reintroduced one
+ * level up.
+ */
+export interface AccountableNode {
+  readonly path: string;
+  readonly node: z.ZodTypeAny;
+}
+
+/**
  * One node's contribution, accumulated into `out`.
  *
  * The switch is closed by construction: anything not named here throws rather
@@ -125,8 +142,14 @@ const UNIONS: ReadonlySet<string> = new Set([
  * `ZodEnum` of two values while `revocationEntrySchema.kind` is a literal — so
  * the terminal set covers both and nothing here reads the discriminator
  * specially.
+ *
+ * `out` is a list rather than a set of paths, because two nodes can stand at
+ * one path — an array of scalars emits its container and then its element at
+ * the same address — and collapsing them here would decide, for every future
+ * caller, which of the two it is allowed to see. `accountablePaths` does the
+ * collapsing itself, so its answer is unchanged.
  */
-function walk(node: z.ZodTypeAny, path: string, out: Set<string>): void {
+function walk(node: z.ZodTypeAny, path: string, out: AccountableNode[]): void {
   const def = node._def as { typeName?: unknown; innerType?: unknown; options?: unknown };
   const typeName = typeof def.typeName === 'string' ? def.typeName : '<unknown>';
 
@@ -143,14 +166,14 @@ function walk(node: z.ZodTypeAny, path: string, out: Set<string>): void {
     // `openQuestions` row beside `openQuestions[]`. Descendants hang off the
     // `[]` form, so an element's key reads `challenges[].verdict`.
     const container = `${path}[]`;
-    out.add(container);
+    out.push({ path: container, node });
     walk((node as z.ZodArray<z.ZodTypeAny>)._def.type, container, out);
     return;
   }
 
   if (typeName === z.ZodFirstPartyTypeKind.ZodRecord) {
     const container = `${path}{}`;
-    out.add(container);
+    out.push({ path: container, node });
     walk((node as z.ZodRecord<z.ZodTypeAny, z.ZodTypeAny>)._def.valueType, container, out);
     return;
   }
@@ -169,17 +192,36 @@ function walk(node: z.ZodTypeAny, path: string, out: Set<string>): void {
   }
 
   if (TERMINALS.has(typeName)) {
-    // An array of scalars lands here at its own `[]` path, which is already in
-    // `out`; the set absorbs it. That is the right answer rather than a
-    // coincidence — a scalar element has no key of its own, so the container
-    // path is the only path it has.
-    out.add(path);
+    // An array of scalars lands here at its own `[]` path, which `out` already
+    // holds against the array node; `accountablePaths` deduplicates it away.
+    // That is the right answer rather than a coincidence — a scalar element has
+    // no key of its own, so the container path is the only path it has.
+    out.push({ path, node });
     return;
   }
 
   throw new FieldAccountingError([
     `${path === '' ? '<root>' : path}: unrecognised zod node kind ${typeName}; the walker refuses rather than guessing, because treating an unfamiliar node as a leaf would classify a whole composite as one field and hide every field beneath it`,
   ]);
+}
+
+/**
+ * Every accountable position in `schema`, in traversal order and with the node
+ * standing at each.
+ *
+ * The one traversal, exposed. A caller asking a structural question about the
+ * record — which arrays hold evidence, which hold pins — reads it off these
+ * nodes rather than writing a second recursion that would agree with this one
+ * until the day it did not.
+ *
+ * Neither sorted nor deduplicated: both are `accountablePaths`'s answer to its
+ * own question, and imposing them here would throw away the node a caller came
+ * for.
+ */
+export function accountableNodes(schema: z.ZodTypeAny, prefix = ''): AccountableNode[] {
+  const out: AccountableNode[] = [];
+  walk(schema, prefix, out);
+  return out;
 }
 
 /**
@@ -190,9 +232,7 @@ function walk(node: z.ZodTypeAny, path: string, out: Set<string>): void {
  * what the fixture tests use.
  */
 export function accountablePaths(schema: z.ZodTypeAny, prefix = ''): string[] {
-  const out = new Set<string>();
-  walk(schema, prefix, out);
-  return [...out].sort();
+  return [...new Set(accountableNodes(schema, prefix).map((entry) => entry.path))].sort();
 }
 
 /**

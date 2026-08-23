@@ -768,6 +768,56 @@ describe('the nine refusals', () => {
     expect(detail).toContain('challenge C1 adjudication');
   });
 
+  it('names the bare challenge when it is the PROSECUTOR quote that cannot be re-found', () => {
+    // The mirror of the case above, and the assertion the two labels need in
+    // order to be a *pair*. `challenge C1 adjudication` was pinned exactly and
+    // `challenge C1` was not, so the prosecutor label could have drifted — to
+    // `challenge C1 prosecution`, or to a bare id — with every test green,
+    // while Task 3.5's whole point is that the two are distinguishable and both
+    // say which producer must repair its work.
+    //
+    // The trailing colon is load-bearing: it is the separator `refuse` writes
+    // after the label, and without it `toContain('challenge C1')` would be
+    // satisfied by the adjudication label, which carries the bare one as a
+    // prefix. That is the assertion-satisfied-unconditionally trap in one
+    // substring.
+    const r = result({
+      challenges: [
+        {
+          id: 'C1',
+          lens: 'threshold',
+          statement: 'Is the turnover threshold EUR 450 000 000?',
+          verdict: 'CONFIRMED',
+          evidence: [
+            {
+              kind: 'quote',
+              docId: 'DOC-B',
+              sha256Normalized: corpus.document('DOC-B').sha256Normalized,
+              text: 'a sentence this amending directive does not contain',
+            },
+          ],
+          resolution: 'The threshold is as encoded.',
+          adjudicationEvidence: [
+            {
+              kind: 'quote',
+              docId: 'DOC-A',
+              sha256Normalized: corpus.document('DOC-A').sha256Normalized,
+              text: 'a net turnover of EUR 450 000 000',
+            },
+          ],
+        },
+      ],
+    });
+    const candidate = buildSignature(signatureInput({ result: r }));
+    expect(refusalCodes(candidate, checks({ result: r }))).toEqual(['evidence_failed']);
+    const detail = refusalDetail(candidate, checks({ result: r }));
+    expect(detail).toMatch(/not found in DOC-B/);
+    expect(detail).toContain('challenge C1: ');
+    // And the adjudicator's array is not implicated: its quote is sound, so a
+    // gate that labelled both sets the same way would fail here.
+    expect(detail).not.toContain('challenge C1 adjudication');
+  });
+
   it('signs a challenge whose two evidence arrays are both sound and distinct', () => {
     // The positive control for the two refusals above. Without it they would
     // pass equally against a gate that refused every challenge with two
