@@ -87,17 +87,18 @@ const COMPOUND: Condition = {
  * object is handed to the run, so the run and the assembly describe one subject
  * by construction rather than by two fixtures agreeing.
  *
- * `relationshipClass` and `severity` are corrected off the shared fixture,
- * which casts past `requirementSchema` and carries values the enum does not
- * hold. Nothing in the pipeline had needed the fixture to be schema-valid;
- * `requirementSha256` parses through `requirementSchema`, so this is the first
- * caller that does. Neither field enters `requirementInputSha256`.
+ * This was the first caller to take a requirement through
+ * `requirementSchema`, and so the first to find the shared fixture's
+ * `relationshipClass` and `severity` outside the production enums. It carried
+ * a local correction of both until Task 5b.1 repaired the fixture itself; the
+ * override existed only for that, so it is gone and the values below are the
+ * shared fixture's own. `derivedStatus` and `statusReasons` remain, because
+ * those are the projected fields a `Requirement` has and an
+ * `AuthoredRequirement` does not.
  */
 function subject(overrides: Partial<Requirement> = {}): Requirement {
   return {
     ...fixtureRequirement({ condition: COMPOUND }),
-    relationshipClass: 'direct_legal',
-    severity: 'high',
     derivedStatus: 'draft',
     statusReasons: [],
     ...overrides,

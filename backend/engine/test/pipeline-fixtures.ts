@@ -15,6 +15,7 @@
  */
 
 import { parseCorpusIndex } from '../src/corpus/schema';
+import { requirementSchema } from '../src/knowledge/schema';
 import type { CorpusDocument, CorpusEdge, CorpusIndex } from '../src/corpus/types';
 import { sha256Hex } from '../src/corpus/hash';
 import type { AuthoredRequirement, FactType } from '../src/types';
@@ -152,26 +153,61 @@ export function fixtureRenderContext(): RenderContext {
   return { factTypes: FACT_TYPES, catalogues: {} };
 }
 
+/**
+ * The shared requirement fixture's authored content, before any override.
+ *
+ * `relationshipClass` and `severity` are the production enums' members, not
+ * near-words. The fixture is a miniature of `CSRD-S-001` — the same
+ * `legal_entity` scope, the same boolean kind, the same in-force status and
+ * literally the same EUR 450m net-turnover threshold — so it is authored the
+ * way that requirement is: a directly imposed legal test (`direct_legal`)
+ * whose miss is a false all-clear on scope (`critical`). It carried `direct`
+ * and `blocking` until Task 5b.1: neither is an enum member, and the cast
+ * below hid that for as long as nothing took the fixture through
+ * `requirementSchema`.
+ */
+const REQUIREMENT_BASE: AuthoredRequirement = {
+  id: 'TEST-R-001',
+  version: 1,
+  title: 'Test requirement',
+  program: 'TESTPROG',
+  decisionArea: 'Test area',
+  plainEnglish: 'A synthetic requirement used to exercise pin derivation.',
+  scopeType: 'legal_entity',
+  relationshipClass: 'direct_legal',
+  severity: 'critical',
+  kind: 'boolean',
+  condition: { op: 'cmp', fact: 'entity.turnover', cmp: 'gt', value: 450_000_000 },
+  legalStatus: 'in_force',
+  sources: ['SRC-100'],
+  provisions: 'Fixture Act Art. 1',
+};
+
+/**
+ * Every shared fixture in this module that represents a `Requirement`, by the
+ * name callers know it under. `pipeline-fixtures.test.ts` parses each one
+ * through `requirementSchema`; a requirement fixture added here without being
+ * listed is a fixture nothing validates, so add it in both places.
+ */
+export const SHARED_REQUIREMENT_FIXTURES: Readonly<Record<string, AuthoredRequirement>> = {
+  fixtureRequirement: REQUIREMENT_BASE,
+};
+
+/**
+ * The shared requirement fixture, optionally overridden.
+ *
+ * The base is parsed on every call rather than only in the fixture test, so
+ * the gate sits at the call site: all nine consumers reach it, and it cannot
+ * be bypassed by deleting a test. Overrides are deliberately *not* parsed —
+ * `pipeline-reader.test.ts` hands in `sources: []` precisely to exercise the
+ * refusal — so what this asserts is that the shared authored baseline every
+ * caller starts from is a requirement the production schema accepts.
+ */
 export function fixtureRequirement(
   overrides: Partial<AuthoredRequirement> = {},
 ): AuthoredRequirement {
-  return {
-    id: 'TEST-R-001',
-    version: 1,
-    title: 'Test requirement',
-    program: 'TESTPROG',
-    decisionArea: 'Test area',
-    plainEnglish: 'A synthetic requirement used to exercise pin derivation.',
-    scopeType: 'legal_entity',
-    relationshipClass: 'direct',
-    severity: 'blocking',
-    kind: 'boolean',
-    condition: { op: 'cmp', fact: 'entity.turnover', cmp: 'gt', value: 450_000_000 },
-    legalStatus: 'in_force',
-    sources: ['SRC-100'],
-    provisions: 'Fixture Act Art. 1',
-    ...overrides,
-  } as AuthoredRequirement;
+  requirementSchema.parse(REQUIREMENT_BASE);
+  return { ...REQUIREMENT_BASE, ...overrides };
 }
 
 // ---------------------------------------------------------------------------
