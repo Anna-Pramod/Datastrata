@@ -33,7 +33,7 @@ import { sha256Hex } from '../src/corpus/hash';
 import { assembleVerificationResult, ResultAssemblyError } from '../src/pipeline/assemble';
 import { DEFAULT_ROLE_CONFIG, type RoleConfig } from '../src/pipeline/config';
 import { EntitledClosure } from '../src/pipeline/entitlement';
-import { runVerificationPipeline } from '../src/pipeline/orchestrate';
+import { canonicaliseGapBearingRun, runVerificationPipeline } from '../src/pipeline/orchestrate';
 import { loadPromptSet } from '../src/pipeline/prompts';
 import { conditionPathsFor } from '../src/pipeline/prosecutors';
 import type {
@@ -251,6 +251,14 @@ const SINGLE_PROSECUTOR: RoleConfig = { ...DEFAULT_ROLE_CONFIG, prosecutorCount:
 interface RunOverrides {
   requirement?: Requirement;
   reader?: ReaderOutput;
+  /**
+   * The prosecutor's response, so a *prosecutor*-origin halt is reachable.
+   *
+   * Added by Task 5b.3. Until then the only halt this file could drive was the
+   * reader's — which is exactly the halt position the record invariant held for
+   * incidentally, so the two positions where it did not hold had no test.
+   */
+  prosecutor?: ProsecutorOutput;
   adjudicator?: AdjudicatorOutput;
   resultSchemaVersion?: string;
 }
@@ -275,7 +283,11 @@ function runPipeline(overrides: RunOverrides = {}) {
         case 'reader':
           return JSON.stringify(overrides.reader ?? readingOutput());
         case 'prosecutor':
-          return JSON.stringify(prosecution(lensFromRequest(request)));
+          return JSON.stringify(
+            overrides.prosecutor === undefined
+              ? prosecution(lensFromRequest(request))
+              : { ...overrides.prosecutor, lens: lensFromRequest(request) },
+          );
         case 'adjudicator':
           return JSON.stringify(overrides.adjudicator ?? adjudication());
       }
@@ -672,5 +684,299 @@ describe('assembly refuses rather than repairs', () => {
       }),
     });
     expect(accepted.gaps[0]!.docId).toBe(NOT_INGESTED);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Whole-run gap canonicalisation, from all three gap origins
+// ---------------------------------------------------------------------------
+
+/**
+ * A gap found anywhere invalidates every judgment formed earlier in that run.
+ *
+ * Before Task 5b.3 each role canonicalised only *its own* output, so the record
+ * invariant held for a reader-origin gap and for nothing else — and only
+ * incidentally, because the reader runs first and the downstream roles never
+ * ran. A prosecutor-origin gap carried `reading.elements` into the record and an
+ * adjudicator-origin gap carried `reading.elements` and `coverage.cells`; both
+ * assembled to **Invalid**, and Invalid writes nothing, so two of the three
+ * legitimate gap producers silently destroyed the gap they had found. Neither
+ * case had a test, because neither was reachable from this file's fixtures.
+ *
+ * The three gaps below are deliberately distinguishable — a different `docId`
+ * each, a different classified `kind` for the prosecutor's, and a marker word in
+ * each `detail` — so an assertion that the right gap survived cannot be
+ * satisfied by the wrong one. `gaps.length === 1` is never the whole claim.
+ */
+const READER_GAP_MARK = 'READER-ORIGIN';
+const PROSECUTOR_GAP_MARK = 'PROSECUTOR-ORIGIN';
+const ADJUDICATOR_GAP_MARK = 'ADJUDICATOR-ORIGIN';
+
+/** Absent from the fixture corpus entirely: the machinery classifies `corpus_gap`. */
+const READER_GAP = {
+  kind: 'corpus_gap' as const,
+  docId: NOT_INGESTED,
+  detail: `${READER_GAP_MARK}: the reader needed the consolidating instrument`,
+};
+
+/** In the corpus, outside the closure at reference depth 2: `closure_gap`. */
+const PROSECUTOR_GAP = {
+  kind: 'closure_gap' as const,
+  docId: 'DOC-D',
+  detail: `${PROSECUTOR_GAP_MARK}: the lens needed the referenced implementing act`,
+};
+
+/** In the corpus, connected to nothing, so outside the closure: `closure_gap`. */
+const ADJUDICATOR_GAP = {
+  kind: 'closure_gap' as const,
+  docId: 'DOC-Z',
+  detail: `${ADJUDICATOR_GAP_MARK}: the adjudicator needed the unconnected annex`,
+};
+
+/** A prosecutor that halts, and produced no table of its own to be cleared. */
+function prosecutionHalting(): ProsecutorOutput {
+  return { lens: 'placeholder', coverage: [], challenges: [], gaps: [PROSECUTOR_GAP] };
+}
+
+/**
+ * The one gap of a halted run, checked field by field against what the role
+ * said.
+ *
+ * `detail` is checked by containment rather than equality on purpose: the
+ * machinery prefixes the role's own words onto its own explanation of the
+ * class, and asserting the composed string here would reproduce
+ * `gapForUnreachableDocument`'s formatting rule in the test that is supposed to
+ * be independent of it. What must survive exactly is the role's own sentence,
+ * and the marker is how that is named.
+ */
+function expectOneGap(
+  gaps: readonly { kind: string; docId?: string; sourceId?: string; detail: string }[],
+  expected: { kind: string; docId: string; mark: string },
+  absentMarks: readonly string[],
+): void {
+  expect(gaps).toHaveLength(1);
+  const gap = gaps[0]!;
+  // Soft, so one mutation of the gap names every field it moved rather than
+  // only the first: `kind`, `docId`, the identity field it does *not* occupy,
+  // and the role's own words are four separate claims about provenance.
+  expect.soft(gap.kind).toBe(expected.kind);
+  expect.soft(gap.docId).toBe(expected.docId);
+  expect.soft(gap.sourceId).toBeUndefined();
+  expect.soft(gap.detail).toContain(expected.mark);
+  for (const mark of absentMarks) expect.soft(gap.detail).not.toContain(mark);
+}
+
+describe('a gap found at any role produces one canonical gap-bearing record', () => {
+  it('reader-origin: the run and the record carry the reader’s gap and no judgment', async () => {
+    const run = await runPipeline({ reader: readingOutput({ elements: [], gaps: [READER_GAP] }) });
+
+    // The canonical run shape, container by container, so a red here names the
+    // container that survived rather than only "the record is invalid".
+    expect.soft(run.reader.output.elements).toEqual([]);
+    expect.soft(run.prosecution.table.cells).toEqual([]);
+    expect(run.adjudication).toBeNull();
+
+    // Nothing downstream of the reader ran at all — the halt, not merely an
+    // empty answer from a prosecutor that was asked.
+    expect(run.executions.prosecutors).toEqual([]);
+    expect(run.executions.adjudicator).toBeNull();
+
+    const assembled = assembleVerificationResult({
+      run,
+      requirement: REQUIREMENT,
+      registry: REGISTRY,
+      registers: REGISTERS,
+    });
+    expect(assembled.reading.elements).toEqual([]);
+    expect(assembled.coverage.cells).toEqual([]);
+    expect(assembled.challenges).toEqual([]);
+    expect(assembled.openQuestions).toEqual([]);
+
+    // Provenance: the role's gap, the run's gap and the record's gap are one
+    // gap, and it is this origin's rather than another's.
+    expectOneGap(assembled.gaps, { kind: 'corpus_gap', docId: NOT_INGESTED, mark: READER_GAP_MARK }, [
+      PROSECUTOR_GAP_MARK,
+      ADJUDICATOR_GAP_MARK,
+    ]);
+    expect(run.tail.gaps).toEqual(run.reader.gaps);
+    expect(assembled.gaps).toEqual(run.reader.gaps);
+  });
+
+  it('prosecutor-origin: the reading that existed before the halt reaches neither run nor record', async () => {
+    const run = await runPipeline({ prosecutor: prosecutionHalting() });
+
+    // The judgments genuinely existed. Read off the reader's own parsed
+    // response, which canonicalisation does not touch — without this the test
+    // would pass against a fixture whose upstream output was already empty, and
+    // would prove nothing about the defect.
+    expect(run.executions.reader!.output.elements.map((element) => element.id)).toEqual([
+      'RE-1',
+      'RE-2',
+    ]);
+
+    // And they are gone from the run handed downstream. This is the assertion
+    // the defect reddens: before Task 5b.3 `reading.elements` survived here.
+    //
+    // Soft, so a mutant that leaves more than one container populated names
+    // every one of them rather than stopping at the first — the difference
+    // between a failure that identifies the surviving judgment and one that
+    // says only that something is wrong.
+    expect.soft(run.reader.output.elements).toEqual([]);
+    expect.soft(run.prosecution.table.cells).toEqual([]);
+    expect(run.adjudication).toBeNull();
+    expect(run.executions.adjudicator).toBeNull();
+
+    const assembled = assembleVerificationResult({
+      run,
+      requirement: REQUIREMENT,
+      registry: REGISTRY,
+      registers: REGISTERS,
+    });
+    expect(assembled.reading.elements).toEqual([]);
+    expect(assembled.coverage.cells).toEqual([]);
+    expect(assembled.challenges).toEqual([]);
+    expect(assembled.openQuestions).toEqual([]);
+
+    expectOneGap(assembled.gaps, { kind: 'closure_gap', docId: 'DOC-D', mark: PROSECUTOR_GAP_MARK }, [
+      READER_GAP_MARK,
+      ADJUDICATOR_GAP_MARK,
+    ]);
+    expect(run.tail.gaps).toEqual(run.prosecution.gaps);
+    expect(assembled.gaps).toEqual(run.prosecution.gaps);
+  });
+
+  it('adjudicator-origin: the reading and the coverage table shown to it reach neither run nor record', async () => {
+    const run = await runPipeline({ adjudicator: adjudication({ gaps: [ADJUDICATOR_GAP] }) });
+
+    // The judgments genuinely existed, and this is what the adjudicator was
+    // actually handed: its own input still points at the reading and the table
+    // that were live when it halted. Two containers, named separately, because
+    // the adjudicator-origin defect discarded two.
+    expect(run.adjudication!.input.reading.elements.map((element) => element.id)).toEqual([
+      'RE-1',
+      'RE-2',
+    ]);
+    expect(run.adjudication!.input.coverage.length).toBeGreaterThan(0);
+    expect(run.executions.prosecutors[0]!.output.coverage.length).toBeGreaterThan(0);
+    // The adjudicator had formed verdicts of its own before it stopped.
+    expect(run.executions.adjudicator!.output.adjudications.length).toBeGreaterThan(0);
+
+    // And none of it reaches the run handed downstream. Soft, for the reason
+    // the prosecutor-origin test gives: this origin's defect left *two*
+    // containers populated, and a failure naming only the first would not say
+    // which judgments survived.
+    expect.soft(run.reader.output.elements).toEqual([]);
+    expect.soft(run.prosecution.table.cells).toEqual([]);
+    expect.soft(run.adjudication!.challenges).toEqual([]);
+    expect.soft(run.adjudication!.openQuestions).toEqual([]);
+
+    const assembled = assembleVerificationResult({
+      run,
+      requirement: REQUIREMENT,
+      registry: REGISTRY,
+      registers: REGISTERS,
+    });
+    expect(assembled.reading.elements).toEqual([]);
+    expect(assembled.coverage.cells).toEqual([]);
+    expect(assembled.challenges).toEqual([]);
+    expect(assembled.openQuestions).toEqual([]);
+
+    expectOneGap(assembled.gaps, { kind: 'closure_gap', docId: 'DOC-Z', mark: ADJUDICATOR_GAP_MARK }, [
+      READER_GAP_MARK,
+      PROSECUTOR_GAP_MARK,
+    ]);
+    expect(run.tail.gaps).toEqual(run.adjudication!.gaps);
+    expect(assembled.gaps).toEqual(run.adjudication!.gaps);
+  });
+
+  it('clears all four containers of a run that populated all four, and leaves the original alone', async () => {
+    // The canonicaliser's own contract, over the shape the defect produced: a
+    // run whose four judgment containers are full, beside a gap. No role path
+    // reaches that today — a halting adjudicator discards its own adjudications
+    // and an earlier halt never has one — so `challenges` and `openQuestions`
+    // have no end-to-end mutant, and this is where those two clears are held to
+    // account. Nothing here is written by hand: the judgments come from a real
+    // complete run and the gap from a real halted one.
+    const complete = await runPipeline();
+    expect(complete.tail.gaps).toEqual([]);
+    expect(complete.reader.output.elements.length).toBeGreaterThan(0);
+    expect(complete.prosecution.table.cells.length).toBeGreaterThan(0);
+    expect(complete.adjudication!.challenges.length).toBeGreaterThan(0);
+    expect(complete.adjudication!.openQuestions.length).toBeGreaterThan(0);
+
+    const halted = await runPipeline({ prosecutor: prosecutionHalting() });
+    expect(halted.tail.gaps).toHaveLength(1);
+
+    const hybrid = {
+      ...complete,
+      tail: { ...complete.tail, gaps: halted.tail.gaps },
+      halted: true,
+    };
+    const canonical = canonicaliseGapBearingRun(hybrid);
+
+    expect.soft(canonical.reader.output.elements).toEqual([]);
+    expect.soft(canonical.prosecution.table.cells).toEqual([]);
+    expect.soft(canonical.adjudication!.challenges).toEqual([]);
+    expect.soft(canonical.adjudication!.openQuestions).toEqual([]);
+    expect(canonical.tail.gaps).toEqual(halted.tail.gaps);
+
+    // Immutably. The adjudicator's input and the raw executions are the record
+    // of what the run held before it stopped, and clearing in place would erase
+    // it — which would also make every "it existed first" assertion above
+    // vacuous.
+    expect.soft(complete.reader.output.elements.length).toBeGreaterThan(0);
+    expect.soft(complete.prosecution.table.cells.length).toBeGreaterThan(0);
+    expect.soft(complete.adjudication!.challenges.length).toBeGreaterThan(0);
+    expect.soft(complete.adjudication!.openQuestions.length).toBeGreaterThan(0);
+
+    // Non-judgment run metadata survives: the pins, the identities and the
+    // transcript are what a gap-bearing record still needs.
+    // Soft: four separate things a canonicalisation could drop, and a mutant
+    // that drops more than one should name each.
+    expect.soft(canonical.tail.pins).toEqual(complete.tail.pins);
+    expect.soft(canonical.pipelineVersion).toBe(complete.pipelineVersion);
+    expect.soft(canonical.runId).toBe(complete.runId);
+    expect.soft(canonical.transcript).toEqual(complete.transcript);
+
+    const assembled = assembleVerificationResult({
+      run: canonical,
+      requirement: REQUIREMENT,
+      registry: REGISTRY,
+      registers: REGISTERS,
+    });
+    expect(assembled.reading.elements).toEqual([]);
+    expect(assembled.coverage.cells).toEqual([]);
+    expect(assembled.challenges).toEqual([]);
+    expect(assembled.openQuestions).toEqual([]);
+    expectOneGap(assembled.gaps, { kind: 'closure_gap', docId: 'DOC-D', mark: PROSECUTOR_GAP_MARK }, [
+      READER_GAP_MARK,
+      ADJUDICATOR_GAP_MARK,
+    ]);
+  });
+
+  it('leaves an OPEN_QUESTION result alone: a complete surface keeps its judgments', async () => {
+    // `OPEN_QUESTION` is not a gap and must never be canonicalised as one. An
+    // unresolved proposition over a *complete* evidence surface is a finding the
+    // record keeps in full; an incomplete surface is what discards judgments.
+    const run = await runPipeline();
+    expect(run.tail.gaps).toEqual([]);
+    expect(run.adjudication!.openQuestions.length).toBeGreaterThan(0);
+
+    // By identity: a run with no gap comes back as the same object, so nothing
+    // was rebuilt and nothing could have been cleared on the way through.
+    expect(canonicaliseGapBearingRun(run)).toBe(run);
+
+    const assembled = assembleVerificationResult({
+      run,
+      requirement: REQUIREMENT,
+      registry: REGISTRY,
+      registers: REGISTERS,
+    });
+    expect(assembled.gaps).toEqual([]);
+    expect(assembled.openQuestions.map((question) => question.id)).toEqual(['P0-C2']);
+    expect(assembled.reading.elements.length).toBeGreaterThan(0);
+    expect(assembled.coverage.cells.length).toBeGreaterThan(0);
+    expect(assembled.challenges.length).toBeGreaterThan(0);
+    expect(assembled.challenges.some((challenge) => challenge.verdict === 'OPEN_QUESTION')).toBe(true);
   });
 });

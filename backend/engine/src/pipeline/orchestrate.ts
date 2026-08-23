@@ -179,6 +179,69 @@ function sourceShapedGaps(gaps: readonly PipelineGap[]): PipelineGap[] {
   return gaps.filter((gap) => gap.docId === undefined);
 }
 
+/**
+ * The one gap-bearing run shape, produced once, here.
+ *
+ * The record invariant is unconditional: a result carrying a gap carries no
+ * reading elements, no coverage cells, no challenges and no open questions
+ * (`result.ts`). Each role already canonicalises **its own** output on its own
+ * halt, and that is correct and stays. What no role can do is canonicalise the
+ * roles *before* it — a prosecutor does not own `reading`, and an adjudicator
+ * owns neither `reading` nor the coverage table. So a reader-origin gap
+ * satisfied the invariant only incidentally, because the reader runs first and
+ * nothing downstream ran; a prosecutor-origin gap left `reading.elements`
+ * populated and an adjudicator-origin gap left `reading.elements` and
+ * `coverage.cells` populated. Both produced an **Invalid** record, and Invalid
+ * writes nothing — so two of the three legitimate gap producers silently
+ * destroyed the gap they had found.
+ *
+ * Orchestration owns phase ordering and halt semantics, so it owns whole-run
+ * canonicalisation. Not the assembler: Task 5b established that boundary as
+ * *transcribe producers → validate → refuse when producers contradict the
+ * record*, and an assembler that erased judgments would make an invalid
+ * orchestration shape look valid downstream. Not the roles: a role clearing
+ * another role's output is a role owning output it did not produce.
+ *
+ * **It discards judgments and never touches the gap.** `tail.gaps` is the
+ * trigger and passes through untouched; no gap is invented, reclassified or
+ * reworded here. Everything the record needs that is not a judgment survives
+ * intact — the pins, the closure and requirement identity, the pipeline
+ * identity, the transcript, the executions, and each role outcome's own
+ * `gaps[]`. The raw role outputs on `executions[]` are left exactly as the
+ * agents produced them, because the transcript is where a human looks to see
+ * what a run had managed before it stopped.
+ *
+ * **Immutably.** The adjudicator's `input` still points at the reading and the
+ * coverage table it was actually shown, and clearing those in place would erase
+ * the record of what the run held before it halted.
+ *
+ * `challenges` and `openQuestions` are cleared as part of the shape rather than
+ * to repair a reachable defect: every role path that reaches a gap today
+ * already leaves both empty, because a halting adjudicator discards its own
+ * adjudications and a run halting earlier never has one. They are part of the
+ * canonical shape, so they are stated here, and `pipeline-assemble.test.ts`
+ * holds this function to them directly.
+ */
+export function canonicaliseGapBearingRun(outcome: PipelineRunOutcome): PipelineRunOutcome {
+  if (outcome.tail.gaps.length === 0) return outcome;
+
+  return {
+    ...outcome,
+    reader: {
+      ...outcome.reader,
+      output: { ...outcome.reader.output, elements: [] },
+    },
+    prosecution: {
+      ...outcome.prosecution,
+      table: { cells: [], challenges: [] },
+    },
+    adjudication:
+      outcome.adjudication === null
+        ? null
+        : { ...outcome.adjudication, challenges: [], openQuestions: [] },
+  };
+}
+
 /** The identity this configuration and these prompt files add up to. */
 export function pipelineVersionFor(input: {
   prompts: PromptSet;
@@ -338,7 +401,12 @@ export async function runVerificationPipeline(
     ],
   };
 
-  return {
+  // The last thing that happens, and the only place it happens. Once the tail
+  // has collated, `tail.gaps` is the whole run's answer to "was the evidence
+  // surface complete", and a gap there invalidates every substantive judgment
+  // any role formed against it — including the ones formed before the halt, by
+  // roles that have no way to reach back and clear them.
+  return canonicaliseGapBearingRun({
     runId,
     pipelineVersion,
     reader,
@@ -352,5 +420,5 @@ export async function runVerificationPipeline(
     transcript,
     tail,
     halted,
-  };
+  });
 }
