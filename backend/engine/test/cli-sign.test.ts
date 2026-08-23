@@ -896,8 +896,8 @@ describe('the CLI resolves normalizer_changed against the retained raw bytes', (
 describe('dispatch', () => {
   const green = (): boolean => true;
 
-  it('signs through the documented command line', () => {
-    const outcome = dispatch(
+  it('signs through the documented command line', async () => {
+    const outcome = await dispatch(
       ['sign', PACK_ID, REQ_ID, '--by', 'A. Reviewer', '--on', '2026-08-21', '--skip-suite'],
       paths,
       green,
@@ -906,10 +906,10 @@ describe('dispatch', () => {
     expect(readLedger()).toHaveLength(1);
   });
 
-  it('revokes through the documented command line', () => {
-    dispatch(['sign', PACK_ID, REQ_ID, '--by', 'A. Reviewer', '--on', '2026-08-21', '--skip-suite'], paths, green);
+  it('revokes through the documented command line', async () => {
+    await dispatch(['sign', PACK_ID, REQ_ID, '--by', 'A. Reviewer', '--on', '2026-08-21', '--skip-suite'], paths, green);
     const signed = readLedger()[0];
-    const outcome = dispatch(
+    const outcome = await dispatch(
       [
         'revoke',
         PACK_ID,
@@ -930,36 +930,40 @@ describe('dispatch', () => {
     expect(readLedger()[1]?.kind).toBe('revoked');
   });
 
-  it('is a usage error, never a refusal, for an unknown subcommand', () => {
+  it('is a usage error, never a refusal, for an unknown subcommand', async () => {
     // A typo must not read as "you may not sign this yet": one is a fact about
     // the invocation, the other about the repository.
-    const outcome = dispatch(['singh', PACK_ID, REQ_ID, '--by', 'A. Reviewer'], paths, green);
+    const outcome = await dispatch(['singh', PACK_ID, REQ_ID, '--by', 'A. Reviewer'], paths, green);
     expect(outcome.exitCode).toBe(EXIT_USAGE);
     expect(outcome.lines.join('\n')).toContain('singh');
   });
 
-  it('is a usage error when --by is missing', () => {
-    expect(dispatch(['sign', PACK_ID, REQ_ID, '--skip-suite'], paths, green).exitCode).toBe(EXIT_USAGE);
+  it('is a usage error when --by is missing', async () => {
+    expect((await dispatch(['sign', PACK_ID, REQ_ID, '--skip-suite'], paths, green)).exitCode).toBe(
+      EXIT_USAGE,
+    );
   });
 
-  it('is a usage error when a revocation names no target or no reason', () => {
+  it('is a usage error when a revocation names no target or no reason', async () => {
     expect(
-      dispatch(['revoke', PACK_ID, REQ_ID, '--by', 'A. Reviewer'], paths, green).exitCode,
+      (await dispatch(['revoke', PACK_ID, REQ_ID, '--by', 'A. Reviewer'], paths, green)).exitCode,
     ).toBe(EXIT_USAGE);
   });
 
-  it('is a usage error for a kind that is not one of the two levels', () => {
+  it('is a usage error for a kind that is not one of the two levels', async () => {
     expect(
-      dispatch(
-        ['sign', PACK_ID, REQ_ID, '--by', 'A. Reviewer', '--kind', 'probably', '--skip-suite'],
-        paths,
-        green,
+      (
+        await dispatch(
+          ['sign', PACK_ID, REQ_ID, '--by', 'A. Reviewer', '--kind', 'probably', '--skip-suite'],
+          paths,
+          green,
+        )
       ).exitCode,
     ).toBe(EXIT_USAGE);
   });
 
-  it('reads the suite result rather than assuming it, and refuses over a red one', () => {
-    const outcome = dispatch(
+  it('reads the suite result rather than assuming it, and refuses over a red one', async () => {
+    const outcome = await dispatch(
       ['sign', PACK_ID, REQ_ID, '--by', 'A. Reviewer', '--on', '2026-08-21'],
       paths,
       () => false,

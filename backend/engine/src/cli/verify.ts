@@ -9,17 +9,35 @@
  * exit. Keeping it to that is what stops the mapping from becoming untestable.
  *
  * ```
+ * npm run verify -- run    <packId> <requirementId>
  * npm run verify -- sign   <packId> <requirementId> --by "<name>" [--kind ratified] [--on YYYY-MM-DD] [--note "<text>"]
  * npm run verify -- revoke <packId> <requirementId> --revokes <entryId> --by "<name>" --reason "<text>" [--on YYYY-MM-DD]
  * npm run verify -- sheet  <packId> [--out <path>] [--golden <path>]
  * ```
  *
- * **`sheet` takes no `--by`, and that is a difference in kind rather than a
- * convenience.** `sign` and `revoke` write a line into an append-only ledger,
- * and a line with nobody's name on it means nothing. `sheet` writes a
- * generated, git-ignored file that asserts nothing and is authoritative over
- * nothing; demanding a signer's name for it would imply otherwise. So it is
- * separated out before the arguments the two writing commands share, not after.
+ * **Neither `sheet` nor `run` takes a `--by`, and that is a difference in kind
+ * rather than a convenience.** `sign` and `revoke` write a line into an
+ * append-only ledger, and a line with nobody's name on it means nothing.
+ * `sheet` writes a generated, git-ignored file that asserts nothing. `run`
+ * writes a `verification-result.json`, which is a record of what a *pipeline*
+ * did — its authorship is `pipelineVersion`, derived from the prompt files, the
+ * models and the role configuration, and attaching a human name to it would
+ * claim a person stood behind a machine's output. Standing behind it is exactly
+ * what `sign` is for, and it is a separate act with a separate gate. So both are
+ * separated out before the arguments the two writing commands share.
+ *
+ * **`run` never contacts a model on its own initiative.** The execution
+ * capability is a parameter of `dispatch`, and the process edge below supplies
+ * nothing: a run reaching a judgment role with no capability is refused by name
+ * with nothing contacted. There is no environment variable, no credential and
+ * no endpoint in this path, and B2 authorises no live execution; Task 5e
+ * supplies replay through that same parameter.
+ *
+ * **`dispatch` is `async` because one subcommand is.** Every branch is awaited
+ * rather than only the asynchronous one, so the return type is a single
+ * `Promise<CliOutcome>` — a union of "outcome or promise of outcome" would put
+ * the burden of remembering which is which on every caller, including the
+ * process edge that maps it to an exit code.
  *
  * Exit codes are the contract; see `exit-codes.ts` for what each one means and
  * why "you may not sign this yet" and "this repository is damaged" must not
@@ -45,6 +63,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { runRevoke } from './revoke';
+import { runRun, type RunCapabilities } from './run';
 import { runSheet } from './review-sheet';
 import { runSign, type VerifyPaths } from './sign';
 import { EXIT_USAGE, type CliOutcome } from './exit-codes';
@@ -54,6 +73,7 @@ const engineRoot = join(here, '..', '..');
 
 const USAGE = [
   'Usage:',
+  '  npm run verify -- run    <packId> <requirementId>',
   '  npm run verify -- sign   <packId> <requirementId> --by "<name>" [--kind verified|ratified] [--on YYYY-MM-DD] [--note "<text>"] [--skip-suite]',
   '  npm run verify -- revoke <packId> <requirementId> --revokes <entryId> --by "<name>" --reason "<text>" [--on YYYY-MM-DD]',
   '  npm run verify -- sheet  <packId> [--out <path>] [--golden <path>]',
@@ -129,16 +149,17 @@ function stringFlag(flags: Record<string, string | true>, name: string): string 
   return typeof value === 'string' ? value : null;
 }
 
-export function dispatch(
+export async function dispatch(
   argv: string[],
   paths: VerifyPaths,
   suiteGreen: () => boolean,
   sheetDefaults?: SheetDefaults,
-): CliOutcome {
+  capabilities?: RunCapabilities,
+): Promise<CliOutcome> {
   const { positional, flags } = parseFlags(argv);
   const [command, packId, requirementId] = positional;
 
-  if (command !== 'sign' && command !== 'revoke' && command !== 'sheet') {
+  if (command !== 'run' && command !== 'sign' && command !== 'revoke' && command !== 'sheet') {
     return {
       exitCode: EXIT_USAGE,
       lines: [command === undefined ? 'No subcommand given.' : `Unknown subcommand: ${command}`, ...USAGE],
@@ -169,6 +190,12 @@ export function dispatch(
 
   if (packId === undefined || requirementId === undefined) {
     return { exitCode: EXIT_USAGE, lines: ['A packId and a requirementId are required.', ...USAGE] };
+  }
+
+  // `run` writes a record of what a pipeline did, so it takes no signer's name.
+  // Split before the `--by` check below for the same reason `sheet` is.
+  if (command === 'run') {
+    return runRun({ packId, requirementId }, paths, capabilities ?? {});
   }
 
   const by = stringFlag(flags, 'by');
@@ -218,10 +245,18 @@ if (process.argv[1] !== undefined && process.argv[1].endsWith('verify.ts')) {
     corpusDir: join(engineRoot, 'corpus'),
     verificationDir: join(engineRoot, 'verification'),
   };
-  const outcome = dispatch(argv, paths, suiteIsGreen, {
-    outPath: join(engineRoot, 'review-sheet.html'),
-    goldenProfilesPath: join(engineRoot, 'test', 'golden-profiles.test.ts'),
-  });
+  const outcome = await dispatch(
+    argv,
+    paths,
+    suiteIsGreen,
+    {
+      outPath: join(engineRoot, 'review-sheet.html'),
+      goldenProfilesPath: join(engineRoot, 'test', 'golden-profiles.test.ts'),
+    },
+    // No execution capability, and no way to configure one from here. See the
+    // file header: `run` refuses by name rather than reaching for a model.
+    { runner: null },
+  );
   for (const line of outcome.lines) console.log(line);
   process.exit(outcome.exitCode);
 }

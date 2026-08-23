@@ -1046,13 +1046,13 @@ describe('runSheet', () => {
 describe('verify sheet', () => {
   const green = (): boolean => true;
 
-  it('is reachable through the dispatcher without --by', () => {
+  it('is reachable through the dispatcher without --by', async () => {
     const verifyPaths: VerifyPaths = {
       packDir: PACK_DIR,
       corpusDir: CORPUS_DIR,
       verificationDir,
     };
-    const outcome = dispatch(['sheet', PACK_ID], verifyPaths, green, {
+    const outcome = await dispatch(['sheet', PACK_ID], verifyPaths, green, {
       goldenProfilesPath: GOLDEN_PROFILES,
       outPath,
     });
@@ -1060,14 +1060,14 @@ describe('verify sheet', () => {
     expect(existsSync(outPath)).toBe(true);
   });
 
-  it('honours --out', () => {
+  it('honours --out', async () => {
     const other = join(dir, 'out', 'elsewhere.html');
     const verifyPaths: VerifyPaths = {
       packDir: PACK_DIR,
       corpusDir: CORPUS_DIR,
       verificationDir,
     };
-    const outcome = dispatch(['sheet', PACK_ID, '--out', other], verifyPaths, green, {
+    const outcome = await dispatch(['sheet', PACK_ID, '--out', other], verifyPaths, green, {
       goldenProfilesPath: GOLDEN_PROFILES,
       outPath,
     });
@@ -1076,17 +1076,19 @@ describe('verify sheet', () => {
     expect(existsSync(outPath)).toBe(false);
   });
 
-  it('rejects sheet without a packId', () => {
+  it('rejects sheet without a packId', async () => {
     const verifyPaths: VerifyPaths = {
       packDir: PACK_DIR,
       corpusDir: CORPUS_DIR,
       verificationDir,
     };
     expect(
-      dispatch(['sheet'], verifyPaths, green, {
-        goldenProfilesPath: GOLDEN_PROFILES,
-        outPath,
-      }).exitCode,
+      (
+        await dispatch(['sheet'], verifyPaths, green, {
+          goldenProfilesPath: GOLDEN_PROFILES,
+          outPath,
+        })
+      ).exitCode,
     ).toBe(EXIT_USAGE);
   });
 });

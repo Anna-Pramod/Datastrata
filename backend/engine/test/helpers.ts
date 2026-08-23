@@ -77,3 +77,52 @@ export class ProfileBuilder {
     return { scopeObjects: this.objects, facts: this.facts };
   }
 }
+
+// ---------------------------------------------------------------------------
+// The network trap
+// ---------------------------------------------------------------------------
+
+/** What a trapped run recorded, and how to put `fetch` back. */
+export interface NetworkTrap {
+  calls: string[];
+  restore(): void;
+}
+
+/**
+ * Intercepts `globalThis.fetch`, and only that.
+ *
+ * Sound today because the one thing that can reach the network —
+ * `LiveAgentRunner` — goes through `fetch`, and `pipeline-runner.test.ts`
+ * drives it into this trap and asserts the call was recorded. **It is not sound
+ * for a runner that reaches for `node:https`, `node:http` or undici's
+ * `request`/`Agent` directly**, which would bypass this entirely and leave every
+ * "trap.calls is empty" assertion vacuously green — evidence-standard failure
+ * mode 7. A task adding such a runner must widen the trap (mock the module, or
+ * install an undici `MockAgent`) and re-run its own positive control against the
+ * new path before believing any of these greens.
+ *
+ * It lives here rather than in one test file because Task 5d needs the same
+ * trap over the `verify run` command path, and two copies of a trap are two
+ * things that can come to intercept different surfaces while both files go on
+ * asserting the same empty array.
+ */
+export function installNetworkTrap(): NetworkTrap {
+  const calls: string[] = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = ((input: unknown): never => {
+    const url =
+      typeof input === 'string'
+        ? input
+        : input instanceof URL
+          ? input.href
+          : String((input as { url?: unknown }).url ?? input);
+    calls.push(url);
+    throw new Error(`NETWORK TRAP: the default suite attempted a network call to ${url}`);
+  }) as unknown as typeof fetch;
+  return {
+    calls,
+    restore(): void {
+      globalThis.fetch = original;
+    },
+  };
+}

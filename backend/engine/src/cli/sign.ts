@@ -252,7 +252,7 @@ function readIfPresent(path: string): string | null {
  * `conditionSha256` were computed on every read and never consulted — which is
  * what a hand-maintained copy of a record tends to become.
  */
-interface CurrentWorld {
+export interface CurrentWorld {
   pack: KnowledgePack;
   requirement: Requirement;
   corpus: LoadedCorpus;
@@ -261,7 +261,17 @@ interface CurrentWorld {
   pins: VerificationPins;
 }
 
-function readWorld(paths: VerifyPaths, packId: string, requirementId: string): CurrentWorld {
+/**
+ * Exported because `run` reads the same world.
+ *
+ * `verify run` and `verify sign` are two operations over one repository, and
+ * the pack, the corpus, the requirement and the closure are what "the
+ * repository" means for both. A second loader in `run.ts` would be a second
+ * answer to which requirement is being verified and which documents it opens
+ * onto — and the two would be free to disagree about the very closure the
+ * signature pins.
+ */
+export function readWorld(paths: VerifyPaths, packId: string, requirementId: string): CurrentWorld {
   let pack: KnowledgePack;
   try {
     pack = loadPack(paths.packDir, { versionRegistryDir: registryDir(paths) });
@@ -381,7 +391,8 @@ function readPromotionsOrFail(paths: VerifyPaths): PromotionRecord[] {
   }
 }
 
-function readRegistryOrFail(paths: VerifyPaths, packId: string): VersionRegistry {
+/** Exported for the same reason `readWorld` is: `run` writes a version this checks. */
+export function readRegistryOrFail(paths: VerifyPaths, packId: string): VersionRegistry {
   const path = join(registryDir(paths), `${packId}.json`);
   const raw = readIfPresent(path);
   if (raw === null) {

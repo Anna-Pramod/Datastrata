@@ -43,47 +43,11 @@ import {
   fixtureRequirement,
   placeholderRunner,
 } from './pipeline-fixtures';
+// One trap, shared with `cli-run.test.ts`. See `helpers.ts` for what it does
+// and does not intercept.
+import { installNetworkTrap } from './helpers';
 
 const TRAP_ENDPOINT = 'https://network-trap.invalid/v1/messages';
-
-interface NetworkTrap {
-  calls: string[];
-  restore(): void;
-}
-
-/**
- * Intercepts `globalThis.fetch`, and only that.
- *
- * Sound today because the one thing that can reach the network —
- * `LiveAgentRunner` — goes through `fetch`, and the positive control below
- * drives it into this trap and asserts the call was recorded. **It is not sound
- * for a runner that reaches for `node:https`, `node:http` or undici's
- * `request`/`Agent` directly**, which would bypass this entirely and leave every
- * "trap.calls is empty" assertion here vacuously green — evidence-standard
- * failure mode 7. A task adding such a runner must widen the trap (mock the
- * module, or install an undici `MockAgent`) and re-run its own positive control
- * against the new path before believing any of these greens.
- */
-function installNetworkTrap(): NetworkTrap {
-  const calls: string[] = [];
-  const original = globalThis.fetch;
-  globalThis.fetch = ((input: unknown): never => {
-    const url =
-      typeof input === 'string'
-        ? input
-        : input instanceof URL
-          ? input.href
-          : String((input as { url?: unknown }).url ?? input);
-    calls.push(url);
-    throw new Error(`NETWORK TRAP: the default suite attempted a network call to ${url}`);
-  }) as unknown as typeof fetch;
-  return {
-    calls,
-    restore(): void {
-      globalThis.fetch = original;
-    },
-  };
-}
 
 const corpus = fixtureCorpus();
 
