@@ -788,5 +788,25 @@ export function parseVerificationResult(
  * inconsistent — which is exactly the moment `stale_result` needs the number.
  */
 export function resultSha256(result: VerificationResult): string {
-  return sha256Hex(canonicalJson(verificationResultSchema.parse(result)));
+  return sha256Hex(canonicalResultJson(result));
+}
+
+/**
+ * The canonical text `resultSha256` is the digest of.
+ *
+ * Exported so that a writer publishing the record to disk can put **the hashed
+ * text itself** on the filesystem rather than a second serialisation that
+ * merely agrees with it today. Two canonical encodings of one record differing
+ * by a single character are two answers to "is this still what was signed", and
+ * the disagreement surfaces as a signature that mysteriously fails to verify
+ * rather than as a diff anyone can read — the failure `canonicalJson` was
+ * collapsed into one function to prevent.
+ *
+ * It is **not** the file's bytes. A file may legitimately add framing a hash
+ * must not cover — a terminal newline is the case here — so the two are named
+ * separately and the writer is what decides the framing. Folding the framing in
+ * would make `resultSha256` depend on a storage convention.
+ */
+export function canonicalResultJson(result: VerificationResult): string {
+  return canonicalJson(verificationResultSchema.parse(result));
 }
