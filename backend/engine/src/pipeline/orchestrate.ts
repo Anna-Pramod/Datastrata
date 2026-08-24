@@ -41,6 +41,13 @@ import type { RoleConfig } from './config';
 import { renderEntitledClosure, type EntitledClosure } from './entitlement';
 import type { PipelineGap } from './gaps';
 import { buildPipelineIdentity, RESULT_SCHEMA_VERSION } from './identity';
+import {
+  assertValidProviderAdapterIdentity,
+  isProviderAdapterSelected,
+  ProviderAdapterMismatchError,
+  ProviderAdapterNotSelectedError,
+  UnverifiedProviderAdapterError,
+} from './provider-adapter';
 import type { PromptSet } from './prompts';
 import { promptHashes } from './prompts';
 import { readerInputFor, runBlindReader, type ReaderInput, type ReaderOutcome } from './reader';
@@ -276,6 +283,10 @@ export function pipelineVersionFor(input: {
   closure: EntitledClosure;
   resultSchemaVersion?: string;
 }): string {
+  // Validated before it is hashed, not only when an adapter is registered.
+  // `{id:' x ',version:'1'}` and `{id:'x',version:'1'}` hash differently, so an
+  // unvalidated identity makes two declarations of one adapter two pipelines.
+  assertValidProviderAdapterIdentity(input.config.providerAdapter);
   return buildPipelineIdentity({
     promptSha256: promptHashes(input.prompts),
     models: input.config.models,
@@ -285,6 +296,7 @@ export function pipelineVersionFor(input: {
       order: input.config.order,
     },
     resultSchemaVersion: input.resultSchemaVersion ?? RESULT_SCHEMA_VERSION,
+    providerAdapter: input.config.providerAdapter,
     closurePolicy: input.closure.policy,
   });
 }
@@ -346,8 +358,45 @@ export async function runVerificationPipeline(
     corpusClosureSha256: boundPins.corpusClosureSha256,
   });
 
-  // Second only to the runner guard, and for the same reason: a capability
-  // holding the wrong recording must refuse before the run does any work. A
+  // The capability must speak the protocol the identity was derived over.
+  //
+  // `pipelineVersion` is computed from the *configured* adapter identity, so a
+  // capability executing some other protocol would make the recorded identity
+  // describe a pipeline that did not run — the same defect as a prosecutor
+  // answering under a lens nobody configured.
+  //
+  // **Which capabilities are exempt is decided by what they claim to be, not by
+  // what they omit.** An earlier version tested only `adapter !== undefined`,
+  // which made *not declaring one* an exemption: a capability announcing
+  // `kind: 'live'` and simply leaving the field off ran to completion and
+  // published an identity nothing had checked. A missing declaration from
+  // something that executes a provider protocol is an unverifiable claim, not a
+  // pass. Replay is exempt because it declares `kind: 'replay'` — it speaks no
+  // protocol at all, which is what keeps it provider-independent while still
+  // reproducing the identity of the run it replays.
+  const configuredAdapter = input.config.providerAdapter;
+  if (runner.kind === 'live') {
+    // Two different repairs, so two different refusals: the configuration chose
+    // no provider, or the capability brought no protocol.
+    if (!isProviderAdapterSelected(configuredAdapter)) {
+      throw new ProviderAdapterNotSelectedError();
+    }
+    if (runner.adapter === undefined) {
+      throw new UnverifiedProviderAdapterError(configuredAdapter);
+    }
+  }
+  if (runner.adapter !== undefined) {
+    if (
+      runner.adapter.id !== configuredAdapter.id ||
+      runner.adapter.version !== configuredAdapter.version
+    ) {
+      throw new ProviderAdapterMismatchError(configuredAdapter, runner.adapter);
+    }
+  }
+
+  // Before the first role call, and for the same reason the guard above is
+  // first: a capability holding the wrong recording must refuse before the run
+  // does any work. A
   // live runner implements neither hook and is unaffected.
   runner.bind?.({
     runId,

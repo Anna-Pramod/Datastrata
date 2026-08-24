@@ -6,6 +6,12 @@
  * hard-coded. Configuration that cannot vary cannot be measured, and a constant
  * buried in an orchestration function is configuration that cannot vary.
  *
+ * **The provider adapter's identity is one of these knobs**, for the reason the
+ * others are: a response projection decides what the model's answer *was*, so
+ * two projections of one envelope are two verification methods, and B3 must not
+ * be able to promote one and execute the other. `provider-adapter.ts` carries
+ * the full argument.
+ *
  * **Count and lenses are independent fields, deliberately.** Deriving the count
  * from `lenses.length` would look tidier and would destroy the property the
  * identity teeth check rests on: two inputs that cannot move apart cannot be
@@ -21,6 +27,10 @@
  */
 
 import type { RoleName } from './roles';
+import {
+  UNSELECTED_PROVIDER_ADAPTER,
+  type ProviderAdapterIdentity,
+} from './provider-adapter';
 
 /**
  * The lenses of spec §3.2, in order.
@@ -50,6 +60,23 @@ export interface RoleConfig {
   /** The order roles run in, pinned because §5.1 pins it. */
   order: readonly RoleName[];
   models: RoleModels;
+  /**
+   * Which provider semantics this run is defined over. A `pipelineVersion` input.
+   *
+   * **Configuration, not a property of the runner**, and the distinction is what
+   * makes replay work. Replay must reproduce the pipeline identity of the run it
+   * replays; if the identity came from whatever capability happened to be
+   * executing, a replay capability would have to either invent the live
+   * adapter's identity — learning about providers, which is exactly what replay
+   * must not do — or read it back out of the recording and become a second
+   * authority for a fact `pipelineVersion` already fixes. Declared here, one
+   * configuration produces one identity whether it is executed live or replayed.
+   *
+   * Independent of `models`. Same adapter with a different model is a different
+   * pipeline; the same model read through different provider semantics is also
+   * a different pipeline. Neither implies the other, and both must move it.
+   */
+  providerAdapter: ProviderAdapterIdentity;
 }
 
 /**
@@ -68,6 +95,18 @@ export const DEFAULT_ROLE_CONFIG: RoleConfig = {
     prosecutor: 'claude-opus-5',
     adjudicator: 'claude-opus-5',
   },
+  /**
+   * No provider has been selected, and the identity says so rather than
+   * defaulting to one.
+   *
+   * A default naming a real provider would make every offline run — every
+   * deterministic stub answering from a table — produce the pipeline identity of
+   * a run that calls that provider. Two entirely different execution paths would
+   * then share one identity, which is the aliasing this whole file exists to
+   * prevent. Selecting a provider is a deliberate configuration change, and it
+   * moves `pipelineVersion`.
+   */
+  providerAdapter: UNSELECTED_PROVIDER_ADAPTER,
 };
 
 /** The lens prosecutor `index` works, wrapping when there are fewer lenses. */

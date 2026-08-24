@@ -21,11 +21,11 @@ import {
   AgentCapabilityError,
   createLiveAgentRunner,
   liveAgentsEnabled,
-  MissingResponseProjectorError,
+  MissingProviderAdapterError,
   LIVE_AGENTS_ENV,
   LIVE_AGENTS_TOKEN,
-  type ProviderResponseProjector,
 } from '../src/pipeline/live-runner';
+import type { ProviderAdapter } from '../src/pipeline/provider-adapter';
 import { PACK_ID, REQUIREMENT_ID, engineRoot } from './replay-fixtures';
 import { captureLiveRun, liveCaptureConfigFrom } from './live-capture';
 
@@ -37,9 +37,9 @@ import { captureLiveRun, liveCaptureConfigFrom } from './live-capture';
  * an anonymous local error *before* reaching `captureLiveRun`, shadowing the
  * production refusal this suite exists to demonstrate. Leaving it absent means
  * the run refuses exactly as a real unconfigured live run would —
- * `MissingResponseProjectorError`, from `live-runner.ts`, before any request.
+ * `MissingProviderAdapterError`, from `live-runner.ts`, before any request.
  */
-const providerResponseProjector: ProviderResponseProjector | undefined = undefined;
+const providerAdapter: ProviderAdapter | undefined = undefined;
 
 describe('the live agents suite', () => {
   it('runs in a suite the default run excludes', () => {
@@ -73,7 +73,7 @@ describe('the live agents suite', () => {
  * spend, plus two items this task deliberately left open:
  *
  * ```text
- * ProviderResponseProjector   how this provider's envelope yields content
+ * ProviderAdapter   how this provider's envelope yields content
  *                             — seamed by Task 5e, refused until supplied
  * the request shape           `x-api-key` and {model, messages} are still
  *                             one provider's; not seamed, only recorded
@@ -97,7 +97,7 @@ describe('capturing a live run', () => {
           DATASTRATA_AGENT_API_KEY: 'unused',
         },
       }),
-    ).rejects.toBeInstanceOf(MissingResponseProjectorError);
+    ).rejects.toBeInstanceOf(MissingProviderAdapterError);
   });
 
   it.runIf(liveAgentsEnabled())(
@@ -128,9 +128,7 @@ describe('capturing a live run', () => {
           // the endpoint and the spend ceiling. Until then it is absent, and
           // `captureLiveRun` refuses before constructing a runner — so with the
           // token set this case reaches that refusal rather than a capture.
-          ...(providerResponseProjector === undefined
-            ? {}
-            : { projectResponse: providerResponseProjector }),
+          ...(providerAdapter === undefined ? {} : { adapter: providerAdapter }),
         });
         // Until a provider is chosen this line is unreachable: `captureLiveRun`
         // refuses above. It is the shape the first authorised live run runs, not

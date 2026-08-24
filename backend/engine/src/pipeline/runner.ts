@@ -28,6 +28,7 @@
  */
 
 import type { RoleRequest } from './roles';
+import type { ProviderAdapterIdentity } from './provider-adapter';
 
 /** What a runner is: replayed from a recording, or live against a model. */
 export type RunnerKind = 'replay' | 'live';
@@ -91,6 +92,19 @@ export interface RunSettlement {
  */
 export interface AgentRunner {
   readonly kind: RunnerKind;
+  /**
+   * The provider semantics this capability actually speaks, if it speaks any.
+   *
+   * Present only on a capability that executes a provider protocol. Replay
+   * declares none, and that is not an omission: replay serves recorded content
+   * and speaks no protocol at all, which is precisely why it stays
+   * provider-independent while still reproducing the pipeline identity of the
+   * run it replays. The identity itself is *configuration*
+   * (`RoleConfig.providerAdapter`); this is what orchestration compares it
+   * against, so a capability cannot execute one protocol while the record claims
+   * another.
+   */
+  readonly adapter?: ProviderAdapterIdentity | undefined;
   /** Called once, before any role runs. Throwing refuses the whole run. */
   bind?(binding: RunBinding): void;
   run(request: RoleRequest): Promise<RoleResponse>;

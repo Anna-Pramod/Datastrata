@@ -69,7 +69,7 @@ import {
   AgentCapabilityError,
   createLiveAgentRunner,
   liveAgentsEnabled,
-  MissingResponseProjectorError,
+  MissingProviderAdapterError,
   LIVE_AGENTS_ENV,
 } from '../src/pipeline/live-runner';
 import {
@@ -94,6 +94,7 @@ import {
 } from '../src/pipeline/replay';
 import { recordedRequest, requestSha256 } from '../src/pipeline/request-identity';
 import { RoleOutputError } from '../src/pipeline/roles';
+import { ProviderAdapterNotSelectedError } from '../src/pipeline/provider-adapter';
 import {
   parseRunTranscript,
   serialiseTranscript,
@@ -113,6 +114,8 @@ import {
   type VerificationResult,
 } from '../src/verification/result';
 import { installNetworkTrap, type NetworkTrap } from './helpers';
+import { SYNTHETIC_ADAPTER_V1 } from './synthetic-adapters';
+import type { ProviderAdapter } from '../src/pipeline/provider-adapter';
 import {
   captureLiveRun,
   liveCaptureConfigFrom,
@@ -1403,49 +1406,61 @@ describe('a recording cannot supply a deterministic pin', () => {
 // ---------------------------------------------------------------------------
 
 describe('projected content is ordinary content', () => {
-  it('a malformed answer is refused identically whether it came live or from a recording', async () => {
-    // The seam must not learn where `outputJson` came from. A live run's
-    // `outputJson` is what the projector returned; a replayed one is what was
-    // recorded.
+  it('a malformed answer is refused at the seam, not by anything provider-aware', async () => {
+    // The seam must not learn where `outputJson` came from.
     //
-    // Proven by making the two indistinguishable at the boundary: same malformed
-    // string, two runners differing only in `kind`, same refusal.
+    // This used to drive two capabilities differing only in `kind` through
+    // `verify run`. It no longer can, and the reason is a *stronger* rule
+    // arriving after it: a capability declaring `kind: 'live'` is refused under
+    // the default configuration, which selects no provider. So the
+    // kind-independence claim moved to `provider-adapter.test.ts`, where the
+    // configuration is controllable and two runs differing only in adapter
+    // identity are compared field by field. What stays here is the end-to-end
+    // half: a malformed answer arriving through the production command path is
+    // an ordinary role-output refusal.
     //
     // **What this does not cover**, stated because the property is easy to
-    // overclaim: it kills a `kind` branch *in the seam*, and it says nothing
-    // about a projector that sanitises its own output — stripping fences,
-    // digging JSON out of prose — before returning. Such an adapter would widen
-    // what the seam accepts without the seam branching on anything, and neither
-    // test here would see it. That is an argument for the projector needing a
-    // pinned identity (`live-runner.ts`), not something this test establishes.
-    const malformed = JSON.stringify({ notAReading: true });
-    const answers = (kind: 'replay' | 'live') => ({
-      kind,
-      run: () => Promise.resolve({ outputJson: malformed }),
-    });
+    // overclaim: it says nothing about an adapter that sanitises its own output
+    // — stripping fences, digging JSON out of prose — before returning. Such an
+    // adapter widens what the seam accepts without the seam branching on
+    // anything. That is an argument for adapter identity being a pipeline
+    // identity input, which it now is, not something this test establishes.
+    const outcome = await dispatch(
+      ['run', PACK_ID, REQUIREMENT_ID],
+      pathsFor(verificationDir),
+      () => true,
+      undefined,
+      { runner: { kind: 'replay', run: () => Promise.resolve({ outputJson: JSON.stringify({ notAReading: true }) }) } },
+    );
+    expect(outcome.exitCode).toBe(EXIT_REFUSED);
+    expect(outcome.lines.join('\n')).toContain('role_output');
+    expect(trap.calls).toEqual([]);
+  });
 
-    // Sequential, not `Promise.all`: two concurrent dispatches share one
-    // `verificationDir`, and if this property ever broke such that one of them
-    // published, the failure would surface as a race rather than an assertion.
-    const outcomes: { exitCode: number; lines: string[] }[] = [];
-    for (const kind of ['replay', 'live'] as const) {
-      outcomes.push(
-        (await dispatch(
-          ['run', PACK_ID, REQUIREMENT_ID],
-          pathsFor(verificationDir),
-          () => true,
-          undefined,
-          { runner: answers(kind) },
-        ).catch((error: unknown) => error)) as { exitCode: number; lines: string[] },
-      );
-    }
-
-    const [asReplay, asLive] = outcomes;
-    expect(asReplay!.exitCode).toBe(EXIT_REFUSED);
-    expect(asReplay!.lines.join('\n')).toContain('role_output');
-    // Byte-identical treatment, which is the actual claim.
-    expect(asLive!.exitCode).toBe(asReplay!.exitCode);
-    expect(asLive!.lines).toEqual(asReplay!.lines);
+  it('a live capability cannot run at all under a configuration that selected no provider', async () => {
+    // The rule that displaced the test above, proved through the same
+    // production path: `verify run` uses `DEFAULT_ROLE_CONFIG`, which declares
+    // no provider, so a capability announcing itself live is refused before any
+    // role executes — and before any request could be made.
+    let asked = 0;
+    const error = await dispatch(
+      ['run', PACK_ID, REQUIREMENT_ID],
+      pathsFor(verificationDir),
+      () => true,
+      undefined,
+      {
+        runner: {
+          kind: 'live',
+          run: () => {
+            asked += 1;
+            return Promise.resolve({ outputJson: '{}' });
+          },
+        },
+      },
+    ).catch((thrown: unknown) => thrown);
+    expect(error).toBeInstanceOf(ProviderAdapterNotSelectedError);
+    expect(asked).toBe(0);
+    expect(existsSync(resultPath(pathsFor(verificationDir), PACK_ID, REQUIREMENT_ID))).toBe(false);
     expect(trap.calls).toEqual([]);
   });
 
@@ -1505,9 +1520,10 @@ describe('the live capture harness', () => {
     expect(trap.calls).toEqual([]);
   });
 
-  it('refuses a capture that has every gate but no way to read the answer', async () => {
+  it('refuses a capture that has every gate but no provider protocol', async () => {
     // The exact shape the first-live-run decision must still fill:
-    //   opt-in + endpoint + credential + NO projector -> named refusal, zero network.
+    //   opt-in + endpoint + credential + model + NO adapter
+    //   -> named refusal, zero network.
     const fullyConfiguredButProviderless = {
       [LIVE_AGENTS_ENV]: '1',
       [LIVE_ENDPOINT_ENV]: 'https://unused.invalid/',
@@ -1524,7 +1540,7 @@ describe('the live capture harness', () => {
         transcriptRoot: join(verificationDir, 'transcripts'),
         env: fullyConfiguredButProviderless,
       }),
-    ).rejects.toBeInstanceOf(MissingResponseProjectorError);
+    ).rejects.toBeInstanceOf(MissingProviderAdapterError);
     expect(trap.calls).toEqual([]);
     // And nothing was written where a capture would have written.
     expect(existsSync(join(verificationDir, 'transcripts'))).toBe(false);
@@ -1545,7 +1561,7 @@ describe('the live capture harness', () => {
         [LIVE_ENDPOINT_ENV]: 'https://unused.invalid/',
         [LIVE_API_KEY_ENV]: 'sk-ant-unused',
       },
-      projectResponse: (body: string) => body,
+      adapter: SYNTHETIC_ADAPTER_V1,
     };
 
     // The control: with every gate present the refusal is *not* a gate refusal.
@@ -1558,7 +1574,7 @@ describe('the live capture harness', () => {
       ...complete,
     }).catch((thrown: unknown) => thrown);
     expect(control).not.toBeInstanceOf(LiveCaptureConfigError);
-    expect(control).not.toBeInstanceOf(MissingResponseProjectorError);
+    expect(control).not.toBeInstanceOf(MissingProviderAdapterError);
 
     // The test's own specification of what a capture needs. Deliberately a local
     // literal rather than a constant imported from the code under test: a loop
@@ -1567,13 +1583,13 @@ describe('the live capture harness', () => {
       LIVE_AGENTS_ENV,
       LIVE_ENDPOINT_ENV,
       LIVE_API_KEY_ENV,
-      'projectResponse',
+      'adapter',
     ] as const;
 
     for (const gate of GATES) {
       const env = { ...complete.env };
-      let projectResponse: ((body: string) => string) | undefined = complete.projectResponse;
-      if (gate === 'projectResponse') projectResponse = undefined;
+      let adapter: ProviderAdapter | undefined = complete.adapter;
+      if (gate === 'adapter') adapter = undefined;
       else delete env[gate];
 
       const thrown = await captureLiveRun({
@@ -1582,13 +1598,13 @@ describe('the live capture harness', () => {
         paths: pathsFor(verificationDir),
         transcriptRoot: join(verificationDir, 'transcripts'),
         env,
-        ...(projectResponse === undefined ? {} : { projectResponse }),
+        ...(adapter === undefined ? {} : { adapter }),
       }).catch((error: unknown) => error);
 
       expect
         .soft(
           thrown instanceof LiveCaptureConfigError ||
-            thrown instanceof MissingResponseProjectorError ||
+            thrown instanceof MissingProviderAdapterError ||
             thrown instanceof AgentCapabilityError,
           `removing ${gate} did not refuse the capture`,
         )

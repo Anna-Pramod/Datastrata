@@ -64,6 +64,7 @@ function baseline(): PipelineIdentityInput {
       order: DEFAULT_ROLE_CONFIG.order,
     },
     resultSchemaVersion: RESULT_SCHEMA_VERSION,
+    providerAdapter: DEFAULT_ROLE_CONFIG.providerAdapter,
     closurePolicy: CLOSURE_POLICY_V0,
   };
 }
@@ -240,6 +241,24 @@ describe('pipelineVersion is derived', () => {
         roleConfig: { ...input.roleConfig, order: ['adjudicator', 'prosecutor', 'reader'] },
       }),
     ).not.toBe(before);
+  });
+
+  it('moves when the provider adapter’s semantic identity moves', () => {
+    // Here as well as in `provider-adapter.test.ts`, because this is where the
+    // "every identity input has a teeth case" list lives, and an input added to
+    // the payload without a case in this describe is an input nobody would
+    // notice going missing from it.
+    expect(
+      buildPipelineIdentity({
+        ...baseline(),
+        providerAdapter: { id: 'some-provider', version: '1' },
+      }),
+    ).not.toBe(
+      buildPipelineIdentity({
+        ...baseline(),
+        providerAdapter: { id: 'some-provider', version: '2' },
+      }),
+    );
   });
 
   it('moves when the result schema version moves', () => {

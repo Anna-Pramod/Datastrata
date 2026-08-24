@@ -6,10 +6,10 @@
  * be reused after the thing it named has changed; "pipeline v7 was approved"
  * then resolves to a name rather than to evidence. A derived one cannot be
  * reused that way: change any prompt file, any model identifier, the prosecutor
- * count, the lens set or its order, the result schema version or the closure
- * policy, and the identity moves — which means the promotion record that
- * approved the old one no longer matches, and `verify sign` refuses with
- * `unpromoted_pipeline`.
+ * count, the lens set or its order, the result schema version, the closure
+ * policy or the provider adapter's semantic identity, and the identity moves —
+ * which means the promotion record that approved the old one no longer matches,
+ * and `verify sign` refuses with `unpromoted_pipeline`.
  *
  * **There is no parameter for the version and no override.** A builder that
  * accepted one would let a caller hand back the identity of a pipeline it is
@@ -37,6 +37,7 @@ import { sha256Hex } from '../corpus/hash';
 import { verificationResultSchema } from '../verification/result';
 import type { RoleName } from './roles';
 import type { RoleConfig } from './config';
+import type { ProviderAdapterIdentity } from './provider-adapter';
 
 /**
  * The result schema version, read off the schema rather than restated.
@@ -53,11 +54,18 @@ export const RESULT_SCHEMA_VERSION: string =
 /**
  * The scheme by which the digest below is taken.
  *
- * Carried in the identity string so that a future change to *what* is hashed is
- * visible in the value rather than silently producing a different number for
- * the same pipeline.
+ * Carried in the identity string so that a change to *what* is hashed is visible
+ * in the value rather than silently producing a different number for the same
+ * pipeline.
+ *
+ * `v2` adds the provider adapter's semantic identity. Every identity moves, and
+ * that is the point rather than a cost: a `v1` identity was derived without any
+ * statement about how a provider's response envelope is read, so it cannot
+ * describe a run that reads one. A promotion record for a `v1` identity does not
+ * match a `v2` pipeline, which is the behaviour that stops evidence gathered
+ * before this distinction existed from carrying across it.
  */
-export const PIPELINE_IDENTITY_SCHEME = 'v1';
+export const PIPELINE_IDENTITY_SCHEME = 'v2';
 
 /** Everything §5.1 says the identity pins, and nothing else. */
 export interface PipelineIdentityInput {
@@ -70,6 +78,19 @@ export interface PipelineIdentityInput {
   resultSchemaVersion: string;
   /** The traversal policy the entitled closure was computed under. */
   closurePolicy: ClosurePolicy;
+  /**
+   * Which provider semantics the run is defined over (`provider-adapter.ts`).
+   *
+   * Here rather than in provenance because a projection decides what the model's
+   * answer was: one envelope, two defensible readings, two different
+   * `outputJson` strings, potentially two different dossiers. A provenance-only
+   * field would let B3 promote one reading while a later run executed the other
+   * under the same identity.
+   *
+   * The declared identity only — never the adapter's code, its endpoint or its
+   * credential. `ProviderEndpointConfig` records why routing is not semantics.
+   */
+  providerAdapter: ProviderAdapterIdentity;
 }
 
 /**
@@ -99,6 +120,12 @@ function identityPayload(input: PipelineIdentityInput): unknown {
       order: [...input.roleConfig.order],
     },
     resultSchemaVersion: input.resultSchemaVersion,
+    // Both fields, written out. Hashing only `id` would make a version bump —
+    // the one signal an author has that semantics moved — invisible.
+    providerAdapter: {
+      id: input.providerAdapter.id,
+      version: input.providerAdapter.version,
+    },
     closurePolicy: {
       referenceDepth: input.closurePolicy.referenceDepth,
       structuralKinds: [...input.closurePolicy.structuralKinds],
@@ -110,7 +137,8 @@ function identityPayload(input: PipelineIdentityInput): unknown {
 /**
  * The identity, as it appears in a result and in a signature.
  *
- * `pipeline-v1-<64 hex>`. Prefixed rather than bare so a reader of
+ * `pipeline-<scheme>-<64 hex>`, currently `pipeline-v2-…`. Prefixed rather than
+ * bare so a reader of
  * `signatures.jsonl` can tell what the string is, and so `isPromoted`'s exact
  * string equality (never a prefix test) has something legible to compare.
  */

@@ -24,19 +24,36 @@
  * environment.
  *
  * **And the token is not the only thing missing until a provider is chosen.**
- * A response body is an envelope, so a runner with no `ProviderResponseProjector`
- * cannot read what it would pay for. That is the second runtime gate, checked
- * before `fetch` for the same reason the first one is: the thing being prevented
- * is the request, not the misreading afterwards.
+ * Both directions of the provider protocol now live behind one named, versioned
+ * `ProviderAdapter` (`provider-adapter.ts`): it builds the request and it
+ * projects the response. This file holds no `x-api-key`, no `{model, messages}`
+ * body and no assumption that a response body is an answer. It performs the
+ * request an adapter describes and hands the adapter's projected content to the
+ * ordinary role boundary.
  *
- * **The gate is response-only.** The request this file builds — its `x-api-key`
- * header and its `{model, messages}` body — is still shaped for one provider,
- * and `ProviderResponseProjector`'s own documentation records that asymmetry
- * rather than letting the new gate imply the whole file is provider-neutral.
+ * ```text
+ * RoleRequest -> adapter.buildRequest -> fetch -> adapter.projectResponse
+ *             -> model-content string -> the same seam replay goes through
+ * ```
+ *
+ * **The adapter's identity is a `pipelineVersion` input**, so this file cannot
+ * choose one: the identity is declared in `RoleConfig` and the adapter is
+ * resolved from it. A runner executing an adapter whose identity differs from
+ * the configured one is refused by orchestration, because the recorded identity
+ * would otherwise describe a pipeline that did not run.
+ *
+ * **A run with no adapter refuses before the request**, for the same reason the
+ * token gate does: the thing being prevented is the spend, not the misreading
+ * afterwards.
  */
 
 import type { AgentRunner, RoleResponse } from './runner';
 import type { RoleRequest } from './roles';
+import type {
+  ProviderAdapter,
+  ProviderAdapterIdentity,
+  ProviderEndpointConfig,
+} from './provider-adapter';
 
 /** The capability token's variable, and the one value that opens the gate. */
 export const LIVE_AGENTS_ENV = 'DATASTRATA_VERIFICATION_AGENTS';
@@ -61,158 +78,79 @@ export function assertLiveAgentsEnabled(env: NodeJS.ProcessEnv = process.env): v
   if (!liveAgentsEnabled(env)) throw new AgentCapabilityError();
 }
 
-/**
- * Turns one provider's HTTP response body into the exact model content string.
- *
- * The seam exists because the alternative is a false generic. An HTTP body is a
- * provider **envelope** — the model's words sit inside provider-specific
- * structure, under a different key in every API — and code that treats the whole
- * body as the role's answer is not "provider-agnostic", it is silently committed
- * to the one provider whose body happens to be bare. This repository has no
- * endpoint configured and documents no internal contract, so there is no such
- * provider here: the assumption was simply unstated.
- *
- * Ownership, and the reason this type lives in this file and nowhere else:
- *
- * ```text
- * provider adapter   envelope        -> model content     (here)
- * role boundary      model content   -> validated output  (agent-role.ts + role-outputs.ts)
- * transcript         records the exact boundary payload   (transcript.ts)
- * ```
- *
- * `outputJson` is therefore the **projected content**, which is what a role
- * parses and what replay serves — so replay never learns that envelopes exist,
- * and `transcript.ts` and `replay.ts` hold no provider knowledge at all.
- *
- * The `request` is passed because some providers key their content by the role
- * or the call, and a projector that needed it would otherwise have to be
- * constructed per request.
- *
- * **B2 chooses no *response* provider, and this seam is response-only.** Which
- * projector to use is part of the explicit first-live-run decision, alongside
- * the model, the endpoint, the configuration and the maximum spend.
- *
- * # The request side is not seamed, and says so
- *
- * The argument above — that treating a body as content is not provider-agnostic
- * but silently committed to one provider — applies verbatim in the other
- * direction, and this task did not fix that direction:
- *
- * ```text
- * request   `x-api-key` header + {model, messages:[{role, content}]} body   COMMITTED
- * response  ProviderResponseProjector                                       SEAMED
- * ```
- *
- * `DEFAULT_ROLE_CONFIG` also pins `claude-opus-5` (`config.ts`), and that model
- * id is a `pipelineVersion` input. So the honest statement is **not** "this
- * repository has chosen no provider" — it is that the response direction now
- * refuses to guess, while the request direction still carries an unstated
- * assumption. Narrowing this claim rather than widening the seam is deliberate:
- * a request adapter is a second design decision, and the first live run is where
- * both belong. Recorded here so the asymmetry is a known item on that decision
- * rather than something the next reader has to rediscover.
- *
- * # The projector needs an identity, and B2 does not give it one
- *
- * **An obligation on the first-live-run decision, recorded before it is met.**
- * This type is a bare function, so a projector is currently anonymous. That is
- * tolerable while nothing may be signed and no run is paid for, and it is not
- * tolerable afterwards:
- *
- * ```text
- * projector A   {content:[{text}]} -> content[0].text
- * projector B   {content:[{text}]} -> content.map(t => t.text).join('')
- * ```
- *
- * Both are defensible readings of one envelope, and they can disagree about
- * **what the model's answer was** — which changes `outputJson`, changes what the
- * seam validates, changes the recorded transcript, and therefore changes
- * `resultSha256`. An execution whose provenance cannot say which projection
- * produced its answer is one B3 cannot measure and B4 cannot reconstruct,
- * exactly as a run that could not say which prompt file it used would be —
- * §5.1's reasoning, one layer further out.
- *
- * So before any real run, decide explicitly whether adapter identity becomes a
- * `pipelineVersion` input — alongside prompt-file hashes, model ids and role
- * configuration — or a separate pinned execution-provenance field. Both are
- * arguable: it is not a prompt, but it does determine the answer.
- *
- * **What must not happen is deciding it implicitly**, by passing an anonymous
- * closure to the first paid run and discovering afterwards that nothing recorded
- * which projection was in force.
- */
-export type ProviderResponseProjector = (body: string, request: RoleRequest) => string;
-
-/** A live run was configured with no way to read the provider's answer. */
-export class MissingResponseProjectorError extends Error {
+/** A live run was configured with no provider adapter to speak through. */
+export class MissingProviderAdapterError extends Error {
   constructor() {
     super(
-      'no provider response projector was supplied: an HTTP response body is a provider envelope, not a role output, and no projector has been chosen for any provider. Refusing before any network call rather than making a request whose answer cannot be read correctly — supplying the projector is part of authorising the first live run. Note the seam is response-only: the request headers and body in this file are still shaped for one provider, which is a separate item on that same decision.',
+      'no provider adapter was supplied: a provider protocol is request *and* response — an HTTP body is an envelope, not a role output, and the headers and body a provider expects are its own. No adapter has been chosen, and refusing here rather than guessing is the point. Supplying one is part of authorising the first live run, and because its identity is a pipelineVersion input, doing so also changes which pipeline this is.',
     );
-    this.name = 'MissingResponseProjectorError';
+    this.name = 'MissingProviderAdapterError';
   }
 }
 
-export interface LiveRunnerOptions {
-  /** The model API endpoint. Supplied, never defaulted to a live host. */
-  endpoint: string;
-  /** Read from the environment by the agents entrypoint, never hard-coded. */
-  apiKey: string;
+export interface LiveRunnerOptions extends ProviderEndpointConfig {
   /**
-   * How this provider's response body yields the model's content.
+   * The provider protocol this runner speaks.
    *
    * Optional in the type and **required at runtime**, deliberately. A required
-   * field would make "a live run with no projector" a compile error, and the
+   * field would make "a live run with no adapter" a compile error, and the
    * property worth holding is that a *configured* run refuses before it spends
-   * money — which is a runtime refusal with a name, provable by a test.
+   * money — a runtime refusal with a name, provable by a test.
    */
-  projectResponse?: ProviderResponseProjector;
+  adapter?: ProviderAdapter;
 }
 
-/** Returns the projector, or refuses. No fallback, and no default projector. */
-export function requireResponseProjector(
-  options: Pick<LiveRunnerOptions, 'projectResponse'>,
-): ProviderResponseProjector {
-  if (options.projectResponse === undefined) throw new MissingResponseProjectorError();
-  return options.projectResponse;
+/** Returns the adapter, or refuses. No fallback, and no default adapter. */
+export function requireProviderAdapter(
+  options: Pick<LiveRunnerOptions, 'adapter'>,
+): ProviderAdapter {
+  if (options.adapter === undefined) throw new MissingProviderAdapterError();
+  return options.adapter;
 }
 
 /**
  * A runner that actually calls a model.
  *
- * Deliberately thin: the request is already assembled by the role, so this
- * turns messages into a request body, performs one `fetch`, and returns the
- * response text. Everything interesting about a run happens outside it.
+ * Deliberately thin, and thinner than it was: the adapter builds the request and
+ * projects the response, so this performs one `fetch` over a description it did
+ * not write and returns a string it did not extract. It knows no auth
+ * convention, no body shape and no envelope. Everything interesting about a run
+ * happens outside it.
  */
 export class LiveAgentRunner implements AgentRunner {
   readonly kind = 'live' as const;
 
   constructor(private readonly options: LiveRunnerOptions) {}
 
+  /**
+   * The provider semantics this runner actually speaks.
+   *
+   * Read by orchestration and compared against the configured identity, so a
+   * capability cannot execute one protocol while the record claims another.
+   * `undefined` until an adapter is supplied — and a run that reaches `run()`
+   * without one refuses there.
+   */
+  get adapter(): ProviderAdapterIdentity | undefined {
+    return this.options.adapter?.identity;
+  }
+
   async run(request: RoleRequest): Promise<RoleResponse> {
     // Both gates before the request, and in this order: permission to spend,
-    // then the ability to read what the spend bought. Checking the projector
-    // after the call would mean paying for an answer and then discovering it
-    // could not be interpreted.
+    // then the ability to speak the protocol at all. Checking after the call
+    // would mean paying for an answer that could not be read.
     assertLiveAgentsEnabled();
-    const project = requireResponseProjector(this.options);
-    // Provider-shaped, and not seamed. `x-api-key` is one provider family's auth
-    // header and the body below is one API's request shape; another provider
-    // needs `Authorization: Bearer` and a different envelope. Task 5e seamed the
-    // response direction only, and the first live run owns this one.
-    const response = await fetch(this.options.endpoint, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': this.options.apiKey,
-      },
-      body: JSON.stringify({
-        model: request.model,
-        messages: request.messages.map((message) => ({
-          role: message.from === 'agent' ? 'assistant' : 'user',
-          content: message.content,
-        })),
-      }),
+    const adapter = requireProviderAdapter(this.options);
+
+    // The adapter owns the whole request: URL, method, headers, body. This file
+    // contributes nothing provider-shaped and knows no auth convention.
+    const spec = adapter.buildRequest(request, {
+      endpoint: this.options.endpoint,
+      apiKey: this.options.apiKey,
+    });
+    const response = await fetch(spec.url, {
+      method: spec.method,
+      headers: { ...spec.headers },
+      body: spec.body,
     });
     if (!response.ok) {
       throw new Error(
@@ -221,14 +159,15 @@ export class LiveAgentRunner implements AgentRunner {
     }
     // The envelope goes to the adapter; the role sees only the model's content.
     // `outputJson` is that content, so it is what the seam parses, what the
-    // transcript records, and what replay serves — one payload, at one boundary.
-    return { outputJson: project(await response.text(), request) };
+    // transcript records, and what replay serves — one payload, at one boundary,
+    // and no provider-specific validation path anywhere after it.
+    return { outputJson: adapter.projectResponse(await response.text(), request) };
   }
 }
 
 /** The gated factory. Refuses before constructing anything. */
 export function createLiveAgentRunner(options: LiveRunnerOptions): AgentRunner {
   assertLiveAgentsEnabled();
-  requireResponseProjector(options);
+  requireProviderAdapter(options);
   return new LiveAgentRunner(options);
 }

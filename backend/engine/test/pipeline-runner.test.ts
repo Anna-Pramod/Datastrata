@@ -25,7 +25,7 @@ import { join } from 'node:path';
 import { MissingAgentRunnerError, requireRunner } from '../src/pipeline/runner';
 import {
   AgentCapabilityError,
-  MissingResponseProjectorError,
+  MissingProviderAdapterError,
   assertLiveAgentsEnabled,
   createLiveAgentRunner,
   liveAgentsEnabled,
@@ -47,6 +47,7 @@ import {
 // One trap, shared with `cli-run.test.ts`. See `helpers.ts` for what it does
 // and does not intercept.
 import { installNetworkTrap } from './helpers';
+import { SYNTHETIC_ADAPTER_V1 } from './synthetic-adapters';
 
 const TRAP_ENDPOINT = 'https://network-trap.invalid/v1/messages';
 
@@ -153,20 +154,20 @@ describe('the capability gate on the live entrypoint', () => {
     expect(liveAgentsEnabled({ [LIVE_AGENTS_ENV]: LIVE_AGENTS_TOKEN })).toBe(true);
   });
 
-  it('refuses with the token but no way to read the provider’s answer, before the request', async () => {
-    // The second runtime gate. An HTTP body is a provider envelope, and B2 has
-    // chosen no provider — so a run that could not interpret what it paid for
-    // must not make the request at all. Token set, endpoint set, credential set,
-    // and it still refuses with nothing contacted.
+  it('refuses with the token but no provider protocol to speak, before the request', async () => {
+    // The second runtime gate. A provider protocol is request *and* response,
+    // and no provider has been chosen — so a run that can neither build the
+    // request nor read the answer must not make it. Token set, endpoint set,
+    // credential set, and it still refuses with nothing contacted.
     const trap = installNetworkTrap();
     process.env[LIVE_AGENTS_ENV] = LIVE_AGENTS_TOKEN;
     try {
       expect(() =>
         createLiveAgentRunner({ endpoint: TRAP_ENDPOINT, apiKey: 'unused' }),
-      ).toThrow(MissingResponseProjectorError);
+      ).toThrow(MissingProviderAdapterError);
       const direct = new LiveAgentRunner({ endpoint: TRAP_ENDPOINT, apiKey: 'unused' });
       await expect(direct.run(roleRequest())).rejects.toBeInstanceOf(
-        MissingResponseProjectorError,
+        MissingProviderAdapterError,
       );
       expect(trap.calls).toEqual([]);
     } finally {
@@ -175,7 +176,7 @@ describe('the capability gate on the live entrypoint', () => {
     }
   });
 
-  it('positive control: with the token AND a projector, the live runner does reach the network', async () => {
+  it('positive control: with the token AND an adapter, the live runner does reach the network', async () => {
     // Proves the trap can fire and that it sits on the live runner's own path.
     // Without this the "trap.calls is empty" assertions above would be equally
     // green against a trap that was never installed — and, since this task, the
@@ -187,8 +188,14 @@ describe('the capability gate on the live entrypoint', () => {
       const runner = new LiveAgentRunner({
         endpoint: TRAP_ENDPOINT,
         apiKey: 'unused',
-        // Not a provider choice: a test double standing where the adapter goes.
-        projectResponse: (body) => body,
+        // Not a provider choice: an offline synthetic adapter standing where a
+        // real one goes, so the runner gets past its second gate and the trap
+        // can be shown to fire. It does **not** prove the URL came from the
+        // adapter — this adapter returns `config.endpoint` verbatim, so the
+        // assertion below holds either way. That proof is in
+        // `provider-adapter.test.ts`, where the adapter's request and the sent
+        // request are compared field by field.
+        adapter: SYNTHETIC_ADAPTER_V1,
       });
       await expect(runner.run(roleRequest())).rejects.toThrow(/NETWORK TRAP/);
       expect(trap.calls).toEqual([TRAP_ENDPOINT]);

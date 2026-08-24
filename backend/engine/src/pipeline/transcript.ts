@@ -23,6 +23,21 @@
  * production" a property an existing gate enforces rather than a convention
  * somebody remembers.
  *
+ * **No provider-adapter field, deliberately.** The adapter's semantic identity
+ * is a `pipelineVersion` input (`provider-adapter.ts`), and `runId` is derived
+ * from `pipelineVersion` plus the question — so a recording made under one
+ * adapter already cannot bind a run configured for another, and refuses at
+ * `bind` naming `pipelineVersion`. Adding `providerAdapterId` here would buy no
+ * binding and would create a second answer to which semantics a recording was
+ * made under, free to disagree with the one the identity fixes.
+ *
+ * The cost is stated rather than hidden: a human opening a transcript alone sees
+ * a digest, not `test-provider@2`. That is already true of the prompts, the lens
+ * set and the closure policy, all of which are folded into the same digest. If
+ * that readability is later wanted, the right shape is a *transcription* of the
+ * configuration with a test asserting it agrees with the identity — never a
+ * second field anything is allowed to read as authoritative.
+ *
  * **No clock.** A transcript carries no timestamp and its filename is a derived
  * run identity, so recording the same run twice produces the same path and the
  * same bytes. A timestamped transcript would make the replay suite's inputs

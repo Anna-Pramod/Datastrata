@@ -69,6 +69,7 @@ import { runSign, resultPath, type VerifyPaths } from '../src/cli/sign';
 import type { RunCapabilities } from '../src/cli/run';
 import { dispatch } from '../src/cli/verify';
 import { DEFAULT_ROLE_CONFIG } from '../src/pipeline/config';
+import { PIPELINE_IDENTITY_SCHEME } from '../src/pipeline/identity';
 import { qualifiedChallengeId } from '../src/pipeline/prosecutors';
 import { RESULT_FILE_FRAMING } from '../src/pipeline/write-result';
 import type { RoleRequest } from '../src/pipeline/roles';
@@ -395,7 +396,13 @@ describe('verify run — a complete run', () => {
     // Contract restatement, not a unique kill: the identity's *content* is
     // `pipeline-identity.test.ts`'s, and the proof that this exact string is
     // the one the gate reads is the promotion positive control below.
-    expect(published.pipelineVersion).toMatch(/^pipeline-v1-[0-9a-f]{64}$/);
+    // Through the constant, not a literal `v1`: the scheme is carried in the
+    // identity precisely so a change to what is hashed is visible, and a test
+    // asserting the old prefix would have to be "repaired" on every such change
+    // — which is how a shape assertion quietly stops tracking the shape.
+    expect(published.pipelineVersion).toMatch(
+      new RegExp(`^pipeline-${PIPELINE_IDENTITY_SCHEME}-[0-9a-f]{64}$`),
+    );
 
     // The pins name both documents of the real closure, at the hashes the
     // corpus files carry. Cross-checked against the corpus rather than against
