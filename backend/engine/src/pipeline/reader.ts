@@ -43,7 +43,7 @@ import { evidenceIsSolelyAbsence } from '../verification/result';
 import { createAgentRole } from './agent-role';
 import { renderEntitledClosure, type EntitledClosure, type EntitledDocument } from './entitlement';
 import {
-  emptyClosureGaps,
+  unservedSourceGaps,
   gapForUnreachableDocument,
   type DocumentGap,
   type PipelineGap,
@@ -198,7 +198,7 @@ export interface BlindReaderRun {
   /** Already projected. This function never sees an `AuthoredRequirement`. */
   input: ReaderInput;
   /**
-   * The requirement's cited sources, for the empty-closure gap producer only.
+   * The requirement's cited sources, for the source-completeness check.
    *
    * Deliberately a parameter here rather than a field of `ReaderInput`: the
    * pipeline needs the source ids to *name* what is missing, and the reader must
@@ -217,10 +217,13 @@ export interface BlindReaderRun {
  *
  * Three outcomes, in the order they are decided:
  *
- *  1. **The entitled closure is empty.** No agent runs. The evidence surface
- *     does not exist, and a reader handed no documents can only answer from
- *     memory — so the run stops before the first call, with a `corpus_gap` per
- *     cited source saying the material was never ingested. Not a weakened
+ *  1. **A cited source is unserved, or the closure is empty.** No agent runs.
+ *     The dominant case is the first: some evidence exists and is entitled, and
+ *     a source the requirement declared is missing from the corpus, so the run
+ *     stops before the first call with one `corpus_gap` per unserved source.
+ *     The closure is kept and pinned as itself — a gap records what is missing
+ *     and must not erase what was available. The second case is the separate
+ *     latent one of a requirement citing no sources at all. Not a weakened
  *     reader: the gap is the finding.
  *  2. **The reader halted on a document.** Its gaps are classified by the
  *     machinery, its elements are discarded, and agent verification stops.
@@ -230,19 +233,39 @@ export async function runBlindReader(run: BlindReaderRun): Promise<ReaderOutcome
   const index = run.index ?? 0;
   const { closure } = run.input;
 
-  // Guarded on the closure being empty, not on there being a gap to name. The
-  // two diverge for a requirement citing no sources at all: there is nothing to
-  // report, and a guard on the gap list would then send the reader off to read
-  // an empty evidence surface — which is exactly the reading-from-memory this
-  // whole branch exists to prevent. `min(1)` on `sources` in
-  // `knowledge/schema.ts` makes that unreachable from a loaded pack today, so
-  // the divergence is latent rather than live; the guard states the rule anyway,
-  // because the schema is a different module's promise.
-  if (closure.docIds.length === 0) {
+  // Source completeness, decided here and never by the reader.
+  //
+  // The reader is blind to the requirement's source declaration — that is what
+  // its blindness means — so it cannot notice that a cited source is unserved.
+  // Only the machinery can, and it must, because a run over an evidence surface
+  // the author declared and the corpus does not hold is a run whose judgments
+  // have no standing. `gaps.ts` carries the full argument and the decision it
+  // reverses.
+  const sourceGaps = unservedSourceGaps(closure, run.sourceIds);
+
+  // Two conditions, not one, and the second is not redundant.
+  //
+  // A gap means the declared surface is incomplete: halt, whatever the closure's
+  // size. An empty closure with *no* gap is the separate latent case of a
+  // requirement citing no sources at all — nothing to report, and nothing to
+  // read either. `min(1)` on `sources` in `knowledge/schema.ts` makes that
+  // unreachable from a loaded pack today, so it stays latent; the guard states
+  // the rule anyway, because the schema is a different module's promise.
+  //
+  // **What the second condition covers, precisely.** It stops *this role* from
+  // reading an empty surface, and no more. `orchestrate.ts` derives
+  // `readerHalted` from `reader.gaps.length > 0`, and that case produces no
+  // gap — so in it the prosecutors and the adjudicator still run, over an empty
+  // entitled closure, until `assertResultConsistency`'s "an empty closure never
+  // travels alone" rule refuses the record. Nothing unsound publishes, and
+  // nothing reaches a model that a loaded pack could produce. It is recorded
+  // here rather than fixed because closing it means changing how orchestration
+  // derives its halt, which is a wider change than this repair.
+  if (sourceGaps.length > 0 || closure.docIds.length === 0) {
     return {
       input: run.input,
       output: { elements: [], gaps: [] },
-      gaps: emptyClosureGaps(closure, run.sourceIds),
+      gaps: sourceGaps,
       execution: null,
     };
   }

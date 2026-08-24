@@ -34,7 +34,7 @@ import {
   classifyUnreachableDocument,
   corpusGapsForUnservedSources,
   EntitledDocumentIsNotAGapError,
-  emptyClosureGaps,
+  unservedSourceGaps,
   gapForUnreachableDocument,
 } from '../src/pipeline/gaps';
 import { DEFAULT_ROLE_CONFIG } from '../src/pipeline/config';
@@ -295,8 +295,39 @@ describe('the gap classes are distinguished by the corpus, not by the role', () 
   it('produces no gap at all when the reader reaches everything it needed', () => {
     // The positive control the plan names: without it, "always a gap" would
     // satisfy both halves above.
-    expect(emptyClosureGaps(closure, ['SRC-100'])).toEqual([]);
+    //
+    // Worth noting what this used to be worth. Under the old closure-cardinality
+    // guard it passed because the closure was non-empty — it could not tell
+    // "SRC-100 is served" from "some other source was served". Under the
+    // per-source rule it passes for the reason its name claims, and the mixed
+    // case below is what distinguishes them.
+    expect(unservedSourceGaps(closure, ['SRC-100'])).toEqual([]);
     expect(closure.docIds).toEqual(['DOC-A', 'DOC-B', 'DOC-C']);
+  });
+
+  it('gaps a cited source nothing serves, even though the closure is not empty', () => {
+    // The case no fixture built, and the whole defect: one served source, one
+    // unserved, a real non-empty closure, and a gap that must still be named.
+    const gaps = unservedSourceGaps(closure, ['SRC-100', 'SRC-900']);
+    expect(closure.docIds).toEqual(['DOC-A', 'DOC-B', 'DOC-C']);
+    expect(gaps).toHaveLength(1);
+    expect(gaps[0]!.kind).toBe('corpus_gap');
+    expect(gaps[0]!.sourceId).toBe('SRC-900');
+    expect(gaps[0]!.docId).toBeUndefined();
+  });
+
+  it('names only the sources nothing serves, never the ones that are', () => {
+    // The second defect, which the obvious fix activates:
+    // `corpusGapsForUnservedSources` asserts of every id it is handed that
+    // nothing serves it, and checks nothing. Removing the old guard without
+    // filtering would emit a gap claiming SRC-100 is unserved.
+    const gaps = unservedSourceGaps(closure, ['SRC-100', 'SRC-900', 'SRC-901']);
+    expect(gaps.map((gap) => gap.sourceId)).toEqual(['SRC-900', 'SRC-901']);
+    // Order follows the requirement's own source order, not the filesystem's.
+    expect(unservedSourceGaps(closure, ['SRC-901', 'SRC-900']).map((g) => g.sourceId)).toEqual([
+      'SRC-901',
+      'SRC-900',
+    ]);
   });
 });
 
@@ -429,10 +460,11 @@ describe('runBlindReader', () => {
   });
 
   it('runs no agent even when there is no source to name in the gap', async () => {
-    // The guard is on the closure being empty, not on there being a gap to
-    // report, and the two diverge exactly here. A guard on the gap list would
-    // send the reader off to read an empty evidence surface — a reading from
-    // general knowledge, which is the thing this branch exists to prevent —
+    // The guard has two conditions, and this case is why the second exists: a
+    // gap list alone would not fire here, because there is no source to name.
+    // A guard on the gap list only would send the reader off to read an empty
+    // evidence surface — a reading from general knowledge, which is what this
+    // branch exists to prevent —
     // and it would do so silently, because the outcome would look like a
     // perfectly ordinary reading.
     //
@@ -923,8 +955,23 @@ describe('a requirement whose sources serve no document (the real corpus)', () =
 
     // The positive control: a served requirement runs every role through the
     // same call, so the emptiness above is the halt and not a broken wiring.
-    const served = pack.requirements.find((entry) => entry.id !== requirement.id);
-    if (served === undefined) throw new Error('unreachable');
+    //
+    // Selected by the property this control needs — **every** cited source
+    // served — and not by `id !== requirement.id`, which is what it used to be.
+    // That predicate was a sound proxy only while `CSRD-S-012` was the one
+    // requirement that halted; ten of sixteen halt now, so "not S-012" no longer
+    // implies "runs to completion". It stayed green purely because the first
+    // entry in `requirements.json` happens to be fully served, and a reorder of
+    // that file — or ingesting the missing material — would have broken this
+    // control for a reason with nothing to do with what it tests.
+    const closureFor = (entry: (typeof pack.requirements)[number]) =>
+      EntitledClosure.forSources(realCorpus, entry.sources);
+    const served = pack.requirements.find(
+      (entry) =>
+        entry.id !== requirement.id &&
+        entry.sources.every((sourceId) => closureFor(entry).corpusServes(sourceId)),
+    );
+    if (served === undefined) throw new Error('the real pack has no fully served requirement');
     const liveRunner = stubRunner((request) =>
       request.role === 'reader'
         ? JSON.stringify({ elements: [], gaps: [] })

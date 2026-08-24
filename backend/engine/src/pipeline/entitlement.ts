@@ -216,6 +216,26 @@ export class EntitledClosure {
     return this.#source.index.documents.some((document) => document.docId === docId);
   }
 
+  /**
+   * Whether any document in the corpus serves this source.
+   *
+   * The sibling of `corpusHolds`, and here for the same reason: it is a fact
+   * about `corpus/index.json`, not a judgment, so the machinery answers it
+   * rather than a role. The reader is never shown the requirement's source
+   * declaration — that is what its blindness means — so it cannot notice that a
+   * cited source is unserved. Only this side can.
+   *
+   * **Deliberately independent of `docIds`.** A closure can be non-empty and
+   * still be missing a cited source, because the closure is built from whichever
+   * sources *did* resolve. "Some entitled evidence exists" and "every declared
+   * source is backed" are two propositions, and conflating them is what let nine
+   * requirements publish a Complete dossier over an evidence surface their own
+   * author said was incomplete.
+   */
+  corpusServes(sourceId: string): boolean {
+    return this.#source.index.documents.some((document) => document.serves.includes(sourceId));
+  }
+
   /** The document, or a refusal. There is no unchecked accessor by design. */
   document(docId: string): EntitledDocument {
     if (!this.entitled(docId)) throw new OutsideEntitlementError(docId, this.#closure.sha256);

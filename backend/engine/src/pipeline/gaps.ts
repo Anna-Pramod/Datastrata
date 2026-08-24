@@ -147,24 +147,69 @@ export function corpusGapsForUnservedSources(sourceIds: readonly string[]): Pipe
   return sourceIds.map((sourceId) => ({
     kind: 'corpus_gap' as const,
     sourceId,
-    detail: `no document in the corpus serves ${sourceId}, so this requirement's entitled closure is empty; the evidence surface does not exist rather than being unreachable — ingest the material this source cites, then restart verification`,
+    detail: `no document in the corpus serves ${sourceId}: the requirement cites this source, and the evidence surface it names does not exist rather than being unreachable — ingest the material this source cites, then restart verification`,
   }));
 }
 
 /**
- * The unserved sources of a requirement whose closure came out empty.
+ * Every cited source the corpus does not serve — one gap each, whatever the
+ * closure's size.
  *
- * Guarded on the closure being empty rather than on the source list, so a
- * requirement one of whose three sources is served produces no gap here: the
- * closure it opens onto is real, and `sources[]` is an entry point rather than
- * a fence at the closure's edge (§3.1). A per-source rule would report a gap
- * every time a source's document happened to be reached through another
- * source's entry instead of its own.
+ * # The decision this reverses, and why it was wrong
+ *
+ * This function was previously `emptyClosureGaps`, guarded on
+ * `closure.docIds.length === 0`, and its reasoning was recorded here:
+ *
+ * > *"Guarded on the closure being empty rather than on the source list, so a
+ * > requirement one of whose three sources is served produces no gap here: the
+ * > closure it opens onto is real, and `sources[]` is an entry point rather
+ * > than a fence at the closure's edge. A per-source rule would report a gap
+ * > every time a source's document happened to be reached through another
+ * > source's entry instead of its own."*
+ *
+ * The stated worry does not arise, and the check it rejected is not the check
+ * it described. `corpusServes(S)` asks whether **any document declares
+ * `serves: [S]`** — the same declaration `docsForSources` selects entry
+ * documents by. A document that serves `S` therefore makes `corpusServes(S)`
+ * true no matter which source's entry the traversal happened to reach it
+ * through, so the false positive the guard was protecting against cannot occur.
+ * What the guard actually suppressed was the true positive: a source that
+ * **nothing serves at all**.
+ *
+ * The cost was measured against the real pack this engine ships knowledge for.
+ * Ten of its sixteen requirements cite at least one unserved source; nine of
+ * those obtain a non-empty closure from their *other* sources and, under the old
+ * guard, published a Complete, zero-gap, signable dossier over an evidence
+ * surface their own author had declared incomplete.
+ *
+ * # The rule
+ *
+ * A requirement's `sources[]` is an **authored provenance claim**. A factory
+ * holding only `SRC-A` has no authority to decide `SRC-B` was unnecessary
+ * because `SRC-A` yielded a usable document — that lets missing evidence become
+ * quietly thinner evidence, over which an agent then forms a judgment. So
+ * source completeness is checked per source and is **independent of closure
+ * cardinality**:
+ *
+ * ```text
+ * some entitled evidence exists        closure.docIds.length > 0
+ * every declared source is backed      ∀ s ∈ sources: corpusServes(s)
+ * ```
+ *
+ * Two propositions. The second is this function's.
+ *
+ * **The filter is load-bearing and not tidiness.** `corpusGapsForUnservedSources`
+ * asserts of every id it is handed that nothing serves it, and checks nothing —
+ * it was correct before only because its one caller had already established
+ * that the closure, and therefore every source, was empty of documents. Handing
+ * it the raw list under the new rule would emit a gap claiming
+ * `no document in the corpus serves SRC-004` about a source that is served.
+ * Removing the old guard without adding this filter converts an under-report
+ * into a false report.
  */
-export function emptyClosureGaps(
+export function unservedSourceGaps(
   closure: EntitledClosure,
   sourceIds: readonly string[],
 ): PipelineGap[] {
-  if (closure.docIds.length > 0) return [];
-  return corpusGapsForUnservedSources(sourceIds);
+  return corpusGapsForUnservedSources(sourceIds.filter((id) => !closure.corpusServes(id)));
 }

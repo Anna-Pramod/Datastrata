@@ -83,9 +83,14 @@ export interface TailInput {
    * Gaps produced by the pipeline itself rather than by a role.
    *
    * A role can only name a document, so the `corpus_gap` shape that names a
-   * *source* — nothing in the corpus serves it, and the entitled closure is
-   * therefore empty — has no role output to arrive in. It is discovered before
-   * the first call and handed in here.
+   * *source* — nothing in the corpus serves it — has no role output to arrive
+   * in. It is discovered before the first call and handed in here.
+   *
+   * **It does not imply an empty closure.** A requirement citing two sources,
+   * one served and one not, opens onto a real non-empty closure *and* carries a
+   * source gap. Conflating the two is the defect `gaps.ts` records reversing;
+   * this docstring stated it as the reason the field exists, which is why it is
+   * corrected here rather than left as prose nobody re-reads.
    */
   gaps?: readonly PipelineGap[];
 }
