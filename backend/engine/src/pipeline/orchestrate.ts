@@ -30,7 +30,11 @@
  */
 
 import type { AuthoredRequirement } from '../types';
-import type { CurrentCorpusSource } from '../verification/current-state';
+import {
+  producePins,
+  type CurrentCorpusSource,
+  type VerificationPins,
+} from '../verification/current-state';
 import { renderRequirement, RENDERER_VERSION, type RenderContext } from '../verification/render';
 import { createAgentRole } from './agent-role';
 import type { RoleConfig } from './config';
@@ -242,6 +246,29 @@ export function canonicaliseGapBearingRun(outcome: PipelineRunOutcome): Pipeline
   };
 }
 
+/**
+ * The run's identity and the record's pins describe one run.
+ *
+ * Thrown rather than returned: a run whose transcript is filed under different
+ * pins from the ones its dossier publishes has no coherent identity, and there
+ * is nothing sensible to publish in that state.
+ */
+export class PinDivergenceError extends Error {
+  constructor(readonly fields: readonly string[]) {
+    super(
+      `the pins the run was bound to and the pins the tail computed disagree on [${fields.join(', ')}]: one shared producer answered twice over the same inputs and gave two answers, so the transcript would be filed against a question the record does not describe`,
+    );
+    this.name = 'PinDivergenceError';
+  }
+}
+
+function assertPinsAgree(bound: VerificationPins, computed: VerificationPins): void {
+  const fields = (['requirementInputSha256', 'conditionSha256', 'renderedConditionSha256', 'corpusClosureSha256'] as const).filter(
+    (field) => bound[field] !== computed[field],
+  );
+  if (fields.length > 0) throw new PinDivergenceError(fields);
+}
+
 /** The identity this configuration and these prompt files add up to. */
 export function pipelineVersionFor(input: {
   prompts: PromptSet;
@@ -279,6 +306,58 @@ export async function runVerificationPipeline(
   });
 
   const renderedCondition = renderRequirement(input.requirement, input.renderContext);
+
+  // The run's own identity, derived before the first role call.
+  //
+  // Both halves come from where they already came from: `producePins` is the
+  // one shared pin producer the tail, the sign candidate and the review sheet
+  // all go through, and `buildRunId` is the one run-identity derivation. What
+  // moved is *when* — Task 5e needs the identity before the reader runs, so a
+  // replay capability holding a recording of some other question can refuse at
+  // a cost of zero role executions rather than after one.
+  //
+  // The tail computes its pins again, from the same producer over the same
+  // inputs, and is left to: the record's pins are the tail's by contract.
+  //
+  // That leaves two calls where there was one, and this file's first version
+  // justified not checking them by saying a precomputed parameter would "put a
+  // pin back into the tail's parameters — the one thing `tail.ts` exists to
+  // refuse". That conflated two different things. What `tail.ts` refuses is a
+  // pin **an agent can influence**; comparing against a value the tail itself
+  // would compute is not that, and the comparison is what makes the equality an
+  // enforced property rather than an argument about purity. So the run asserts
+  // it below — because the transcript is now filed against `boundPins` while
+  // the record carries `tail.pins`, and a divergence would be invisible
+  // forever: a later replay binds against `boundPins` again, so the recording
+  // and the binding would stay consistent while the published record disagreed
+  // with both.
+  const boundPins = producePins({
+    requirement: input.requirement,
+    renderContext: input.renderContext,
+    closure: input.closure.pinInput,
+    corpus: input.corpus,
+  });
+  const runId = buildRunId({
+    pipelineVersion,
+    packId: input.packId,
+    requirementId: input.requirementId,
+    requirementInputSha256: boundPins.requirementInputSha256,
+    renderedConditionSha256: boundPins.renderedConditionSha256,
+    corpusClosureSha256: boundPins.corpusClosureSha256,
+  });
+
+  // Second only to the runner guard, and for the same reason: a capability
+  // holding the wrong recording must refuse before the run does any work. A
+  // live runner implements neither hook and is unaffected.
+  runner.bind?.({
+    runId,
+    packId: input.packId,
+    requirementId: input.requirementId,
+    pipelineVersion,
+    requirementInputSha256: boundPins.requirementInputSha256,
+    renderedConditionSha256: boundPins.renderedConditionSha256,
+    corpusClosureSha256: boundPins.corpusClosureSha256,
+  });
 
   // The projection, built once and by the one function that is allowed to read
   // an `AuthoredRequirement` on the reader's behalf. Nothing below reaches for
@@ -376,30 +455,45 @@ export async function runVerificationPipeline(
     gaps: sourceShapedGaps(reader.gaps),
   });
 
-  const runId = buildRunId({
-    pipelineVersion,
-    packId: input.packId,
-    requirementId: input.requirementId,
-    requirementInputSha256: tail.pins.requirementInputSha256,
-    renderedConditionSha256: tail.pins.renderedConditionSha256,
-    corpusClosureSha256: tail.pins.corpusClosureSha256,
-  });
-
+  // `runId` was derived above, from the same producer over the same inputs the
+  // tail has just walked. Deriving it a second time here from `tail.pins` would
+  // be a second construction of the run identity, and the transcript would then
+  // be filed under whichever of the two happened to be computed last.
   const transcript: RunTranscript = {
     transcriptSchemaVersion: TRANSCRIPT_SCHEMA_VERSION,
     runId,
     packId: input.packId,
     requirementId: input.requirementId,
     pipelineVersion,
-    requirementInputSha256: tail.pins.requirementInputSha256,
-    renderedConditionSha256: tail.pins.renderedConditionSha256,
-    corpusClosureSha256: tail.pins.corpusClosureSha256,
+    requirementInputSha256: boundPins.requirementInputSha256,
+    renderedConditionSha256: boundPins.renderedConditionSha256,
+    corpusClosureSha256: boundPins.corpusClosureSha256,
     roles: [
       ...(reader.execution === null ? [] : [reader.execution.transcript]),
       ...prosecutorExecutions.map((execution) => execution.transcript),
       ...(adjudicatorExecution === null ? [] : [adjudicatorExecution.transcript]),
     ],
   };
+
+  // One producer, called twice, and the two answers are the same answer.
+  // `producePins` is pure and both calls receive the same object references, so
+  // this cannot fail today — which is the point: an invariant with nothing
+  // observing it is an invariant until somebody makes `EntitledClosure` mutable
+  // or gives `producePins` a cache.
+  assertPinsAgree(boundPins, tail.pins);
+
+  // The run is over as far as the agents are concerned. A replay capability
+  // refuses here when the recording held exchanges nothing asked for; a live
+  // runner implements nothing and this is a no-op.
+  //
+  // `halted` is settled above, before the tail, so the placement is not forced
+  // by it — an earlier draft of this comment claimed it was, which would have
+  // survived a refactor as a reason not to move something that can move. What
+  // the argument *is*: a halted run is owed fewer exchanges, because agent
+  // verification stops at a gap, so `halted` has to be passed rather than
+  // assumed. Requiring a correct halt to have consumed every recorded exchange
+  // would turn the halt into a replay failure.
+  runner.settle?.({ halted });
 
   // The last thing that happens, and the only place it happens. Once the tail
   // has collated, `tail.gaps` is the whole run's answer to "was the evidence

@@ -31,7 +31,7 @@ import { EntitledClosure } from '../src/pipeline/entitlement';
 import { DEFAULT_ROLE_CONFIG, lensFor } from '../src/pipeline/config';
 import { loadPromptSet } from '../src/pipeline/prompts';
 import { runVerificationPipeline } from '../src/pipeline/orchestrate';
-import { replayRunner, TranscriptReplayError } from '../src/pipeline/runner';
+import { replayRunner, TranscriptReplayError } from '../src/pipeline/replay';
 import { ProsecutorTranscriptMissingError } from '../src/pipeline/prosecutors';
 import {
   fixtureCorpus,

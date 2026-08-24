@@ -27,8 +27,7 @@
  * Pure with respect to I/O: this module has no network and no filesystem in it.
  */
 
-import type { RoleName, RoleRequest } from './roles';
-import type { RunTranscript } from './transcript';
+import type { RoleRequest } from './roles';
 
 /** What a runner is: replayed from a recording, or live against a model. */
 export type RunnerKind = 'replay' | 'live';
@@ -40,16 +39,63 @@ export interface RoleResponse {
 }
 
 /**
+ * Which run a capability is about to execute.
+ *
+ * Handed to `bind` before the first role call, and derived entirely by
+ * orchestration out of the world it was given — the same `pipelineVersion` the
+ * result pins, the same pins the shared producer computes, the same `runId`
+ * the transcript is filed under. A capability that needed to compute any of it
+ * for itself would be a second derivation of the run's identity.
+ */
+export interface RunBinding {
+  runId: string;
+  packId: string;
+  requirementId: string;
+  pipelineVersion: string;
+  requirementInputSha256: string;
+  renderedConditionSha256: string;
+  corpusClosureSha256: string;
+}
+
+/** How a run ended, so a capability can check what it was owed. */
+export interface RunSettlement {
+  /** True when a gap stopped agent verification before the last role ran. */
+  halted: boolean;
+}
+
+/**
  * The only way orchestration reaches an agent.
  *
  * Narrow on purpose: a runner receives a fully-assembled request and returns
  * text. It does not choose a model, does not know what role means, and does not
  * validate — so a replay runner and a live runner differ in exactly one thing,
  * which is where the response comes from.
+ *
+ * `bind` and `settle` are the two optional edges of that, and both are
+ * *questions orchestration answers*, never work it delegates:
+ *
+ * ```text
+ * bind(binding)     before the first role call — "this is the run you are about
+ *                   to answer for". A replay capability refuses here when its
+ *                   recording describes a different run, so a mismatched
+ *                   transcript costs zero role executions.
+ * settle(outcome)   after the last one — "the run is over". A replay capability
+ *                   refuses here when the recording held exchanges nothing
+ *                   consumed, which is how a recording of a *larger* pipeline
+ *                   fails instead of quietly satisfying a smaller one.
+ * ```
+ *
+ * Optional because a live runner has nothing to check: it answers whatever it
+ * is asked and has no recording to be wrong about. Making them required would
+ * put two empty methods on the one implementation that spends money.
  */
 export interface AgentRunner {
   readonly kind: RunnerKind;
+  /** Called once, before any role runs. Throwing refuses the whole run. */
+  bind?(binding: RunBinding): void;
   run(request: RoleRequest): Promise<RoleResponse>;
+  /** Called once, after the last role ran. Throwing refuses the whole run. */
+  settle?(outcome: RunSettlement): void;
 }
 
 /**
@@ -78,39 +124,4 @@ export class MissingAgentRunnerError extends Error {
 export function requireRunner(runner: AgentRunner | null | undefined): AgentRunner {
   if (runner === null || runner === undefined) throw new MissingAgentRunnerError();
   return runner;
-}
-
-/** A recorded exchange the replay runner could not find. */
-export class TranscriptReplayError extends Error {
-  constructor(
-    readonly role: RoleName,
-    readonly index: number,
-    readonly runId: string,
-  ) {
-    super(
-      `transcript ${runId} holds no recorded exchange for ${role}[${index}]: the recording and the run being replayed do not describe the same pipeline`,
-    );
-    this.name = 'TranscriptReplayError';
-  }
-}
-
-/**
- * Replays a recorded run. No network, no spend, no model.
- *
- * Matched by `role` and `index` rather than by call order, so a reordering bug
- * in orchestration surfaces as a missing exchange instead of as prosecutor 2's
- * answer quietly standing in for prosecutor 1's.
- */
-export function replayRunner(transcript: RunTranscript): AgentRunner {
-  const byKey = new Map(transcript.roles.map((entry) => [`${entry.role}:${entry.index}`, entry]));
-  return {
-    kind: 'replay',
-    run(request: RoleRequest): Promise<RoleResponse> {
-      const recorded = byKey.get(`${request.role}:${request.index}`);
-      if (recorded === undefined) {
-        throw new TranscriptReplayError(request.role, request.index, transcript.runId);
-      }
-      return Promise.resolve({ outputJson: recorded.outputJson });
-    },
-  };
 }

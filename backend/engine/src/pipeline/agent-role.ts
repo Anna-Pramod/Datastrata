@@ -38,6 +38,7 @@ import {
 } from './roles';
 import type { AgentRunner } from './runner';
 import type { RolePrompt } from './prompts';
+import { requestSha256 } from './request-identity';
 import type { RoleTranscript, TranscriptMessage } from './transcript';
 
 export interface AgentRoleSpec<I, O extends PinFree<O>> {
@@ -47,6 +48,15 @@ export interface AgentRoleSpec<I, O extends PinFree<O>> {
   model: string;
   prompt: RolePrompt;
   runner: AgentRunner;
+  /**
+   * The pass this role works, for the role that has one.
+   *
+   * Declared here so the prosecutor's lens reaches the request as a field
+   * rather than only as a heading inside the rendered input. Replay compares it
+   * (`replay.ts`), and a comparison that had to read the lens back out of prose
+   * would re-implement the input renderer.
+   */
+  lens?: string;
   /** How this run's inputs are written into the message the role receives. */
   renderInput(input: I): string;
   /** The seam. `role-outputs.ts` supplies the zod-backed parsers. */
@@ -70,6 +80,7 @@ export function createAgentRole<I, O extends PinFree<O>>(spec: AgentRoleSpec<I, 
         index,
         model,
         promptSha256: prompt.sha256,
+        ...(spec.lens === undefined ? {} : { lens: spec.lens }),
         messages,
       };
 
@@ -88,11 +99,18 @@ export function createAgentRole<I, O extends PinFree<O>>(spec: AgentRoleSpec<I, 
 
       const output = spec.parse(raw);
 
+      // The binding is taken off the request object that was actually sent,
+      // never rebuilt from `spec`. A recording whose fingerprint were computed
+      // from configuration would be a fingerprint of what this code believes it
+      // sent, and would agree with itself however the request had been altered
+      // on the way out.
       const transcript: RoleTranscript = {
         role: name,
         index,
         model,
         promptSha256: prompt.sha256,
+        ...(request.lens === undefined ? {} : { lens: request.lens }),
+        requestSha256: requestSha256(request),
         messages: [...messages, { from: 'agent', content: response.outputJson }],
         outputJson: response.outputJson,
       };

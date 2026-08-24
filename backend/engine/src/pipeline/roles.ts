@@ -154,6 +154,21 @@ export interface RoleRequest {
   index: number;
   model: string;
   promptSha256: string;
+  /**
+   * The pass this execution works, for the role that has one.
+   *
+   * A first-class field rather than a value a reader has to find inside the
+   * rendered input, because replay compares it: prosecutor *i* answering under
+   * a recording made for prosecutor *j*'s lens must be refused by name, and a
+   * check that had to parse the lens back out of prose would be a second
+   * renderer of the input format — free to disagree with the first exactly when
+   * the format moves.
+   *
+   * `undefined` for the reader and the adjudicator, which have no lens. It is
+   * still a request-identity input for them (as `null`), so a role that grew a
+   * lens could not do so without moving its recorded fingerprints.
+   */
+  lens?: string;
   /** The prompt file's text, plus the interpolated inputs, as messages. */
   messages: readonly TranscriptMessage[];
 }

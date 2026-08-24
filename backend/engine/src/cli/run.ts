@@ -70,6 +70,7 @@ import { runVerificationPipeline } from '../pipeline/orchestrate';
 import { loadPromptSet, MissingPromptFileError } from '../pipeline/prompts';
 import { RoleOutputError } from '../pipeline/roles';
 import { MissingAgentRunnerError, type AgentRunner } from '../pipeline/runner';
+import type { RunTranscript } from '../pipeline/transcript';
 import { writeVerificationResult } from '../pipeline/write-result';
 import type { GapIdentityRegisters } from '../verification/result';
 import { EXIT_INTEGRITY_FAILURE, EXIT_OK, EXIT_REFUSED, type CliOutcome } from './exit-codes';
@@ -104,6 +105,27 @@ export interface RunCapabilities {
    * turns it into a named refusal with nothing contacted.
    */
   runner?: AgentRunner | null;
+  /**
+   * Where this run's recording goes, if anywhere.
+   *
+   * A capability rather than a flag, and a *callback* rather than a directory,
+   * for the same reason `runner` is one: this module must not decide that a
+   * transcript is written, where it is written, or whether writing it is
+   * allowed. A live capture harness supplies a callback that writes under
+   * `TRANSCRIPT_ROOT`; the default suite supplies one that keeps the recording
+   * in memory; the process edge in `verify.ts` supplies none, so an ordinary
+   * `verify run` records nothing anywhere.
+   *
+   * It is handed the transcript orchestration *already built* — this module
+   * assembles no recording of its own. A second assembly would be a second
+   * account of what the roles were sent.
+   *
+   * Called before the result is written and outside the write's atomicity: a
+   * transcript is execution evidence, not part of the published record, and a
+   * recording that survived a failed publish is better than a published record
+   * whose recording was lost.
+   */
+  record?(transcript: RunTranscript): void;
 }
 
 /**
@@ -207,6 +229,10 @@ export async function runRun(
     }
     throw error;
   }
+
+  // The recording, if anybody asked for one. Orchestration built it; this
+  // hands it over unchanged.
+  capabilities.record?.(run.transcript);
 
   // Exactly one call, and everything it needs is already decided. The
   // destination is the sign gate's own join; the registers are the world's.

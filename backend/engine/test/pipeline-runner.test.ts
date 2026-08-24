@@ -25,6 +25,7 @@ import { join } from 'node:path';
 import { MissingAgentRunnerError, requireRunner } from '../src/pipeline/runner';
 import {
   AgentCapabilityError,
+  MissingResponseProjectorError,
   assertLiveAgentsEnabled,
   createLiveAgentRunner,
   liveAgentsEnabled,
@@ -152,17 +153,47 @@ describe('the capability gate on the live entrypoint', () => {
     expect(liveAgentsEnabled({ [LIVE_AGENTS_ENV]: LIVE_AGENTS_TOKEN })).toBe(true);
   });
 
-  it('positive control: with the token set, the live runner does reach the network', async () => {
-    // Proves the trap can fire and that it sits on the live runner's own path.
-    // Without this the three "trap.calls is empty" assertions above would be
-    // equally green against a trap that was never installed.
+  it('refuses with the token but no way to read the provider’s answer, before the request', async () => {
+    // The second runtime gate. An HTTP body is a provider envelope, and B2 has
+    // chosen no provider — so a run that could not interpret what it paid for
+    // must not make the request at all. Token set, endpoint set, credential set,
+    // and it still refuses with nothing contacted.
     const trap = installNetworkTrap();
     process.env[LIVE_AGENTS_ENV] = LIVE_AGENTS_TOKEN;
     try {
-      const runner = new LiveAgentRunner({ endpoint: TRAP_ENDPOINT, apiKey: 'unused' });
+      expect(() =>
+        createLiveAgentRunner({ endpoint: TRAP_ENDPOINT, apiKey: 'unused' }),
+      ).toThrow(MissingResponseProjectorError);
+      const direct = new LiveAgentRunner({ endpoint: TRAP_ENDPOINT, apiKey: 'unused' });
+      await expect(direct.run(roleRequest())).rejects.toBeInstanceOf(
+        MissingResponseProjectorError,
+      );
+      expect(trap.calls).toEqual([]);
+    } finally {
+      delete process.env[LIVE_AGENTS_ENV];
+      trap.restore();
+    }
+  });
+
+  it('positive control: with the token AND a projector, the live runner does reach the network', async () => {
+    // Proves the trap can fire and that it sits on the live runner's own path.
+    // Without this the "trap.calls is empty" assertions above would be equally
+    // green against a trap that was never installed — and, since this task, the
+    // projector refusal would be equally green against a runner that could
+    // never have reached the network for some entirely different reason.
+    const trap = installNetworkTrap();
+    process.env[LIVE_AGENTS_ENV] = LIVE_AGENTS_TOKEN;
+    try {
+      const runner = new LiveAgentRunner({
+        endpoint: TRAP_ENDPOINT,
+        apiKey: 'unused',
+        // Not a provider choice: a test double standing where the adapter goes.
+        projectResponse: (body) => body,
+      });
       await expect(runner.run(roleRequest())).rejects.toThrow(/NETWORK TRAP/);
       expect(trap.calls).toEqual([TRAP_ENDPOINT]);
     } finally {
+      delete process.env[LIVE_AGENTS_ENV];
       trap.restore();
     }
   });

@@ -57,7 +57,7 @@ import { EntitledClosure, renderEntitledClosure } from '../src/pipeline/entitlem
 import { loadPromptSet } from '../src/pipeline/prompts';
 import { parseRoleOutput, type ProsecutorOutput, type ReaderOutput } from '../src/pipeline/role-outputs';
 import { RoleOutputError } from '../src/pipeline/roles';
-import { replayRunner } from '../src/pipeline/runner';
+import { replayRunner } from '../src/pipeline/replay';
 import { pipelineVersionFor, runVerificationPipeline } from '../src/pipeline/orchestrate';
 import { renderReaderInput, readerInputFor } from '../src/pipeline/reader';
 import { featuresFromRequirement } from '../src/verification/features';

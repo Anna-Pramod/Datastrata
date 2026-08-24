@@ -50,7 +50,8 @@ import type { RolePrompt } from './prompts';
 import { parseRoleOutput, type ProsecutorOutput, type ReaderOutput } from './role-outputs';
 import { createAgentRole } from './agent-role';
 import { RoleOutputError, RoleTransportError, type RoleExecution } from './roles';
-import { TranscriptReplayError, type AgentRunner } from './runner';
+import { TranscriptReplayError } from './replay';
+import type { AgentRunner } from './runner';
 import type { AuthoredRequirement } from '../types';
 import {
   ADVERSE_COVERAGE,
@@ -790,6 +791,9 @@ export async function runProsecutors(run: ProsecutorsRun): Promise<ProsecutorsOu
       model: run.config.models.prosecutor,
       prompt: run.prompt,
       runner: run.runner,
+      // The same `lens` the input is rendered from, so the request carries the
+      // pass as a field and not only as a heading. One value, two uses.
+      lens,
       renderInput: renderProsecutorInput,
       parse: (raw) => assertProsecutorCoverage(parseRoleOutput('prosecutor', index, raw), ctx, index),
     });
