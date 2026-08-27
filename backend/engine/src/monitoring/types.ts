@@ -91,12 +91,58 @@ export interface SourceAuthority {
   rationale: string;
 }
 
+/**
+ * One origin a source has authorised to carry its documents.
+ *
+ * **A different axis from `SourceAuthority`.** That one says what kind of
+ * authority the *source* is, and therefore whether a determination may rest on
+ * it. This says which *surfaces* may serve that source's artefacts. A corpus
+ * may legitimately hold a document for a source no requirement cites, so the
+ * two questions do not share a row and neither implies the other.
+ */
+export interface AuthorisedOrigin {
+  /**
+   * `exact` — one document, at this path.
+   * `path_prefix` — any document beneath this path, bounded at a path segment.
+   *
+   * No host, regex or glob kind. Twelve of seventeen CSRD sources share
+   * `eur-lex.europa.eu`, so a host-shaped permission is no permission.
+   */
+  kind: 'exact' | 'path_prefix';
+  /** https, and carrying no credentials, query or fragment. */
+  url: string;
+}
+
+/** The origins one source has authorised, as the register declares them. */
+export interface SourceAuthorisedOrigins {
+  /** SRC-NNN in the pack's citation record. */
+  sourceId: string;
+  /** At least one. A source authorising nothing has no row. */
+  origins: AuthorisedOrigin[];
+  /**
+   * Why this permission exists, and **never consulted when matching**.
+   *
+   * Required because every declarative row in this register states why it is
+   * there. Non-operative because a matcher that read prose would make prose
+   * operative: matching decides on `kind` and `url` alone.
+   */
+  rationale: string;
+}
+
 export interface SourceRegister {
   program: string;
   /** ISO date the register was last edited by a human. */
   updated: string;
   /** One governing authority per source. Surfaces are `sources`. */
   governingAuthorities: SourceAuthority[];
+  /**
+   * Which origins each source has authorised to carry its documents.
+   *
+   * A sibling of `governingAuthorities`, never nested inside it: source
+   * authority and serving-artefact authority are independent axes. Rows are
+   * required only where a corpus document claims the source (spec §19.2).
+   */
+  authorisedOrigins: SourceAuthorisedOrigins[];
   sources: RegisterSource[];
 }
 

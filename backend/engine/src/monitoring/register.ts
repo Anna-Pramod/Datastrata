@@ -9,6 +9,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
+import { canonicalOriginKey, canonicalOriginPath } from './origin';
 import type { KnowledgePack } from '../types';
 import { sourceIdsOf } from '../knowledge/provenance';
 import type { RegisterSource, SourceAuthority, SourceRegister, SourceTier, TierPolicy } from './types';
@@ -51,27 +52,6 @@ const sourceAuthority = z
     rationale: z.string().min(1),
   })
   .strict();
-
-/**
- * The declaration path, with a trailing slash removed except at the root.
- *
- * Trailing slashes are the one difference the URL parser does **not** settle.
- * It already lowercases the host and drops a default `:443`, which is why
- * declarations are compared as parsed values rather than as authored strings:
- * `https://EUR-LEX.EUROPA.EU:443/x` and `https://eur-lex.europa.eu/x` are the
- * same permission, and two rows saying so would be one permission counted
- * twice.
- */
-function canonicalDeclarationPath(parsed: URL): string {
-  const path = parsed.pathname;
-  return path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path;
-}
-
-/** The identity two declarations share when they authorise the same surface. */
-function canonicalOriginKey(kind: string, url: string): string {
-  const parsed = new URL(url);
-  return `${kind} ${parsed.origin}${canonicalDeclarationPath(parsed)}`;
-}
 
 /**
  * One surface a source has authorised to serve its artefacts.
@@ -141,7 +121,7 @@ const authorisedOrigin = z
     // sources sharing that host included — which is precisely what naming a
     // source-scoped origin exists to prevent. `exact` is unaffected: it
     // authorises one path and cannot widen to the host by accident.
-    if (value.kind === 'path_prefix' && canonicalDeclarationPath(parsed) === '/') {
+    if (value.kind === 'path_prefix' && canonicalOriginPath(parsed) === '/') {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: `${value.url}: a path_prefix must name a path beneath the origin — a root prefix authorises the whole host`,
