@@ -1,6 +1,38 @@
 {
   "program": "CSRD",
-  "updated": "2026-08-14",
+  "updated": "2026-08-27",
+  "governingAuthorities": [
+    {
+      "sourceId": "SRC-001",
+      "tier": "legal_record",
+      "rationale": "Directive 2013/34/EU is an EU directive adopted by the Parliament and Council: an enacted legal instrument, not an institution's account of one, which is what separates it from official_body."
+    },
+    {
+      "sourceId": "SRC-002",
+      "tier": "legal_record",
+      "rationale": "Directive (EU) 2022/2464 is an EU directive on the same footing. Most of its content was inserted into 2013/34/EU and is read there; its own Article 5 application timetable was not."
+    },
+    {
+      "sourceId": "SRC-004",
+      "tier": "legal_record",
+      "rationale": "Directive (EU) 2026/470 is an EU directive. Its amendments to 2013/34/EU are read in the host; its own transitional provisions, including the FY2025-26 national relief option, are only here."
+    },
+    {
+      "sourceId": "SRC-005",
+      "tier": "legal_record",
+      "rationale": "Commission Delegated Regulation (EU) 2023/2772 is a delegated regulation adopted under Article 29b — binding in its entirety and directly applicable, not guidance about a rule, which is why it is not official_body."
+    },
+    {
+      "sourceId": "SRC-007",
+      "tier": "legal_record",
+      "rationale": "The revised ESRS delegated act, C(2026) 5010, is a Commission delegated regulation. It is not official_body: that tier is for an institution's account of the law, and this is the instrument. Its temporal status is recorded in the pack's sources.json, not here, and does not bear on the tier."
+    },
+    {
+      "sourceId": "SRC-008",
+      "tier": "legal_record",
+      "rationale": "The voluntary-standard delegated act, C(2026) 5011, is a Commission delegated regulation on the same footing as SRC-007, and is the instrument defining the value-chain cap catalogue rather than an explanation of it."
+    }
+  ],
   "sources": [
     {
       "id": "W-001",
@@ -172,6 +204,57 @@
       "lastSeen": null,
       "discoveredBy": "migrated from watchlist.json 2026-08-14",
       "tierRationale": "Commission status page for acts whose enacted texts are SRC-016/017 on EUR-Lex."
+    },
+    {
+      "id": "W-011",
+      "tier": "legal_record",
+      "name": "EUR-Lex — Directive 2013/34/EU (Accounting Directive, consolidated)",
+      "authority": "EU Publications Office",
+      "url": "https://eur-lex.europa.eu/eli/dir/2013/34/oj/eng",
+      "feed": null,
+      "feedNote": "EUR-Lex exposes ELI and CELEX identifiers; the consolidation is re-issued whenever an amending act takes effect. Resolve the feed on the first map sweep.",
+      "governs": "The host instrument's current consolidated text, its amendment markers and any corrigenda",
+      "cadence": "weekly",
+      "affectsRequirements": ["CSRD-S-001", "CSRD-S-002", "CSRD-S-005", "CSRD-S-006", "CSRD-S-007", "CSRD-S-008", "CSRD-S-009", "CSRD-S-010", "CSRD-S-011", "CSRD-S-013", "CSRD-S-014", "CSRD-S-015", "CSRD-S-016"],
+      "expectedProvenance": ["SRC-001"],
+      "mustCorroborateWith": [],
+      "lastSeen": null,
+      "discoveredBy": "D1a-0b provenance audit 2026-08-27: the audit made this the host of thirteen requirements' propositions, and nothing watched it",
+      "tierRationale": "The Official Journal text of an adopted directive is the legal record itself; a consolidation of it is issued by the same authority."
+    },
+    {
+      "id": "W-012",
+      "tier": "legal_record",
+      "name": "EUR-Lex — Directive (EU) 2022/2464 (CSRD)",
+      "authority": "EU Publications Office",
+      "url": "https://eur-lex.europa.eu/eli/dir/2022/2464/oj/eng",
+      "feed": null,
+      "feedNote": "No feed confirmed. Resolve on the first map sweep.",
+      "governs": "The CSRD's own application timetable in Article 5, and amendments to it",
+      "cadence": "weekly",
+      "affectsRequirements": ["CSRD-S-003"],
+      "expectedProvenance": ["SRC-002"],
+      "mustCorroborateWith": [],
+      "lastSeen": null,
+      "discoveredBy": "D1a-0b provenance audit 2026-08-27: CSRD-S-003 traces to Article 5(2), which is not in the consolidated host",
+      "tierRationale": "The Official Journal text of an adopted directive is the legal record itself."
+    },
+    {
+      "id": "W-013",
+      "tier": "legal_record",
+      "name": "EUR-Lex — Commission Delegated Regulation (EU) 2023/2772 (ESRS Set 1)",
+      "authority": "EU Publications Office",
+      "url": "https://eur-lex.europa.eu/eli/reg_del/2023/2772/oj/eng",
+      "feed": null,
+      "feedNote": "No feed confirmed. The consolidation offered today predates Delegated Regulation (EU) 2025/1416, so the amending act must be watched with it. Resolve on the first map sweep.",
+      "governs": "The baseline ESRS standard set, its Annex I content and the acts amending it",
+      "cadence": "weekly",
+      "affectsRequirements": ["CSRD-S-012"],
+      "expectedProvenance": ["SRC-005"],
+      "mustCorroborateWith": [],
+      "lastSeen": null,
+      "discoveredBy": "D1a-0b provenance audit 2026-08-27: CSRD-S-012 selects this instrument by name and nothing watched it",
+      "tierRationale": "A delegated regulation published in the Official Journal is the legal record itself."
     }
   ]
 }

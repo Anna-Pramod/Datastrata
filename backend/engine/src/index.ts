@@ -7,7 +7,7 @@ export { loadPack, verifyIntegrity, PackIntegrityError } from './knowledge/loade
 export { sourceIdsOf } from './knowledge/provenance';
 export { rankNextQuestions } from './engine/nextQuestion';
 export { summarise } from './engine/summary';
-export { loadSourceRegister, parseSourceRegister, verifyRegisterIntegrity, verifyCitationCoverage, RegisterIntegrityError, TIER_POLICY } from './monitoring/register';
+export { loadSourceRegister, parseSourceRegister, verifyRegisterIntegrity, verifyCitationCoverage, governingAuthorityFor, isCitableSource, NoGoverningAuthorityError, RegisterIntegrityError, TIER_POLICY } from './monitoring/register';
 export type { RegisterSource, SourceRegister, SourceTier, SourceCadence, TierPolicy } from './monitoring/types';
 export { loadCorpus, CorpusDocumentNotFoundError } from './corpus/store';
 export { parseCorpusIndex, verifyCorpusIntegrity, verifyCorpusServesCoverage, CorpusIntegrityError } from './corpus/schema';

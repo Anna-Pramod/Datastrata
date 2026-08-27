@@ -8,13 +8,17 @@ import { describe, expect, it } from 'vitest';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  governingAuthorityFor,
+  isCitableSource,
   loadSourceRegister,
+  NoGoverningAuthorityError,
   parseSourceRegister,
   RegisterIntegrityError,
+  TIER_POLICY,
   verifyCitationCoverage,
   verifyRegisterIntegrity,
 } from '../src/monitoring/register';
-import type { RegisterSource } from '../src/monitoring/types';
+import type { RegisterSource, SourceAuthority } from '../src/monitoring/types';
 import { csrdPack } from './helpers';
 
 /** A minimal valid row. Tests override single fields to isolate one failure. */
@@ -41,7 +45,19 @@ function row(over: Partial<RegisterSource> = {}): RegisterSource {
 
 // Program defaults to the real pack's program so fixtures cross-validate
 // against csrdPack() out of the box; tests that need a mismatch override it.
-const register = (sources: RegisterSource[], program = 'CSRD') => ({ program, updated: '2026-08-14', sources });
+const register = (
+  sources: RegisterSource[],
+  program = 'CSRD',
+  governingAuthorities: SourceAuthority[] = [],
+) => ({ program, updated: '2026-08-14', governingAuthorities, sources });
+
+/** The real register's directory, needed by more than one block. */
+const monitoringDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'monitoring');
+
+/** A minimal valid governing authority. */
+function authority(over: Partial<SourceAuthority> = {}): SourceAuthority {
+  return { sourceId: 'SRC-001', tier: 'legal_record', rationale: 'An EU directive is the legal record', ...over };
+}
 
 describe('source register schema', () => {
   it('accepts a well-formed register', () => {
@@ -228,10 +244,134 @@ describe('citation firewall', () => {
   });
 });
 
+describe('a source\'s governing authority, distinct from the surfaces that watch it', () => {
+  it('resolves a source to the one statement of what it is', () => {
+    const reg = parseSourceRegister(register([row()], 'CSRD', [authority()]));
+    expect(governingAuthorityFor(reg, 'SRC-001').tier).toBe('legal_record');
+    expect(isCitableSource(reg, 'SRC-001')).toBe(true);
+  });
+
+  it('refuses a source with no authority rather than inferring one from a surface', () => {
+    // The counterexample that keeps the positive claim from passing vacuously:
+    // W-001 names SRC-004 in expectedProvenance and is a legal_record row, so a
+    // tier could be *inferred* here. The lookup refuses instead.
+    const reg = parseSourceRegister(
+      register([row({ expectedProvenance: ['SRC-004'] })], 'CSRD', [authority()]),
+    );
+    expect(() => governingAuthorityFor(reg, 'SRC-004')).toThrow(NoGoverningAuthorityError);
+    expect(() => governingAuthorityFor(reg, 'SRC-004')).toThrow(/SRC-004/);
+  });
+
+  it('requires the field, so a register cannot omit governing authority silently', () => {
+    // Without this, making the schema `.optional()` leaves the whole suite green
+    // and the record becomes advisory (evidence standard, failure mode 6).
+    expect(() =>
+      parseSourceRegister({ program: 'CSRD', updated: '2026-08-14', sources: [row()] }),
+    ).toThrow(/governingAuthorities/);
+  });
+
+  it('rejects two governing authorities for one source', () => {
+    expect(() =>
+      parseSourceRegister(
+        register([row()], 'CSRD', [authority(), authority({ tier: 'tracker' })]),
+      ),
+    ).toThrow(/SRC-001: more than one governing authority/);
+  });
+
+  it('requires a rationale, so a source tier is never assigned without a stated reason', () => {
+    // Schema violations surface as ZodError, matching the sibling tierRationale
+    // test above; only cross-row problems become RegisterIntegrityError.
+    expect(() =>
+      parseSourceRegister(register([row()], 'CSRD', [authority({ rationale: '' })])),
+    ).toThrow(/rationale/);
+  });
+
+  it('rejects an authority for a source the pack does not carry', () => {
+    const reg = parseSourceRegister(register([row()], 'CSRD', [authority({ sourceId: 'SRC-999' })]));
+    expect(() => verifyRegisterIntegrity(reg, csrdPack())).toThrow(/authority for SRC-999/);
+  });
+
+  it('keeps the two surfaces watching the pending acts at disagreeing tiers', () => {
+    // W-004 (official_body) and W-005 (legal_record) both watch SRC-007 and
+    // SRC-008. That is not a contradiction: they are different surfaces for the
+    // same pending acts, and W-004's own onEvent says the OJ record governs the
+    // event. The authority is stated separately, and this asserts the surfaces
+    // still disagree — if they ever stopped, this test would stop discriminating.
+    const reg = loadSourceRegister(monitoringDir, csrdPack());
+    for (const sourceId of ['SRC-007', 'SRC-008']) {
+      const watchers = reg.sources.filter((s) => s.expectedProvenance.includes(sourceId));
+      expect(watchers.map((s) => s.id).sort(), sourceId).toEqual(['W-004', 'W-005']);
+      expect(new Set(watchers.map((s) => s.tier)), sourceId).toEqual(
+        new Set(['official_body', 'legal_record']),
+      );
+      expect(governingAuthorityFor(reg, sourceId).tier, sourceId).toBe('legal_record');
+    }
+  });
+});
+
+describe('the governing authority decides citability, not a surface sharing its host', () => {
+  it('refuses a cited source whose governing authority may not be cited', () => {
+    // The disagreement the record exists to prevent: the host rule would call
+    // this citable, because eur-lex.europa.eu carries citable surfaces. The
+    // authority says tracker, and the authority governs.
+    const pack = csrdPack();
+    const cited = pack.sources[0]!;
+    const reg = parseSourceRegister(
+      register([row()], 'CSRD', [authority({ sourceId: cited.id, tier: 'tracker' })]),
+    );
+    expect(() => verifyCitationCoverage(reg, pack)).toThrow(
+      new RegExp(`${cited.id} appears in sources.json, but its governing authority is tracker`),
+    );
+  });
+
+  it('still falls back to the host rule for a source with no governing authority', () => {
+    // The positive sibling: without it, the check above would pass equally
+    // against an implementation that refused every source. Narrowed to one
+    // source so the fixture does not have to carry every host the pack cites.
+    const pack = csrdPack();
+    const eurLexSource = pack.sources.find((s) => s.url.includes('eur-lex.europa.eu'))!;
+    const onePack = { ...pack, sources: [eurLexSource] };
+    const reg = parseSourceRegister(register([row()], 'CSRD', []));
+    expect(() => verifyCitationCoverage(reg, onePack)).not.toThrow();
+  });
+});
+
+describe('the audited provenance universe resolves to governing authority', () => {
+  /**
+   * The universe the D1a-0b audit produced
+   * (`docs/superpowers/reports/2026-08-24-d1a-provenance-audit.md` §11).
+   * Written out rather than derived from requirements.json, because the pack
+   * still carries the pre-audit citations until Task 4 re-authors them — a
+   * derivation would assert the old universe and pass for the wrong reason.
+   */
+  const AUDITED = ['SRC-001', 'SRC-002', 'SRC-004', 'SRC-005', 'SRC-007', 'SRC-008'] as const;
+
+  it('every audited source has exactly one governing authority, and it permits citation', () => {
+    const reg = loadSourceRegister(monitoringDir, csrdPack());
+    for (const sourceId of AUDITED) {
+      const matches = reg.governingAuthorities.filter((a) => a.sourceId === sourceId);
+      expect(matches, `${sourceId} governing authority count`).toHaveLength(1);
+      // The tier by name, not merely `citable` — official_body is citable too,
+      // so asserting citability alone would pass a silent downgrade.
+      expect(matches[0]!.tier, `${sourceId} tier`).toBe('legal_record');
+      expect(TIER_POLICY[matches[0]!.tier].citable, `${sourceId} citable`).toBe(true);
+    }
+  });
+
+  it('a source the audit removed has no authority — the check is not satisfied by everything', () => {
+    // The counterexample. SRC-010 and SRC-015 were cited before the audit and
+    // are not in the audited universe; if the assertion above passed for them
+    // too it would be measuring nothing.
+    const reg = loadSourceRegister(monitoringDir, csrdPack());
+    for (const sourceId of ['SRC-010', 'SRC-015']) {
+      expect(() => governingAuthorityFor(reg, sourceId)).toThrow(NoGoverningAuthorityError);
+    }
+  });
+});
+
 describe('the real CSRD source register', () => {
   const pack = csrdPack();
-  const here = dirname(fileURLToPath(import.meta.url));
-  const dir = join(here, '..', 'monitoring');
+  const dir = monitoringDir;
   const reg = loadSourceRegister(dir, pack);
 
   it('loads, validates and cross-references cleanly', () => {
@@ -241,14 +381,20 @@ describe('the real CSRD source register', () => {
 
   it('loads without a pack when no cross-validation is needed', () => {
     const bare = loadSourceRegister(dir);
-    expect(bare.sources).toHaveLength(10);
+    expect(bare.sources).toHaveLength(13);
   });
 
-  it('carries every surface migrated from the watchlist', () => {
-    expect(reg.sources).toHaveLength(10);
+  it('carries every surface migrated from the watchlist, plus the three the audit added', () => {
+    // W-001..W-010 came from watchlist.json; W-011..W-013 were added by the
+    // D1a-0b audit, which made SRC-001, SRC-002 and SRC-005 load-bearing while
+    // nothing watched them. The count is asserted alongside both endpoints so a
+    // silently dropped row cannot pass.
+    expect(reg.sources).toHaveLength(13);
     const ids = reg.sources.map((s) => s.id);
     expect(ids).toContain('W-001');
     expect(ids).toContain('W-010');
+    expect(ids).toContain('W-011');
+    expect(ids).toContain('W-013');
   });
 
   it('states a tier rationale and a feed note for every surface', () => {

@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
 import type { KnowledgePack } from '../types';
-import type { RegisterSource, SourceRegister, SourceTier, TierPolicy } from './types';
+import type { RegisterSource, SourceAuthority, SourceRegister, SourceTier, TierPolicy } from './types';
 
 export const TIER_POLICY: Record<SourceTier, TierPolicy> = {
   legal_record: { sufficientAlone: 'yes', citable: true, mustCorroborateWith: [] },
@@ -43,10 +43,19 @@ const registerSource = z
   })
   .strict();
 
+const sourceAuthority = z
+  .object({
+    sourceId: z.string().regex(/^SRC-\d{3}$/, 'authority sourceId must be SRC-NNN'),
+    tier,
+    rationale: z.string().min(1),
+  })
+  .strict();
+
 const sourceRegister = z
   .object({
     program: z.string().min(1),
     updated: z.string().min(1),
+    governingAuthorities: z.array(sourceAuthority),
     sources: z.array(registerSource).min(1),
   })
   .strict();
@@ -79,8 +88,49 @@ export function parseSourceRegister(raw: unknown): SourceRegister {
     }
   }
 
+  // Exactly one governing authority per source, checked rather than assumed.
+  // "Exactly one" is the whole property this record exists to provide, so it is
+  // asserted here rather than left to the shape of the data — an object keyed by
+  // sourceId would collapse a duplicated key in `JSON.parse` and the second
+  // statement would vanish where nothing could see it.
+  const claimed = new Set<string>();
+  for (const a of reg.governingAuthorities) {
+    if (claimed.has(a.sourceId)) {
+      problems.push(`${a.sourceId}: more than one governing authority — a source may have only one`);
+    }
+    claimed.add(a.sourceId);
+  }
+
   if (problems.length > 0) throw new RegisterIntegrityError(problems);
   return reg;
+}
+
+/**
+ * A source's governing authority, or a refusal.
+ *
+ * The one derivation. Reading a tier off a surface row that happens to name the
+ * source in `expectedProvenance` is what this replaces: rows describe surfaces,
+ * several may watch one source, and two of them disagree about tier by design
+ * (W-004 official_body, W-005 legal_record, both watching SRC-007/SRC-008).
+ */
+export class NoGoverningAuthorityError extends Error {
+  constructor(readonly sourceId: string) {
+    super(
+      `${sourceId} has no governing authority in the source register: a cited source must have exactly one statement of what it is and whether it may be cited — add an authorities entry rather than inferring a tier from whichever surface happens to watch it`,
+    );
+    this.name = 'NoGoverningAuthorityError';
+  }
+}
+
+export function governingAuthorityFor(register: SourceRegister, sourceId: string): SourceAuthority {
+  const found = register.governingAuthorities.find((a) => a.sourceId === sourceId);
+  if (found === undefined) throw new NoGoverningAuthorityError(sourceId);
+  return found;
+}
+
+/** Whether this source's governing authority permits it to be cited. */
+export function isCitableSource(register: SourceRegister, sourceId: string): boolean {
+  return TIER_POLICY[governingAuthorityFor(register, sourceId).tier].citable;
 }
 
 /**
@@ -116,6 +166,12 @@ export function verifyRegisterIntegrity(register: SourceRegister, pack: Knowledg
     }
   }
 
+  for (const a of register.governingAuthorities) {
+    if (!srcIds.has(a.sourceId)) {
+      problems.push(`authority for ${a.sourceId}: pack ${pack.id} carries no such source`);
+    }
+  }
+
   // The firewall. sources.json is the citation record; a surface that may not
   // be cited must not appear there, or corroboration could be bypassed.
   const uncitable = new Map<string, string>();
@@ -143,12 +199,35 @@ export function verifyRegisterIntegrity(register: SourceRegister, pack: Knowledg
  * is what makes product law 9 true rather than aspirational.
  */
 export function verifyCitationCoverage(register: SourceRegister, pack: KnowledgePack): void {
-  const citable = new Set(
+  const citableHosts = new Set(
     register.sources.filter((s) => TIER_POLICY[s.tier].citable).map((s) => hostOf(s.url)),
   );
-  const problems = pack.sources
-    .filter((ps) => !citable.has(hostOf(ps.url)))
-    .map((ps) => `${ps.id} cites ${hostOf(ps.url)}, which is not a citable surface in the register`);
+
+  const problems: string[] = [];
+  for (const ps of pack.sources) {
+    const governing = register.governingAuthorities.find((a) => a.sourceId === ps.id);
+
+    // Where the register states what the source *is*, that governs. The host
+    // rule below is what this replaces for such a source: it answers from
+    // whichever surface happens to share a domain, which for a source watched by
+    // two surfaces of different tiers was never an answer at all.
+    if (governing !== undefined) {
+      if (!TIER_POLICY[governing.tier].citable) {
+        problems.push(
+          `${ps.id} appears in sources.json, but its governing authority is ${governing.tier}, which may never be cited`,
+        );
+      }
+      continue;
+    }
+
+    // Fallback, unchanged, for catalogue entries that have no governing
+    // authority yet. It stays until every entry has one; spec §19 replaces the
+    // host rule outright at Task 5.
+    if (!citableHosts.has(hostOf(ps.url))) {
+      problems.push(`${ps.id} cites ${hostOf(ps.url)}, which is not a citable surface in the register`);
+    }
+  }
+
   if (problems.length > 0) throw new RegisterIntegrityError(problems);
 }
 
