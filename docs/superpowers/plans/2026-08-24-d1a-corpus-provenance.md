@@ -31,6 +31,8 @@
 
 `docs/superpowers/specs/2026-08-24-d1a-corpus-provenance-design.md` (committed at `b68bb8e`) governs. Its architecture is settled and this plan does not reopen it. Where implementation reconnaissance finds a **direct contradiction** with the repository, stop and report rather than deciding locally.
 
+**Required spec amendment before Task 4** (raised by the D1a-0b audit, §2 of `reports/2026-08-24-d1a-provenance-audit.md`): the spec must state that an **official consolidation may serve as a pinned current-reading artefact without being represented as an authentic, legally effective publication**, and the corpus must be able to say which it holds. Three things are currently conflated — requirement provenance (the current instrument and proposition), the serving artefact (e.g. the EUR-Lex consolidated text, which has no legal effect), and the authentic authority basis (the OJ publications). Task 4 authors provenance against the first of these, so the amendment lands before it. The metadata/authority mechanism is decided after the audit's impact is known, not here.
+
 ---
 
 ## 1. Current-state reconnaissance
@@ -209,54 +211,46 @@ d) the proposition itself is over-authored
   5. **Possible 2006/43 dependency (S-015).** `sources.json` carries no Audit Directive entry. Determine whether the Art. 34 text already in the corpus fully supports S-015, or whether a source is missing.
 - **The SRC-010 substitution test runs here** (spec §17), against the propositions located at `32026L0470.txt:450`, `:456`, `:458`, `:478`, `:622`, `:642`, `:80`. Its outcome decides whether S-010/S-011 carry `SRC-010` into version 3 (§4.3).
 - **Positive controls:** the audit **procedure** must be shown able to trace a known proposition end to end — pick one already located in the spec, reproduce it independently, and record the trace. This proves the method works. It does **not** preordain that all six currently reachable requirements remain fully supported; a reachable requirement that fails tracing is a finding, not a method error.
-#### The paired national-law experiment (questions 3 and 4)
+#### The national-law probes (questions 3 and 4)
 
-**Why one run cannot answer the branch question.** In the current pack, S-004 and S-013 cite `SRC-015`, `SRC-015` is unserved, and the B2 source-completeness guard therefore halts each run before any determination is reached. That guard is doing its job — and in doing it, it **masks** the very boundary the branch decision turns on. A current-pack run can prove *"today this is `corpus_gap(SRC-015)`"*. It cannot prove *"without `SRC-015`, the country boundary safely produces `national_law_unresolved`"*, which is the proposition §4.3 branches on. So each requirement needs **two** runs.
+**Amended 2026-08-24, during execution.** The original design asked for one experiment spanning both layers. It cannot work, for two reasons established against the tree and recorded in the audit report:
 
-**Probe A — current-state control.** Real `packDir`, real `corpusDir`, scratch `verificationDir` A, `capabilities.runner` unset. Must show:
+- `orchestrate.ts:310` calls `requireRunner(input.runner)` **before** `runBlindReader` at `:415`. A gap-bearing requirement does **not** halt before the runner is needed; withholding the runner refuses the run with `no_execution_capability` before source completeness is ever evaluated. A **synthetic, non-network, request-counting** runner must be supplied, and its request count is the evidence.
+- `national_law_unresolved` is not produced on the `runRun` path at all. It arises in the **assessment** path — `condition/evaluate.ts` resolving a fact's `missingReason` or the `ratified_country_packs` catalogue miss, reached through `engine/evaluate.ts` `assess()`.
 
-```
-corpus_gap(SRC-015)
-zero agent requests
-```
+Verification provenance and entity assessment are **orthogonal layers**, and each gets its own proof. Run S-004 and S-013 independently; never average their outcomes.
 
-This establishes the mask, and it is what makes Probe B's result a *transition* rather than an isolated observation.
-
-**Probe B — candidate-provenance run.** Build a temporary copy of the pack **outside the repository's authored tree**, differing from the real pack **only** in the candidate re-authoring under test: `SRC-015` removed from that one requirement's authored sources, every other authored semantic identical.
-
-Removing a cited source moves `requirementSha256`, so the copied pack would fail `assertVersionIntegrity` as-is. **Do not weaken or bypass version integrity to run the experiment.** Satisfy it honestly instead, and the path for that already exists: `registryDir(paths) = join(paths.verificationDir, 'requirement-versions')` (`cli/sign.ts:182`), so the temporary registry entry for the candidate requirement lives in **scratch `verificationDir` B** and never touches the repository. The candidate pack is internally valid on its own terms.
-
-Then call the same production `runRun` with: temporary candidate `packDir`, **real** `corpusDir`, scratch `verificationDir` B, `capabilities.runner` unset. The chain under test:
+**Verification control** — real/current pack, real corpus, scratch `verificationDir`, synthetic counting runner:
 
 ```
-source completeness no longer stops on SRC-015
-      ↓
-the country-specific fact is requested
-      ↓
-the real country-pack boundary executes
-      ↓
-national implementing evidence absent / pack unratified
-      ↓
-national_law_unresolved
+expect   corpus_gap(SRC-015)
+         runner requests = 0
 ```
 
-The two requirements hinge on **different facts**, which is precisely why one cannot stand in for the other: `fact-types.json` carries `missingReason: "national_law_unresolved"` on `entity.member_state_transition_option` (S-004's condition fact) and on `entity.governing_member_state` (S-013's). Record which fact each probe actually reached.
-
-**The paired evidence, per requirement:**
+**Verification candidate** — temporary pack with `SRC-015` removed from that requirement only, temporary valid version bookkeeping in the scratch registry, real corpus, scratch `verificationDir`, same synthetic runner:
 
 ```
-CURRENT PACK      SRC-015 cited   → corpus_gap(SRC-015), zero requests
-CANDIDATE PACK    SRC-015 absent  → no corpus_gap(SRC-015),
-                                    national_law_unresolved, zero requests
+expect   corpus_gap(SRC-015) absent
+         source-completeness barrier removed
 ```
 
-That pair proves the boundary transition *caused by* the proposed correction. Observing `national_law_unresolved` alone would not.
+**Do not require zero runner requests here.** Reaching the runner is the correct positive result: it is what "the barrier is gone" looks like.
 
-**Each requirement's outcome is its own.** If a Probe B instead silently determines, reaches the agent runner, loses the country dependency, or throws for an unrelated reason, that is **stop-and-fix evidence for that requirement** — it retains its citation and is repaired later. It says nothing about the other requirement, whose result stands on its own paired evidence (§4.3).
+**Assessment proof** — run the production `assess()` path independently and establish, per requirement:
 
-**Causal narrowness is part of the evidence.** Record a manifest or diff showing the temporary candidate pack differs from the real pack only in the intended authored removal plus the version bookkeeping integrity requires. The experiment must **not** simultaneously retier W-002, modify country-pack evidence, ratify anything, change condition logic, or change corpus contents. Retiering W-002 is the later authored landing decision (§4.3) — this experiment answers only: *what happens if the tracker stops masquerading as requirement evidence?*
+```
+S-004  → entity.member_state_transition_option → national_law_unresolved
+S-013  → entity.governing_member_state         → national_law_unresolved
+```
 
-**Isolation is native and must be used.** `runRun(args, paths, capabilities)` (`cli/run.ts:161`) takes `VerifyPaths { packDir, corpusDir, verificationDir }` as a parameter, and every write destination derives from it — `resultPath`, `ledgerPath`, `promotionsPath` (`cli/sign.ts:172-182`). The orchestration exercised is the real one; only the destinations move. Two further properties make this safe rather than merely tidy: a gap-bearing requirement halts **before** the runner is needed, so no model can be reached even in principle; and if a probe unexpectedly reaches the runner, `MissingAgentRunnerError` refuses rather than falling back. **"Run in the real pack and delete whatever appeared" is not acceptable** while isolated destinations exist.
+**Do not claim that removing `SRC-015` causes `national_law_unresolved`.** The layers are independent and the audit must say only what each probe shows.
+
+**Also trace the producer of `ratified_country_packs`.** Its `entries` are empty and the evaluator does not read `DE.json`/`IE.json`. Establish whether `country-pack ratification → ratified_country_packs` is wired at all. If there is no production derivation, that is an audit finding — the empty catalogue is then **not** proof that the country-pack implementation is wired.
+
+**Causal narrowness is part of the evidence.** Record a manifest showing the candidate pack differs from the real pack only in the intended authored removal plus the version bookkeeping integrity requires. The experiment must not retier W-002, modify country packs, ratify anything, change condition logic, or alter the corpus.
+
+**Isolation is native and must be used.** `runRun(args, paths, capabilities)` (`cli/run.ts:161`) takes `VerifyPaths { packDir, corpusDir, verificationDir }`, and every write destination derives from it (`cli/sign.ts:172-182`). The orchestration exercised is the real one; only the destinations move, and the runner is synthetic. **"Run in the real pack and delete whatever appeared" is not acceptable** while isolated destinations exist.
+
 - **Mutation that must land:** none — this task produces evidence rather than behaviour. Its integrity check is that a reviewer picks three rows at random and reproduces them from the cited artefacts.
 - **Expected first relevant red:** not applicable.
 - **Acceptance gates:** sixteen rows; every `survives?` answered with a citation; four probe runs (A and B, for S-004 and S-013) carrying real command output and the causal-narrowness manifest; the SRC-010 substitution test answered pass/fail with its evidence; the branch decision stated per requirement, unaveraged.
