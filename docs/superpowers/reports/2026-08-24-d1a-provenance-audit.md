@@ -4,6 +4,7 @@
 **Base:** `fdc0fe5` *Read the cited source set through one function*
 **Task:** D1a-0b of `docs/superpowers/plans/2026-08-24-d1a-corpus-provenance.md`. Document only — no code, no data, no schema.
 **Governs:** where this audit and the spec's §12 disposition table disagree, **this audit governs the expectation**. It does not change any settled architectural rule.
+**Corrected 2026-08-27 — S-004.** One disposition in this audit was wrong and is corrected below: **`S-004` cites `SRC-002`, locator `Article 5(2), fifth subparagraph`** — not `SRC-004`. The audited universe is **five** sources, not six, and `SRC-004` is cited by no requirement. §3, §5, §8 Q2, §11 and §14 carry the correction; the §10 probe transcripts are left as the record of runs that happened, and their `SRC-015` conclusion is unaffected.
 
 ---
 
@@ -66,7 +67,15 @@ Every proposition traced below is in that document:
 
 **What `SRC-004` uniquely holds.** Only its own transitional and amending provisions, which are *not* in the host: the FY2025–26 national relief option (`32026L0470.txt:1057`), and the amendment to Article 5(2) of Directive (EU) 2022/2464 that closes the first-wave window (`:981`, `:1021`). Searching the host for `1 January 2025`/`31 December 2026` returns nothing.
 
-**Consequence.** `SRC-004` is currently cited by fourteen of sixteen requirements. Under the rule in §2 it is *lineage* for all but one of them. This inverts the spec's §12 expectation, which treated `SRC-004` as the served backbone and `SRC-002` as the marginal case. The audit governs.
+> **Correction — 2026-08-27. `SRC-004` uniquely holds nothing, and the search above tested the wrong host.**
+>
+> The relief option at `:1057` is not a standalone transitional provision. It sits under `Article 3` — `Amendments to Directive (EU) 2022/2464` (`:963`–`:967`), reached through `in Article 5, paragraph 2 is amended as follows:` (`:971`) and `the following subparagraph is added:` (`:1055`). It is quoted insertion text, structurally identical to the first-wave amendments at `:981`/`:1021` that this audit already attributed to the host.
+>
+> Its host is Article 5(2) of Directive (EU) 2022/2464 — **`SRC-002`** — where the derogation now stands as the **fifth** subparagraph, the fourth being the separate sentence applying the Article 3 measures. The corpus does not serve `SRC-002`; the grep quoted above ran over `32013L0034` (`SRC-001`), which is not the host for Article 5(2), so it could not have found the derogation and its silence established nothing.
+>
+> Under §2 the proposition is therefore **incorporated, not unique**, and `SRC-004` is *lineage* for S-004 exactly as it is for the other thirteen. The paragraph above is left as written because it records how the audit reached the wrong result.
+
+**Consequence.** `SRC-004` is currently cited by fourteen of sixteen requirements. Under the rule in §2 it is *lineage* for all but one of them — **corrected 2026-08-27: for *all* of them; the exception, S-004, was the error above**. This inverts the spec's §12 expectation, which treated `SRC-004` as the served backbone and `SRC-002` as the marginal case. The audit governs.
 
 ---
 
@@ -90,13 +99,14 @@ This is a gap between the spec's §10 architecture (*"referenced through the cou
 
 Tier is the source's `monitoring/source-register.json` row; **no row** means the source has none (six sources are rowless — Task 3's input). ⁺ `SRC-007` and `SRC-008` each appear in **two** rows with **different** tiers — W-004 `official_body` and W-005 `legal_record`. The matrix shows `legal_record`; Task 3 must resolve which row governs.
 Locators are `32013L0034.txt` unless another file is named. *deferred* = the instrument is unserved, so no locator can be quoted yet.
+⁑ **Corrected 2026-08-27.** The S-004 row originally read `SRC-004 ✔ uniquely`, removing only `SRC-015`. It now takes the same shape as S-003, for the same reason and from the same amending article — see the correction in §3.
 
 | # | Proposition the determination rests on | Cited now | Locator | Tier | Survives? | Remove | Add | Country dep. |
 |---|---|---|---|---|---|---|---|---|
 | **S-001** | EU incorporation + Accounting-Directive legal form + turnover > €450m + > 1 000 employees (Art. 19a(1)) | SRC-004, SRC-001 | `:1311`; scope extension `:169` | `legal_record` / **no row** | SRC-001 ✔ · SRC-004 ✘ lineage | SRC-004 | — | no |
 | **S-002** | Parent + group exceeds the same two thresholds consolidated (Art. 29a) | SRC-004, SRC-001 | `:2309` | as above | SRC-001 ✔ · SRC-004 ✘ | SRC-004 | — | no |
 | **S-003** | Prior FY2024 reporters are a distinct population, closed by the amended wave window | SRC-004, SRC-006 | Art. 5(2) of Dir. 2022/2464 as amended — amending instruction at `32026L0470.txt:981`, `:1021`; **host text unserved** (*deferred*) | `legal_record` / **no row** | **neither survives as authored** | SRC-006, SRC-004 | **SRC-002** | no |
-| **S-004** | Member States may relieve undertakings below either amended threshold for FY beginning 2025-01-01 – 2026-12-31, where the option is exercised | SRC-004, SRC-015 | `32026L0470.txt:1057` — **uniquely** in the amending act | `legal_record` / `legal_record` | SRC-004 ✔ **uniquely** · SRC-015 ✘ | SRC-015 | — | **yes** — `entity.member_state_transition_option` |
+| **S-004** | Member States may relieve undertakings below either amended threshold for FY beginning 2025-01-01 – 2026-12-31, where the option is exercised | SRC-004, SRC-015 | Art. 5(2), **fifth subpara.**, of Dir. 2022/2464 as amended — amending instruction at `32026L0470.txt:1053`–`:1057`; **host text unserved** (*deferred*) | `legal_record` / `legal_record` | **neither survives as authored** ⁑ | SRC-015, SRC-004 ⁑ | **SRC-002** ⁑ | **yes** — `entity.member_state_transition_option` |
 | **S-005** | Subsidiary exemption where included in a qualifying EU-parent consolidated report and the publication/identification conditions are met (Art. 19a(9)) | SRC-002, SRC-004 | `:1545`, conditions `:1553`–`:1579` | **no row** / `legal_record` | neither survives | SRC-002, SRC-004 | **SRC-001** | no |
 | **S-006** | Same exemption via a third-country parent reporting under ESRS or standards determined equivalent, with assurance and Taxonomy information | SRC-002, SRC-004, SRC-009 | `:1545` (third-country branch + equivalence route), assurance/publication `:1569`, Taxonomy `:1575` | **no row** / `legal_record` / **no row** | none survives | SRC-002, SRC-004, SRC-009 | **SRC-001** | no |
 | **S-007** | Non-EU ultimate parent with > €450m EU turnover in each of two consecutive years (Art. 40a) | SRC-004, SRC-001 | `:3479` | `legal_record` / **no row** | SRC-001 ✔ · SRC-004 ✘ | SRC-004 | — | no |
@@ -214,6 +224,8 @@ Per §6, S-014's verified surface is its title plus its rendered composition —
 
 **Q2 — S-003 → does `SRC-006` survive? No, and `SRC-004` does not survive either.**
 Delegated Regulation (EU) 2025/1416 postpones *ESRS disclosure application dates*; it says nothing about which undertakings formed the FY2024 wave. The wave window is Article 5(2) of Directive (EU) 2022/2464 as amended, and the corpus holds only the *amending instruction* (`32026L0470.txt:981`, `:1021`), not the host text. Under §2 the citation belongs to the host instrument: **S-003 loses `SRC-006` and `SRC-004` and gains `SRC-002`**, which is unserved and will gap until ingested. The audit does not soften this to preserve reachability.
+
+**Corrected 2026-08-27 — S-004 takes this same path.** Its derogation is added to the *same* Article 5(2) by the *same* Article 3(1) of Directive (EU) 2026/470 (point (c), at `32026L0470.txt:1053`–`:1057`). Answering Q2 one way for S-003 and the other way for S-004 was internally inconsistent: **S-004 also loses `SRC-004` and gains `SRC-002`**, and it also gaps until the host is ingested.
 
 **Q3 / Q4 — the S-004 and S-013 national-law paths.** §7.
 
@@ -351,28 +363,31 @@ assessment     independently of provenance, both requirements surface
 
 ## 11. The source universe this audit produces
 
-**Removals (24 citations):** `SRC-004` from S-001, S-002, S-003, S-005, S-006, S-007, S-008, S-009, S-010, S-011, S-014, S-015, S-016 (13) · `SRC-002` from S-005, S-006, S-014, S-015 (4) · `SRC-006` from S-003 and S-012 (2) · `SRC-009` from S-006 (1) · `SRC-010` from S-010, S-011 (2) · `SRC-015` from S-004, S-013 (2).
+**Removals (25 citations):** `SRC-004` from S-001, S-002, S-003, **S-004**, S-005, S-006, S-007, S-008, S-009, S-010, S-011, S-014, S-015, S-016 (14 — S-004 added by the 2026-08-27 correction) · `SRC-002` from S-005, S-006, S-014, S-015 (4) · `SRC-006` from S-003 and S-012 (2) · `SRC-009` from S-006 (1) · `SRC-010` from S-010, S-011 (2) · `SRC-015` from S-004, S-013 (2).
 
-**Additions:** `SRC-001` to S-005, S-006, S-008, S-009, S-010, S-011, S-014, S-015, S-016 · `SRC-002` to S-003.
+**Additions (11):** `SRC-001` to S-005, S-006, S-008, S-009, S-010, S-011, S-014, S-015, S-016 (9) · `SRC-002` to S-003 and **S-004** (2 — S-004 added by the 2026-08-27 correction).
 
-**Re-attributions:** `SRC-002` leaves four requirements and arrives at one different one. `SRC-004` retreats from fourteen requirements to one.
+**Re-attributions:** `SRC-002` leaves four requirements and arrives at two different ones. `SRC-004` retreats from fourteen requirements to **none**.
 
-32 citations today − 24 removals + 10 additions = **18**, across **six** sources:
+32 citations today − 25 removals + 11 additions = **18**, across **five** sources:
 
 | Source | Cited by | Served? |
 |---|---|---|
 | `SRC-001` | S-001, S-002, S-005, S-006, S-007, S-008, S-009, S-010, S-011, S-013, S-014, S-015, S-016 (13) | **yes** |
-| `SRC-002` | S-003 (1) | no |
-| `SRC-004` | S-004 (1) | **yes** |
+| `SRC-002` | S-003, S-004 (2) | no |
 | `SRC-005` | S-012 (1) | no |
 | `SRC-007` | S-012 (1) | no |
 | `SRC-008` | S-011 (1) | no |
 
-**Cited by no requirement after this audit:** `SRC-006`, `SRC-009`, `SRC-010`, `SRC-015` (each removed here). `SRC-003` was already cited by nothing and is untouched. Each remains a monitoring target; none is deleted from the catalogue by this audit.
+> **Correction — 2026-08-27.** This table originally read **six** sources, with `SRC-004` cited by S-004 and served. The citation **total is unchanged at 18**: S-004 is *re-attributed*, not stripped, so the correction moves one citation from `SRC-004` to `SRC-002` and adjusts both sides of the arithmetic (24 → 25 removals, 10 → 11 additions). `SRC-004` leaves the universe entirely.
+
+**Cited by no requirement after this audit:** `SRC-004`, `SRC-006`, `SRC-009`, `SRC-010`, `SRC-015` (each removed here; `SRC-004` by the 2026-08-27 correction). `SRC-003` was already cited by nothing and is untouched. Each remains a monitoring target; none is deleted from the catalogue by this audit. **`SRC-004` keeps the governing authority Task 3 gave it**: Directive (EU) 2026/470 is still an EU directive and still a real legal source. Leaving the requirement-provenance universe is a statement about what rests on it, not about what it is.
 
 **Register rows Task 3 must create** (rowless sources still in the universe): `SRC-001`, `SRC-002`, `SRC-005`. `SRC-003` (never cited), `SRC-006` and `SRC-009` (removed here) are rowless and outside the universe — Task 3 decides whether the catalogue keeps them, per its own scoping rule.
 
 **Reachability is not stated here.** It is measured at D1a-3 from the corpus that actually results, and no target is set.
+
+> **Where the 2026-08-27 correction lands downstream.** Stated as a pointer, not as a finding — this report does not assert reachability. `SRC-002` is unserved, so S-004 moves from the served side to the gap-bearing side, and the pre-ingestion partition *measured* at Task 4 and D1a-3 is **12 model-reachable / 4 gap-bearing** (S-003, S-004, S-011, S-012), not 13 / 3. The measurement is recorded there, from the corpus, and remains a measurement rather than a target.
 
 ---
 
@@ -457,7 +472,7 @@ The scratch `verification-result.json` files written by the two control runs are
 
 ## 14. Status
 
-**Task-2 audit: closed.** All sixteen rows are resolved, including S-012, which was determined from official artefacts read read-only rather than left pending ingestion. The audited source universe is final.
+**Task-2 audit: closed.** All sixteen rows are resolved, including S-012, which was determined from official artefacts read read-only rather than left pending ingestion. The audited source universe is final — **as corrected on 2026-08-27**: five sources (`SRC-001`, `SRC-002`, `SRC-005`, `SRC-007`, `SRC-008`), with S-004 citing `SRC-002` at `Article 5(2), fifth subparagraph`. Closing the audit did not make its dispositions unappealable; it made them the standing expectation until evidence displaces one, which is what happened here.
 
 ```
 audit finding, subsequently closed before Task 4 — see D1(a) spec revision 4

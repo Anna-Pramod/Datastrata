@@ -343,8 +343,15 @@ describe('the audited provenance universe resolves to governing authority', () =
    * Written out rather than derived from requirements.json, because the pack
    * still carries the pre-audit citations until Task 4 re-authors them — a
    * derivation would assert the old universe and pass for the wrong reason.
+   *
+   * Five, not six: the 2026-08-27 correction re-attributed S-004 from `SRC-004`
+   * to `SRC-002`, its host under Article 5(2). `SRC-004` is now cited by no
+   * requirement and leaves this universe. It keeps its governing authority —
+   * that authority is a statement about the instrument, not about whether
+   * anything rests on it, so the row below is the audited *provenance* set and
+   * is deliberately narrower than the set of authorities the register holds.
    */
-  const AUDITED = ['SRC-001', 'SRC-002', 'SRC-004', 'SRC-005', 'SRC-007', 'SRC-008'] as const;
+  const AUDITED = ['SRC-001', 'SRC-002', 'SRC-005', 'SRC-007', 'SRC-008'] as const;
 
   it('every audited source has exactly one governing authority, and it permits citation', () => {
     const reg = loadSourceRegister(monitoringDir, csrdPack());
