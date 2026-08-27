@@ -19,6 +19,7 @@ import {
   verifyRegisterIntegrity,
 } from '../src/monitoring/register';
 import type { RegisterSource, SourceAuthority } from '../src/monitoring/types';
+import { loadCorpus } from '../src/corpus/store';
 import { csrdPack } from './helpers';
 
 /** A minimal valid row. Tests override single fields to isolate one failure. */
@@ -49,7 +50,12 @@ const register = (
   sources: RegisterSource[],
   program = 'CSRD',
   governingAuthorities: SourceAuthority[] = [],
-) => ({ program, updated: '2026-08-14', governingAuthorities, sources });
+  // Empty rather than absent: `authorisedOrigins` is a required field, and a
+  // register that simply omits it is not a register. Empty is also truthful for
+  // these fixtures — none of them holds a corpus document, and a declaration is
+  // required only where a document claims to serve the source (T5.2).
+  authorisedOrigins: unknown[] = [],
+) => ({ program, updated: '2026-08-14', governingAuthorities, authorisedOrigins, sources });
 
 /** A pack whose sole requirement cites `sourceId`, for firewall fixtures. */
 function citingPack(sourceId: string) {
@@ -471,5 +477,276 @@ describe('the real CSRD source register', () => {
     } catch (e) {
       expect((e as RegisterIntegrityError).problems.some((p) => p.includes('eur-lex.europa.eu'))).toBe(true);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// authorisedOrigins — the serving-artefact authority surface
+// ---------------------------------------------------------------------------
+
+/**
+ * What a source has authorised to carry its documents.
+ *
+ * **A sibling of `governingAuthorities`, never nested inside it.** That row
+ * says what kind of authority the *source* is, and whether a determination may
+ * rest on it. This one says which *origins* that source has authorised to serve
+ * its artefacts. A corpus may legitimately hold a document for a source no
+ * requirement cites — `SRC-004` is exactly that today — so corpus validity and
+ * requirement citability are not the same question and do not share a row.
+ *
+ * **What a match will prove, once T5.2 enforces it:** that the source has
+ * authorised the origin a document *records*. Not that the bytes were fetched
+ * from there — a local actor able to edit the corpus can edit `url` and the
+ * hashes together. That stronger claim is envelope E2's and is made nowhere in
+ * Task 5.
+ *
+ * This block is schema and data only. Nothing here matches a declaration
+ * against a corpus document; that is T5.2's boundary.
+ */
+describe('authorisedOrigins schema', () => {
+  const origin = (over: Record<string, unknown> = {}) => ({
+    kind: 'path_prefix',
+    url: 'https://eur-lex.europa.eu/eli/dir/2013/34',
+    ...over,
+  });
+  const row = (over: Record<string, unknown> = {}) => ({
+    sourceId: 'SRC-001',
+    origins: [origin()],
+    rationale: 'Fixture declaration.',
+    ...over,
+  });
+  /** A minimal register carrying whatever authorisedOrigins a case means to test. */
+  const withOrigins = (authorisedOrigins: unknown[]) =>
+    parseSourceRegister({
+      program: 'CSRD',
+      updated: '2026-08-27',
+      governingAuthorities: [],
+      authorisedOrigins,
+      sources: [row0()],
+    });
+  /** One inert surface, because `sources` requires at least one. */
+  function row0() {
+    return {
+      id: 'W-001', tier: 'legal_record', name: 'Fixture', authority: 'Fixture',
+      url: 'https://example.invalid/fixture', feed: null, feedNote: 'Fixture.',
+      governs: 'Nothing.', cadence: 'weekly', affectsRequirements: [],
+      expectedProvenance: [], mustCorroborateWith: [], lastSeen: null,
+      discoveredBy: 'fixture', tierRationale: 'Fixture.',
+    };
+  }
+
+  it('accepts a well-formed declaration of each matcher kind', () => {
+    // The positive control. Every refusal below moves exactly one thing from
+    // here, so a refusal cannot be some unrelated schema failure.
+    expect(() => withOrigins([row()])).not.toThrow();
+    expect(() =>
+      withOrigins([row({ origins: [origin({ kind: 'exact', url: 'https://eur-lex.europa.eu/eli/dir/2026/470/oj/eng' })] })]),
+    ).not.toThrow();
+  });
+
+  it('refuses a duplicate sourceId — one source, one answer', () => {
+    // Two rows would be two answers to one question with nothing to say which
+    // governs: the shape Task 4 spent the provenance migration removing.
+    expect(() => withOrigins([row(), row()])).toThrow(/SRC-001 is declared more than once/);
+  });
+
+  it('refuses an empty origins list — authorising nothing is not a declaration', () => {
+    expect(() => withOrigins([row({ origins: [] })])).toThrow(/authorises nothing/);
+  });
+
+  it('refuses a duplicate origin inside one row', () => {
+    // Not merely redundant: it makes the row's length stop meaning how many
+    // distinct surfaces are authorised.
+    expect(() => withOrigins([row({ origins: [origin(), origin()] })])).toThrow(/declared more than once/);
+  });
+
+  it('refuses http — a declaration matched by parsing must be unambiguous', () => {
+    expect(() => withOrigins([row({ origins: [origin({ url: 'http://eur-lex.europa.eu/eli/dir/2013/34' })] })])).toThrow(
+      /must be https/,
+    );
+  });
+
+  it('refuses credentials in a declaration', () => {
+    expect(() =>
+      withOrigins([row({ origins: [origin({ url: 'https://user:pw@eur-lex.europa.eu/eli/dir/2013/34' })] })]),
+    ).toThrow(/must not carry credentials/);
+  });
+
+  it('refuses a query-bearing declaration', () => {
+    // These two matchers compare path identity. A query in the declaration
+    // would be silently ignored at match time, so the declaration would mean
+    // less than it appears to.
+    expect(() =>
+      withOrigins([row({ origins: [origin({ url: 'https://eur-lex.europa.eu/eli/dir/2013/34?uri=CELEX' })] })]),
+    ).toThrow(/must not carry a query/);
+  });
+
+  it('refuses a fragment-bearing declaration', () => {
+    expect(() =>
+      withOrigins([row({ origins: [origin({ url: 'https://eur-lex.europa.eu/eli/dir/2013/34#art19a' })] })]),
+    ).toThrow(/must not carry a fragment/);
+  });
+
+  it('refuses an unknown matcher kind', () => {
+    // The matcher set is closed on purpose: no regex, glob or host kind. A host
+    // matcher would be the defect itself — twelve of seventeen CSRD sources
+    // share `eur-lex.europa.eu`, so host authority is no authority.
+    expect(() => withOrigins([row({ origins: [origin({ kind: 'host' })] })])).toThrow();
+    expect(() => withOrigins([row({ origins: [origin({ kind: 'regex' })] })])).toThrow();
+  });
+
+  it('refuses an unknown field, so a matcher cannot be smuggled in beside the kind', () => {
+    expect(() => withOrigins([row({ origins: [{ ...origin(), pattern: '.*' }] })])).toThrow();
+  });
+
+  it('refuses a root path_prefix — that is hostname authority wearing a path', () => {
+    // The whole point of a source-scoped declaration. A `/` prefix authorises
+    // every artefact on the host, so `SRC-001` would cover the twelve other
+    // CSRD sources sharing `eur-lex.europa.eu` — the coincidence §19.2 exists
+    // to break.
+    for (const url of ['https://eur-lex.europa.eu', 'https://eur-lex.europa.eu/']) {
+      expect(() => withOrigins([row({ origins: [origin({ kind: 'path_prefix', url })] })]), url).toThrow(
+        /a root prefix authorises the whole host/,
+      );
+    }
+  });
+
+  it('permits an exact declaration at the root, which authorises one path only', () => {
+    // The discriminator for the rule above: the refusal is about *prefixes*
+    // widening to a host, not about root paths being forbidden outright. An
+    // exact root authorises exactly one URL and cannot widen.
+    expect(() => withOrigins([row({ origins: [origin({ kind: 'exact', url: 'https://example.invalid/' })] })])).not.toThrow();
+  });
+
+  it('refuses duplicates that differ only in host case, default port or trailing slash', () => {
+    // Canonical identity, not the authored string. The URL parser settles host
+    // case and a default `:443`; the trailing slash is settled by the schema.
+    // Without this, four spellings of one permission sit in a row looking like
+    // four distinct authorised surfaces.
+    const base = 'https://eur-lex.europa.eu/eli/dir/2013/34';
+    for (const twin of [
+      'https://EUR-LEX.EUROPA.EU/eli/dir/2013/34',
+      'https://eur-lex.europa.eu:443/eli/dir/2013/34',
+      'https://eur-lex.europa.eu/eli/dir/2013/34/',
+    ]) {
+      expect(
+        () => withOrigins([row({ origins: [origin({ url: base }), origin({ url: twin })] })]),
+        twin,
+      ).toThrow(/declared more than once/);
+    }
+  });
+
+  it('still accepts two genuinely different surfaces in one row', () => {
+    // The positive control for the duplicate rule: it must catch spellings of
+    // one permission without collapsing two real ones.
+    expect(() =>
+      withOrigins([
+        row({
+          origins: [
+            origin({ url: 'https://eur-lex.europa.eu/eli/dir/2013/34' }),
+            origin({ url: 'https://eur-lex.europa.eu/eli/dir/2013/35' }),
+          ],
+        }),
+      ]),
+    ).not.toThrow();
+  });
+
+  it('requires a rationale, and never consults it when matching', () => {
+    // Required because every declarative row in this register states why it
+    // exists. Non-operative because a matcher that read prose would make prose
+    // operative: the coverage tests below decide entirely on kind and url.
+    expect(() => withOrigins([row({ rationale: '' })])).toThrow();
+    expect(() => withOrigins([{ sourceId: 'SRC-001', origins: [origin()] }])).toThrow();
+  });
+});
+
+/**
+ * The committed register already declares what the committed corpus will need.
+ *
+ * T5.2 will refuse a `(document, sourceId)` pair whose recorded origin no
+ * declaration covers. This proves the migration authored the rows that pairing
+ * requires, over the **real** corpus and the **real** register, before any
+ * enforcement exists to depend on them.
+ *
+ * The coverage check below is written out locally rather than imported. There
+ * is no production matcher yet — T5.2 owns it — and once there is, an expected
+ * value computed by it would move in step with it and could never fail. This is
+ * the independent oracle; the production matcher will be checked against these
+ * same documents.
+ *
+ * It proves the recorded origin is authorised for the source. It does **not**
+ * prove the bytes were fetched from that origin: a local actor able to edit the
+ * corpus can edit `url` and the hashes together. That is envelope E2's claim.
+ */
+describe('the committed corpus is covered by the committed register', () => {
+  /** `exact` / `path_prefix`, as T5.2 will implement them. Local on purpose. */
+  function covers(declared: { kind: string; url: string }, candidateUrl: string): boolean {
+    const a = new URL(declared.url);
+    const b = new URL(candidateUrl);
+    if (a.origin !== b.origin) return false;
+    const strip = (p: string) => (p.length > 1 && p.endsWith('/') ? p.slice(0, -1) : p);
+    const declaredPath = strip(a.pathname);
+    const candidatePath = strip(b.pathname);
+    if (declared.kind === 'exact') return candidatePath === declaredPath;
+    return candidatePath === declaredPath || candidatePath.startsWith(`${declaredPath}/`);
+  }
+
+  const register = loadSourceRegister(monitoringDir, csrdPack()) as unknown as {
+    authorisedOrigins: { sourceId: string; origins: { kind: string; url: string }[] }[];
+  };
+  const documents = loadCorpus(join(monitoringDir, '..', 'corpus')).index.documents;
+
+  it('every (document, source) pair the corpus claims has a covering declaration', () => {
+    expect(documents.length).toBeGreaterThan(0);
+    let pairs = 0;
+    for (const document of documents) {
+      expect(document.serves.length, document.docId).toBeGreaterThan(0);
+      for (const sourceId of document.serves) {
+        pairs += 1;
+        const row = register.authorisedOrigins.find((r) => r.sourceId === sourceId);
+        expect(row, `${document.docId} serves ${sourceId} with no authorisedOrigins row`).toBeDefined();
+        expect(
+          row!.origins.some((o) => covers(o, document.url)),
+          `${document.docId} (${document.url}) is not covered by any origin declared for ${sourceId}`,
+        ).toBe(true);
+      }
+    }
+    // Not vacuous: the loop ran over real pairs.
+    expect(pairs).toBe(2);
+  });
+
+  it('a declaration authorises its own source and no other on the same host', () => {
+    // The §19.2 property, over real data: twelve of seventeen CSRD sources sit
+    // on `eur-lex.europa.eu`, so a host-shaped rule would authorise everything
+    // for everything. SRC-001's document must not be covered by SRC-004's
+    // declaration, nor the reverse.
+    const bySource = new Map(register.authorisedOrigins.map((r) => [r.sourceId, r.origins]));
+    const host = documents.find((d) => d.serves.includes('SRC-001'))!;
+    const amending = documents.find((d) => d.serves.includes('SRC-004'))!;
+    expect(new URL(host.url).origin).toBe(new URL(amending.url).origin);
+
+    expect(bySource.get('SRC-004')!.some((o) => covers(o, host.url))).toBe(false);
+    expect(bySource.get('SRC-001')!.some((o) => covers(o, amending.url))).toBe(false);
+  });
+
+  it('declares nothing for sources no committed artefact serves — today', () => {
+    // **A migration assertion about the current CSRD corpus, not a schema
+    // invariant.** Nothing forbids a register from declaring an origin for a
+    // source no artefact serves yet, and ingesting SRC-007 will legitimately
+    // add a row before any document exists to match it. What this pins is that
+    // *this* migration authored the minimum: SRC-007 and SRC-008 are
+    // registered, cited and ungated by E1, but nothing serves them, so
+    // declaring an origin for them would authorise a surface on speculation.
+    const declared = register.authorisedOrigins.map((r) => r.sourceId).sort();
+    const served = [...new Set(documents.flatMap((d) => d.serves))].sort();
+    expect(declared).toEqual(served);
+  });
+
+  it('the prefix declaration stops at a path-segment boundary', () => {
+    // What makes `path_prefix` source-specific rather than string-shaped.
+    const src001 = register.authorisedOrigins.find((r) => r.sourceId === 'SRC-001')!.origins[0]!;
+    expect(covers(src001, 'https://eur-lex.europa.eu/eli/dir/2013/34/2026-03-18')).toBe(true);
+    expect(covers(src001, 'https://eur-lex.europa.eu/eli/dir/2013/345/oj/eng')).toBe(false);
+    expect(covers(src001, 'https://eur-lex.europa.eu/eli/dir/2013/3')).toBe(false);
   });
 });

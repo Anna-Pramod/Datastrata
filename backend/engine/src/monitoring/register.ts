@@ -52,14 +52,167 @@ const sourceAuthority = z
   })
   .strict();
 
+/**
+ * The declaration path, with a trailing slash removed except at the root.
+ *
+ * Trailing slashes are the one difference the URL parser does **not** settle.
+ * It already lowercases the host and drops a default `:443`, which is why
+ * declarations are compared as parsed values rather than as authored strings:
+ * `https://EUR-LEX.EUROPA.EU:443/x` and `https://eur-lex.europa.eu/x` are the
+ * same permission, and two rows saying so would be one permission counted
+ * twice.
+ */
+function canonicalDeclarationPath(parsed: URL): string {
+  const path = parsed.pathname;
+  return path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path;
+}
+
+/** The identity two declarations share when they authorise the same surface. */
+function canonicalOriginKey(kind: string, url: string): string {
+  const parsed = new URL(url);
+  return `${kind} ${parsed.origin}${canonicalDeclarationPath(parsed)}`;
+}
+
+/**
+ * One surface a source has authorised to serve its artefacts.
+ *
+ * **This is not `governingAuthorities`, and the separation is the design.**
+ * `governingAuthorities` says what kind of authority the *source* is — whether
+ * a determination may rest on it at all. This says which *origins* that source
+ * has authorised to carry its documents. A source can be a `legal_record` and
+ * still not have authorised the surface some artefact came from; a corpus may
+ * legitimately hold documents for sources no requirement currently cites. The
+ * two questions have different answers and different owners, so they have
+ * different rows.
+ *
+ * **What a match proves, stated exactly.** That the source has authorised the
+ * origin this document *records*. It does **not** prove the bytes were fetched
+ * from there: a local actor able to edit the corpus can edit `url` and the
+ * hashes together. That stronger authenticity claim is envelope E2's and is not
+ * made here, or anywhere in Task 5.
+ *
+ * Two matchers, deliberately no more:
+ *
+ * - `exact` — the artefact is that one document. Same origin, same pathname.
+ * - `path_prefix` — the artefact is any document beneath a declared path. Same
+ *   origin, and the candidate pathname either equals the declared one or
+ *   continues it after a `/`. The boundary is what stops `/eli/dir/2013/34`
+ *   from authorising `/eli/dir/2013/345`.
+ *
+ * No regex, glob or host matcher. A host matcher would be the §19.2 defect
+ * itself: twelve of seventeen CSRD sources share `eur-lex.europa.eu`, so host
+ * authority is no authority. Queries and fragments do not participate — these
+ * two matchers are about path identity. That is a statement about *these*
+ * matchers, not a claim that queries are never semantic; a source whose
+ * document identity genuinely depends on a query needs a new declared matcher
+ * kind, not a loosening of these.
+ */
+const authorisedOrigin = z
+  .object({
+    kind: z.enum(['exact', 'path_prefix']),
+    url: z.string().url(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    let parsed: URL;
+    try {
+      parsed = new URL(value.url);
+    } catch {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${value.url}: not a parseable URL` });
+      return;
+    }
+    // A declaration is matched against by parsing, so it must itself be
+    // unambiguous. Each of these would otherwise make one declaration mean two
+    // things depending on who normalised it.
+    if (parsed.protocol !== 'https:') {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${value.url}: authorised origins must be https` });
+    }
+    if (parsed.username !== '' || parsed.password !== '') {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${value.url}: authorised origins must not carry credentials` });
+    }
+    if (parsed.search !== '') {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${value.url}: authorised origins must not carry a query — these matchers compare path identity` });
+    }
+    if (parsed.hash !== '') {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${value.url}: authorised origins must not carry a fragment — these matchers compare path identity` });
+    }
+    // A prefix of `/` is the host, and host authority is the defect. Declared
+    // that way, `SRC-001` would authorise every EUR-Lex artefact — the twelve
+    // sources sharing that host included — which is precisely what naming a
+    // source-scoped origin exists to prevent. `exact` is unaffected: it
+    // authorises one path and cannot widen to the host by accident.
+    if (value.kind === 'path_prefix' && canonicalDeclarationPath(parsed) === '/') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `${value.url}: a path_prefix must name a path beneath the origin — a root prefix authorises the whole host`,
+      });
+    }
+  });
+
+/**
+ * The origins one source has authorised, as a row.
+ *
+ * `rationale` follows this register's own convention rather than machine need:
+ * every declarative row here states why it exists (`tierRationale`, `feedNote`,
+ * `governs`, `discoveredBy`, and `governingAuthorities.rationale`). An origin
+ * declaration is a standing permission, and a permission with no recorded
+ * reason is the kind nobody later dares narrow.
+ */
+const sourceAuthorisedOrigins = z
+  .object({
+    sourceId: z.string().regex(/^SRC-\d{3}$/, 'authorisedOrigins sourceId must be SRC-NNN'),
+    origins: z.array(authorisedOrigin).min(1, 'a source with no authorised origin authorises nothing — omit the row instead'),
+    // Required and non-empty, and **never consulted when matching**. It exists
+    // so a standing permission records why it was granted; a matcher that read
+    // it would make prose operative.
+    rationale: z.string().min(1),
+  })
+  .strict();
+
 const sourceRegister = z
   .object({
     program: z.string().min(1),
     updated: z.string().min(1),
     governingAuthorities: z.array(sourceAuthority),
+    // A sibling of `governingAuthorities`, never nested inside it: source
+    // authority and serving-artefact authority are different axes (§19.2).
+    authorisedOrigins: z.array(sourceAuthorisedOrigins),
     sources: z.array(registerSource).min(1),
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    // One row per source. Two rows would be two answers to one question, with
+    // nothing to say which governs — the shape the provenance migration spent
+    // Task 4 removing from requirements.
+    const seen = new Set<string>();
+    for (const row of value.authorisedOrigins) {
+      if (seen.has(row.sourceId)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: `authorisedOrigins: ${row.sourceId} is declared more than once` });
+      }
+      seen.add(row.sourceId);
+
+      // Duplicates inside a row are not merely redundant: they make the row's
+      // length stop meaning how many distinct surfaces are authorised.
+      //
+      // Compared on **canonical identity**, not the authored string. Host case
+      // and a default `:443` are settled by the URL parser, and the trailing
+      // slash is settled here; without that, four spellings of one permission
+      // could sit in a row looking like four surfaces.
+      const origins = new Set<string>();
+      for (const origin of row.origins) {
+        let key: string;
+        try {
+          key = canonicalOriginKey(origin.kind, origin.url);
+        } catch {
+          continue; // Unparseable is already refused by the origin schema.
+        }
+        if (origins.has(key)) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: `authorisedOrigins ${row.sourceId}: ${key} is declared more than once` });
+        }
+        origins.add(key);
+      }
+    }
+  });
 
 export class RegisterIntegrityError extends Error {
   constructor(public problems: string[]) {

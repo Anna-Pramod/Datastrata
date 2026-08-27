@@ -73,6 +73,10 @@ export function installSyntheticRegister(
   const register = {
     program,
     updated: '2026-08-27',
+    // No artefact-origin declarations: these synthetic worlds hold no corpus
+    // document whose `serves[]` would require one. T5.2, which matches
+    // documents against declarations, is where a world that needs them says so.
+    authorisedOrigins: [],
     governingAuthorities: authorities.map((a) => ({
       sourceId: a.sourceId,
       tier: a.tier,

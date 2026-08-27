@@ -33,6 +33,22 @@
       "rationale": "The voluntary-standard delegated act, C(2026) 5011, is a Commission delegated regulation on the same footing as SRC-007, and is the instrument defining the value-chain cap catalogue rather than an explanation of it."
     }
   ],
+  "authorisedOrigins": [
+    {
+      "sourceId": "SRC-001",
+      "origins": [
+        { "kind": "path_prefix", "url": "https://eur-lex.europa.eu/eli/dir/2013/34" }
+      ],
+      "rationale": "The Accounting Directive's ELI identifies the instrument, and the documents beneath it are its official expressions — including the consolidated readings the corpus pins. Declared as a prefix rather than exactly because a consolidation carries a date segment the OJ publication does not, and both are the same instrument. Nothing outside this ELI is authorised for SRC-001, so the other EUR-Lex sources on this host confer nothing on it and it confers nothing on them."
+    },
+    {
+      "sourceId": "SRC-004",
+      "origins": [
+        { "kind": "exact", "url": "https://eur-lex.europa.eu/eli/dir/2026/470/oj/eng" }
+      ],
+      "rationale": "The Omnibus is served from its OJ publication and nothing else is authorised for it today. Declared exactly rather than by prefix because no consolidation of this act is pinned: the narrower matcher is the truthful one, and widening it later is a decision to record rather than a default to inherit."
+    }
+  ],
   "sources": [
     {
       "id": "W-001",
