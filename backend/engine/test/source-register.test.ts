@@ -15,8 +15,8 @@ import {
   parseSourceRegister,
   RegisterIntegrityError,
   TIER_POLICY,
-  verifyCitationCoverage,
   verifyRegisterIntegrity,
+  verifyRequirementCitability,
 } from '../src/monitoring/register';
 import type { RegisterSource, SourceAuthority } from '../src/monitoring/types';
 import { loadCorpus } from '../src/corpus/store';
@@ -179,88 +179,102 @@ describe('register ↔ pack referential integrity', () => {
   });
 });
 
-describe('citation firewall', () => {
-  const pack = csrdPack();
+describe('host coincidence decides nothing', () => {
+  /**
+   * Task 5 retires the last rule by which a hostname could decide an authority
+   * question. Three axes, three owners, and a hostname owns none of them:
+   *
+   *   may requirement provenance rely on this SOURCE?
+   *     → `governingAuthorities`, via `verifyRequirementCitability`
+   *   may this artefact's recorded origin serve the source it claims?
+   *     → `authorisedOrigins`, via `AuthorisedCorpus`
+   *   does this register describe this pack at all?
+   *     → `verifyRegisterIntegrity`
+   *
+   * The tests below pin the boundary from both sides. A hostname must not
+   * *confer* authority a source has not been granted, and — the reciprocal
+   * defect Task 4 repaired — must not *strip* authority a source explicitly
+   * holds. Both directions are asserted because a single-direction check passes
+   * against an implementation that simply refuses, or admits, everything.
+   */
 
-  it('allows an official_body surface to share a host with a cited source', () => {
-    // SRC-011 is a finance.ec.europa.eu page; the Commission is citable.
+  /** A tracker sharing the host of the EUR-Lex legal record. */
+  const trackerSharingHost = row({
+    id: 'W-095',
+    tier: 'tracker',
+    url: 'https://eur-lex.europa.eu/some/commentary',
+    mustCorroborateWith: ['legal_record'],
+    tierRationale: 'Fixture: an unrelated tracker on a host that also carries the legal record',
+  });
+
+  /** A legal_record surface sharing that host, to test the conferring direction. */
+  const legalSharingHost = row({
+    id: 'W-096',
+    url: 'https://eur-lex.europa.eu/eli/dir/2013/34/oj/eng',
+    tierRationale: 'Fixture: a citable surface on the same host',
+  });
+
+  it('keeps an explicit legal_record citable when a tracker shares its host', () => {
     const reg = parseSourceRegister(
-      register([
-        row({
-          tier: 'official_body',
-          url: 'https://finance.ec.europa.eu/some/other/page_en',
-          tierRationale: 'European Commission, authoritative but not the legal record',
-        }),
-      ]),
+      register([trackerSharingHost], 'CSRD', [authority({ sourceId: 'SRC-001', tier: 'legal_record' })]),
     );
+    const pack = citingPack('SRC-001');
     expect(() => verifyRegisterIntegrity(reg, pack)).not.toThrow();
+    expect(() => verifyRequirementCitability(reg, pack)).not.toThrow();
   });
 
-  it('rejects a pack citing a host registered as a tracker', () => {
+  it('keeps an explicit official_body citable when a tracker shares its host', () => {
+    // official_body, not legal_record: the two citable tiers are asserted
+    // separately so a rule that admitted only the legal record would be caught.
     const reg = parseSourceRegister(
-      register([
-        row({
-          id: 'W-090',
-          tier: 'tracker',
-          // Deliberately a host the CSRD pack really cites.
-          url: 'https://eur-lex.europa.eu/some/commentary',
-          mustCorroborateWith: ['legal_record'],
-          tierRationale: 'Fixture: pretend commentary to prove the firewall fires',
-        }),
+      register([trackerSharingHost], 'CSRD', [
+        authority({ sourceId: 'SRC-001', tier: 'official_body', rationale: 'Commission guidance' }),
       ]),
     );
-    expect(() => verifyRegisterIntegrity(reg, pack)).toThrow(/W-090/);
-  });
-
-  it('rejects a pack citing a host registered as news', () => {
-    const reg = parseSourceRegister(
-      register([
-        row({
-          id: 'W-091',
-          tier: 'news',
-          url: 'https://www.efrag.org/newsroom',
-          mustCorroborateWith: ['legal_record'],
-          tierRationale: 'Fixture: pretend press surface to prove the firewall fires',
-        }),
-      ]),
-    );
-    // The firewall's subject is a source a requirement actually cites: a
-    // catalogue entry nothing rests on cannot bypass corroboration. `pack`
-    // cites SRC-012 on efrag.org, so the news row condemns a real citation.
-    expect(() => verifyRegisterIntegrity(reg, citingPack('SRC-012'))).toThrow(/W-091/);
-  });
-
-  it('ignores a www. prefix when matching hosts', () => {
-    const reg = parseSourceRegister(
-      register([
-        row({
-          id: 'W-092',
-          tier: 'tracker',
-          url: 'https://www.eur-lex.europa.eu/commentary',
-          mustCorroborateWith: ['legal_record'],
-          tierRationale: 'Fixture: same host as SRC-001 with a www prefix',
-        }),
-      ]),
-    );
-    expect(() => verifyRegisterIntegrity(reg, pack)).toThrow(/W-092/);
-  });
-
-  it('does not flag a tracker row at a host the pack never cites', () => {
-    // Proves the firewall discriminates by host, not merely by the presence of
-    // an uncitable row — an implementation that threw on any uncitable row
-    // regardless of the pack would also pass every test above.
-    const reg = parseSourceRegister(
-      register([
-        row({
-          id: 'W-093',
-          tier: 'tracker',
-          url: 'https://example.org/tracker',
-          mustCorroborateWith: ['legal_record'],
-          tierRationale: 'Fixture: tracker at a host the pack never cites',
-        }),
-      ]),
-    );
+    const pack = citingPack('SRC-001');
     expect(() => verifyRegisterIntegrity(reg, pack)).not.toThrow();
+    expect(() => verifyRequirementCitability(reg, pack)).not.toThrow();
+  });
+
+  it('refuses a source with no governing authority even when a citable surface shares its host', () => {
+    // The conferring direction, and the strongest of these: under the retired
+    // host fallback this source was *accepted*, because a legal_record row sat
+    // on the same domain. Nothing may now stand in for the missing statement.
+    const reg = parseSourceRegister(register([legalSharingHost], 'CSRD', []));
+    expect(() => verifyRequirementCitability(reg, citingPack('SRC-001'))).toThrow(
+      /cites SRC-001, which has no governing authority/,
+    );
+  });
+
+  it('refuses a source with no governing authority when a tracker shares its host', () => {
+    // Same proposition, opposite neighbour. The refusal must come from the
+    // absent authority, not from the tracker — otherwise the test above and
+    // this one are answered by two different rules and neither is pinned.
+    const reg = parseSourceRegister(register([trackerSharingHost], 'CSRD', []));
+    expect(() => verifyRequirementCitability(reg, citingPack('SRC-001'))).toThrow(
+      /cites SRC-001, which has no governing authority/,
+    );
+  });
+
+  it('does not let integrity refuse a cited source because a tracker shares its host', () => {
+    // The rule this commit removes. `verifyRegisterIntegrity` answers whether
+    // the register *describes* this pack — same program, ids that resolve. It
+    // must not also answer citability from a shared hostname, which is a
+    // different question owned by `verifyRequirementCitability`.
+    //
+    // The source is still refused: the assertion is about which check owns the
+    // refusal, not about admitting anything. The sibling below proves that.
+    const reg = parseSourceRegister(register([trackerSharingHost], 'CSRD', []));
+    expect(() => verifyRegisterIntegrity(reg, citingPack('SRC-001'))).not.toThrow();
+  });
+
+  it('still refuses that source, so moving the rule did not open a hole', () => {
+    // The positive control for the test above. Without it, deleting citability
+    // outright would leave that assertion green.
+    const reg = parseSourceRegister(register([trackerSharingHost], 'CSRD', []));
+    expect(() => verifyRequirementCitability(reg, citingPack('SRC-001'))).toThrow(
+      RegisterIntegrityError,
+    );
   });
 });
 
@@ -330,29 +344,59 @@ describe('a source\'s governing authority, distinct from the surfaces that watch
 });
 
 describe('the governing authority decides citability, not a surface sharing its host', () => {
+  /**
+   * The complete rule in one place: citability is a function of the
+   * `governingAuthorities` row and of nothing else. Scattered siblings can each
+   * pass while the rule as a whole still has a hole — an implementation that
+   * admitted `news`, or that treated a missing row as permissive, would survive
+   * every other test in this file. The absent row is the load-bearing case:
+   * before Task 5 it fell through to a host rule, and the answer came from
+   * whichever surface happened to share a domain.
+   */
+  const CITABILITY = [
+    { name: 'legal_record is accepted', tier: 'legal_record' as const, refused: false },
+    { name: 'official_body is accepted', tier: 'official_body' as const, refused: false },
+    { name: 'tracker is refused', tier: 'tracker' as const, refused: true },
+    { name: 'news is refused', tier: 'news' as const, refused: true },
+    { name: 'no governing authority at all is refused', tier: null, refused: true },
+  ];
+
+  for (const { name, tier, refused } of CITABILITY) {
+    it(`reads citability off the stated authority alone: ${name}`, () => {
+      const reg = parseSourceRegister(
+        register([row()], 'CSRD', tier === null ? [] : [authority({ sourceId: 'SRC-001', tier })]),
+      );
+      const run = () => verifyRequirementCitability(reg, citingPack('SRC-001'));
+      if (refused) expect(run).toThrow(RegisterIntegrityError);
+      else expect(run).not.toThrow();
+    });
+  }
+
   it('refuses a cited source whose governing authority may not be cited', () => {
-    // The disagreement the record exists to prevent: the host rule would call
-    // this citable, because eur-lex.europa.eu carries citable surfaces. The
-    // authority says tracker, and the authority governs.
-    const pack = csrdPack();
-    const cited = pack.sources[0]!;
+    // The disagreement the record exists to prevent: the retired host rule
+    // called this citable, because eur-lex.europa.eu carries citable surfaces.
+    // The authority says tracker, and the authority governs.
+    //
+    // The proposition is unchanged by Task 5; its owner is. It was asserted
+    // against `verifyCitationCoverage`, which also carried the host fallback
+    // and no production caller. `verifyRequirementCitability` is the check the
+    // production loader actually runs.
     const reg = parseSourceRegister(
-      register([row()], 'CSRD', [authority({ sourceId: cited.id, tier: 'tracker' })]),
+      register([row()], 'CSRD', [authority({ sourceId: 'SRC-001', tier: 'tracker' })]),
     );
-    expect(() => verifyCitationCoverage(reg, pack)).toThrow(
-      new RegExp(`${cited.id} appears in sources.json, but its governing authority is tracker`),
+    expect(() => verifyRequirementCitability(reg, citingPack('SRC-001'))).toThrow(
+      /cites SRC-001, whose governing authority is tracker/,
     );
   });
 
-  it('still falls back to the host rule for a source with no governing authority', () => {
-    // The positive sibling: without it, the check above would pass equally
-    // against an implementation that refused every source. Narrowed to one
-    // source so the fixture does not have to carry every host the pack cites.
-    const pack = csrdPack();
-    const eurLexSource = pack.sources.find((s) => s.url.includes('eur-lex.europa.eu'))!;
-    const onePack = { ...pack, sources: [eurLexSource] };
-    const reg = parseSourceRegister(register([row()], 'CSRD', []));
-    expect(() => verifyCitationCoverage(reg, onePack)).not.toThrow();
+  it('admits that source once its governing authority permits citation', () => {
+    // The positive sibling: without it the check above would pass equally
+    // against an implementation that refused every source. The *only*
+    // difference between the two fixtures is the tier.
+    const reg = parseSourceRegister(
+      register([row()], 'CSRD', [authority({ sourceId: 'SRC-001', tier: 'legal_record' })]),
+    );
+    expect(() => verifyRequirementCitability(reg, citingPack('SRC-001'))).not.toThrow();
   });
 });
 
@@ -448,36 +492,6 @@ describe('the real CSRD source register', () => {
     expect(legal).not.toContain('W-002');
   });
 
-  it('passes verifyCitationCoverage against the real pack', () => {
-    expect(() => verifyCitationCoverage(reg, pack)).not.toThrow();
-  });
-
-  it('rejects a register missing a host the pack cites', () => {
-    const thin = parseSourceRegister(register([row({ url: 'https://example.org/act' })]));
-    expect(() => verifyCitationCoverage(thin, pack)).toThrow(RegisterIntegrityError);
-  });
-
-  it('rejects a register whose only matching row is at a non-citable tier', () => {
-    // Same host as the real legal record (W-001/W-005), but registered as a
-    // tracker — coverage must require a *citable* surface, not merely a
-    // registered one at the right host.
-    const wrongTier = parseSourceRegister(
-      register([
-        row({
-          tier: 'tracker',
-          url: 'https://eur-lex.europa.eu/some/commentary',
-          mustCorroborateWith: ['legal_record'],
-          tierRationale: 'Fixture: right host, wrong tier — must not satisfy coverage',
-        }),
-      ]),
-    );
-    try {
-      verifyCitationCoverage(wrongTier, pack);
-      expect.unreachable('should have thrown');
-    } catch (e) {
-      expect((e as RegisterIntegrityError).problems.some((p) => p.includes('eur-lex.europa.eu'))).toBe(true);
-    }
-  });
 });
 
 // ---------------------------------------------------------------------------

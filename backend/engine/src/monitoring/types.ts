@@ -63,13 +63,18 @@ export interface RegisterSource {
  * This is that statement: exactly one entry per `sourceId`, checked rather than
  * assumed, and the input `isCitableSource` answers from.
  *
- * **It does not yet displace the host-matching firewall.** `verifyCitationCoverage`
- * still decides, for a source with no governing authority, whether the pack may
- * cite it by matching its URL host against citable surface rows. That fallback
- * is the pre-existing behaviour and it stays until every catalogue entry has an
- * authority; where an authority *does* exist it governs, and the two are made
- * to agree rather than left to diverge. Spec §19 replaces the host rule
- * outright at Task 5.
+ * **It is now the only thing that decides citability.** Until Task 5 a source
+ * with no governing authority fell through to a host rule, which answered from
+ * whichever surface happened to share a domain — for a source watched by two
+ * surfaces of different tiers, never an answer at all. That fallback is gone
+ * (spec §19.2). A source with no row here is not citable, and no neighbour on
+ * its host can supply the missing statement.
+ *
+ * **It does not decide artefact origin authority.** Whether a corpus document's
+ * recorded origin may serve the source it claims is `authorisedOrigins`, via
+ * `AuthorisedCorpus`. The two are separate axes and neither substitutes for the
+ * other: an explicit authority here never authorises an origin, and an
+ * authorised origin never makes a source citable.
  */
 export interface SourceAuthority {
   /** SRC-NNN in the pack's citation record. */

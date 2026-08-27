@@ -268,15 +268,6 @@ export function isCitableSource(register: SourceRegister, sourceId: string): boo
 }
 
 /**
- * Host comparison is deliberately coarse. A tracker hosted on a domain that
- * also serves citable content will trip this check — which is the intended
- * outcome: a human adjudicates rather than the tool guessing.
- */
-function hostOf(url: string): string {
-  return new URL(url).hostname.toLowerCase().replace(/^www\./, '');
-}
-
-/**
  * Cross-validate the register against a loaded pack. Separate from parsing
  * because the register is meaningful on its own; only these checks need a pack.
  */
@@ -306,40 +297,23 @@ export function verifyRegisterIntegrity(register: SourceRegister, pack: Knowledg
     }
   }
 
-  // The firewall. sources.json is the citation record; a surface that may not
-  // be cited must not appear there, or corroboration could be bypassed.
-  const uncitable = new Map<string, string>();
-  for (const s of register.sources) {
-    if (!TIER_POLICY[s.tier].citable) uncitable.set(hostOf(s.url), `${s.id} (${s.tier})`);
-  }
-  // Scoped to sources a requirement actually cites, and to sources the register
-  // has not classified.
+  // **No host rule here.** Until Task 5 this function also refused a cited
+  // source whose URL host matched a non-citable register row. That rule decided
+  // a *citability* question — may this source back a determination? — from a
+  // hostname, and a hostname is shared: `eur-lex.europa.eu` carries the Official
+  // Journal and the national transposition listing alike.
   //
-  // Both narrowings are the same correction. The check compares *hosts*, and a
-  // host is shared: `eur-lex.europa.eu` carries the Official Journal and the
-  // national transposition listing alike. Once one surface there is a tracker,
-  // the unnarrowed check condemns every EUR-Lex source in the catalogue — the
-  // host-coincidence defect of §19.2 running backwards, an unrelated row
-  // *denying* authority rather than conferring it.
+  // Its whole domain was a cited source the register had never classified, and
+  // `verifyRequirementCitability` refuses exactly that set outright, on the
+  // stated authority rather than on whichever neighbour happens to share a
+  // domain. The rule could therefore never change an outcome on the production
+  // path, where both checks run — only which of the two spoke first, and with
+  // what reason. Removing it does not admit anything; it stops a second,
+  // weaker answer from being given to a question this function does not own.
   //
-  // What the firewall exists to stop is corroboration being bypassed by citing
-  // a surface too weak to carry a determination. A catalogue entry no
-  // requirement cites carries no determination, and a source the register has
-  // classified is answered by that classification. What is left is the honest
-  // residue: a cited source the register has never placed. Spec §19 replaces
-  // the host rule outright at Task 5.
-  const cited = new Set(pack.requirements.flatMap((r) => sourceIdsOf(r)));
-  for (const ps of pack.sources) {
-    if (!cited.has(ps.id)) continue;
-    if (register.governingAuthorities.some((auth) => auth.sourceId === ps.id)) continue;
-
-    const owner = uncitable.get(hostOf(ps.url));
-    if (owner) {
-      problems.push(
-        `${ps.id} cites ${hostOf(ps.url)}, which the register lists as ${owner} — a non-citable tier must never appear in sources.json`,
-      );
-    }
-  }
+  // What remains here is referential integrity alone: same program, ids that
+  // resolve. Policy is read out of the register by the citability check, and
+  // artefact origin authority by `AuthorisedCorpus` (spec §19.2).
 
   if (problems.length > 0) throw new RegisterIntegrityError(problems);
 }
@@ -380,58 +354,26 @@ export function verifyRequirementCitability(register: SourceRegister, pack: Know
 }
 
 /**
- * Every host the pack cites must be a registered, citable surface.
- *
- * The firewall in verifyRegisterIntegrity is a blacklist — it catches a pack
- * citing a host the register already knows is a tracker. This is the whitelist
- * half: a cited host the register has never heard of is also a failure, which
- * is what makes product law 9 true rather than aspirational.
- */
-export function verifyCitationCoverage(register: SourceRegister, pack: KnowledgePack): void {
-  const citableHosts = new Set(
-    register.sources.filter((s) => TIER_POLICY[s.tier].citable).map((s) => hostOf(s.url)),
-  );
-
-  const problems: string[] = [];
-  for (const ps of pack.sources) {
-    const governing = register.governingAuthorities.find((a) => a.sourceId === ps.id);
-
-    // Where the register states what the source *is*, that governs. The host
-    // rule below is what this replaces for such a source: it answers from
-    // whichever surface happens to share a domain, which for a source watched by
-    // two surfaces of different tiers was never an answer at all.
-    if (governing !== undefined) {
-      if (!TIER_POLICY[governing.tier].citable) {
-        problems.push(
-          `${ps.id} appears in sources.json, but its governing authority is ${governing.tier}, which may never be cited`,
-        );
-      }
-      continue;
-    }
-
-    // Fallback, unchanged, for catalogue entries that have no governing
-    // authority yet. It stays until every entry has one; spec §19 replaces the
-    // host rule outright at Task 5.
-    if (!citableHosts.has(hostOf(ps.url))) {
-      problems.push(`${ps.id} cites ${hostOf(ps.url)}, which is not a citable surface in the register`);
-    }
-  }
-
-  if (problems.length > 0) throw new RegisterIntegrityError(problems);
-}
-
-/**
  * Read and validate `source-register.json` from a directory. When a pack is
- * supplied, also cross-validate the register against it (referential
- * integrity, the citation firewall, and citation coverage) before returning —
- * the same discipline `loadPack` already applies unconditionally, made the
- * default here rather than something a caller has to remember to opt into.
+ * supplied, also cross-validate the register against it — referential integrity
+ * first, then requirement citability — before returning.
+ *
+ * **No production path calls this**, and that is deliberate rather than an
+ * oversight: production loads the register through `loadPackContext`, which
+ * parses it once and hands the *same object* to every check and to
+ * `assertCorpusAuthority`, so no two consumers can be reading two parses. This
+ * remains as a convenience reader for the committed register — the corpus and
+ * register fixtures use it — and it now runs exactly the pair `loadPackContext`
+ * runs, so the two cannot drift into disagreeing about what validation means.
+ *
+ * It previously ran a third check, `verifyCitationCoverage`, retired at Task 5:
+ * it decided citability by matching a source's URL host against citable surface
+ * rows, which is the host-coincidence defect of spec §19.2 stated as policy.
  */
 export function loadSourceRegister(dir: string, pack?: KnowledgePack): SourceRegister {
   const reg = parseSourceRegister(JSON.parse(readFileSync(join(dir, 'source-register.json'), 'utf8')));
   if (pack) {
     verifyRegisterIntegrity(reg, pack);
-    verifyCitationCoverage(reg, pack);
     verifyRequirementCitability(reg, pack);
   }
   return reg;

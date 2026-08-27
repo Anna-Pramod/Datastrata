@@ -173,7 +173,7 @@ describe('a requirement that still authors a derived field', () => {
  * A requirement may not rest on a source the register will not let it cite.
  *
  * **Wiring evidence.** `verifyRequirementCitability` asks the question the
- * pack-side firewall does not: not "is this host known" but "may this source
+ * retired host rule could not: not "is this host known" but "may this source
  * back a determination at all". A tracker reports that something happened; it
  * is not the text, and provenance resting on one would cite a notice board.
  *
@@ -274,6 +274,28 @@ describe('a requirement resting on a source the register will not let it cite', 
     ]);
     citeInstead('SRC-015');
     expect(() => load()).not.toThrow();
+  });
+
+  it('accepts a non-citable authority for a source no requirement cites', () => {
+    // **Classifying a source is not citing one.** The register may state what a
+    // catalogue entry *is* — including that it is a watch surface, or a press
+    // surface — and that statement does not invalidate the pack. Nothing rests
+    // on an uncited source, so nothing is being let through.
+    //
+    // The sibling below is this test with exactly one thing changed: provenance
+    // is repointed at SRC-015. Same source, same tier, opposite outcome. That
+    // one variable is the whole distinction between source classification and
+    // requirement citability, and it is why the two live in different checks.
+    //
+    // Task 5 retired a rule that refused this outright, catalogue-wide. The
+    // retirement was deliberate, and this test is what says so: without it,
+    // reinstating that prohibition would leave the suite green.
+    for (const tier of ['tracker', 'news'] as const) {
+      writeRegister([
+        { sourceId: 'SRC-015', tier, rationale: `Fixture: an uncited ${tier} classification.` },
+      ]);
+      expect(() => load(), tier).not.toThrow();
+    }
   });
 
   it('refuses provenance backed only by a tracker', () => {

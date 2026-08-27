@@ -209,7 +209,7 @@ export function verifyCorpusIntegrity(index: CorpusIndex): void {
  * Cross-validate `serves` against a pack's citation record. Separate from
  * `verifyCorpusIntegrity` — and from `loadCorpus` — because the corpus is
  * meaningful on its own and must not acquire pack knowledge; only this check
- * needs a pack. Same split as `verifyCitationCoverage` in
+ * needs a pack. Same split as `verifyRegisterIntegrity` in
  * src/monitoring/register.ts.
  *
  * A document serving an SRC id the pack does not carry is not a harmless typo:

@@ -384,11 +384,10 @@ export function loadPackContext(dir: string, options: LoadPackOptions = {}): Pac
   // **Two states, deliberately not conflated.** A *missing register* is a
   // missing integrity dependency and refuses here, before any policy runs. A
   // *present register that carries no governing authority for some source* is a
-  // different thing — an explicit, settled fallback path that
-  // `verifyRequirementCitability` and the host rule evaluate on their own terms
-  // until Task 5 replaces them. Falling through to the host rule when the
-  // register itself is absent would let a fallback pretend to decide a question
-  // nothing had the evidence to answer.
+  // different thing: a register that has simply not placed that source, which
+  // `verifyRequirementCitability` refuses on its own terms. Since Task 5 there
+  // is no third state — no host fallback left to pretend it can decide a
+  // question nothing had the evidence to answer.
   //
   // **Boundary with Task 5.** This establishes whether a *source* may be cited.
   // Whether a corpus *artefact* is an authorised origin for the source it claims
@@ -414,11 +413,10 @@ export function loadPackContext(dir: string, options: LoadPackOptions = {}): Pac
   // hand `loadPack` any register on disk, and nothing asked whether it was
   // this pack's.
   //
-  // `verifyCitationCoverage`, the third check `loadSourceRegister` runs, is
-  // deliberately **not** wired here. It is the host-matching whitelist that
-  // spec §19.2 replaces outright with source-scoped artefact authority at
-  // Task 5; making it a production authority now would mean retiring it as one
-  // two commits later.
+  // These two are the whole of it. `loadSourceRegister` once ran a third check,
+  // `verifyCitationCoverage`, deliberately never wired here because it decided
+  // citability by hostname; Task 5 deleted it rather than promoting it, so the
+  // two paths now run the same pair and cannot drift.
   const registerDir = options.sourceRegisterDir ?? defaultSourceRegisterDir(dir);
   const registerPath = join(registerDir, 'source-register.json');
   if (!existsSync(registerPath)) {
