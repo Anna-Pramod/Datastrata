@@ -86,6 +86,15 @@ function edge(edgeId: string, kind: CorpusEdge['kind'], from: string, to: string
  *     DOC-D   one further `references` hop from DOC-C — depth 2, and the
  *             reference-depth bound is 1, so the corpus holds it and the
  *             traversal policy does not entitle it: a `closure_gap`
+ *   DOC-D and DOC-Z are the two outside DOC-A's closure, and DOC-D is left
+ *   **deliberately unsourced** (`serves: []`) where its three siblings are not.
+ *   That is the split this corpus exists to show: the corpus may hold an
+ *   artefact that names no source, and such an artefact may simply never become
+ *   evidence. It is safe only because DOC-D is outside every closure built here
+ *   — widening `referenceDepth` to 2 in a new test would reach it and refuse
+ *   with `no served source`, which would be the guard working, not a bug. Give
+ *   it a source (and an origin row) before widening.
+ *
  *     DOC-Z   in the corpus, connected to nothing — also outside, and the
  *             case the entitlement refusal has always been tested against
  *
@@ -106,8 +115,14 @@ export function fixtureIndex(): CorpusIndex {
     updated: '2026-08-21',
     documents: [
       doc('DOC-A', [edge('E-1', 'amendedBy', 'DOC-A', 'DOC-B'), edge('E-2', 'references', 'DOC-A', 'DOC-C')], ['SRC-100']),
-      doc('DOC-B'),
-      doc('DOC-C', [edge('E-3', 'references', 'DOC-C', 'DOC-D')]),
+      // DOC-B and DOC-C serve sources of their *own*, not SRC-100: they must be
+      // reached by traversal rather than selected as entry points, and they must
+      // still be admissible as evidence. Since Task 5's closure guard, a
+      // document inside a closure that names no source at all is refused — the
+      // real corpus gives even its amending act an SRC record, so an unsourced
+      // closure member models nothing.
+      doc('DOC-B', [], ['SRC-101']),
+      doc('DOC-C', [edge('E-3', 'references', 'DOC-C', 'DOC-D')], ['SRC-102']),
       doc('DOC-D'),
       doc('DOC-Z', [], ['SRC-999']),
     ],
@@ -381,11 +396,23 @@ const FIXTURE_AUTHORISED_ORIGINS = [
     origins: [{ kind: 'exact' as const, url: 'https://example.invalid/DOC-Z' }],
     rationale: 'Fixture: DOC-Z is the only artefact SRC-999 has authorised.',
   },
+  {
+    sourceId: 'SRC-101',
+    origins: [{ kind: 'exact' as const, url: 'https://example.invalid/DOC-B' }],
+    rationale: 'Fixture: DOC-B is the only artefact SRC-101 has authorised.',
+  },
+  {
+    sourceId: 'SRC-102',
+    origins: [{ kind: 'exact' as const, url: 'https://example.invalid/DOC-C' }],
+    rationale: 'Fixture: DOC-C is the only artefact SRC-102 has authorised.',
+  },
 ];
 
 /** A pack carrying exactly the sources the fixture corpus claims. */
 function fixtureSourceUniverse(): KnowledgePack {
-  return { sources: [{ id: 'SRC-100' }, { id: 'SRC-999' }] } as unknown as KnowledgePack;
+  return {
+    sources: [{ id: 'SRC-100' }, { id: 'SRC-999' }, { id: 'SRC-101' }, { id: 'SRC-102' }],
+  } as unknown as KnowledgePack;
 }
 
 /** A register declaring the fixture origins, and nothing else. */
@@ -393,7 +420,17 @@ export function fixtureRegister(): SourceRegister {
   return {
     program: 'FIXTURE',
     updated: '2026-08-27',
-    governingAuthorities: [],
+    // Both fixture sources are classified, and citably: a fixture corpus stands
+    // in for a real one, and since Task 5 a document may only become
+    // model-facing evidence if every source it serves has an explicit citable
+    // governing authority. Leaving these out would model a world no production
+    // closure may be built over, and every downstream fixture would refuse.
+    governingAuthorities: [
+      { sourceId: 'SRC-100', tier: 'legal_record', rationale: 'Fixture: the legal record.' },
+      { sourceId: 'SRC-999', tier: 'legal_record', rationale: 'Fixture: the legal record.' },
+      { sourceId: 'SRC-101', tier: 'legal_record', rationale: 'Fixture: the legal record.' },
+      { sourceId: 'SRC-102', tier: 'legal_record', rationale: 'Fixture: the legal record.' },
+    ],
     authorisedOrigins: FIXTURE_AUTHORISED_ORIGINS,
     sources: [],
   } as unknown as SourceRegister;

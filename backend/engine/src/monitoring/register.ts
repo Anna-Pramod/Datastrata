@@ -262,9 +262,21 @@ export function governingAuthorityFor(register: SourceRegister, sourceId: string
   return found;
 }
 
-/** Whether this source's governing authority permits it to be cited. */
+/**
+ * Whether this source's governing authority permits it to be cited.
+ *
+ * Expressed through `sourceCitability` rather than recomputing the tier lookup,
+ * so the module holds one interpretation of `governingAuthorities` and not two
+ * that happen to agree. It keeps its throwing contract for an absent row —
+ * `governingAuthorityFor` is what callers of this shape expect — while the
+ * predicate itself lives in one place.
+ */
 export function isCitableSource(register: SourceRegister, sourceId: string): boolean {
-  return TIER_POLICY[governingAuthorityFor(register, sourceId).tier].citable;
+  const verdict = sourceCitability(register, sourceId);
+  if (!verdict.citable && verdict.reason === 'no governing authority') {
+    throw new NoGoverningAuthorityError(sourceId);
+  }
+  return verdict.citable;
 }
 
 /**
@@ -319,6 +331,37 @@ export function verifyRegisterIntegrity(register: SourceRegister, pack: Knowledg
 }
 
 /**
+ * Whether a source carries an explicit governing authority that permits
+ * citation — and, when it does not, which of the two failures it is.
+ *
+ * **One predicate, two callers asking different questions.** Whether a
+ * requirement may *cite* a source is `verifyRequirementCitability`'s question;
+ * whether a document already inside an entitled closure may be *shown to a
+ * model* is `EntitledClosure`'s. Those are different propositions with
+ * different owners and different errors. What must not differ is the meaning of
+ * "has an explicit citable governing authority" — two implementations of that
+ * would be two readings of the same register, and the register is supposed to
+ * be the one statement of what a source is.
+ *
+ * The verdict distinguishes an absent row from a present non-citable one
+ * because the callers must say which: silence and refusal are different
+ * failures, and collapsing them was how the retired host rule justified itself.
+ */
+export type SourceCitability =
+  | { readonly citable: true; readonly tier: SourceTier }
+  | { readonly citable: false; readonly reason: 'no governing authority' }
+  | { readonly citable: false; readonly reason: 'non-citable tier'; readonly tier: SourceTier };
+
+export function sourceCitability(register: SourceRegister, sourceId: string): SourceCitability {
+  const governing = register.governingAuthorities.find((a) => a.sourceId === sourceId);
+  if (governing === undefined) return { citable: false, reason: 'no governing authority' };
+  if (!TIER_POLICY[governing.tier].citable) {
+    return { citable: false, reason: 'non-citable tier', tier: governing.tier };
+  }
+  return { citable: true, tier: governing.tier };
+}
+
+/**
  * Every source a requirement's provenance names must be one the register
  * permits it to cite.
  *
@@ -336,18 +379,13 @@ export function verifyRequirementCitability(register: SourceRegister, pack: Know
   const problems: string[] = [];
   for (const requirement of pack.requirements) {
     for (const sourceId of sourceIdsOf(requirement)) {
-      const governing = register.governingAuthorities.find((a) => a.sourceId === sourceId);
-      if (governing === undefined) {
-        problems.push(
-          `${requirement.id}: cites ${sourceId}, which has no governing authority in the source register`,
-        );
-        continue;
-      }
-      if (!TIER_POLICY[governing.tier].citable) {
-        problems.push(
-          `${requirement.id}: cites ${sourceId}, whose governing authority is ${governing.tier} — a non-citable tier may never back a requirement's provenance`,
-        );
-      }
+      const verdict = sourceCitability(register, sourceId);
+      if (verdict.citable) continue;
+      problems.push(
+        verdict.reason === 'no governing authority'
+          ? `${requirement.id}: cites ${sourceId}, which has no governing authority in the source register`
+          : `${requirement.id}: cites ${sourceId}, whose governing authority is ${verdict.tier} — a non-citable tier may never back a requirement's provenance`,
+      );
     }
   }
   if (problems.length > 0) throw new RegisterIntegrityError(problems);

@@ -38,6 +38,7 @@ import {
   fixtureRenderContext,
   fixtureRequirement,
   placeholderRunner,
+  fixtureRegister,
 } from './pipeline-fixtures';
 
 const corpus = fixtureAuthorisedCorpus();
@@ -48,7 +49,7 @@ function runInput(runner: Parameters<typeof runVerificationPipeline>[0]['runner'
     requirementId: 'TEST-R-001',
     requirement: fixtureRequirement(),
     renderContext: fixtureRenderContext(),
-    closure: EntitledClosure.forSources(corpus, ['SRC-100']),
+    closure: EntitledClosure.forSources(corpus, fixtureRegister(), ['SRC-100']),
     corpus,
     prompts: loadPromptSet(),
     config: DEFAULT_ROLE_CONFIG,

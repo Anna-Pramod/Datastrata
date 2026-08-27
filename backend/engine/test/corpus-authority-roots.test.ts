@@ -141,3 +141,85 @@ describe('the authority error survives as itself', () => {
     expect(new CorpusAuthorityError([]).name).toBe('CorpusAuthorityError');
   });
 });
+
+/**
+ * The closure guard, at the same roots and for the same reason.
+ *
+ * `corpus-authority.test.ts` proves the validator and
+ * `pipeline-closure-citability.test.ts` proves the guard; neither proves that a
+ * production root reaches it. That is the F-5 lesson this file exists for: a
+ * check can be correct, tested, and never called. The register parameter on
+ * `forSources` makes *omitting* a register a compile error, but it cannot make
+ * a root pass the right one, so the wiring is asserted here rather than assumed.
+ *
+ * The world is unauthorised in a different way from `buildWorld(true)`: the
+ * corpus is untouched and entirely origin-authorised, and the **register** is
+ * edited to reclassify `SRC-004` as a tracker. Origin authority still passes —
+ * it reads no tier — so the only boundary that can refuse is the closure guard.
+ */
+function buildNonCitableWorld(): string {
+  const root = buildWorld(false);
+  const path = join(root, 'monitoring', 'source-register.json');
+  const register = JSON.parse(readFileSync(path, 'utf8')) as {
+    governingAuthorities: { sourceId: string; tier: string }[];
+  };
+  const row = register.governingAuthorities.find((a) => a.sourceId === 'SRC-004')!;
+  row.tier = 'tracker';
+  writeFileSync(path, `${JSON.stringify(register, null, 2)}\n`, 'utf8');
+  return root;
+}
+
+describe('the closure guard is reached from the production roots', () => {
+  // DOC-32026L0470 serves SRC-004 and is reached only by traversal from the
+  // entry document, so this is the committed corpus's own version of the
+  // traversal exposure — not a synthetic graph.
+  it('refuses at the verify run / verify sign root', () => {
+    const root = buildNonCitableWorld();
+    expect(() => readWorld(pathsFor(root), 'csrd', 'CSRD-S-001')).toThrow(
+      /may not become evidence|non-citable tier/,
+    );
+  });
+
+  it('names the document and the source it is served by', () => {
+    const root = buildNonCitableWorld();
+    try {
+      readWorld(pathsFor(root), 'csrd', 'CSRD-S-001');
+      throw new Error('expected a refusal');
+    } catch (error) {
+      const message = (error as { lines?: string[] }).lines?.join('\n') ?? String(error);
+      expect(message).toContain('DOC-32026L0470');
+      expect(message).toContain('SRC-004');
+    }
+  });
+
+  it('arrives as a structured CLI failure, not an uncaught error', () => {
+    // An error written to name the document and the source is worth nothing to
+    // an operator if it escapes as a stack trace.
+    const root = buildNonCitableWorld();
+    let caught: unknown;
+    try {
+      readWorld(pathsFor(root), 'csrd', 'CSRD-S-001');
+    } catch (error) {
+      caught = error;
+    }
+    expect((caught as { lines?: string[] }).lines, 'must be a CliFailure with lines').toBeDefined();
+  });
+
+  it('refuses at the review-sheet root', () => {
+    const root = buildNonCitableWorld();
+    const sheet = gatherSheet('csrd', sheetPathsFor(root));
+    // The sheet reports per-requirement rather than throwing, so the refusal
+    // shows up as the closure problem it recorded.
+    expect(JSON.stringify(sheet)).toMatch(/may not become evidence|non-citable tier/);
+  });
+
+  it('positive control: the identical world passes with SRC-004 left classified', () => {
+    // One field different — the tier — and the same two roots proceed. Without
+    // this the refusals above could be any failure to build the world.
+    const root = buildWorld(false);
+    expect(() => readWorld(pathsFor(root), 'csrd', 'CSRD-S-001')).not.toThrow();
+    expect(JSON.stringify(gatherSheet('csrd', sheetPathsFor(root)))).not.toMatch(
+      /may not become evidence|non-citable tier/,
+    );
+  });
+});

@@ -455,6 +455,7 @@ export function gatherSheet(packId: string, paths: SheetPaths): SheetModel {
       packId,
       paths,
       corpus,
+      sourceRegister,
       heldDocIds,
       entries,
       promotions,
@@ -482,6 +483,8 @@ interface GatherOneInput {
   packId: string;
   paths: SheetPaths;
   corpus: LoadedCorpus & AuthorisedCorpus;
+  /** The same object that authorised `corpus`; closure admission reads tiers from it. */
+  sourceRegister: SourceRegister;
   heldDocIds: ReadonlySet<string>;
   entries: LedgerEntry[];
   promotions: PromotionRecord[];
@@ -490,7 +493,7 @@ interface GatherOneInput {
 }
 
 function gatherRequirement(input: GatherOneInput): SheetRequirement {
-  const { requirement, pack, packId, paths, corpus, entries, renderCtx } = input;
+  const { requirement, pack, packId, paths, corpus, sourceRegister, entries, renderCtx } = input;
 
   const governing = governingEntry(entries, packId, requirement.id);
   const signature = governing !== null && governing.kind !== 'revoked' ? governing : null;
@@ -502,7 +505,7 @@ function gatherRequirement(input: GatherOneInput): SheetRequirement {
   let closureSha256: string | null = null;
   let closureProblem: string | null = null;
   try {
-    const closure = EntitledClosure.forSources(corpus, sourceIdsOf(requirement));
+    const closure = EntitledClosure.forSources(corpus, sourceRegister, sourceIdsOf(requirement));
     closureDocIds = [...closure.docIds];
     closureSha256 = closure.sha256;
   } catch (error) {

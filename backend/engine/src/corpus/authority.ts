@@ -15,15 +15,28 @@
  * - that the artefact is the legally authentic publication — a EUR-Lex
  *   consolidation is an authorised origin for `SRC-001` and is admitted here,
  *   without that admitting anything about which text has legal effect (§7.1);
- * - that any requirement may cite the source. That is
- *   `verifyRequirementCitability`'s question, settled against
- *   `governingAuthorities`, and this module reads no tier at all.
+ * - that the source may carry normative text at all. That is settled against
+ *   `governingAuthorities`, and this module reads no tier.
  *
- * The last one is the separation worth restating, because collapsing it is the
- * obvious mistake: **a corpus may legitimately hold documents for sources no
- * requirement cites.** `SRC-004` is exactly that today — served by a committed
- * document, cited by nothing since the S-004 correction. A validator that
- * demanded citability would reject a corpus that is entirely correct.
+ * **Storing an artefact and showing it to a model are different permissions.**
+ * A corpus may legitimately hold a document whose source is not citable — an
+ * archived tracker page, say — and origin authority is the right answer to
+ * whether it may sit there. It is not the answer to whether that document may
+ * become evidence, and until Task 5's closure guard existed, nothing asked:
+ * `serves[]` selects closure *entry points*, and traversal then walks
+ * structural edges without consulting it again, so a document no requirement
+ * could cite could still be reached and rendered. That question now belongs to
+ * `EntitledClosure`, which refuses any closure member served by a source with
+ * no explicit citable governing authority.
+ *
+ * **`SRC-004` is the discriminator for that split, not an argument against it.**
+ * It is served by a committed document and cited by no requirement since the
+ * S-004 correction — and the register classifies it `legal_record`. So it is
+ * *uncited* and *citable*, which are different words: it passes here on its
+ * origin, and it passes closure admission on its tier. Reading it as a reason
+ * to keep tiers out of evidence admission confuses "nothing currently rests on
+ * this" with "this may not be relied on", which is the confusion the governing
+ * authority record exists to end.
  *
  * # Why a brand
  *

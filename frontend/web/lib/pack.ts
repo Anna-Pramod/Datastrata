@@ -48,7 +48,7 @@ import {
   sourceIdsOf,
   verificationResultSchema,
 } from '@datastrata/engine';
-import type { AuthorisedCorpus } from '@datastrata/engine';
+import type { AuthorisedCorpus, SourceRegister } from '@datastrata/engine';
 import type {
   CheckedFreshness,
   FreshnessResolver,
@@ -199,6 +199,7 @@ function readPinnedResult(root: string, packId: string, requirementId: string): 
 export function buildCsrdFreshnessResolver(root: string): FreshnessResolver {
   const corpusDir = corpusDirOf(root);
   let corpus: (LoadedCorpus & AuthorisedCorpus) | undefined;
+  let register: SourceRegister | undefined;
 
   /**
    * The corpus, authorised once and remembered.
@@ -218,23 +219,28 @@ export function buildCsrdFreshnessResolver(root: string): FreshnessResolver {
    * validated against the pack in the same call, which is the invariant that
    * matters — the register deciding authority is the one checked against a pack.
    */
-  const authorised = (): LoadedCorpus & AuthorisedCorpus => {
-    if (corpus !== undefined) return corpus;
+  const authorised = (): { corpus: LoadedCorpus & AuthorisedCorpus; register: SourceRegister } => {
+    if (corpus !== undefined && register !== undefined) return { corpus, register };
     const verificationDir = verificationDirOf(root);
     const { pack, sourceRegister } = loadPackContext(packDirOf(root), {
       versionRegistryDir: join(verificationDir, 'requirement-versions'),
       ledgerPath: join(verificationDir, 'signatures.jsonl'),
     });
+    // Returned together, deliberately. Closure admission reads tiers from the
+    // register, and it must be the same object that authorised this corpus —
+    // handing back only the corpus would leave the caller to find a register
+    // of its own, which is the second-parse hazard T5.3 closed at ingest.
+    register = sourceRegister;
     corpus = authoriseCorpus(loadCorpus(corpusDir), sourceRegister, pack);
-    return corpus;
+    return { corpus, register };
   };
 
   return ({ packId, requirement, entry, renderContext }): CheckedFreshness => {
-    const loaded = authorised();
+    const { corpus: loaded, register: loadedRegister } = authorised();
 
     let closure;
     try {
-      closure = EntitledClosure.forSources(loaded, sourceIdsOf(requirement));
+      closure = EntitledClosure.forSources(loaded, loadedRegister, sourceIdsOf(requirement));
     } catch (error) {
       integrityFailure(
         'unresolved_gap',

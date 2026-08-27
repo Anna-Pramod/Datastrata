@@ -56,6 +56,8 @@ import {
 } from '../corpus/closure';
 import type { CorpusDocument, CorpusIndex } from '../corpus/types';
 import type { AuthorisedCorpus } from '../corpus/authority';
+import type { SourceRegister, SourceTier } from '../monitoring/types';
+import { sourceCitability } from '../monitoring/register';
 
 /**
  * The corpus reduced to what entitlement needs of it.
@@ -142,6 +144,112 @@ export function renderEntitledClosure(closure: EntitledClosure): string {
  * erased at runtime; what holds is that every production composition root calls
  * the validator, and each root has its own tooth proving it.
  */
+/**
+ * A document inside a computed closure whose served source may not carry
+ * normative text.
+ *
+ * Distinct from `RegisterIntegrityError` on purpose. That one answers "may this
+ * *requirement* rest on this source?" and is raised while a pack loads. This
+ * answers "may this *document*, already inside a closure, be shown to a model?"
+ * and is raised at exposure. Same register, same predicate, different
+ * proposition and different remedy — collapsing them into one error would hide
+ * which boundary refused.
+ */
+export interface ClosureCitabilityFailure {
+  readonly docId: string;
+  /** `null` when the document names no source at all — there is none to name. */
+  readonly sourceId: string | null;
+  readonly reason: 'no served source' | 'no governing authority' | 'non-citable tier';
+  readonly tier?: SourceTier;
+}
+
+export class ClosureCitabilityError extends Error {
+  constructor(readonly failures: readonly ClosureCitabilityFailure[]) {
+    super(
+      `The entitled closure holds documents served by sources that may not carry normative text:\n${failures
+        .map((f) => {
+          if (f.reason === 'no served source') {
+            return `  - ${f.docId} names no source at all, so nothing states what its text is evidence of`;
+          }
+          return f.reason === 'no governing authority'
+            ? `  - ${f.docId} is served by ${f.sourceId}, which has no governing authority in the source register`
+            : `  - ${f.docId} is served by ${f.sourceId}, whose governing authority is ${f.tier} — a non-citable tier may never become model-facing evidence`;
+        })
+        .join('\n')}`,
+    );
+    this.name = 'ClosureCitabilityError';
+  }
+}
+
+/**
+ * Every document in the **final** closure, not merely the entry points.
+ *
+ * The distinction is the whole defect. `docsForSources` reads `serves[]` to
+ * choose entry points, and `computeClosure` then walks structural edges in both
+ * directions without consulting `serves` again — so a document no requirement
+ * could cite can still arrive by traversal. Validating entry points would leave
+ * exactly that path open, which is why this runs over `closure.docIds`.
+ *
+ * Every `(document, sourceId)` pair is independent: one citable source on a
+ * document does not rescue another. A document is a single artefact and its
+ * text is shown whole, so if any source it claims may not carry normative text,
+ * showing it would put that text in front of a model under a claim the register
+ * does not support.
+ *
+ * Source *existence* is not rechecked here. `AuthorisedCorpus` is a
+ * precondition of this constructor and `assertCorpusAuthority` already refuses
+ * any `serves[]` id the pack does not carry, so re-deciding it would create a
+ * second owner for a settled question.
+ */
+function assertClosureCitability(
+  index: CorpusIndex,
+  closure: Closure,
+  register: SourceRegister,
+): void {
+  const byId = new Map(index.documents.map((d) => [d.docId, d]));
+  const failures: ClosureCitabilityFailure[] = [];
+
+  for (const docId of closure.docIds) {
+    const document = byId.get(docId);
+    // Unreachable: `computeClosure` throws `ClosureEntryNotFoundError` on an
+    // entry the corpus does not hold, and only ever reaches further ids through
+    // edges between held documents. It throws rather than `continue`ing anyway,
+    // because `continue` here would mean "a closure member I could not resolve
+    // is fine" — which is exactly the shape of the two defects this guard was
+    // written to close, and the shape is worth not having.
+    if (document === undefined) {
+      throw new Error(
+        `closure member ${docId} is not in the index it was computed from — refusing rather than skipping`,
+      );
+    }
+
+    // **The quantifier is over documents, not over the ids they list.** A
+    // `serves: []` document is schema-valid, and both upstream boundaries pass
+    // it vacuously — origin authority loops over the same empty array, so it
+    // has nothing to check either. Written as a loop alone, this guard would
+    // inherit that hole: zero claims would mean zero failures, and the document
+    // would be rendered to the agents having stated nothing about what its text
+    // is evidence of. "No unsourced fact" makes that the one document that may
+    // never become evidence, so an empty claim is a failure in its own right.
+    if (document.serves.length === 0) {
+      failures.push({ docId, sourceId: null, reason: 'no served source' });
+      continue;
+    }
+
+    for (const sourceId of document.serves) {
+      const verdict = sourceCitability(register, sourceId);
+      if (verdict.citable) continue;
+      failures.push(
+        verdict.reason === 'no governing authority'
+          ? { docId, sourceId, reason: verdict.reason }
+          : { docId, sourceId, reason: verdict.reason, tier: verdict.tier },
+      );
+    }
+  }
+
+  if (failures.length > 0) throw new ClosureCitabilityError(failures);
+}
+
 export class EntitledClosure {
   /**
    * The corpus, and the traversal's answer, as **genuine** private fields.
@@ -177,16 +285,17 @@ export class EntitledClosure {
    */
   static forSources(
     source: AuthorisedCorpus,
+    register: SourceRegister,
     sourceIds: readonly string[],
     policy: ClosurePolicy = CLOSURE_POLICY_V0,
   ): EntitledClosure {
     const entryDocIds = docsForSources(source.index, [...sourceIds]);
-    return new EntitledClosure(
-      source,
-      policy,
-      entryDocIds,
-      computeClosure(source.index, entryDocIds, policy),
-    );
+    const closure = computeClosure(source.index, entryDocIds, policy);
+    // After expansion, before the closure can be handed to anything. Origin
+    // authority admitted these documents to the *corpus*; this decides which of
+    // them may become *evidence*, and the two are not the same permission.
+    assertClosureCitability(source.index, closure, register);
+    return new EntitledClosure(source, policy, entryDocIds, closure);
   }
 
   /** Sorted. Every document a role may open. */

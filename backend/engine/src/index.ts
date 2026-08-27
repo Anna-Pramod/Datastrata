@@ -7,11 +7,11 @@ export { loadPack, loadPackContext, verifyIntegrity, refuseAuthoredDerivedFields
 export { sourceIdsOf } from './knowledge/provenance';
 export { rankNextQuestions } from './engine/nextQuestion';
 export { summarise } from './engine/summary';
-export { loadSourceRegister, parseSourceRegister, verifyRegisterIntegrity, verifyRequirementCitability, governingAuthorityFor, isCitableSource, NoGoverningAuthorityError, RegisterIntegrityError, TIER_POLICY } from './monitoring/register';
+export { loadSourceRegister, parseSourceRegister, verifyRegisterIntegrity, verifyRequirementCitability, governingAuthorityFor, isCitableSource, sourceCitability, NoGoverningAuthorityError, RegisterIntegrityError, TIER_POLICY } from './monitoring/register';
 export type { RegisterSource, SourceRegister, SourceTier, SourceCadence, TierPolicy } from './monitoring/types';
 export { loadCorpus, CorpusDocumentNotFoundError } from './corpus/store';
 export { parseCorpusIndex, verifyCorpusIntegrity, verifyCorpusServesCoverage, CorpusIntegrityError } from './corpus/schema';
-export { EntitledClosure } from './pipeline/entitlement';
+export { EntitledClosure, ClosureCitabilityError, type ClosureCitabilityFailure } from './pipeline/entitlement';
 export { authoriseCorpus, assertCorpusAuthority, CorpusAuthorityError, type AuthorisedCorpus, type CorpusCapability } from './corpus/authority';
 export { computeClosure, docsForSources, CLOSURE_POLICY_V0, STRUCTURAL_EDGE_KINDS, ClosureEntryNotFoundError } from './corpus/closure';
 export { checkEvidenceSet } from './corpus/evidence';

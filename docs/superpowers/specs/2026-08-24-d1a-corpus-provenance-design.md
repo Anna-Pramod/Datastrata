@@ -669,7 +669,29 @@ Two independent, partial checks and a hole between them:
 
 ### 19.2 The invariant, source-specific
 
-> Every `sourceId` in a `CorpusDocument.serves[]` resolves to an actual source-register row whose tier permits citation, and the artefact's own origin is authorised **for that source**. An unrelated citable row on the same host never confers authority.
+The invariant as first written bundled two propositions into one sentence:
+
+> ~~Every `sourceId` in a `CorpusDocument.serves[]` resolves to an actual source-register row whose tier permits citation, and the artefact's own origin is authorised **for that source**.~~
+
+Those are different questions with different owners, and bundling them left the second half enforced and the first half enforced nowhere. They are now stated separately.
+
+**19.2(a) — recorded-origin authority, owned by `AuthorisedCorpus`.**
+
+> Every `sourceId` in a `CorpusDocument.serves[]` resolves to a source the pack carries, and the artefact's own recorded origin is authorised **for that source**. An unrelated citable row on the same host never confers authority.
+
+This reads no tier, deliberately. It decides what the corpus may **store**.
+
+**19.2(b) — source-tier eligibility, owned by `EntitledClosure`.**
+
+> Every document in a computed entitled closure — including documents reached only by structural traversal, not merely the entry points `docsForSources` selected — is served exclusively by sources holding an explicit governing authority whose tier permits citation. One citable source on a document does not rescue another.
+
+This decides what a model may **see**.
+
+**The refusal is whole-closure, and that is deliberate but worth stating.** Structural edges are traversed in both directions, so a single non-citable document anywhere in a connected component makes *every* requirement whose closure reaches it unbuildable — including requirements that do not cite the offending source at all. The run fails closed rather than silently narrowing the evidence, because quietly dropping a document from a closure would change what the agents saw without changing what the signature said they saw. The remedy is to classify the source or to remove the artefact from the corpus; there is deliberately no per-document override.
+
+**Why the split, and why the second half cannot live in `AuthorisedCorpus`.** A corpus may legitimately hold an origin-authorised artefact for a source that may not be cited — an archived tracker page is a reasonable thing to keep. Refusing to store it is the wrong remedy; refusing to *show* it is the right one. The split is also what closes a real gap: `serves[]` selects closure entry points, and `computeClosure` then walks structural edges in both directions without consulting `serves` again, so a document no requirement could cite could be reached by traversal and rendered to the agents. Validating entry points, or validating at ingest, both leave that path open. The guard therefore sits at closure construction, after expansion and before exposure.
+
+**`uncited` is not `non-citable`.** `SRC-004` is served by a committed document, is cited by no requirement since the S-004 correction, and is classified `legal_record`. It passes 19.2(a) on its origin and 19.2(b) on its tier. Whether anything currently rests on a source is irrelevant to both predicates, and the committed corpus is the standing discriminator for that.
 
 **What this invariant does not answer.** It validates *origin authority* — whether an artefact came from a surface the register authorises for the source it claims to serve. It does not classify the artefact's **authenticity**: a EUR-Lex consolidation is an authorised origin for `SRC-001` and this check will correctly admit it, without thereby asserting that the consolidation is the authentic legally effective publication. That axis is §7.1's, and its enforcement belongs to envelope E2. `AuthorisedCorpus` must not be read as having settled it.
 

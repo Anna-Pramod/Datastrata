@@ -70,7 +70,7 @@ import { normalize } from '../corpus/normalize';
 import { loadCorpus, type LoadedCorpus } from '../corpus/store';
 import { CorpusIntegrityError } from '../corpus/schema';
 import { authoriseCorpus, CorpusAuthorityError, type AuthorisedCorpus } from '../corpus/authority';
-import { EntitledClosure } from '../pipeline/entitlement';
+import { ClosureCitabilityError, EntitledClosure } from '../pipeline/entitlement';
 import type { SourceRegister } from '../monitoring/types';
 import { loadPackContext, PackIntegrityError } from '../knowledge/loader';
 import type { KnowledgePack, Requirement } from '../types';
@@ -265,6 +265,8 @@ export interface CurrentWorld {
    * build an entitlement over a corpus that never earned its sources.
    */
   corpus: LoadedCorpus & AuthorisedCorpus;
+  /** The same object that authorised `corpus`; closure admission reads tiers from it. */
+  sourceRegister: SourceRegister;
   renderCtx: RenderContext;
   /** Every pin. `pins.corpus` is the closure's documents as the corpus holds them now. */
   pins: VerificationPins;
@@ -338,7 +340,7 @@ export function readWorld(paths: VerifyPaths, packId: string, requirementId: str
 
   let closure;
   try {
-    closure = EntitledClosure.forSources(corpus, sourceIdsOf(requirement));
+    closure = EntitledClosure.forSources(corpus, sourceRegister, sourceIdsOf(requirement));
   } catch (error) {
     if (error instanceof ClosureEntryNotFoundError) {
       // Factory §4.2 files this as a `corpus_gap`, answered by ingesting the
@@ -346,6 +348,22 @@ export function readWorld(paths: VerifyPaths, packId: string, requirementId: str
       throw new CliFailure(EXIT_REFUSED, [
         'REFUSED — the entitled closure cannot be computed.',
         `  - unresolved_gap: ${error.message}`,
+      ]);
+    }
+    if (error instanceof ClosureCitabilityError) {
+      // An integrity failure, filed like `CorpusAuthorityError` above rather
+      // than as a refusal: the corpus holds a document the register says may
+      // not carry normative text, which is a state to repair, not a verdict to
+      // record. Structured for the operator, because an error written to name
+      // the document and the source is worth nothing if it arrives as a stack
+      // trace — `dispatch` owes every branch a `CliOutcome`.
+      throw new CliFailure(EXIT_INTEGRITY_FAILURE, [
+        'INTEGRITY FAILURE — the entitled closure holds documents that may not become evidence.',
+        ...error.failures.map((f) =>
+          f.sourceId === null
+            ? `  - ${f.docId} names no source at all — ${f.reason}`
+            : `  - ${f.docId} is served by ${f.sourceId} — ${f.reason}`,
+        ),
       ]);
     }
     throw error;
@@ -358,6 +376,7 @@ export function readWorld(paths: VerifyPaths, packId: string, requirementId: str
     pack,
     requirement,
     corpus,
+    sourceRegister,
     renderCtx,
     pins: producePins({
       requirement,

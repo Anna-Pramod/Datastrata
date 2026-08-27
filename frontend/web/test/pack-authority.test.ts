@@ -20,7 +20,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildCsrdFreshnessResolver, loadVerifiedCsrdPack } from '@/lib/pack';
-import { loadPack } from '@datastrata/engine';
+import { CorpusAuthorityError, loadPack } from '@datastrata/engine';
 import type { SigningEntry } from '@datastrata/engine';
 
 const REAL_ENGINE_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'backend', 'engine');
@@ -84,9 +84,29 @@ function resolverInput(engine: string, entry: Partial<SigningEntry> = {}) {
 
 describe('the public site refuses a corpus that is not authorised for what it claims', () => {
   it('refuses when the freshness root consumes the corpus', () => {
+    // **Asserted as the authority failure, not merely as a failure.** This test
+    // used to match `/SRC-002|authoris/i` on the thrown value. Removing
+    // `authoriseCorpus` from this root still reddened it — but only because the
+    // unauthorised corpus then crashed downstream with `entry.corpus is not
+    // iterable`, an incidental TypeError that says nothing about authority. A
+    // tooth that passes through the wrong failure is a tooth that would accept
+    // the wrong fix. The typed error and its structured failure are what the
+    // root is supposed to produce, and nothing downstream can imitate them.
     const engine = buildRoot(true);
     const resolve = buildCsrdFreshnessResolver(engine);
-    expect(() => resolve(resolverInput(engine) as never)).toThrow(/SRC-002|authoris/i);
+    try {
+      resolve(resolverInput(engine) as never);
+      expect.unreachable('the unauthorised corpus must be refused');
+    } catch (error) {
+      expect(error).toBeInstanceOf(CorpusAuthorityError);
+      expect((error as CorpusAuthorityError).failures).toContainEqual(
+        expect.objectContaining({
+          docId: 'DOC-32013L0034',
+          sourceId: 'SRC-002',
+          reason: 'no declaration',
+        }),
+      );
+    }
   });
 
   it('positive control: the identical repository resolves when the corpus is authorised', () => {
@@ -110,5 +130,71 @@ describe('the public site refuses a corpus that is not authorised for what it cl
     // consumed — and nothing has been decided from it either.
     const engine = buildRoot(true);
     expect(() => loadVerifiedCsrdPack(engine)).not.toThrow();
+  });
+});
+
+/**
+ * The closure guard, at the public site's root.
+ *
+ * The engine's `corpus-authority-roots.test.ts` invokes the F-5 lesson — a
+ * check can be correct, tested, and never called — and asserts the wiring at
+ * the two CLI roots. That claim did not reach here until this block existed:
+ * with the guard correctly wired but handed a *fabricated permissive* register
+ * instead of the validated one, all 46 frontend and 1535 engine tests still
+ * passed. The `register` parameter makes omission a compile error; it cannot
+ * make a root pass the right object, so that has to be asserted.
+ *
+ * The corpus is left entirely origin-authorised and the **register** is edited
+ * instead: `SRC-004` becomes a tracker. Origin authority reads no tier, so it
+ * still passes, and the closure guard is the only boundary that can refuse.
+ * `DOC-32026L0470` serves `SRC-004` and is reached only by traversal from the
+ * entry document, so this exercises the committed corpus's own version of the
+ * traversal exposure rather than a synthetic graph.
+ */
+function reclassifySrc004AsTracker(engine: string): void {
+  const path = join(engine, 'monitoring', 'source-register.json');
+  const register = JSON.parse(readFileSync(path, 'utf8')) as {
+    governingAuthorities: { sourceId: string; tier: string }[];
+  };
+  register.governingAuthorities.find((a) => a.sourceId === 'SRC-004')!.tier = 'tracker';
+  writeFileSync(path, `${JSON.stringify(register, null, 2)}\n`, 'utf8');
+}
+
+/** Did this failure come from the closure guard, or from something else? */
+const isCitabilityRefusal = (error: unknown): boolean =>
+  /non-citable tier|may not become evidence|no served source/.test(String(error));
+
+describe('the public site refuses a closure holding evidence it may not show', () => {
+  it('refuses when a traversal-reached document is served by a non-citable source', () => {
+    const engine = buildRoot(false);
+    reclassifySrc004AsTracker(engine);
+    const resolve = buildCsrdFreshnessResolver(engine);
+    let caught: unknown;
+    try {
+      resolve(resolverInput(engine) as never);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught, 'the resolver must refuse').toBeDefined();
+    expect(isCitabilityRefusal(caught), `refused for the wrong reason: ${String(caught)}`).toBe(true);
+    expect(String(caught)).toContain('DOC-32026L0470');
+    expect(String(caught)).toContain('SRC-004');
+  });
+
+  it('positive control: the identical repository does not refuse with SRC-004 left classified', () => {
+    // One field different — the tier — and the guard is silent. Asserted the way
+    // its sibling above is: this stub entry carries no corpus pins, so the
+    // resolver fails downstream on shape either way, and a bare `not.toThrow()`
+    // would be red for a reason that has nothing to do with citability. What
+    // must be absent is the *refusal*, not every failure.
+    const engine = buildRoot(false);
+    const resolve = buildCsrdFreshnessResolver(engine);
+    let caught: unknown;
+    try {
+      resolve(resolverInput(engine) as never);
+    } catch (error) {
+      caught = error;
+    }
+    expect(isCitabilityRefusal(caught), 'a classified source must not be refused').toBe(false);
   });
 });

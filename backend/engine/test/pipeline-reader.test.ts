@@ -67,6 +67,7 @@ import {
   docText,
   fixtureAuthorisedCorpus,
   fixtureIndex,
+  fixtureRegister,
   fixtureRenderContext,
   fixtureRequirement,
   lensFromRequest,
@@ -81,7 +82,7 @@ const prompts = loadPromptSet();
 const corpus = fixtureAuthorisedCorpus();
 
 function fixtureClosure(sourceIds: readonly string[] = ['SRC-100']): EntitledClosure {
-  return EntitledClosure.forSources(corpus, sourceIds);
+  return EntitledClosure.forSources(corpus, fixtureRegister(), sourceIds);
 }
 
 /** A reader input over the fixture closure, projected the only supported way. */
@@ -862,11 +863,10 @@ describe('a requirement whose sources serve no document (the real corpus)', () =
   // Authorised, like every production consumer of the real corpus: `forSources`
   // takes only a validated corpus, and a test that reached round it would be
   // exercising a path production cannot use.
-  const realCorpus = authoriseCorpus(
-    loadCorpus(join(here, '..', 'corpus')),
-    parseSourceRegister(JSON.parse(readFileSync(join(here, '..', 'monitoring', 'source-register.json'), 'utf8'))),
-    csrdPack(),
+  const realRegister = parseSourceRegister(
+    JSON.parse(readFileSync(join(here, '..', 'monitoring', 'source-register.json'), 'utf8')),
   );
+  const realCorpus = authoriseCorpus(loadCorpus(join(here, '..', 'corpus')), realRegister, csrdPack());
   const pack = csrdPack();
   const requirement = pack.requirements.find((entry) => entry.id === 'CSRD-S-012');
   const registers = {
@@ -885,7 +885,7 @@ describe('a requirement whose sources serve no document (the real corpus)', () =
     // too. The number is a measurement of the corpus, and it will move again
     // when the host instruments are ingested.
     const empty = pack.requirements.filter(
-      (entry) => EntitledClosure.forSources(realCorpus, entry.sources).docIds.length === 0,
+      (entry) => EntitledClosure.forSources(realCorpus, realRegister, entry.sources).docIds.length === 0,
     );
     expect(empty.map((entry) => entry.id)).toEqual(['CSRD-S-003', 'CSRD-S-004', 'CSRD-S-012']);
     expect(pack.requirements).toHaveLength(16);
@@ -896,7 +896,7 @@ describe('a requirement whose sources serve no document (the real corpus)', () =
     // them with nothing entitled at all. Asserted here so the set above is not
     // read as the pack's halt list.
     const eleven = pack.requirements.find((entry) => entry.id === 'CSRD-S-011')!;
-    expect(EntitledClosure.forSources(realCorpus, eleven.sources).docIds.length).toBeGreaterThan(0);
+    expect(EntitledClosure.forSources(realCorpus, realRegister, eleven.sources).docIds.length).toBeGreaterThan(0);
   });
 
   it('produces a corpus_gap per cited source, and no reading assembled from memory', async () => {
@@ -904,7 +904,7 @@ describe('a requirement whose sources serve no document (the real corpus)', () =
     if (requirement === undefined) throw new Error('unreachable');
     expect(requirement.sources).toEqual(['SRC-005', 'SRC-007']);
 
-    const closure = EntitledClosure.forSources(realCorpus, requirement.sources);
+    const closure = EntitledClosure.forSources(realCorpus, realRegister, requirement.sources);
     const runner = stubRunner(() => JSON.stringify(wholeReading()));
     const outcome = await runBlindReader({
       input: readerInputFor({ packId: pack.id, requirement, closure }),
@@ -934,7 +934,7 @@ describe('a requirement whose sources serve no document (the real corpus)', () =
       input: readerInputFor({
         packId: pack.id,
         requirement,
-        closure: EntitledClosure.forSources(realCorpus, requirement.sources),
+        closure: EntitledClosure.forSources(realCorpus, realRegister, requirement.sources),
       }),
       sourceIds: requirement.sources,
       prompt: prompts.reader,
@@ -973,7 +973,7 @@ describe('a requirement whose sources serve no document (the real corpus)', () =
       requirementId: requirement.id,
       requirement,
       renderContext: { factTypes: pack.factTypes, catalogues: pack.catalogues },
-      closure: EntitledClosure.forSources(realCorpus, requirement.sources),
+      closure: EntitledClosure.forSources(realCorpus, realRegister, requirement.sources),
       corpus: realCorpus,
       prompts,
       config: DEFAULT_ROLE_CONFIG,
@@ -1010,7 +1010,7 @@ describe('a requirement whose sources serve no document (the real corpus)', () =
     // that file — or ingesting the missing material — would have broken this
     // control for a reason with nothing to do with what it tests.
     const closureFor = (entry: (typeof pack.requirements)[number]) =>
-      EntitledClosure.forSources(realCorpus, entry.sources);
+      EntitledClosure.forSources(realCorpus, realRegister, entry.sources);
     const served = pack.requirements.find(
       (entry) =>
         entry.id !== requirement.id &&
@@ -1032,7 +1032,7 @@ describe('a requirement whose sources serve no document (the real corpus)', () =
       requirementId: served.id,
       requirement: served,
       renderContext: { factTypes: pack.factTypes, catalogues: pack.catalogues },
-      closure: EntitledClosure.forSources(realCorpus, served.sources),
+      closure: EntitledClosure.forSources(realCorpus, realRegister, served.sources),
       corpus: realCorpus,
       prompts,
       config: DEFAULT_ROLE_CONFIG,
@@ -1050,7 +1050,7 @@ describe('a requirement whose sources serve no document (the real corpus)', () =
     // justification has to be rewritten rather than inherited.
     const held = new Set(realCorpus.index.documents.map((document) => document.docId));
     for (const entry of pack.requirements) {
-      const closure = EntitledClosure.forSources(realCorpus, entry.sources);
+      const closure = EntitledClosure.forSources(realCorpus, realRegister, entry.sources);
       const outside = [...held].filter((docId) => !closure.entitled(docId));
       if (closure.docIds.length === 0) continue;
       expect(outside).toEqual([]);

@@ -40,6 +40,7 @@ import {
   stubAdjudicatorOutput,
   stubProsecutorOutput,
   stubReaderOutput,
+  fixtureRegister,
 } from './pipeline-fixtures';
 import { EntitledClosure } from '../src/pipeline/entitlement';
 
@@ -98,7 +99,7 @@ function pipelineInput() {
     requirementId: 'TEST-R-001',
     requirement: fixtureRequirement(),
     renderContext: fixtureRenderContext(),
-    closure: EntitledClosure.forSources(corpus, ['SRC-100']),
+    closure: EntitledClosure.forSources(corpus, fixtureRegister(), ['SRC-100']),
     corpus,
     prompts,
   };
@@ -295,7 +296,7 @@ describe('deployment configuration is not verification semantics', () => {
       pipelineVersionFor({
         prompts,
         config: { ...SINGLE_PROSECUTOR, providerAdapter: { id: ' test-provider ', version: '1' } },
-        closure: EntitledClosure.forSources(corpus, ['SRC-100']),
+        closure: EntitledClosure.forSources(corpus, fixtureRegister(), ['SRC-100']),
       }),
     ).toThrow(InvalidProviderAdapterIdentityError);
     // Control: the same call with a clean identity produces one.
@@ -303,7 +304,7 @@ describe('deployment configuration is not verification semantics', () => {
       pipelineVersionFor({
         prompts,
         config: { ...SINGLE_PROSECUTOR, providerAdapter: SYNTHETIC_ADAPTER_V1.identity },
-        closure: EntitledClosure.forSources(corpus, ['SRC-100']),
+        closure: EntitledClosure.forSources(corpus, fixtureRegister(), ['SRC-100']),
       }),
     ).toMatch(new RegExp(`^pipeline-${PIPELINE_IDENTITY_SCHEME}-[0-9a-f]{64}$`));
   });

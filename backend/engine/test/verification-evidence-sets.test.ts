@@ -82,6 +82,7 @@ import {
   fixtureRequirement,
   lensFromRequest,
   stubRunner,
+  fixtureRegister,
 } from './pipeline-fixtures';
 
 // ---------------------------------------------------------------------------
@@ -217,7 +218,7 @@ async function assembled(): Promise<VerificationResult> {
     requirementId: REQUIREMENT.id,
     requirement: REQUIREMENT,
     renderContext,
-    closure: EntitledClosure.forSources(corpus, REQUIREMENT.sources),
+    closure: EntitledClosure.forSources(corpus, fixtureRegister(), REQUIREMENT.sources),
     corpus,
     prompts,
     config: SINGLE_PROSECUTOR,

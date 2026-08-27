@@ -399,7 +399,7 @@ function closureShaFor(world: string, requirementId: string, packId: string = PA
   const register = parseSourceRegister(
     JSON.parse(readFileSync(join(world, 'monitoring', 'source-register.json'), 'utf8')),
   );
-  return EntitledClosure.forSources(authoriseCorpus(corpus, register, pack), requirement.sources).sha256;
+  return EntitledClosure.forSources(authoriseCorpus(corpus, register, pack), register, requirement.sources).sha256;
 }
 
 // ---------------------------------------------------------------------------

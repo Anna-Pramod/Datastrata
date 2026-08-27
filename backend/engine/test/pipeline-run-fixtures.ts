@@ -56,6 +56,7 @@ import {
   lensFromRequest,
   NOT_INGESTED,
   stubRunner,
+  fixtureRegister,
 } from './pipeline-fixtures';
 
 /**
@@ -108,7 +109,7 @@ export function subject(overrides: Partial<Requirement> = {}): Requirement {
 export const REQUIREMENT = subject();
 
 export function closureForRun(): EntitledClosure {
-  return EntitledClosure.forSources(corpus, sourceIdsOf(REQUIREMENT));
+  return EntitledClosure.forSources(corpus, fixtureRegister(), sourceIdsOf(REQUIREMENT));
 }
 
 export const CLOSURE = closureForRun();
@@ -271,7 +272,7 @@ export function runPipeline(overrides: RunOverrides = {}) {
     requirementId: requirement.id,
     requirement,
     renderContext,
-    closure: EntitledClosure.forSources(corpus, sourceIdsOf(requirement)),
+    closure: EntitledClosure.forSources(corpus, fixtureRegister(), sourceIdsOf(requirement)),
     corpus,
     prompts,
     config: SINGLE_PROSECUTOR,

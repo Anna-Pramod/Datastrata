@@ -74,6 +74,7 @@ import {
   stubProsecutorOutput,
   stubReaderOutput,
   stubRunner,
+  fixtureRegister,
 } from './pipeline-fixtures';
 
 const corpus = fixtureAuthorisedCorpus();
@@ -81,7 +82,7 @@ const prompts = loadPromptSet();
 const ctxRender = fixtureRenderContext();
 
 function fixtureClosure(): EntitledClosure {
-  return EntitledClosure.forSources(corpus, ['SRC-100']);
+  return EntitledClosure.forSources(corpus, fixtureRegister(), ['SRC-100']);
 }
 
 /** Two atoms under one `all`, so the address vocabulary has groups in it. */

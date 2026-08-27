@@ -89,6 +89,7 @@ import {
   NOT_INGESTED,
   stubReaderOutput,
   stubRunner,
+  fixtureRegister,
 } from './pipeline-fixtures';
 
 const corpus = fixtureAuthorisedCorpus();
@@ -96,7 +97,7 @@ const prompts = loadPromptSet();
 const ctxRender = fixtureRenderContext();
 
 function fixtureClosure(): EntitledClosure {
-  return EntitledClosure.forSources(corpus, ['SRC-100']);
+  return EntitledClosure.forSources(corpus, fixtureRegister(), ['SRC-100']);
 }
 
 function quote(text = 'The operative test is stated here.') {

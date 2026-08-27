@@ -178,7 +178,7 @@ export async function runRun(
   // The capability object, built once and handed to every role. Not a second
   // traversal: `EntitledClosure.forSources` wraps `docsForSources` and
   // `computeClosure`, which is the same pair `readWorld` went through.
-  const closure = EntitledClosure.forSources(world.corpus, sourceIdsOf(world.requirement));
+  const closure = EntitledClosure.forSources(world.corpus, world.sourceRegister, sourceIdsOf(world.requirement));
 
   let run;
   try {
