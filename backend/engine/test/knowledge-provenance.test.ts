@@ -380,3 +380,98 @@ describe('a pack whose source register is absent', () => {
     expect(withRegister).not.toThrow(SourceRegisterMissingError);
   });
 });
+
+// ---------------------------------------------------------------------------
+// The register must describe this pack before its policy is trusted
+// ---------------------------------------------------------------------------
+
+/**
+ * `loadPack` proves register↔pack agreement before reading policy out of it.
+ *
+ * **Order is the proposition, not a preference.** `verifyRegisterIntegrity`
+ * answers whether this register describes this pack at all — same program, ids
+ * that exist here. `verifyRequirementCitability` then reads policy *out of* the
+ * register and applies it. Reversed, a register for another program would
+ * decide which of this pack's sources may back a determination, using
+ * authorities whose `sourceId`s mean something else: a confident answer derived
+ * from the wrong document.
+ *
+ * The check is not new — it has covered program agreement since Task 3 — but
+ * its only caller was `loadSourceRegister`, which no production path calls.
+ * Task 4 made the register mandatory and deferred this. Through the default
+ * directory the gap is academic; through `options.sourceRegisterDir` a caller
+ * hands `loadPack` any register on disk, and nothing asked whose it was.
+ */
+describe('a source register that does not describe this pack', () => {
+  let root = '';
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'register-program-'));
+    mkdirSync(join(root, 'knowledge'), { recursive: true });
+    cpSync(join(engineRoot, 'knowledge', 'csrd'), join(root, 'knowledge', 'csrd'), { recursive: true });
+    installRealRegister(root);
+  });
+
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  const load = () =>
+    loadPack(join(root, 'knowledge', 'csrd'), {
+      versionRegistryDir: join(engineRoot, 'verification', 'requirement-versions'),
+    });
+
+  /** Rewrites one field of the installed register, leaving the rest alone. */
+  function setProgram(program: string): void {
+    const path = join(root, 'monitoring', 'source-register.json');
+    const register = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+    register['program'] = program;
+    writeFileSync(path, `${JSON.stringify(register, null, 2)}\n`, 'utf8');
+  }
+
+  it('loads when the register is this pack’s — the control', () => {
+    // One field separates this from the refusal below. Without it, that refusal
+    // could be any load failure at all.
+    expect(() => load()).not.toThrow();
+  });
+
+  it('refuses a register for another program, naming both', () => {
+    setProgram('NFRD');
+    expect(() => load()).toThrow(RegisterIntegrityError);
+    // Both programs, so an operator reads which register reached which pack
+    // rather than that something disagreed.
+    expect(() => load()).toThrow(/NFRD/);
+    expect(() => load()).toThrow(/CSRD/);
+  });
+
+  it('refuses before citability reads policy out of it', () => {
+    // The ordering, made observable. This register is for another program *and*
+    // carries an authority for a source the pack does not know, so both checks
+    // have something to say. Integrity runs first, so its message is the one
+    // that arrives — a citability message here would mean policy had been
+    // trusted from a register nothing had vouched for.
+    const path = join(root, 'monitoring', 'source-register.json');
+    const register = JSON.parse(readFileSync(path, 'utf8')) as {
+      program: string;
+      governingAuthorities: { sourceId: string; tier: string; rationale: string }[];
+    };
+    register.program = 'NFRD';
+    register.governingAuthorities.push({
+      sourceId: 'SRC-999',
+      tier: 'legal_record',
+      rationale: 'Fixture: a source this pack does not carry.',
+    });
+    writeFileSync(path, `${JSON.stringify(register, null, 2)}\n`, 'utf8');
+
+    let message = '';
+    try {
+      load();
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message).toContain('does not match pack program');
+    expect(message).toContain('SRC-999');
+    // …and it is the integrity error, not the citability one.
+    expect(message).not.toContain('non-citable tier');
+  });
+});

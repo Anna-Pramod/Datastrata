@@ -20,7 +20,7 @@ import { assertFactVocabularyCoverage } from '../verification/vocabulary';
 import { requirementSha256 } from '../verification/canonical';
 import { assertVersionIntegrity, parseVersionRegistry, VersionIntegrityError } from '../verification/registry';
 import { governingEntry, parseLedger, type SigningEntry } from '../verification/ledger';
-import { parseSourceRegister, verifyRequirementCitability } from '../monitoring/register';
+import { parseSourceRegister, verifyRegisterIntegrity, verifyRequirementCitability } from '../monitoring/register';
 import type { RenderContext } from '../verification/render';
 import { sourceIdsOf } from './provenance';
 import {
@@ -372,12 +372,40 @@ export function loadPack(dir: string, options: LoadPackOptions = {}): KnowledgeP
   // **Boundary with Task 5.** This establishes whether a *source* may be cited.
   // Whether a corpus *artefact* is an authorised origin for the source it claims
   // to serve is `AuthorisedCorpus`, and is not decided here.
+  //
+  // # Integrity before policy
+  //
+  // `verifyRegisterIntegrity` runs **first**, and the order is the point rather
+  // than a preference. It answers whether this register describes this pack at
+  // all — same program, requirement and source ids that exist here, every
+  // governing authority attached to a source the pack carries.
+  // `verifyRequirementCitability` then reads policy *out of* the register and
+  // applies it. Reversing them would let a register for another program decide
+  // which of this pack's sources may back a determination, using authorities
+  // whose `sourceId`s mean something else entirely — a confident answer derived
+  // from the wrong document.
+  //
+  // Task 4 wired citability alone and deferred this deliberately. The check was
+  // not missing: `verifyRegisterIntegrity` has covered program agreement since
+  // Task 3, but its only caller was `loadSourceRegister`, which no production
+  // path calls. Reachable through the default register directory it would have
+  // been academic; reachable through `options.sourceRegisterDir`, a caller can
+  // hand `loadPack` any register on disk, and nothing asked whether it was
+  // this pack's.
+  //
+  // `verifyCitationCoverage`, the third check `loadSourceRegister` runs, is
+  // deliberately **not** wired here. It is the host-matching whitelist that
+  // spec §19.2 replaces outright with source-scoped artefact authority at
+  // Task 5; making it a production authority now would mean retiring it as one
+  // two commits later.
   const registerDir = options.sourceRegisterDir ?? defaultSourceRegisterDir(dir);
   const registerPath = join(registerDir, 'source-register.json');
   if (!existsSync(registerPath)) {
     throw new SourceRegisterMissingError(registerPath, pack.id);
   }
-  verifyRequirementCitability(parseSourceRegister(readRegisterFile(registerDir)), pack);
+  const register = parseSourceRegister(readRegisterFile(registerDir));
+  verifyRegisterIntegrity(register, pack);
+  verifyRequirementCitability(register, pack);
   assertFactVocabularyCoverage(pack);
   assertRequirementVersions(pack, options.versionRegistryDir ?? defaultVersionRegistryDir(dir));
   return pack;
