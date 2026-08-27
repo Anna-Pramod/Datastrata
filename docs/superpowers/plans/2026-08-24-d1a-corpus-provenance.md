@@ -31,7 +31,7 @@
 
 `docs/superpowers/specs/2026-08-24-d1a-corpus-provenance-design.md` (committed at `b68bb8e`) governs. Its architecture is settled and this plan does not reopen it. Where implementation reconnaissance finds a **direct contradiction** with the repository, stop and report rather than deciding locally.
 
-**Required spec amendment before Task 4** (raised by the D1a-0b audit, §2 of `reports/2026-08-24-d1a-provenance-audit.md`): the spec must state that an **official consolidation may serve as a pinned current-reading artefact without being represented as an authentic, legally effective publication**, and the corpus must be able to say which it holds. Three things are currently conflated — requirement provenance (the current instrument and proposition), the serving artefact (e.g. the EUR-Lex consolidated text, which has no legal effect), and the authentic authority basis (the OJ publications). Task 4 authors provenance against the first of these, so the amendment lands before it. The metadata/authority mechanism is decided after the audit's impact is known, not here.
+**Gate G-1 — CLOSED 2026-08-27.** The D1a-0b audit raised it (`reports/2026-08-24-d1a-provenance-audit.md` §2) and spec **§7.1** now settles it: source authority, serving-artefact authenticity and temporal legal status are three independent axes, an official consolidation may validly serve a `legal_record` source for current reading while itself being a non-authentic reading artefact, and *currency, not lineage* is unchanged — authentic OJ lineage belongs to artefact-level provenance, never to the authored source set. The invariant Task 4 relies on is stated there: **provenance names the current host instrument and its locator, never an artefact, and never gains an amending act merely because that act is where the authentic wording was published.** No metadata is designed; enforcement belongs to envelope **E2** (widened to *document standing*), explicitly not to Task 5.
 
 ---
 
@@ -329,6 +329,7 @@ Spec §4.2, §5.1–§5.6, §11, §19.2. **One commit; it cannot be split** (§4
   - `test/verification-transcripts/csrd/CSRD-S-001/` — a **new** recording beside the existing one (§4.2)
   - **`monitoring/source-register.json` — conditional, PASS / PASS only** (W-002 → `tracker`, with the `mustCorroborateWith` its tier dictates). Untouched in every other outcome
 - **Authoritative producer/consumer changed:** the authored requirement itself.
+- **The §7.1 invariant governs what a locator may name.** Provenance names the current host instrument and the locator within it — never an artefact, and never an amending act added merely because that act is where the authentic wording was first published. An amending act enters provenance only on §3 rule 2's ground: the requirement rests on a proposition uniquely contained in it. Gate G-1 is closed, so this needs no metadata to exist.
 - **Requirement-side citability lands here, not later.** Every `provenance.sourceId` must resolve to a register row whose tier is `citable`. Task 3 has made the rows exist. Proving the rule uses a **synthetic** tracker-backed provenance entry (must refuse) with an `official_body` positive control in the same suite (must pass) — otherwise the check is indistinguishable from "refuse everything".
 - **What the committed Task-4 tree contains, stated per probe outcome so there is no ambiguity (§4.3):**
 
@@ -428,7 +429,7 @@ Spec §19.
 - **Mutations that must land:** M-P7 (ingress origin), M-P8 (use-time smuggling), M-P9, M-P10 (compare hosts instead of source-scoped origins), M-P11, plus the runtime-wiring mutant above.
 - **Expected first relevant red:** for the wiring mutant, a `cli-run` or entitlement test naming the run or the closure — **not** `corpus-authority.test.ts`. If only the direct validator test reds, the production path is not wired and the task is not done; that is the exact defect this task removes. For M-P7, a `corpus-ingest` assertion naming the unauthorised source, with the untouched-files assertion beside it.
 - **Acceptance gates:** both call sites validate; all three composition roots construct through the validator; no `EntitledClosure.forSources` call takes an unvalidated object; frontend green; `typecheck` 0.
-- **Does NOT prove:** anything about which sources a requirement may cite — that is Task 4's citability rule.
+- **Does NOT prove:** anything about which sources a requirement may cite — that is Task 4's citability rule — and nothing about an artefact's **authenticity**. Origin authority admits a EUR-Lex consolidation as a valid origin for `SRC-001` without asserting it is the authentic publication (spec §7.1, §19.2). Scope unchanged; the boundary is only stated so nobody later reads `AuthorisedCorpus` as having answered it.
 - **Commit boundary:** one commit. *Make a document earn entitlement before it can be read.*
 
 ---
@@ -512,7 +513,7 @@ Spec §7, §9, §16. **These are capability envelopes, not tasks.** Each states 
 | Envelope | Subject | Acceptance condition from the spec |
 |---|---|---|
 | **E1** | Deterministic PDF text extraction; `NORMALIZER_VERSION` bump from `1.0.2` | Byte-identical extraction across machines, or the envelope fails. A new runtime dependency needs its own approval |
-| **E2** | `CorpusDocument` temporal legal status reaching verification | No role can read an `adopted_not_effective` document as current law; mutating the status away reds a run-level assertion |
+| **E2** | `CorpusDocument` **document standing** reaching verification — temporal legal status (§7) and serving-artefact authenticity (§7.1) | No role can read an `adopted_not_effective` document as current law, nor an official consolidation as the authentic publication; mutating either classification away reds a run-level assertion |
 | **E3** | Lifecycle metadata and successor–predecessor relation, **outside** closure traversal | Adding a lifecycle relation must **not** change any `corpusClosureSha256`. Implementing it as an edge must red that assertion |
 | **E4** | Source-scoped artefact origin for Commission PDFs | Extends Task 5's declaration; generic, no host named in code |
 

@@ -1,7 +1,7 @@
 # D1(a) — corpus provenance: what a cited source means, and what serves it
 
 **Date:** 2026-08-24
-**Status:** Design, revision 3 — complete. No implementation. Nothing ingested, no requirement edited, no schema changed, no PDF support written.
+**Status:** Design, revision 4 — complete. §7.1 added 2026-08-27, closing the one gate the D1a-0b audit raised. No implementation. Nothing ingested, no requirement edited, no schema changed, no PDF support written.
 **Base:** `1e16f24` *Stop verification when any cited source is unserved*
 **Branch/worktree:** `feature/b1b-ii-a-record` — `/Users/vivin/Documents/DataStrata/b1b-record`
 **Blocks:** B3. The real pack cannot serve as a model-quality benchmark until every cited source has a semantically correct disposition and every requirement has correctly weighted provenance.
@@ -292,6 +292,79 @@ temporal status    adopted_not_effective   it is not operative law until the OJ
 
 **The same separation protects `SRC-009` in the other direction.** Its Notice is immutable and ingestible; its tier stays `official_body` with `sufficientAlone: 'non_binding_only'`. Ingesting official guidance never turns guidance into law.
 
+### 7.1 The third axis: serving-artefact authenticity
+
+**Added 2026-08-27, closing gate G-1 raised by the D1a-0b audit (`reports/2026-08-24-d1a-provenance-audit.md` §2). This is the semantic contract Task 4 authors provenance against.**
+
+Two axes were not enough. The audit's disposition rests on reading the Accounting Directive from an **official EUR-Lex consolidation** — a document that shows the applicable rules at a point in time and *carries no legal effect of its own*; legal effect is produced by the authentic electronic Official Journal. Nothing in this design said which of those a corpus artefact is, so "the text we read" and "the text that has force" were one idea with two meanings.
+
+**Three independent dimensions. Each answers a different question, and no field may answer two.**
+
+```
+source authority
+    what kind of authority is the legal source?
+    → legal_record | official_body | tracker | news
+    → held per source in the register's governingAuthorities
+
+serving-artefact authenticity
+    is THIS corpus artefact the authentic legally effective publication,
+    or an official reading/consolidation of that law?
+    → a property of the artefact, not of the source
+
+temporal legal status
+    is the instrument adopted, effective, superseded?
+    → a property of the instrument, not of the artefact or of the tier
+```
+
+Independence is the point, and it is not decorative:
+
+- **An official consolidation may validly serve a `legal_record` source for current reading while itself being a non-authentic reading artefact.** `SRC-001` is a `legal_record` — Directive 2013/34/EU is an enacted directive — and `DOC-32013L0034` is an official consolidation of it. Both statements are true at once, and neither weakens the other.
+- Authenticity says nothing about temporal status: an authentic OJ publication may be of an act not yet in force, and a consolidation may faithfully render law that is fully effective.
+- Temporal status says nothing about tier — §7 above.
+
+**This is a different question from §8.** §8 asks whether an artefact can be *pinned at all* (does re-retrieval under the same identifier yield the same bytes). A consolidation passes that test per consolidation date, which is what `versionLabel` records. Mutability and authenticity are separate: a stable artefact can still be a non-authentic reading of the law.
+
+#### The invariant Task 4 relies on
+
+> **Requirement provenance names the current host instrument and the locator within it. It never names an artefact, and it never acquires an amending act merely because that act is where the authentic wording was first published.**
+
+*Currency, not lineage* (§3 rule 2) is therefore **unchanged and unweakened by this section**. The distinction must not be read as a reason to re-add every amending OJ act to every requirement's provenance: authentic OJ lineage belongs to artefact-level legal-basis provenance, not to the authored source set. An amending act enters a requirement's provenance on exactly the ground §3 rule 2 already gives — that the requirement rests on a proposition **uniquely** contained in it, such as a standalone transitional provision — and on no other.
+
+So Task 4 can author provenance now, without any metadata existing: it names instruments and locators, which are unaffected by which artefact happens to serve them.
+
+#### What is deliberately not designed here
+
+**No authenticity metadata ontology.** This section fixes the semantics and stops. Field names, the value set, and how an artefact's authenticity class reaches a role are implementation questions, and designing them before the corpus has more than two documents would be guessing.
+
+#### Who owns enforcement
+
+**Envelope E2**, widened from *temporal legal status* to **document standing** — the artefact-level classification that must reach verification so that no role mistakes an official reading for the authentic text, and no role mistakes an adopted act for effective law. E2 already exists to put a document-level field on `CorpusDocument` and prove it reaches a run; authenticity class is the same kind of field answering an adjacent question, so it belongs there rather than in a parallel subsystem.
+
+**Not Task 5.** `AuthorisedCorpus` (§19) validates *origin authority* — whether an artefact comes from a surface the register authorises **for the source it claims to serve**. A EUR-Lex consolidation is an authorised origin for `SRC-001`, and Task 5 will correctly admit it. That answer is orthogonal to whether the artefact is authentic, and Task 5 must not be read as having settled it. Its scope is unchanged; §19 gains one sentence saying so.
+
+**Not Task 3.** The register records what a *source* is. Authenticity is a property of artefacts, which the register does not hold.
+
+#### Authenticity does not gate ingestion the way temporal status does
+
+§7 gates an **adopted-not-effective** artefact: it may not enter the corpus until its status is representable, because a role shown that document would read a future obligation as a current one — the *answer* changes. **No equivalent gate applies to an official consolidation**, and D1a-2 is not blocked by this section.
+
+The asymmetry is in what a misreading costs:
+
+```
+adopted-not-effective, unlabelled   a role reads law that is not yet in force
+                                    as though it binds today
+                                    → the determination is wrong
+
+official consolidation, unlabelled  a role reads the current law correctly,
+                                    from an official rendering of it
+                                    → the determination is right; what is
+                                      unstated is where legal effect comes from
+```
+
+An official consolidation is a faithful rendering of the law in force at its consolidation date; reading it yields the same obligations as reading the authentic publications it consolidates. What is missing is a claim nobody makes — no role asserts "this artefact has legal effect", and the pack's provenance names the *instrument*, not the artefact (the invariant above). So the consolidations already in the corpus, and those D1a-2 will add, are honest today and remain so; E2 makes the classification explicit rather than repairing an error.
+
+**§14 rule 2 is unaffected and must not be read through this section.** *"Where consolidation lags a known amendment, ingest base and amending act"* is an ingestion-completeness rule about being able to **read** the current text. It creates no citation: an amending act ingested for completeness does not thereby enter any requirement's provenance. `SRC-005` is the live case — its consolidation predates `2025/1416`, so both are ingested, and only `2023/2772` is cited.
+
 ---
 
 ## 8. Immutable legal record versus mutable official surface
@@ -525,7 +598,7 @@ D1a-3 measures, per requirement: closure documents; rendered closure chars and b
 2. **Raw-byte hash and normalized hash.** `sha256Raw` over the PDF bytes as served; `sha256Normalized` over extracted text. The existing split is retained, not special-cased.
 3. **`NORMALIZER_VERSION` consequences.** A new extractor is a version bump from `1.0.2`. The bump must not silently re-describe already-ingested text; re-normalizing existing documents is an explicit decision.
 4. **Stable adopted-document identity.** A `docId` for an act with no CELEX number. `C(2026) 5010` is the durable identifier; what happens to that identity at publication follows §9.
-5. **Temporal legal status in the corpus, reaching verification** — §7.
+5. **Document standing in the corpus, reaching verification** — temporal legal status (§7) **and** serving-artefact authenticity (§7.1). One artefact-level classification answering two adjacent questions, so that no role reads an adopted act as effective law, and none reads an official consolidation as the authentic publication.
 6. **Tier is unaffected** — `legal_record` with `adopted_not_effective`, no new tier (§7).
 7. **Lifecycle and supersession metadata, outside closure traversal** — §9.
 8. **Artefact-origin authority, source-specific and generic** — §19.
@@ -597,6 +670,8 @@ Two independent, partial checks and a hole between them:
 ### 19.2 The invariant, source-specific
 
 > Every `sourceId` in a `CorpusDocument.serves[]` resolves to an actual source-register row whose tier permits citation, and the artefact's own origin is authorised **for that source**. An unrelated citable row on the same host never confers authority.
+
+**What this invariant does not answer.** It validates *origin authority* — whether an artefact came from a surface the register authorises for the source it claims to serve. It does not classify the artefact's **authenticity**: a EUR-Lex consolidation is an authorised origin for `SRC-001` and this check will correctly admit it, without thereby asserting that the consolidation is the authentic legally effective publication. That axis is §7.1's, and its enforcement belongs to envelope E2. `AuthorisedCorpus` must not be read as having settled it.
 
 This must fail:
 
@@ -704,5 +779,8 @@ The final model-reachable count is measured from the resulting corpus. It is nev
 - the exact field names for corpus lifecycle metadata and the successor–predecessor relation (§9);
 - the exact branded-TypeScript expression of `AuthorisedCorpus` and its test builder (§19.3);
 - migration helper naming and the order in which the call sites in §5.3 are moved to the single derivation and the renamed field (§5.3).
+- the field names and value set for **document standing** — temporal legal status and serving-artefact authenticity — and how the classification reaches a role (§7.1, envelope E2).
 
 Two findings are settled in principle and must be **recorded as evidence** at D1a-0b rather than asserted: whether S-005/S-014/S-015 retain `SRC-002` (§13.1), and whether S-003 retains `SRC-006` (§13.2). Both are audit outputs, not open questions.
+
+**D1a-0b has since run** (`reports/2026-08-24-d1a-provenance-audit.md`) and both were answered — neither source survives. Where that audit and this document's §12 expectation table disagree, **the audit governs**; §7.1 was added to close the one gate it raised.

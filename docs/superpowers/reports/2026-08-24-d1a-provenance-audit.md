@@ -388,6 +388,10 @@ source authority        !=        serving-artefact authenticity / legal effect
 
 Task 4 authors provenance against the *current legal instrument*; this audit's whole disposition rests on that separation, so it is stated in the spec before Task 4 acts on it. **Not implemented during Task 2**, by instruction, and the metadata mechanism stays undesigned until the audit's impact is priced.
 
+> **Closure note — 2026-08-27.** G-1 was subsequently closed after Task 3, before Task 4. D1(a) spec revision 4 (§7.1) now distinguishes three independent axes — **source authority**, **serving-artefact authenticity**, **temporal legal status**. Requirement provenance names the current host instrument and locator, not the serving artefact, so an official consolidation may serve a `legal_record` source without the consolidation itself being represented as the authentic legally effective publication. Artefact-level standing/authenticity is deferred to envelope **E2**. This does not reopen *currency, not lineage*, and does not block Task 4 provenance authoring.
+>
+> The finding above is left as written: it records what the audit established, and the closure records what was done about it.
+
 **No other gate.** `SRC-007`'s locators are pinned from EUR-Lex official text (§7.1); S-013's locator is pinned at `:4267`; S-015's semantics are settled by `renderRequirement` (§6). None of the three is a Task-4 decision.
 
 **Not a gate: envelope E1.** Deterministic PDF extraction is needed to *ingest* `SRC-007` into the corpus, because the Commission distributes it as a download-gated PDF. It is an ingestion/normalisation capability question for D1a-2 and E1, not a locator or provenance blocker.
@@ -456,7 +460,7 @@ The scratch `verification-result.json` files written by the two control runs are
 **Task-2 audit: closed.** All sixteen rows are resolved, including S-012, which was determined from official artefacts read read-only rather than left pending ingestion. The audited source universe is final.
 
 ```
-pre-Task-4 gate
+audit finding, subsequently closed before Task 4 — see D1(a) spec revision 4
   G-1  Finding A spec amendment — source authority != serving-artefact
        authenticity / legal effect
 
