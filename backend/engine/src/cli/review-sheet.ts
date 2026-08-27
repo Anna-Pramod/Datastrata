@@ -64,8 +64,11 @@ import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { ClosureEntryNotFoundError, computeClosure, docsForSources } from '../corpus/closure';
 import { loadCorpus, type LoadedCorpus } from '../corpus/store';
 import { CorpusIntegrityError } from '../corpus/schema';
+import { authoriseCorpus, CorpusAuthorityError, type AuthorisedCorpus } from '../corpus/authority';
+import { EntitledClosure } from '../pipeline/entitlement';
+import type { SourceRegister } from '../monitoring/types';
 import type { CorpusDocument } from '../corpus/types';
-import { loadPack, PackIntegrityError } from '../knowledge/loader';
+import { loadPackContext, PackIntegrityError } from '../knowledge/loader';
 import type {
   KnowledgePack,
   ObligationTemplate,
@@ -385,10 +388,13 @@ function describeEvidence(item: EvidenceItem, corpus: LoadedCorpus): SheetEviden
  */
 export function gatherSheet(packId: string, paths: SheetPaths): SheetModel {
   let pack: KnowledgePack;
+  let sourceRegister: SourceRegister;
   try {
-    pack = loadPack(paths.packDir, {
+    // The context, so the register authorising the corpus below is the one
+    // whose integrity was checked against this pack.
+    ({ pack, sourceRegister } = loadPackContext(paths.packDir, {
       versionRegistryDir: resolve(paths.verificationDir, 'requirement-versions'),
-    });
+    }));
   } catch (error) {
     if (error instanceof VersionIntegrityError || error instanceof PackIntegrityError) {
       throw cliFailure(EXIT_INTEGRITY_FAILURE, [
@@ -405,14 +411,23 @@ export function gatherSheet(packId: string, paths: SheetPaths): SheetModel {
     ]);
   }
 
-  let corpus: LoadedCorpus;
+  let corpus: LoadedCorpus & AuthorisedCorpus;
   try {
-    corpus = loadCorpus(paths.corpusDir);
+    // Loaded, then authorised — the review sheet reports closure documents and
+    // digests, so an unauthorised document reaching it would be reported as
+    // evidence a requirement rests on.
+    corpus = authoriseCorpus(loadCorpus(paths.corpusDir), sourceRegister, pack);
   } catch (error) {
     if (error instanceof CorpusIntegrityError) {
       throw cliFailure(EXIT_INTEGRITY_FAILURE, [
         'INTEGRITY FAILURE — the corpus does not load.',
         ...error.problems.map((problem) => `  - ${problem}`),
+      ]);
+    }
+    if (error instanceof CorpusAuthorityError) {
+      throw cliFailure(EXIT_INTEGRITY_FAILURE, [
+        'INTEGRITY FAILURE — the corpus is not authorised for the sources it claims.',
+        ...error.failures.map((f) => `  - ${f.docId} claims ${f.sourceId} with origin ${f.url} — ${f.reason}`),
       ]);
     }
     throw error;
@@ -466,7 +481,7 @@ interface GatherOneInput {
   pack: KnowledgePack;
   packId: string;
   paths: SheetPaths;
-  corpus: LoadedCorpus;
+  corpus: LoadedCorpus & AuthorisedCorpus;
   heldDocIds: ReadonlySet<string>;
   entries: LedgerEntry[];
   promotions: PromotionRecord[];
@@ -487,11 +502,8 @@ function gatherRequirement(input: GatherOneInput): SheetRequirement {
   let closureSha256: string | null = null;
   let closureProblem: string | null = null;
   try {
-    const closure = computeClosure(
-      corpus.index,
-      docsForSources(corpus.index, sourceIdsOf(requirement)),
-    );
-    closureDocIds = closure.docIds;
+    const closure = EntitledClosure.forSources(corpus, sourceIdsOf(requirement));
+    closureDocIds = [...closure.docIds];
     closureSha256 = closure.sha256;
   } catch (error) {
     closureProblem =

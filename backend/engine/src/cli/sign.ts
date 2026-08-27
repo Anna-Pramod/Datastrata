@@ -69,7 +69,10 @@ import { sha256Hex } from '../corpus/hash';
 import { normalize } from '../corpus/normalize';
 import { loadCorpus, type LoadedCorpus } from '../corpus/store';
 import { CorpusIntegrityError } from '../corpus/schema';
-import { loadPack, PackIntegrityError } from '../knowledge/loader';
+import { authoriseCorpus, CorpusAuthorityError, type AuthorisedCorpus } from '../corpus/authority';
+import { EntitledClosure } from '../pipeline/entitlement';
+import type { SourceRegister } from '../monitoring/types';
+import { loadPackContext, PackIntegrityError } from '../knowledge/loader';
 import type { KnowledgePack, Requirement } from '../types';
 import { canonicalJson } from '../verification/canonical';
 import {
@@ -256,7 +259,12 @@ function readIfPresent(path: string): string | null {
 export interface CurrentWorld {
   pack: KnowledgePack;
   requirement: Requirement;
-  corpus: LoadedCorpus;
+  /**
+   * Validated, not merely loaded. Every `(document, source)` claim was checked
+   * against the register before this world existed, so nothing downstream can
+   * build an entitlement over a corpus that never earned its sources.
+   */
+  corpus: LoadedCorpus & AuthorisedCorpus;
   renderCtx: RenderContext;
   /** Every pin. `pins.corpus` is the closure's documents as the corpus holds them now. */
   pins: VerificationPins;
@@ -274,8 +282,12 @@ export interface CurrentWorld {
  */
 export function readWorld(paths: VerifyPaths, packId: string, requirementId: string): CurrentWorld {
   let pack: KnowledgePack;
+  let sourceRegister: SourceRegister;
   try {
-    pack = loadPack(paths.packDir, { versionRegistryDir: registryDir(paths) });
+    // The context, not just the pack: the register this returns is the object
+    // whose integrity was checked against this pack, and it is what authorises
+    // the corpus below. Re-reading it would be a second, unvouched-for object.
+    ({ pack, sourceRegister } = loadPackContext(paths.packDir, { versionRegistryDir: registryDir(paths) }));
   } catch (error) {
     if (error instanceof VersionIntegrityError || error instanceof PackIntegrityError) {
       throw new CliFailure(EXIT_INTEGRITY_FAILURE, [
@@ -299,14 +311,24 @@ export function readWorld(paths: VerifyPaths, packId: string, requirementId: str
     ]);
   }
 
-  let corpus: LoadedCorpus;
+  let corpus: LoadedCorpus & AuthorisedCorpus;
   try {
-    corpus = loadCorpus(paths.corpusDir);
+    // Loaded, then authorised. Integrity says the bytes are what the index
+    // claims; authority says each document may serve the sources it claims. A
+    // corpus that passes the first and fails the second is exactly the state
+    // ingest refuses to create and this refuses to read.
+    corpus = authoriseCorpus(loadCorpus(paths.corpusDir), sourceRegister, pack);
   } catch (error) {
     if (error instanceof CorpusIntegrityError) {
       throw new CliFailure(EXIT_INTEGRITY_FAILURE, [
         'INTEGRITY FAILURE — the corpus does not load.',
         ...error.problems.map((problem) => `  - ${problem}`),
+      ]);
+    }
+    if (error instanceof CorpusAuthorityError) {
+      throw new CliFailure(EXIT_INTEGRITY_FAILURE, [
+        'INTEGRITY FAILURE — the corpus is not authorised for the sources it claims.',
+        ...error.failures.map((f) => `  - ${f.docId} claims ${f.sourceId} with origin ${f.url} — ${f.reason}`),
       ]);
     }
     throw error;
@@ -316,7 +338,7 @@ export function readWorld(paths: VerifyPaths, packId: string, requirementId: str
 
   let closure;
   try {
-    closure = computeClosure(corpus.index, docsForSources(corpus.index, sourceIdsOf(requirement)));
+    closure = EntitledClosure.forSources(corpus, sourceIdsOf(requirement));
   } catch (error) {
     if (error instanceof ClosureEntryNotFoundError) {
       // Factory §4.2 files this as a `corpus_gap`, answered by ingesting the

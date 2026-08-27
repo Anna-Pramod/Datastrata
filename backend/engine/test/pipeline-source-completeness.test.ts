@@ -40,6 +40,8 @@ import { DEFAULT_ROLE_CONFIG } from '../src/pipeline/config';
 import { conditionPathsFor, qualifiedChallengeId } from '../src/pipeline/prosecutors';
 import type { RoleRequest } from '../src/pipeline/roles';
 import { loadCorpus } from '../src/corpus/store';
+import { authoriseCorpus } from '../src/corpus/authority';
+import { parseSourceRegister } from '../src/monitoring/register';
 import { loadPack } from '../src/knowledge/loader';
 import { requirementSchema } from '../src/knowledge/schema';
 import { sourceIdsOf } from '../src/knowledge/provenance';
@@ -229,10 +231,24 @@ function buildSyntheticWorld(root: string): void {
   // Both synthetic sources are stand-ins for legal instruments, and this world
   // is about *serving*, not authority — so both carry `legal_record` and the
   // severing result cannot be confused with a citability refusal.
-  installSyntheticRegister(root, [
-    { sourceId: SOURCE_A, tier: 'legal_record', rationale: 'Fixture: a legal instrument.' },
-    { sourceId: SOURCE_B, tier: 'legal_record', rationale: 'Fixture: a legal instrument.' },
-  ]);
+  //
+  // Origins as well as authorities. The two are different axes and this world
+  // needs both: the authority says the source may be cited, the origin says
+  // this artefact may serve it. They are declared from the documents' own
+  // recorded URLs, which is what makes severing `serves` — not the URL — the
+  // only variable between the baseline and severed worlds.
+  const [originA, originB] = index.documents;
+  installSyntheticRegister(
+    root,
+    [
+      { sourceId: SOURCE_A, tier: 'legal_record', rationale: 'Fixture: a legal instrument.' },
+      { sourceId: SOURCE_B, tier: 'legal_record', rationale: 'Fixture: a legal instrument.' },
+    ],
+    [
+      { sourceId: SOURCE_A, kind: 'exact', url: originA!.url as string },
+      { sourceId: SOURCE_B, kind: 'exact', url: originB!.url as string },
+    ],
+  );
 }
 
 function buildSyntheticWorlds(root: string): void {
@@ -378,7 +394,12 @@ function closureShaFor(world: string, requirementId: string, packId: string = PA
     versionRegistryDir: join(verificationDir, 'requirement-versions'),
   });
   const requirement = pack.requirements.find((r) => r.id === requirementId)!;
-  return EntitledClosure.forSources(corpus, requirement.sources).sha256;
+  // The same authorisation the production path performs; `forSources` accepts
+  // nothing else.
+  const register = parseSourceRegister(
+    JSON.parse(readFileSync(join(world, 'monitoring', 'source-register.json'), 'utf8')),
+  );
+  return EntitledClosure.forSources(authoriseCorpus(corpus, register, pack), requirement.sources).sha256;
 }
 
 // ---------------------------------------------------------------------------

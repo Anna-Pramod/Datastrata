@@ -76,7 +76,7 @@ import {
 } from '../src/verification/result';
 import {
   docText,
-  fixtureCorpus,
+  fixtureAuthorisedCorpus,
   fixtureIndex,
   fixtureRenderContext,
   fixtureRequirement,
@@ -113,7 +113,7 @@ function schemaEvidencePaths(): string[] {
 // One real record, from the real pipeline over replayed role outputs
 // ---------------------------------------------------------------------------
 
-const corpus = fixtureCorpus();
+const corpus = fixtureAuthorisedCorpus();
 const prompts = loadPromptSet();
 const renderContext = fixtureRenderContext();
 

@@ -49,6 +49,7 @@ import type { GapIdentityRegisters } from '../src/verification/result';
 import {
   docText,
   fixtureCorpus,
+  fixtureAuthorisedCorpus,
   fixtureIndex,
   fixtureRenderContext,
   fixtureRequirement,
@@ -57,7 +58,14 @@ import {
   stubRunner,
 } from './pipeline-fixtures';
 
-export const corpus = fixtureCorpus();
+/**
+ * The shared fixture corpus, authorised.
+ *
+ * `forSources` requires an `AuthorisedCorpus`, so the shared fixture is one:
+ * every suite reading this export gets a corpus that passed the same validator
+ * production uses, rather than a structural stand-in.
+ */
+export const corpus = fixtureAuthorisedCorpus();
 export const prompts = loadPromptSet();
 export const renderContext = fixtureRenderContext();
 

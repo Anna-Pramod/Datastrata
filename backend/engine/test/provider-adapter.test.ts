@@ -33,7 +33,7 @@ import { installNetworkTrap } from './helpers';
 import { replayRunner, TranscriptRunMismatchError } from '../src/pipeline/replay';
 import { runTranscriptSchema } from '../src/pipeline/transcript';
 import {
-  fixtureCorpus,
+  fixtureAuthorisedCorpus,
   fixtureRenderContext,
   fixtureRequirement,
   lensFromRequest,
@@ -86,7 +86,7 @@ const GOLDEN_IDENTITY =
   'pipeline-v2-869e7385634f69f8720d8ae386253b39a69b531fb68df466ea19de4d22d984ea';
 
 const prompts = loadPromptSet();
-const corpus = fixtureCorpus();
+const corpus = fixtureAuthorisedCorpus();
 
 /** One prosecutor, so a run needs three exchanges rather than five. */
 const SINGLE_PROSECUTOR = { ...DEFAULT_ROLE_CONFIG, prosecutorCount: 1 };

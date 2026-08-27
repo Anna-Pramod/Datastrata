@@ -28,6 +28,9 @@ import { describe, expect, it } from 'vitest';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CLOSURE_POLICY_V0, computeClosure, docsForSources } from '../src/corpus/closure';
+import { readFileSync } from 'node:fs';
+import { authoriseCorpus } from '../src/corpus/authority';
+import { parseSourceRegister } from '../src/monitoring/register';
 import { loadCorpus } from '../src/corpus/store';
 import { EntitledClosure, OutsideEntitlementError } from '../src/pipeline/entitlement';
 import {
@@ -62,7 +65,7 @@ import { csrdPack } from './helpers';
 import {
   citing,
   docText,
-  fixtureCorpus,
+  fixtureAuthorisedCorpus,
   fixtureIndex,
   fixtureRenderContext,
   fixtureRequirement,
@@ -75,7 +78,7 @@ import {
 
 const here = dirname(fileURLToPath(import.meta.url));
 const prompts = loadPromptSet();
-const corpus = fixtureCorpus();
+const corpus = fixtureAuthorisedCorpus();
 
 function fixtureClosure(sourceIds: readonly string[] = ['SRC-100']): EntitledClosure {
   return EntitledClosure.forSources(corpus, sourceIds);
@@ -856,7 +859,14 @@ describe('an empty closure never travels alone', () => {
 // ---------------------------------------------------------------------------
 
 describe('a requirement whose sources serve no document (the real corpus)', () => {
-  const realCorpus = loadCorpus(join(here, '..', 'corpus'));
+  // Authorised, like every production consumer of the real corpus: `forSources`
+  // takes only a validated corpus, and a test that reached round it would be
+  // exercising a path production cannot use.
+  const realCorpus = authoriseCorpus(
+    loadCorpus(join(here, '..', 'corpus')),
+    parseSourceRegister(JSON.parse(readFileSync(join(here, '..', 'monitoring', 'source-register.json'), 'utf8'))),
+    csrdPack(),
+  );
   const pack = csrdPack();
   const requirement = pack.requirements.find((entry) => entry.id === 'CSRD-S-012');
   const registers = {

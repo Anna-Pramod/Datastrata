@@ -3,7 +3,7 @@ export { assess, bestResult } from './engine/evaluate';
 export type { AssessOptions, MinStatus } from './engine/evaluate';
 export { evaluateCondition, cmpRange, EngineContentError } from './condition/evaluate';
 export { FactResolver } from './engine/facts';
-export { loadPack, verifyIntegrity, refuseAuthoredDerivedFields, PackIntegrityError } from './knowledge/loader';
+export { loadPack, loadPackContext, verifyIntegrity, refuseAuthoredDerivedFields, PackIntegrityError } from './knowledge/loader';
 export { sourceIdsOf } from './knowledge/provenance';
 export { rankNextQuestions } from './engine/nextQuestion';
 export { summarise } from './engine/summary';
@@ -11,6 +11,8 @@ export { loadSourceRegister, parseSourceRegister, verifyRegisterIntegrity, verif
 export type { RegisterSource, SourceRegister, SourceTier, SourceCadence, TierPolicy } from './monitoring/types';
 export { loadCorpus, CorpusDocumentNotFoundError } from './corpus/store';
 export { parseCorpusIndex, verifyCorpusIntegrity, verifyCorpusServesCoverage, CorpusIntegrityError } from './corpus/schema';
+export { EntitledClosure } from './pipeline/entitlement';
+export { authoriseCorpus, assertCorpusAuthority, CorpusAuthorityError, type AuthorisedCorpus, type CorpusCapability } from './corpus/authority';
 export { computeClosure, docsForSources, CLOSURE_POLICY_V0, STRUCTURAL_EDGE_KINDS, ClosureEntryNotFoundError } from './corpus/closure';
 export { checkEvidenceSet } from './corpus/evidence';
 export { normalize, normalizeWhitespace, extractText, selectContent, NORMALIZER_VERSION, CONTENT_SELECTOR_PATTERN } from './corpus/normalize';

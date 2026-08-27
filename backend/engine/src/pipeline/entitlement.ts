@@ -55,6 +55,7 @@ import {
   type ClosurePolicy,
 } from '../corpus/closure';
 import type { CorpusDocument, CorpusIndex } from '../corpus/types';
+import type { AuthorisedCorpus } from '../corpus/authority';
 
 /**
  * The corpus reduced to what entitlement needs of it.
@@ -127,6 +128,20 @@ export function renderEntitledClosure(closure: EntitledClosure): string {
 /**
  * The capability. Construct it once per run; hand the same object to every role.
  */
+/**
+ * **Why the parameter is `AuthorisedCorpus` and not the structural shape.**
+ *
+ * `EntitlementSource` was deliberately open, so a caller holding a corpus by
+ * some other route could still build an entitlement. That openness was the
+ * bypass: a hand-written index satisfies the shape, and produced an entitled
+ * closure with no authority check anywhere. Requiring a value only
+ * `authoriseCorpus` returns makes the invariant structural — no document can
+ * become entitled unless its `(document, source)` claims were validated first.
+ *
+ * The brand is a fence, not the mechanism. `as` defeats it and TypeScript is
+ * erased at runtime; what holds is that every production composition root calls
+ * the validator, and each root has its own tooth proving it.
+ */
 export class EntitledClosure {
   /**
    * The corpus, and the traversal's answer, as **genuine** private fields.
@@ -161,7 +176,7 @@ export class EntitledClosure {
    * documents it names seed the traversal, and the traversal decides the rest.
    */
   static forSources(
-    source: EntitlementSource,
+    source: AuthorisedCorpus,
     sourceIds: readonly string[],
     policy: ClosurePolicy = CLOSURE_POLICY_V0,
   ): EntitledClosure {

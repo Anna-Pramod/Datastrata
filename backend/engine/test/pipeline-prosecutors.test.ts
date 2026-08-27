@@ -66,7 +66,7 @@ import { sha256Hex } from '../src/corpus/hash';
 import type { AuthoredRequirement, Condition } from '../src/types';
 import {
   docText,
-  fixtureCorpus,
+  fixtureAuthorisedCorpus,
   fixtureRenderContext,
   fixtureRequirement,
   lensFromRequest,
@@ -76,7 +76,7 @@ import {
   stubRunner,
 } from './pipeline-fixtures';
 
-const corpus = fixtureCorpus();
+const corpus = fixtureAuthorisedCorpus();
 const prompts = loadPromptSet();
 const ctxRender = fixtureRenderContext();
 

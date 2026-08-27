@@ -15,6 +15,9 @@
  */
 
 import { parseCorpusIndex } from '../src/corpus/schema';
+import { authoriseCorpus, type AuthorisedCorpus } from '../src/corpus/authority';
+import type { SourceRegister } from '../src/monitoring/types';
+import type { KnowledgePack } from '../src/types';
 import { requirementSchema } from '../src/knowledge/schema';
 import type { CorpusDocument, CorpusEdge, CorpusIndex } from '../src/corpus/types';
 import { sha256Hex } from '../src/corpus/hash';
@@ -351,4 +354,57 @@ export function placeholderRunner(lensFor?: (index: number) => string): StubRunn
         return JSON.stringify(stubAdjudicatorOutput());
     }
   });
+}
+
+/**
+ * The fixture corpus, authorised the way production authorises one.
+ *
+ * `EntitledClosure.forSources` requires an `AuthorisedCorpus`, and there is no
+ * unchecked test-only constructor: a bypass that exists for tests is one
+ * production eventually imitates. So fixtures run the same validator over
+ * synthetic declarations.
+ *
+ * **The declarations are written out, not derived from the corpus.** Deriving
+ * "whatever this index claims" would authorise anything and pass always, which
+ * is a validator in name only. Written out, a fixture that changes a document's
+ * `url` or `serves` stops being authorised — which is the correct answer, and
+ * the reason this builder is worth having.
+ */
+const FIXTURE_AUTHORISED_ORIGINS = [
+  {
+    sourceId: 'SRC-100',
+    origins: [{ kind: 'exact' as const, url: 'https://example.invalid/DOC-A' }],
+    rationale: 'Fixture: DOC-A is the only artefact SRC-100 has authorised.',
+  },
+  {
+    sourceId: 'SRC-999',
+    origins: [{ kind: 'exact' as const, url: 'https://example.invalid/DOC-Z' }],
+    rationale: 'Fixture: DOC-Z is the only artefact SRC-999 has authorised.',
+  },
+];
+
+/** A pack carrying exactly the sources the fixture corpus claims. */
+function fixtureSourceUniverse(): KnowledgePack {
+  return { sources: [{ id: 'SRC-100' }, { id: 'SRC-999' }] } as unknown as KnowledgePack;
+}
+
+/** A register declaring the fixture origins, and nothing else. */
+export function fixtureRegister(): SourceRegister {
+  return {
+    program: 'FIXTURE',
+    updated: '2026-08-27',
+    governingAuthorities: [],
+    authorisedOrigins: FIXTURE_AUTHORISED_ORIGINS,
+    sources: [],
+  } as unknown as SourceRegister;
+}
+
+/** The fixture corpus, run through the production validator. */
+export function fixtureAuthorisedCorpus(
+  corpus: ReturnType<typeof fixtureCorpus> = fixtureCorpus(),
+): ReturnType<typeof fixtureCorpus> & AuthorisedCorpus {
+  return authoriseCorpus(corpus, fixtureRegister(), fixtureSourceUniverse()) as ReturnType<
+    typeof fixtureCorpus
+  > &
+    AuthorisedCorpus;
 }

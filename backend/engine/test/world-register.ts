@@ -63,9 +63,16 @@ export interface SyntheticAuthority {
  * cites. It exists to make the document well-formed, not to grant anything:
  * `verifyRequirementCitability` reads `governingAuthorities` only.
  */
+export interface SyntheticOrigin {
+  sourceId: string;
+  kind: 'exact' | 'path_prefix';
+  url: string;
+}
+
 export function installSyntheticRegister(
   worldRoot: string,
   authorities: readonly SyntheticAuthority[],
+  origins: readonly SyntheticOrigin[] = [],
   program = 'SYN',
 ): string {
   const dir = registerDirFor(worldRoot);
@@ -73,10 +80,15 @@ export function installSyntheticRegister(
   const register = {
     program,
     updated: '2026-08-27',
-    // No artefact-origin declarations: these synthetic worlds hold no corpus
-    // document whose `serves[]` would require one. T5.2, which matches
-    // documents against declarations, is where a world that needs them says so.
-    authorisedOrigins: [],
+    // Artefact-origin declarations, where the world holds documents. A world
+    // whose corpus claims a source must declare an origin for it: since T5.4
+    // every production root authorises the corpus, so an undeclared source is
+    // refused at load rather than ignored.
+    authorisedOrigins: origins.map((o) => ({
+      sourceId: o.sourceId,
+      origins: [{ kind: o.kind, url: o.url }],
+      rationale: `Fixture origin for ${o.sourceId}.`,
+    })),
     governingAuthorities: authorities.map((a) => ({
       sourceId: a.sourceId,
       tier: a.tier,

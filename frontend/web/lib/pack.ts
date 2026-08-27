@@ -37,16 +37,18 @@ import 'server-only';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import {
-  computeClosure,
+  authoriseCorpus,
   currentStateOf,
-  docsForSources,
+  EntitledClosure,
   IntegrityFailureError,
   loadCorpus,
   loadPack,
+  loadPackContext,
   resolvedStaleness,
   sourceIdsOf,
   verificationResultSchema,
 } from '@datastrata/engine';
+import type { AuthorisedCorpus } from '@datastrata/engine';
 import type {
   CheckedFreshness,
   FreshnessResolver,
@@ -196,15 +198,43 @@ function readPinnedResult(root: string, packId: string, requirementId: string): 
  */
 export function buildCsrdFreshnessResolver(root: string): FreshnessResolver {
   const corpusDir = corpusDirOf(root);
-  let corpus: LoadedCorpus | undefined;
+  let corpus: (LoadedCorpus & AuthorisedCorpus) | undefined;
+
+  /**
+   * The corpus, authorised once and remembered.
+   *
+   * This path computes freshness pins rather than model-visible evidence, but
+   * it is still a production consumer of the corpus's source-identity claim: it
+   * decides which documents a requirement's closure contains and what digest
+   * that closure has. A raw index reaching it would let an unauthorised
+   * document decide a pin, so it begins from `AuthorisedCorpus` like every
+   * other root.
+   *
+   * The pack and register come from their own `loadPackContext` rather than
+   * from the load this resolver is serving. That load has not parsed its
+   * register yet when `attachDerivedStatus` calls a resolver, and reaching back
+   * into it would be the recursive `loadPack()` the resolver contract exists to
+   * avoid. This context is separate but not unvouched-for: its register was
+   * validated against the pack in the same call, which is the invariant that
+   * matters — the register deciding authority is the one checked against a pack.
+   */
+  const authorised = (): LoadedCorpus & AuthorisedCorpus => {
+    if (corpus !== undefined) return corpus;
+    const verificationDir = verificationDirOf(root);
+    const { pack, sourceRegister } = loadPackContext(packDirOf(root), {
+      versionRegistryDir: join(verificationDir, 'requirement-versions'),
+      ledgerPath: join(verificationDir, 'signatures.jsonl'),
+    });
+    corpus = authoriseCorpus(loadCorpus(corpusDir), sourceRegister, pack);
+    return corpus;
+  };
 
   return ({ packId, requirement, entry, renderContext }): CheckedFreshness => {
-    corpus ??= loadCorpus(corpusDir);
-    const loaded = corpus;
+    const loaded = authorised();
 
     let closure;
     try {
-      closure = computeClosure(loaded.index, docsForSources(loaded.index, sourceIdsOf(requirement)));
+      closure = EntitledClosure.forSources(loaded, sourceIdsOf(requirement));
     } catch (error) {
       integrityFailure(
         'unresolved_gap',

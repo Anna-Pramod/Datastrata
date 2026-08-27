@@ -34,13 +34,13 @@ import { runVerificationPipeline } from '../src/pipeline/orchestrate';
 import { replayRunner, TranscriptReplayError } from '../src/pipeline/replay';
 import { ProsecutorTranscriptMissingError } from '../src/pipeline/prosecutors';
 import {
-  fixtureCorpus,
+  fixtureAuthorisedCorpus,
   fixtureRenderContext,
   fixtureRequirement,
   placeholderRunner,
 } from './pipeline-fixtures';
 
-const corpus = fixtureCorpus();
+const corpus = fixtureAuthorisedCorpus();
 
 function runInput(runner: Parameters<typeof runVerificationPipeline>[0]['runner']) {
   return {

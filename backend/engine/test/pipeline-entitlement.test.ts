@@ -17,9 +17,9 @@ import {
   docsForSources,
 } from '../src/corpus/closure';
 import { EntitledClosure, OutsideEntitlementError } from '../src/pipeline/entitlement';
-import { docText, fixtureCorpus, fixtureIndex } from './pipeline-fixtures';
+import { docText, fixtureAuthorisedCorpus, fixtureIndex } from './pipeline-fixtures';
 
-const corpus = fixtureCorpus();
+const corpus = fixtureAuthorisedCorpus();
 
 function closure(policy = CLOSURE_POLICY_V0): EntitledClosure {
   return EntitledClosure.forSources(corpus, ['SRC-100'], policy);
@@ -78,7 +78,7 @@ describe('EntitledClosure', () => {
 
   it('lets an absent entry document escape as a corpus_gap rather than closing over it', () => {
     expect(() => EntitledClosure.forSources(corpus, ['SRC-100'], CLOSURE_POLICY_V0)).not.toThrow();
-    const emptyCorpus = fixtureCorpus();
+    const emptyCorpus = fixtureAuthorisedCorpus();
     // `SRC-404` maps to no document, so the closure is empty rather than
     // erroneous; the throw belongs to an entry the index cannot resolve.
     expect(EntitledClosure.forSources(emptyCorpus, ['SRC-404']).docIds).toEqual([]);

@@ -63,7 +63,15 @@ export interface CorpusCapability {
 
 declare const authorisedCorpus: unique symbol;
 
-/** A corpus whose every `(document, source)` claim has been validated. */
+/**
+ * A corpus whose every `(document, source)` claim has been validated.
+ *
+ * Generic in the input so authorisation **adds** the brand rather than
+ * narrowing the value: `authoriseCorpus(loadCorpus(dir), …)` is still a
+ * `LoadedCorpus`, `rawText` and all. A boundary that stripped capabilities
+ * would push callers back to the raw object to get them again, which is the
+ * bypass it exists to close.
+ */
 export type AuthorisedCorpus = CorpusCapability & { readonly [authorisedCorpus]: true };
 
 /** Why one `(document, source)` pair was refused. */
@@ -103,13 +111,13 @@ export class CorpusAuthorityError extends Error {
  * authority on the other. Failures accumulate so one load reports every problem
  * rather than the first.
  */
-export function authoriseCorpus(
-  corpus: CorpusCapability,
+export function authoriseCorpus<T extends CorpusCapability>(
+  corpus: T,
   register: SourceRegister,
   pack: KnowledgePack,
-): AuthorisedCorpus {
+): T & AuthorisedCorpus {
   assertCorpusAuthority(corpus.index, register, pack);
-  return corpus as AuthorisedCorpus;
+  return corpus as T & AuthorisedCorpus;
 }
 
 /**

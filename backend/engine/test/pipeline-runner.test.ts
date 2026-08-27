@@ -39,7 +39,7 @@ import { DEFAULT_ROLE_CONFIG } from '../src/pipeline/config';
 import { loadPromptSet } from '../src/pipeline/prompts';
 import type { RoleRequest } from '../src/pipeline/roles';
 import {
-  fixtureCorpus,
+  fixtureAuthorisedCorpus,
   fixtureRenderContext,
   fixtureRequirement,
   placeholderRunner,
@@ -51,7 +51,7 @@ import { SYNTHETIC_ADAPTER_V1 } from './synthetic-adapters';
 
 const TRAP_ENDPOINT = 'https://network-trap.invalid/v1/messages';
 
-const corpus = fixtureCorpus();
+const corpus = fixtureAuthorisedCorpus();
 
 function runInput(runner: Parameters<typeof runVerificationPipeline>[0]['runner']) {
   return {
