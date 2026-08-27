@@ -17,6 +17,8 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { CorpusDocument, CorpusEdge, CorpusIndex } from '../corpus/types';
 import { parseCorpusIndex, verifyCorpusIntegrity } from '../corpus/schema';
+import { assertCorpusAuthority } from '../corpus/authority';
+import { loadPackContext } from '../knowledge/loader';
 import { normalize, NORMALIZER_VERSION } from '../corpus/normalize';
 import { sha256Hex } from '../corpus/hash';
 
@@ -126,8 +128,14 @@ function usage(): never {
       'Usage:',
       '  npm run ingest -- --url <url> --doc-id <DOC-...> --slug <stem> \\',
       '    --serves SRC-001[,SRC-004] --title "<title>" --version-label "<label>" \\',
-      '    --retrieved-on YYYY-MM-DD [--corpus-dir <dir>] [--edges <edges.json>] \\',
-      '    [--content-selector "#id"]',
+      '    --retrieved-on YYYY-MM-DD --pack-dir <dir> [--corpus-dir <dir>] \\',
+      '    [--register-dir <dir>] [--edges <edges.json>] [--content-selector "#id"]',
+      '',
+      '--pack-dir names the pack whose source register governs this ingestion.',
+      'A document may only be written for a source that has authorised the origin',
+      'it was fetched from, and the register is where a source says so. The',
+      'register defaults to <pack-dir>/../../monitoring, the same convention',
+      'loadPack uses.',
       '',
       'Edges, when supplied, are a JSON array of CorpusEdge objects. Each needs a',
       'complete provenance block. Ingest validates them; it does not invent them.',
@@ -165,10 +173,17 @@ export async function main(argv: string[]): Promise<void> {
   const versionLabel = arg(argv, 'version-label');
   const retrievedOn = arg(argv, 'retrieved-on');
   const corpusDir = arg(argv, 'corpus-dir') ?? 'corpus';
+  const packDir = arg(argv, 'pack-dir');
+  const registerDir = arg(argv, 'register-dir') ?? (packDir ? join(packDir, '..', '..', 'monitoring') : undefined);
   const edgesPath = arg(argv, 'edges');
   const contentSelector = arg(argv, 'content-selector');
 
   if (!url || !docId || !slug || !serves || !title || !versionLabel || !retrievedOn) usage();
+  // Required, not defaulted. Ingestion writes corpus state that later becomes
+  // model-visible evidence, and the authority governing it is not something to
+  // guess at: without a pack there is no source universe and no register, so
+  // there is no question this command could answer about what it is writing.
+  if (!packDir || !registerDir) usage();
 
   const edges: CorpusEdge[] = edgesPath ? JSON.parse(readFileSync(edgesPath, 'utf8')) : [];
 
@@ -210,6 +225,49 @@ export async function main(argv: string[]): Promise<void> {
 
   const merged = mergeIntoIndex(index, entry);
   verifyCorpusIntegrity(merged);
+
+  // The authority preflight, and its position is the whole point.
+  //
+  // `merged` is the complete candidate state and nothing durable has happened
+  // yet: the first filesystem mutation is the `mkdirSync` below. So a refusal
+  // here leaves the corpus exactly as it was — no partial document, no
+  // directory created, nothing to roll back. Validating after writing and
+  // undoing would be a different and weaker promise, and one this command
+  // already refuses to make elsewhere ("Nothing was written").
+  //
+  // It runs the same validator the load path will: one matcher, not an
+  // ingest-specific copy. The origin it checks is `entry.url`, which is the
+  // `--url` this command actually fetched — not a second, separately supplied
+  // value that could disagree with what was retrieved.
+  //
+  // What it proves is that the source has authorised that origin. Not that the
+  // bytes came from there — this process fetched them, but the corpus it writes
+  // cannot later prove that, and nothing downstream should read the check as
+  // saying so.
+  //
+  // **Authority comes through `loadPackContext`, and the object identity is the
+  // point.** That loader refuses a missing register, parses it exactly once,
+  // proves it describes this pack (program, requirement and source ids), then
+  // applies citability — and hands back *that* register. The origin question
+  // below is therefore decided by the same in-memory object whose integrity was
+  // checked against this pack.
+  //
+  // Re-reading the file here would break that, and "same path" would not repair
+  // it: a path is not bytes, and a second parse is a second object nothing
+  // vouched for. There is deliberately no second read.
+  //
+  // Citability stays where it is. The loader decides whether a requirement may
+  // *cite* a source; this decides whether an artefact may *serve* one. A corpus
+  // may hold documents for sources nothing cites, so the second question cannot
+  // be answered by the first.
+  try {
+    const { pack, sourceRegister } = loadPackContext(packDir, { sourceRegisterDir: registerDir });
+    assertCorpusAuthority(merged, sourceRegister, pack);
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err));
+    console.error('Nothing was written.');
+    process.exit(1);
+  }
 
   // The raw side is written as bytes so what is stored is what was served;
   // the normalized side is text this process produced, so it is written as

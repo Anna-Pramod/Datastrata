@@ -21,6 +21,7 @@ import { requirementSha256 } from '../verification/canonical';
 import { assertVersionIntegrity, parseVersionRegistry, VersionIntegrityError } from '../verification/registry';
 import { governingEntry, parseLedger, type SigningEntry } from '../verification/ledger';
 import { parseSourceRegister, verifyRegisterIntegrity, verifyRequirementCitability } from '../monitoring/register';
+import type { SourceRegister } from '../monitoring/types';
 import type { RenderContext } from '../verification/render';
 import { sourceIdsOf } from './provenance';
 import {
@@ -293,7 +294,27 @@ function assertRequirementVersions(pack: KnowledgePack, registryDir: string): vo
   assertVersionIntegrity(pack.requirements, parseVersionRegistry(JSON.parse(raw)), requirementSha256);
 }
 
-export function loadPack(dir: string, options: LoadPackOptions = {}): KnowledgePack {
+/**
+ * A pack and the register whose integrity was checked against it.
+ *
+ * **One read, one validated object.** The register is parsed exactly once here
+ * and handed back as the same instance the checks ran over. A caller needing it
+ * — the ingest authority preflight — must not re-read the file: the same path
+ * is not the same bytes, and origin authority decided by a second register
+ * object is authority decided by something nothing vouched for.
+ */
+export interface PackContext {
+  pack: KnowledgePack;
+  /** The parsed register, already checked against `pack`. */
+  sourceRegister: SourceRegister;
+}
+
+/**
+ * Load a pack together with its validated source register.
+ *
+ * `loadPack` is this, minus the register, for the callers that do not need one.
+ */
+export function loadPackContext(dir: string, options: LoadPackOptions = {}): PackContext {
   const read = (name: string) => JSON.parse(readFileSync(join(dir, name), 'utf8'));
 
   const m = manifestSchema.parse(read('pack.json'));
@@ -403,12 +424,23 @@ export function loadPack(dir: string, options: LoadPackOptions = {}): KnowledgeP
   if (!existsSync(registerPath)) {
     throw new SourceRegisterMissingError(registerPath, pack.id);
   }
-  const register = parseSourceRegister(readRegisterFile(registerDir));
-  verifyRegisterIntegrity(register, pack);
-  verifyRequirementCitability(register, pack);
+  const sourceRegister = parseSourceRegister(readRegisterFile(registerDir));
+  verifyRegisterIntegrity(sourceRegister, pack);
+  verifyRequirementCitability(sourceRegister, pack);
   assertFactVocabularyCoverage(pack);
   assertRequirementVersions(pack, options.versionRegistryDir ?? defaultVersionRegistryDir(dir));
-  return pack;
+  return { pack, sourceRegister };
+}
+
+/**
+ * The pack alone, for callers with no question about the register.
+ *
+ * Delegates rather than duplicating: every check `loadPackContext` performs
+ * still runs, in the same order, so this is the same load with a narrower
+ * return type.
+ */
+export function loadPack(dir: string, options: LoadPackOptions = {}): KnowledgePack {
+  return loadPackContext(dir, options).pack;
 }
 
 /**

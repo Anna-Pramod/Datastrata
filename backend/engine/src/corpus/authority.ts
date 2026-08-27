@@ -108,11 +108,32 @@ export function authoriseCorpus(
   register: SourceRegister,
   pack: KnowledgePack,
 ): AuthorisedCorpus {
+  assertCorpusAuthority(corpus.index, register, pack);
+  return corpus as AuthorisedCorpus;
+}
+
+/**
+ * The validation itself, over an index alone.
+ *
+ * Separate from `authoriseCorpus` because the ingest preflight has no corpus
+ * *capability* to brand — it holds a candidate index in memory, assembled but
+ * not yet written, and there is nothing to read text from. Handing that path a
+ * fabricated capability whose `normalizedText` must never be called would be a
+ * lie the day authorisation grows to read text.
+ *
+ * **One validator, one matcher, two entry points.** `authoriseCorpus` is this
+ * plus the brand. Nothing else decides authority.
+ */
+export function assertCorpusAuthority(
+  index: CorpusIndex,
+  register: SourceRegister,
+  pack: KnowledgePack,
+): void {
   const known = new Set(pack.sources.map((s) => s.id));
   const declared = new Map(register.authorisedOrigins.map((row) => [row.sourceId, row.origins]));
   const failures: AuthorityFailure[] = [];
 
-  for (const document of corpus.index.documents) {
+  for (const document of index.documents) {
     for (const sourceId of document.serves) {
       const failure = (reason: AuthorityFailureReason) =>
         failures.push({ docId: document.docId, sourceId, url: document.url, reason });
@@ -135,5 +156,4 @@ export function authoriseCorpus(
   }
 
   if (failures.length > 0) throw new CorpusAuthorityError(failures);
-  return corpus as AuthorisedCorpus;
 }
