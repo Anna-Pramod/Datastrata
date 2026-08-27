@@ -43,7 +43,9 @@
  * is accepted as evidence.
  */
 
+import { existsSync, globSync } from 'node:fs';
 import { join } from 'node:path';
+import { VERIFICATION_RUNTIME_INPUTS } from '../frontend/web/verification-runtime-inputs.mjs';
 import { runAgreement } from './deployment-agreement.mjs';
 import {
   StandaloneFailure,
@@ -67,6 +69,91 @@ try {
   // -------------------------------------------------------------------------
   step('Building the production standalone artifact');
   const { webDir, standaloneDir } = buildStandalone(repoRoot);
+
+  // Physical packaging, asserted against the built tree rather than inferred
+  // from the declaration. The liveness run below would also catch a missing
+  // `fatal` member — but only as a 500 whose cause has to be read out of a
+  // server log, and only for members the one fixed request happens to exercise.
+  // This names the file instead.
+  //
+  // **What this loop cannot do is notice a member's deletion**, because it
+  // iterates the declaration: remove a member and its assertion leaves with it.
+  // Deleting `authored-knowledge` produces zero findings here. That is covered
+  // elsewhere — phase 1 liveness for members the request exercises, and the
+  // named register check below for the one this step exists for — and the
+  // distinction is written down rather than left for a reader to discover,
+  // because a packaging assertion that overstates its reach is the same defect
+  // this whole gate exists to catch.
+  step('Packaging: every file a fatal runtime input claims physically reached the artifact');
+  //
+  // **Repository against artifact, not presence against nothing.** A first
+  // version of this asserted each fatal glob matched something in the built
+  // tree, and reddened on `pinned-verification-results` — correctly by its own
+  // rule and uselessly, because the repository holds no signed results, so
+  // there was nothing to trace. What matters is that nothing the repository
+  // *has* and the declaration *claims* was left behind.
+  //
+  // **Members whose globs legitimately match nothing**, declared rather than
+  // discovered. A fatal member matching zero repository files is normally a
+  // broken glob — a typo, or a path convention that moved — and would otherwise
+  // pass in silence, since "every file it claims" is vacuously true of no files.
+  // The one real exception is the pinned results: the repository holds none
+  // until something is signed. Naming it makes the exemption a decision.
+  const MAY_MATCH_NOTHING = new Set(['pinned-verification-results']);
+  const missingFiles = [];
+  const emptyMembers = [];
+  let tracedCount = 0;
+  for (const input of VERIFICATION_RUNTIME_INPUTS) {
+    if (input.onAbsence !== 'fatal') continue;
+    let matchedForMember = 0;
+    for (const glob of input.globs) {
+      // Globs are relative to `frontend/web`; the standalone tree mirrors the
+      // repository beneath the tracing root, so the same relative walk applies.
+      const inRepo = globSync(join(webDir, glob));
+      matchedForMember += inRepo.length;
+      for (const file of inRepo) {
+        const relative = file.slice(repoRoot.length + 1);
+        tracedCount += 1;
+        // `existsSync`, not `globSync`: `relative` is a concrete path, and a
+        // filename carrying `[`, `]`, `{`, `}`, `*` or `?` would be reread as a
+        // pattern and report a false absence.
+        if (!existsSync(join(standaloneDir, relative))) {
+          missingFiles.push(`${input.member}: ${relative}`);
+        }
+      }
+    }
+    if (matchedForMember === 0 && !MAY_MATCH_NOTHING.has(input.member)) {
+      emptyMembers.push(`${input.member}: ${input.globs.join(', ')}`);
+    }
+  }
+  if (emptyMembers.length > 0) {
+    fail(
+      'Declared `fatal` runtime inputs matched no file in the repository. Either the ' +
+        'glob is wrong, or the state it names is gone — both ship an artifact missing ' +
+        'something the deployed site needs:',
+      emptyMembers.join('\n'),
+    );
+  }
+  if (missingFiles.length > 0) {
+    fail(
+      'Files the declaration marks `fatal` exist in the repository but did not reach ' +
+        'the standalone artifact. `frontend/web/verification-runtime-inputs.mjs` says ' +
+        'the deployed site needs these:',
+      missingFiles.join('\n'),
+    );
+  }
+  // Named explicitly: this member is why the assertion exists, and a silent
+  // count would not show it was actually exercised.
+  const registerFile = 'backend/engine/monitoring/source-register.json';
+  if (globSync(join(standaloneDir, registerFile)).length === 0) {
+    fail(
+      'The source register did not reach the standalone artifact. Requirement-side ' +
+        'citability is checked against it on every pack load, so the deployed site ' +
+        'would refuse to load the pack at all.',
+      registerFile,
+    );
+  }
+  note(`${tracedCount} fatal runtime-input files traced into the artifact, including the source register`);
 
   step('Assembling the isolated runtime, outside the repository');
   const forbiddenRoots = [repoRoot];

@@ -235,10 +235,48 @@ export interface Requirement {
   derivedStatus: DerivedStatus;
   /** Why the status reads as it does. Empty when nothing has been signed. */
   statusReasons: StatusReason[];
+  /**
+   * The one authored declaration of what this determination rests on.
+   *
+   * Each entry names a **current host instrument** and where inside it to look.
+   * It never names the artefact serving that instrument: an official
+   * consolidation may serve a `legal_record` source without being the authentic
+   * publication, and that distinction belongs to the artefact, not here
+   * (design §7.1). Nor does it acquire an amending act merely because that act
+   * is where the wording was first published — currency, not lineage (§3).
+   */
+  provenance: ProvenanceEntry[];
+  /**
+   * Attached by the loader as `provenance[*].sourceId`, never authored — the
+   * same treatment as `derivedStatus`, and for the same reason: two authored
+   * declarations of one fact are two authorities, and nothing would say which
+   * wins. `sourceIdsOf` is the single derivation.
+   */
   sources: string[];
-  provisions?: string;
   caution?: string;
   obligationTemplates?: string[];
+}
+
+/**
+ * Where inside an instrument to look.
+ *
+ * Two kinds, and no more. Standardising European legal citation syntax is
+ * explicitly not in scope (design §5.4); what the model must express is the one
+ * distinction an author cannot work around: an address *within* the document,
+ * or the document itself. "This rests on the whole Notice" is a truthful claim,
+ * and forcing an author to invent an `Art. X para. Y` that does not exist would
+ * make the field lie.
+ */
+export type ProvenanceLocator =
+  | { kind: 'provision'; text: string }
+  | { kind: 'whole_document' };
+
+/** One cited instrument, and every place in it this determination rests on. */
+export interface ProvenanceEntry {
+  /** SRC-NNN in the pack's citation record. */
+  sourceId: string;
+  /** At least one. Authored order is significant and preserved. */
+  locators: ProvenanceLocator[];
 }
 
 /**
@@ -256,7 +294,7 @@ export interface Requirement {
  * depend on the knowledge loader merely to describe the absence of two fields,
  * which is a dependency direction nothing about the concept justifies.
  */
-export type AuthoredRequirement = Omit<Requirement, 'derivedStatus' | 'statusReasons'>;
+export type AuthoredRequirement = Omit<Requirement, 'derivedStatus' | 'statusReasons' | 'sources'>;
 
 export interface SourceRecord {
   id: string;
@@ -389,7 +427,15 @@ export interface Determination {
   needs: FactNeed[];
   trace: TraceNode;
   sources: string[];
-  provisions?: string;
+  /**
+   * The locators the requirement's provenance carries, flattened.
+   *
+   * Addresses only — no `SRC-` identity. A determination is customer-facing,
+   * and "where to look" is useful where "which record the author cited" is
+   * internal bookkeeping. `sources` beside it already carries the ids for the
+   * surfaces that need them.
+   */
+  locators: string[];
   caution?: string;
   legalStatus: LegalStatus;
   /** The requirement's derived verification status at the time of assessment. */

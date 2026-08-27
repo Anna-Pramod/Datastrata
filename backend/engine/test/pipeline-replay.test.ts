@@ -58,6 +58,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join, sep } from 'node:path';
 
@@ -114,6 +115,7 @@ import {
   type VerificationResult,
 } from '../src/verification/result';
 import { installNetworkTrap, type NetworkTrap } from './helpers';
+import { installRealRegister } from './world-register';
 import { SYNTHETIC_ADAPTER_V1 } from './synthetic-adapters';
 import type { ProviderAdapter } from '../src/pipeline/provider-adapter';
 import {
@@ -126,6 +128,7 @@ import {
 import {
   engineRoot,
   FIXTURE_TRANSCRIPT_ROOT,
+  SUPERSEDED_RUN_IDS,
   PACK_ID,
   READING_ONE,
   REQUIREMENT_ID,
@@ -152,6 +155,9 @@ beforeAll(() => {
     recursive: true,
   });
   cpSync(join(engineRoot, 'corpus'), join(world, 'corpus'), { recursive: true });
+  // A runtime world is incomplete without the register: `loadPack` refuses
+  // without one, since requirement-side citability is checked against it.
+  installRealRegister(world);
 });
 
 afterAll(() => {
@@ -181,11 +187,28 @@ function pathsFor(outDir: string): VerifyPaths {
   };
 }
 
-/** The one committed recording, freshly parsed each time it is asked for. */
+/**
+ * The current-generation recording.
+ *
+ * The directory holds more than one now: the provenance migration retired the
+ * pre-migration recording without deleting it, so the fixture carries both
+ * generations and `SUPERSEDED_RUN_IDS` says which are history. Selecting by
+ * "the only file" stopped being possible then, and selecting by *position*
+ * would be the very thing `readTranscriptsFor` refuses to do.
+ */
 function committed(): RunTranscript {
   const found = readTranscriptsFor(FIXTURE_TRANSCRIPT_ROOT, PACK_ID, REQUIREMENT_ID);
-  expect(found).toHaveLength(1);
-  return found[0]!;
+  const current = found.filter((t) => !SUPERSEDED_RUN_IDS.includes(t.runId));
+  expect(current).toHaveLength(1);
+  return current[0]!;
+}
+
+/** The retired pre-provenance recording, kept as evidence of the run it answered. */
+function superseded(): RunTranscript {
+  const found = readTranscriptsFor(FIXTURE_TRANSCRIPT_ROOT, PACK_ID, REQUIREMENT_ID);
+  const retired = found.filter((t) => SUPERSEDED_RUN_IDS.includes(t.runId));
+  expect(retired).toHaveLength(SUPERSEDED_RUN_IDS.length);
+  return retired[0]!;
 }
 
 /** A temporary transcript root holding whatever a test wants to offer. */
@@ -300,7 +323,7 @@ function withRole(
 // ---------------------------------------------------------------------------
 
 describe('the committed replay fixture', () => {
-  it('is a valid 1.1.0 transcript, and the only file in its directory', () => {
+  it('is a valid 1.1.0 transcript, filed beside the generation it retired', () => {
     const transcript = committed();
     expect(transcript.transcriptSchemaVersion).toBe(TRANSCRIPT_SCHEMA_VERSION);
     expect(transcript.packId).toBe(PACK_ID);
@@ -309,11 +332,30 @@ describe('the committed replay fixture', () => {
     // check and proves nothing about derivation on its own — `readTranscriptsFor`
     // enforces the filing rule (tested below), and derivation is established by
     // the fact that `bind` matches during a real `verifyRun`.
+    //
+    // Two files, not one. The directory used to hold exactly one recording; the
+    // provenance migration retired the first without deleting it, because a
+    // recording is evidence of an execution and deleting it would erase the
+    // only record of what the pipeline produced under the previous provenance.
+    // Both are named here so a third arriving unannounced is a red.
     const files = readdirSync(join(FIXTURE_TRANSCRIPT_ROOT, PACK_ID, REQUIREMENT_ID));
-    expect(files.filter((file) => file.endsWith('.json'))).toEqual([`${transcript.runId}.json`]);
+    expect(files.filter((file) => file.endsWith('.json')).sort()).toEqual(
+      [`${transcript.runId}.json`, ...SUPERSEDED_RUN_IDS.map((id) => `${id}.json`)].sort(),
+    );
     // The provenance note the recorder writes beside it, so the directory says
     // what the recording is without anybody having to find this test.
     expect(files).toContain('PROVENANCE.md');
+  });
+
+  it('preserves the retired recording byte-for-byte', () => {
+    // "Retired, not deleted" made checkable. The digest is of the file exactly
+    // as it was recorded before the provenance migration; a re-record that
+    // overwrote it, or any edit at all, reddens here.
+    const path = transcriptPath(
+      FIXTURE_TRANSCRIPT_ROOT, PACK_ID, REQUIREMENT_ID, SUPERSEDED_RUN_IDS[0]!,
+    );
+    const digest = createHash('sha256').update(readFileSync(path)).digest('hex');
+    expect(digest).toBe('91ad7485be3572062b9af245127eab5ee6fd4ba574baeb9475a4876586e167c9');
   });
 
   it('records one exchange per configured execution, each bound', () => {
@@ -1195,7 +1237,6 @@ describe('a recording cannot lie about what it says it recorded', () => {
 
 
 
-
 });
 
 describe('the recording an adjudicator answered is the table it was shown', () => {
@@ -1653,5 +1694,84 @@ describe('recording and reading back', () => {
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The provenance migration's effect on run identity
+// ---------------------------------------------------------------------------
+
+/**
+ * What the D1(a) provenance migration did to the binding, measured.
+ *
+ * A recording answers one question, and the question is the binding. The
+ * migration changed the reader prompt (locators replaced source identities in
+ * `ReaderInput`) and changed `requirementInputSha256`'s domain (authored
+ * `provenance` replaced `provisions` + `sources`), so the binding had to move
+ * and the pre-migration recording had to stop binding.
+ *
+ * **The fields are measured here rather than asserted from the plan.** Three
+ * were expected to move; the other four were expected to hold. Writing only the
+ * three would leave a fourth field's silent movement invisible, so the whole
+ * `BINDING_FIELDS` set is partitioned and both halves are named.
+ */
+describe('the binding the provenance migration moved', () => {
+  /** Runs against a root offering only the superseded recording, and catches the refusal. */
+  async function mismatchAgainstSuperseded(): Promise<TranscriptRunMismatchError> {
+    // The suite's own `verificationDir`, which `beforeEach` seeds with the
+    // version registry. A bare temporary directory makes the run fail at pack
+    // load instead, which looks like a refusal and proves nothing about replay.
+    const root = transcriptRootWith([superseded()]);
+    try {
+      await verifyRun(verificationDir, REQUIREMENT_ID, root);
+    } catch (error) {
+      if (error instanceof TranscriptRunMismatchError) return error;
+      throw error;
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+    throw new Error('the run bound to the superseded recording, which it must not');
+  }
+
+  it('moves exactly pipelineVersion, requirementInputSha256 and runId', async () => {
+    const { differences } = await mismatchAgainstSuperseded();
+    // Measured, not forced. If the implementation legitimately moves a fourth
+    // binding field, this reds and names it rather than absorbing it.
+    expect([...differences.map((d) => d.field)].sort()).toEqual([
+      'pipelineVersion',
+      'requirementInputSha256',
+      'runId',
+    ]);
+  });
+
+  it('leaves packId, requirementId, renderedConditionSha256 and the closure untouched', async () => {
+    // The other half of the partition, asserted positively rather than inferred
+    // from the list above. `corpusClosureSha256` holding is the interesting one:
+    // CSRD-S-001 stopped citing SRC-004, yet its entitled closure is unchanged,
+    // because the host document already reached the amending one through the
+    // `amendedBy` edge. Provenance moved; the surface the reader sees did not.
+    const { binding } = await mismatchAgainstSuperseded();
+    const recording = superseded();
+    for (const field of ['packId', 'requirementId', 'renderedConditionSha256', 'corpusClosureSha256'] as const) {
+      expect(binding[field], field).toBe(recording[field]);
+    }
+    // …and the three that did move are genuinely different values, so the
+    // partition above cannot be satisfied by everything being equal.
+    expect(binding.pipelineVersion).not.toBe(recording.pipelineVersion);
+    expect(binding.requirementInputSha256).not.toBe(recording.requirementInputSha256);
+    expect(binding.runId).not.toBe(recording.runId);
+  });
+
+  it('refuses to replay the superseded recording, naming the identity and not guessing', async () => {
+    // The production refusal, before any new recording exists. A recording of a
+    // different question is refused rather than replayed — the alternative is a
+    // run that reports outputs produced under provenance the pack no longer
+    // carries.
+    const error = await mismatchAgainstSuperseded();
+    expect(error.name).toBe('TranscriptRunMismatchError');
+    // The superseded recording was genuinely offered and genuinely rejected: a
+    // refusal because nothing was found would prove nothing about selection.
+    expect(error.offered).toEqual([superseded().runId]);
+    expect(error.differences.length).toBeGreaterThan(0);
   });
 });

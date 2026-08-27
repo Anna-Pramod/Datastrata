@@ -123,6 +123,26 @@ export const VERIFICATION_RUNTIME_INPUTS = Object.freeze([
     ],
   },
   {
+    member: 'source-authority-register',
+    purpose:
+      'The register at `monitoring/source-register.json`, which says what each cited ' +
+      'source *is* — its governing authority and that authority\'s tier — and ' +
+      'therefore whether it may back a determination at all. `loadPack` runs ' +
+      '`verifyRequirementCitability` over it on every production load, so a pack ' +
+      'whose provenance rests on a tracker, or on a source no authority covers, is ' +
+      'refused rather than answered. Absence is a `SourceRegisterMissingError`, not a ' +
+      'skipped check: this member is the integrity dependency of the citability rule, ' +
+      'and a rule that switches itself off when its input is missing is not a rule. ' +
+      'Added at D1(a) Task 4, when requirement-side citability moved onto the ' +
+      'production load path; before that nothing on the public path read the ' +
+      'register, and the artifact shipped without it while the loader claimed ' +
+      'otherwise. **Not Task 5.** This member establishes whether a *source* may be ' +
+      'cited. Whether a corpus *artefact* is an authorised origin for the source it ' +
+      'claims to serve is `AuthorisedCorpus`, and is not in this closure.',
+    onAbsence: 'fatal',
+    globs: ['../../backend/engine/monitoring/source-register.json'],
+  },
+  {
     member: 'pinned-verification-results',
     purpose:
       'The verification result each signature is over, at ' +

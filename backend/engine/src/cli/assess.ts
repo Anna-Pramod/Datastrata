@@ -58,7 +58,7 @@ for (const d of result.determinations.sort((a, b) => a.requirementId.localeCompa
   const sel = d.selected ? ` → ${d.selected}` : '';
   const why = d.reason ? ` (${d.reason})` : '';
   lines.push(`- ${icon(d.result)} **${d.requirementId}** ${d.requirementTitle} — ${d.scopeName}: **${d.result}**${sel}${why} [${d.relationshipClass}]`);
-  lines.push(`  sources: ${d.sources.map((s) => `${s} <${srcUrl(s)}>`).join('; ')}${d.provisions ? ` — ${d.provisions}` : ''}`);
+  lines.push(`  sources: ${d.sources.map((s) => `${s} <${srcUrl(s)}>`).join('; ')}${d.locators.length > 0 ? ` — ${d.locators.join('; ')}` : ''}`);
   if (d.result !== 'DOES_NOT_APPLY' && d.caution) lines.push(`  caution: ${d.caution}`);
 }
 lines.push('');

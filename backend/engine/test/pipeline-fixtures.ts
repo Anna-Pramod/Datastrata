@@ -179,8 +179,7 @@ const REQUIREMENT_BASE: AuthoredRequirement = {
   kind: 'boolean',
   condition: { op: 'cmp', fact: 'entity.turnover', cmp: 'gt', value: 450_000_000 },
   legalStatus: 'in_force',
-  sources: ['SRC-100'],
-  provisions: 'Fixture Act Art. 1',
+  provenance: [{ sourceId: 'SRC-100', locators: [{ kind: 'provision', text: 'Fixture Act Art. 1' }] }],
 };
 
 /**
@@ -203,6 +202,24 @@ export const SHARED_REQUIREMENT_FIXTURES: Readonly<Record<string, AuthoredRequir
  * refusal — so what this asserts is that the shared authored baseline every
  * caller starts from is a requirement the production schema accepts.
  */
+/**
+ * Provenance for a list of source ids, one generic locator each.
+ *
+ * Tests that only care *which* sources a requirement cites should say so
+ * without restating the locator shape; tests that care about locators build
+ * them literally.
+ */
+export function citing(...sourceIds: string[]): AuthoredRequirement['provenance'] {
+  return sourceIds.map((sourceId) => ({
+    sourceId,
+    // Neutral locator text: it must not encode its own source id. A locator
+    // carrying `SRC-NNN` would make any reader-blindness assertion written over
+    // a `citing()` fixture red for the locator's own spelling rather than for
+    // the leak it means to detect.
+    locators: [{ kind: 'provision' as const, text: 'Article 1' }],
+  }));
+}
+
 export function fixtureRequirement(
   overrides: Partial<AuthoredRequirement> = {},
 ): AuthoredRequirement {

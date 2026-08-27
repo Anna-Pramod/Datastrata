@@ -28,6 +28,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
+import { FROZEN_HISTORICAL_DIGESTS } from './historical-version-digests';
 
 import { assess, type MinStatus } from '../src/engine/evaluate';
 import {
@@ -408,25 +409,63 @@ describe('the version registry after the bump', () => {
     JSON.parse(readFileSync(join(REGISTRY_DIR, 'csrd.json'), 'utf8')),
   );
 
-  it('records every requirement at version 2, matching its current content', () => {
+  it('records every requirement at version 3, matching its current content', () => {
     const pack = csrdPack();
     for (const r of pack.requirements) {
-      expect(r.version, r.id).toBe(2);
-      expect(registry[r.id]?.['2'], r.id).toBe(requirementSha256(r));
+      expect(r.version, r.id).toBe(3);
+      expect(registry[r.id]?.['3'], r.id).toBe(requirementSha256(r));
     }
   });
 
-  it('still holds every version-1 hash, so version 1 keeps its meaning', () => {
+  it('still holds every historical digest, byte-for-byte, so old versions keep their meaning', () => {
+    // Historical preservation, over **all thirty-two** committed entries —
+    // sixteen requirements at version 1 and sixteen at version 2 — against
+    // literals frozen from committed history rather than against anything the
+    // migration produced. A registry that "still parses" is not the property; a
+    // registry whose old digests are the old digests is.
+    //
+    // The previous shape of this test pinned seven version-2 values and no
+    // version-1 value at all, so twenty-five of the thirty-two could be
+    // rewritten with the whole suite green. Verified 2026-08-27 by rewriting
+    // `CSRD-S-010`'s version-2 digest: 1459 tests passed.
+    expect(FROZEN_HISTORICAL_DIGESTS).toHaveLength(32);
+    for (const [id, version, digest] of FROZEN_HISTORICAL_DIGESTS) {
+      expect(registry[id]?.[version], `${id} v${version}`).toBe(digest);
+    }
+
+    // The table covers the pack rather than a subset of it: sixteen
+    // requirements, each at both historical versions. Without this, deleting
+    // rows from the oracle would weaken the check silently and stay green.
+    const covered = new Map<string, string[]>();
+    for (const [id, version] of FROZEN_HISTORICAL_DIGESTS) {
+      covered.set(id, [...(covered.get(id) ?? []), version].sort());
+    }
+    expect(covered.size).toBe(16);
+    for (const [id, versions] of covered) expect(versions, id).toEqual(['1', '2']);
+    expect([...covered.keys()].sort()).toEqual(csrdPack().requirements.map((r) => r.id).sort());
+  });
+
+  it('keeps the three versions distinct, so a version number names one content', () => {
+    // Structural, and separate from the preservation table above: equal digests
+    // across versions would mean a version number named nothing, and that would
+    // be true even if every frozen literal still matched.
     const pack = csrdPack();
     for (const r of pack.requirements) {
-      const one = registry[r.id]?.['1'];
-      expect(one, r.id).toMatch(/^[0-9a-f]{64}$/);
-      // Without this the inequality below would pass against an absent version 2.
-      expect(registry[r.id]?.['2'], r.id).toMatch(/^[0-9a-f]{64}$/);
-      // Version 1 named the content that carried an asserted ratification, and
-      // that is different content: a version number bound to two hashes would
-      // mean nothing at all.
-      expect(one, r.id).not.toBe(registry[r.id]?.['2']);
+      const [one, two, three] = [registry[r.id]?.['1'], registry[r.id]?.['2'], registry[r.id]?.['3']];
+      for (const [label, value] of [['1', one], ['2', two], ['3', three]] as const) {
+        expect(value, `${r.id} v${label}`).toMatch(/^[0-9a-f]{64}$/);
+      }
+      expect(one, r.id).not.toBe(two);
+      expect(two, r.id).not.toBe(three);
+      expect(one, r.id).not.toBe(three);
+    }
+  });
+
+  it('has appended version 3 and nothing beyond it', () => {
+    // No version 4: the migration is one bump, and a stray higher version would
+    // mean some requirement was re-authored after the registry was settled.
+    for (const r of csrdPack().requirements) {
+      expect(Object.keys(registry[r.id] ?? {}).sort(), r.id).toEqual(['1', '2', '3']);
     }
   });
 });

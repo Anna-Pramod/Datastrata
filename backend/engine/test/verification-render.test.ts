@@ -70,6 +70,7 @@ function requirement(id: string, shape: { condition?: Condition; cases?: Require
     derivedStatus: 'draft',
     statusReasons: [],
     sources: ['SRC-TEST'],
+    provenance: [{ sourceId: 'SRC-001', locators: [{ kind: 'provision', text: 'Article 1' }] }],
   };
 }
 

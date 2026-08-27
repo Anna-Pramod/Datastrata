@@ -51,7 +51,7 @@ export interface CheckDetermination {
   relationshipClass: RelationshipClass;
   needs: CheckNeed[];
   sources: CheckSource[];
-  provisions?: string;
+  locators: string[];
   caution?: string;
 }
 
@@ -121,7 +121,7 @@ export function buildCheckResponse(
       relationshipClass: d.relationshipClass,
       needs: d.needs.map((n) => ({ factType: n.factType, label: factLabel(n.factType) })),
       sources: d.sources.map((s) => sourceById(pack, s)),
-      provisions: d.provisions,
+      locators: d.locators,
       caution: d.caution,
     }));
 

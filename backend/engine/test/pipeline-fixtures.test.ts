@@ -44,10 +44,10 @@ describe('shared requirement fixtures are valid under the production schema', ()
   it('is reached from the ordinary call path, not only from this file', () => {
     // `fixtureRequirement()` parses its own base, so every consumer exercises
     // the gate. Overrides stay unparsed by design — `pipeline-reader.test.ts`
-    // hands in `sources: []` to exercise the refusal — so the guard is over
+    // hands in an empty provenance to exercise the refusal — so the guard is over
     // the shared baseline, which is what nine test files inherit.
     expect(() => fixtureRequirement()).not.toThrow();
-    expect(fixtureRequirement({ sources: [] }).sources).toEqual([]);
+    expect(fixtureRequirement({ provenance: [] }).provenance).toEqual([]);
   });
 
   it('can be taken through both production hashes', () => {
@@ -58,12 +58,24 @@ describe('shared requirement fixtures are valid under the production schema', ()
     const requirement = fixtureRequirement() as Requirement;
     expect(requirementSha256(requirement)).toMatch(/^[0-9a-f]{64}$/);
 
-    // `requirementInputSha256` covers provisions, sources and the logical
-    // payload — neither corrected field reaches it. This digest is therefore
-    // the one the fixture had *before* the correction, and its stillness is
-    // what proves the repair moved only what it should have.
+    // A **frozen regression pin**, and nothing more than that.
+    //
+    // This literal is the provenance-era digest of this fixture, recorded once.
+    // Its whole value is its *stillness*: if the payload's shape moves, or the
+    // fixture's provenance changes, or `canonicalJson` starts ordering keys
+    // differently, this line reddens and names the digest.
+    //
+    // It deliberately does **not** claim to establish that the payload shape is
+    // *correct* — that is `verification-canonical.test.ts`'s job, and mutant
+    // M-P1 (drop `provenance` from the hash) is what proves those assertions
+    // live. Recorded 2026-08-27: this assertion briefly recomputed its own
+    // expected value as `sha256Hex(canonicalJson({ provenance,
+    // logicalPayloadSha256 }))` — the producer's own body on both sides, so
+    // both moved together and it could no longer fail for any change to
+    // `canonicalJson` or `logicalPayloadSha256`. A regression pin whose
+    // expected side is computed is not a pin.
     expect(requirementInputSha256(requirement)).toBe(
-      'd5ec1d9dd79d8256ead631d47ad6d78b6be7d844be125e8cfc800ca9ae623e49',
+      'a415715ce5573ea4daa8ac237d68ca53437f1fb49512b48ae33510a6a9596039',
     );
   });
 });

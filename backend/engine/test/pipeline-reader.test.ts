@@ -60,6 +60,7 @@ import {
 import type { AuthoredRequirement } from '../src/types';
 import { csrdPack } from './helpers';
 import {
+  citing,
   docText,
   fixtureCorpus,
   fixtureIndex,
@@ -109,7 +110,7 @@ type Exact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
  */
 const readerInputIsExactlyTheProjection: Exact<
   keyof ReaderInput,
-  'packId' | 'requirementId' | 'requirementVersion' | 'provisions' | 'closure'
+  'packId' | 'requirementId' | 'requirementVersion' | 'locators' | 'closure'
 > = true;
 
 /** Each of the four §3.1 exclusions, refused by the type. */
@@ -118,7 +119,7 @@ const base = {
   packId: 'testpack',
   requirementId: 'TEST-R-001',
   requirementVersion: 1,
-  provisions: 'Fixture Act Art. 1',
+  locators: ['Fixture Act Art. 1'],
   closure: closureForCompileChecks,
 };
 
@@ -132,6 +133,10 @@ const withCaution: ReaderInput = { ...base, caution: 'The revised act is not yet
 const withRenderedCondition: ReaderInput = { ...base, renderedCondition: 'Applies when …' };
 // @ts-expect-error the reader may not be handed a prior reading to agree with
 const withPriorReading: ReaderInput = { ...base, priorReading: { elements: [] } };
+// @ts-expect-error the reader may not be handed the authored provenance, which carries source identity
+const withProvenance: ReaderInput = { ...base, provenance: [{ sourceId: 'SRC-100', locators: [] }] };
+// @ts-expect-error the reader may not be handed the cited source ids under any name
+const withSources: ReaderInput = { ...base, sources: ['SRC-100'] };
 
 /** The positive control: the projection itself does compile. */
 const honestInput: ReaderInput = base;
@@ -144,6 +149,8 @@ export type BlindnessWitnesses = [
   typeof withCaution,
   typeof withRenderedCondition,
   typeof withPriorReading,
+  typeof withProvenance,
+  typeof withSources,
   typeof honestInput,
 ];
 
@@ -152,17 +159,35 @@ export type BlindnessWitnesses = [
 // ---------------------------------------------------------------------------
 
 describe('the reader’s input is a positive projection', () => {
-  it('carries the identifiers, the citation and the capability, and nothing else', () => {
+  it('carries the identifiers, the addresses and the capability, and nothing else', () => {
     const projected = input();
     expect(Object.keys(projected).sort()).toEqual([
       'closure',
+      'locators',
       'packId',
-      'provisions',
       'requirementId',
       'requirementVersion',
     ]);
     expect(projected.requirementId).toBe('TEST-R-001');
-    expect(projected.provisions).toBe('Fixture Act Art. 1');
+    expect(projected.locators).toEqual(['Fixture Act Art. 1']);
+  });
+
+  it('gives the reader the address and never the source it came from', () => {
+    // The discriminating pair, in one output. The locator must be present —
+    // otherwise an implementation that projected nothing would satisfy the
+    // absence half — and no `SRC-` identity may appear anywhere in the rendered
+    // text the model receives.
+    const requirement = fixtureRequirement({
+      provenance: [
+        { sourceId: 'SRC-900', locators: [{ kind: 'provision', text: 'Fixture Act Art. 7' }] },
+      ],
+    });
+    const rendered = renderReaderInput(
+      readerInputFor({ packId: 'testpack', requirement, closure: fixtureClosure() }),
+    );
+    expect(rendered).toContain('Fixture Act Art. 7');
+    expect(rendered).not.toContain('SRC-900');
+    expect(rendered).not.toMatch(/SRC-\d{3}/);
   });
 
   it('keeps the encoding out of the message the model receives', () => {
@@ -364,7 +389,7 @@ function readerRun(response: (docId?: string) => ReaderOutput, sourceIds = ['SRC
       runBlindReader({
         input: readerInputFor({
           packId: 'testpack',
-          requirement: fixtureRequirement({ sources: [...sourceIds] }),
+          requirement: fixtureRequirement({ provenance: citing(...sourceIds) }),
           closure: fixtureClosure(sourceIds),
         }),
         sourceIds,
@@ -479,7 +504,7 @@ describe('runBlindReader', () => {
     const outcome = await runBlindReader({
       input: readerInputFor({
         packId: 'testpack',
-        requirement: fixtureRequirement({ sources: [] }),
+        requirement: fixtureRequirement({ provenance: [] }),
         closure,
       }),
       sourceIds: [],
@@ -839,21 +864,35 @@ describe('a requirement whose sources serve no document (the real corpus)', () =
     sourceIds: pack.sources.map((source) => source.id),
   };
 
-  it('is the only requirement in the pack with an empty entitled closure', () => {
+  it('is one of the three requirements in the pack with an empty entitled closure', () => {
     // Measured, not assumed — and the positive control for everything below:
-    // the other fifteen requirements do open onto a real surface, so an empty
-    // closure is a finding about this one rather than a broken corpus.
+    // thirteen requirements do open onto a real surface, so an empty closure is
+    // a finding about these three rather than a broken corpus.
+    //
+    // Three, not one. Before the D1a-0b audit `CSRD-S-012` was the only
+    // requirement citing nothing the corpus serves; the audit moved S-003 onto
+    // the unserved `SRC-002`, and the 2026-08-27 correction moved S-004 there
+    // too. The number is a measurement of the corpus, and it will move again
+    // when the host instruments are ingested.
     const empty = pack.requirements.filter(
       (entry) => EntitledClosure.forSources(realCorpus, entry.sources).docIds.length === 0,
     );
-    expect(empty.map((entry) => entry.id)).toEqual(['CSRD-S-012']);
+    expect(empty.map((entry) => entry.id)).toEqual(['CSRD-S-003', 'CSRD-S-004', 'CSRD-S-012']);
     expect(pack.requirements).toHaveLength(16);
+
+    // **Empty closure is not the same question as gap-bearing.** `CSRD-S-011`
+    // cites the served `SRC-001` and the unserved `SRC-008`, so it gaps over a
+    // closure that is genuinely non-empty — four requirements halt, three of
+    // them with nothing entitled at all. Asserted here so the set above is not
+    // read as the pack's halt list.
+    const eleven = pack.requirements.find((entry) => entry.id === 'CSRD-S-011')!;
+    expect(EntitledClosure.forSources(realCorpus, eleven.sources).docIds.length).toBeGreaterThan(0);
   });
 
   it('produces a corpus_gap per cited source, and no reading assembled from memory', async () => {
     expect(requirement).toBeDefined();
     if (requirement === undefined) throw new Error('unreachable');
-    expect(requirement.sources).toEqual(['SRC-005', 'SRC-006', 'SRC-007']);
+    expect(requirement.sources).toEqual(['SRC-005', 'SRC-007']);
 
     const closure = EntitledClosure.forSources(realCorpus, requirement.sources);
     const runner = stubRunner(() => JSON.stringify(wholeReading()));
@@ -868,9 +907,9 @@ describe('a requirement whose sources serve no document (the real corpus)', () =
     // The canonical gap-bearing shape, asserted in full.
     expect(outcome.output.elements).toEqual([]);
     expect(outcome.gaps).toEqual([
-      ...corpusGapsForUnservedSources(['SRC-005', 'SRC-006', 'SRC-007']),
+      ...corpusGapsForUnservedSources(['SRC-005', 'SRC-007']),
     ]);
-    expect(outcome.gaps.map((gap) => gap.docId)).toEqual([undefined, undefined, undefined]);
+    expect(outcome.gaps.map((gap) => gap.docId)).toEqual([undefined, undefined]);
     expect(closure.sha256).toBe(EMPTY_CLOSURE_SHA256);
     expect(runner.requests).toHaveLength(0);
     expect(outcome.execution).toBeNull();
@@ -947,11 +986,7 @@ describe('a requirement whose sources serve no document (the real corpus)', () =
     // Invalid whatever else is true of it.
     expect(outcome.tail.pins.corpusClosureSha256).toBe(EMPTY_CLOSURE_SHA256);
     expect(outcome.tail.pins.corpus).toEqual([]);
-    expect(outcome.tail.gaps.map((gap) => gap.sourceId)).toEqual([
-      'SRC-005',
-      'SRC-006',
-      'SRC-007',
-    ]);
+    expect(outcome.tail.gaps.map((gap) => gap.sourceId)).toEqual(['SRC-005', 'SRC-007']);
 
     // The positive control: a served requirement runs every role through the
     // same call, so the emptiness above is the halt and not a broken wiring.
@@ -959,7 +994,7 @@ describe('a requirement whose sources serve no document (the real corpus)', () =
     // Selected by the property this control needs — **every** cited source
     // served — and not by `id !== requirement.id`, which is what it used to be.
     // That predicate was a sound proxy only while `CSRD-S-012` was the one
-    // requirement that halted; ten of sixteen halt now, so "not S-012" no longer
+    // requirement that halted; four of sixteen halt now, so "not S-012" no longer
     // implies "runs to completion". It stayed green purely because the first
     // entry in `requirements.json` happens to be fully served, and a reorder of
     // that file — or ingesting the missing material — would have broken this

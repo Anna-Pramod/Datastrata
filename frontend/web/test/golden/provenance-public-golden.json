@@ -1,0 +1,464 @@
+{
+  "assessedAt": "2026-07-26",
+  "financialYear": {
+    "start": "2027-01-01",
+    "end": "2027-12-31"
+  },
+  "pack": {
+    "id": "csrd",
+    "version": "0.1.0",
+    "legalSnapshot": "2026-07-26",
+    "program": "CSRD"
+  },
+  "containsDraftContent": true,
+  "headline": "Reporting duty active for Your entity. 2 determination(s) unresolved and awaiting input. national-law status requires review — this is NOT a final legal conclusion.",
+  "nationalLawResolved": false,
+  "counts": {
+    "applies": 4,
+    "doesNotApply": 6,
+    "indeterminate": 3
+  },
+  "determinations": [
+    {
+      "id": "CSRD-S-001",
+      "title": "Individual Article 19a threshold scope",
+      "decisionArea": "Individual scope",
+      "result": "APPLIES",
+      "severity": "critical",
+      "relationshipClass": "direct_legal",
+      "needs": [],
+      "sources": [
+        {
+          "id": "SRC-001",
+          "title": "Directive 2013/34/EU — Accounting Directive (host instrument)",
+          "url": "https://eur-lex.europa.eu/eli/dir/2013/34/oj/eng"
+        }
+      ],
+      "locators": [
+        "Article 19a(1)"
+      ],
+      "caution": "Threshold-crossing ranges are indeterminate — ask for the exact value. This is scope, not the final reporting duty (see CSRD-S-014); national transposition may vary timing and options."
+    },
+    {
+      "id": "CSRD-S-002",
+      "title": "Consolidated Article 29a threshold scope",
+      "decisionArea": "Consolidated scope",
+      "result": "DOES_NOT_APPLY",
+      "severity": "critical",
+      "relationshipClass": "direct_legal",
+      "needs": [],
+      "sources": [
+        {
+          "id": "SRC-001",
+          "title": "Directive 2013/34/EU — Accounting Directive (host instrument)",
+          "url": "https://eur-lex.europa.eu/eli/dir/2013/34/oj/eng"
+        }
+      ],
+      "locators": [
+        "Article 29a(1)"
+      ],
+      "caution": "Use the legal consolidation perimeter, not internal business units."
+    },
+    {
+      "id": "CSRD-S-003",
+      "title": "First-wave (FY2024) reporting history",
+      "decisionArea": "Wave history",
+      "result": "DOES_NOT_APPLY",
+      "severity": "medium",
+      "relationshipClass": "timing_context",
+      "needs": [],
+      "sources": [
+        {
+          "id": "SRC-002",
+          "title": "Directive (EU) 2022/2464 — CSRD",
+          "url": "https://eur-lex.europa.eu/eli/dir/2022/2464/oj/eng"
+        }
+      ],
+      "locators": [
+        "Article 5(2)"
+      ],
+      "caution": "Never tell a former reporter to stop based only on an EU-level threshold screen (see CSRD-S-004 and CSRD-S-013)."
+    },
+    {
+      "id": "CSRD-S-004",
+      "title": "FY2025–26 national transition exemption",
+      "decisionArea": "Transition exemption",
+      "result": "DOES_NOT_APPLY",
+      "severity": "high",
+      "relationshipClass": "direct_legal_exemption",
+      "needs": [],
+      "sources": [
+        {
+          "id": "SRC-002",
+          "title": "Directive (EU) 2022/2464 — CSRD",
+          "url": "https://eur-lex.europa.eu/eli/dir/2022/2464/oj/eng"
+        }
+      ],
+      "locators": [
+        "Article 5(2), fifth subparagraph"
+      ],
+      "caution": "Requires the governing country pack — this is a national option, not a universal automatic exemption."
+    },
+    {
+      "id": "CSRD-S-005",
+      "title": "Subsidiary exemption via qualifying EU-parent consolidated report",
+      "decisionArea": "Exemption",
+      "result": "DOES_NOT_APPLY",
+      "severity": "high",
+      "relationshipClass": "direct_legal_exemption",
+      "needs": [],
+      "sources": [
+        {
+          "id": "SRC-001",
+          "title": "Directive 2013/34/EU — Accounting Directive (host instrument)",
+          "url": "https://eur-lex.europa.eu/eli/dir/2013/34/oj/eng"
+        }
+      ],
+      "locators": [
+        "Article 19a(9)"
+      ],
+      "caution": "Scope and exemption are separate determinations: 'threshold in scope but exempt' must never be summarised as 'CSRD does not apply'. Exemption evidence must remain current every year (O-011)."
+    },
+    {
+      "id": "CSRD-S-006",
+      "title": "Subsidiary exemption via qualifying non-EU parent report",
+      "decisionArea": "Exemption",
+      "result": "DOES_NOT_APPLY",
+      "severity": "high",
+      "relationshipClass": "direct_legal_exemption",
+      "needs": [],
+      "sources": [
+        {
+          "id": "SRC-001",
+          "title": "Directive 2013/34/EU — Accounting Directive (host instrument)",
+          "url": "https://eur-lex.europa.eu/eli/dir/2013/34/oj/eng"
+        }
+      ],
+      "locators": [
+        "Article 19a(9)"
+      ],
+      "caution": "'EQUIVALENT' requires a formal equivalence basis — treat as legal judgment with a signed DecisionRecord until an equivalence decision exists."
+    },
+    {
+      "id": "CSRD-S-007",
+      "title": "Article 40a third-country group gate",
+      "decisionArea": "Third-country scope",
+      "result": "INDETERMINATE",
+      "reason": "missing_fact",
+      "reasonCopy": "A fact we need is missing",
+      "severity": "high",
+      "relationshipClass": "direct_legal",
+      "needs": [
+        {
+          "factType": "group.ultimate_parent_country",
+          "label": "Ultimate parent's country"
+        },
+        {
+          "factType": "third_country.eu_turnover_year_1_eur",
+          "label": "Group EU turnover, prior year"
+        },
+        {
+          "factType": "third_country.eu_turnover_year_2_eur",
+          "label": "Group EU turnover, year before that"
+        }
+      ],
+      "sources": [
+        {
+          "id": "SRC-001",
+          "title": "Directive 2013/34/EU — Accounting Directive (host instrument)",
+          "url": "https://eur-lex.europa.eu/eli/dir/2013/34/oj/eng"
+        }
+      ],
+      "locators": [
+        "Article 40a"
+      ]
+    },
+    {
+      "id": "CSRD-S-008",
+      "title": "Article 40a subsidiary gateway",
+      "decisionArea": "Third-country scope",
+      "result": "DOES_NOT_APPLY",
+      "severity": "high",
+      "relationshipClass": "direct_legal",
+      "needs": [],
+      "sources": [
+        {
+          "id": "SRC-001",
+          "title": "Directive 2013/34/EU — Accounting Directive (host instrument)",
+          "url": "https://eur-lex.europa.eu/eli/dir/2013/34/oj/eng"
+        }
+      ],
+      "locators": [
+        "Article 40a"
+      ],
+      "caution": "The subsidiary is a publication gateway, not necessarily the reporting parent. Art. 40a reporting runs for financial years beginning on or after 1 January 2028 (R-012)."
+    },
+    {
+      "id": "CSRD-S-012",
+      "title": "Applicable ESRS version",
+      "decisionArea": "Standard selection",
+      "result": "APPLIES",
+      "selected": "ESRS_2023",
+      "severity": "high",
+      "relationshipClass": "standard_selection",
+      "needs": [],
+      "sources": [
+        {
+          "id": "SRC-005",
+          "title": "Commission Delegated Regulation (EU) 2023/2772 — ESRS Set 1",
+          "url": "https://eur-lex.europa.eu/eli/reg_del/2023/2772/oj/eng"
+        },
+        {
+          "id": "SRC-007",
+          "title": "Commission revised ESRS delegated act, adopted 3 Jul 2026",
+          "url": "https://finance.ec.europa.eu/regulation-and-supervision/financial-services-legislation/implementing-and-delegated-acts/corporate-sustainability-reporting-directive_en"
+        }
+      ],
+      "locators": [
+        "the instrument as a whole",
+        "Article 2(1)(a)",
+        "Article 3"
+      ],
+      "caution": "The revised ESRS were adopted 3 Jul 2026 but were NOT in force at the pack snapshot; they must not alter current obligations until legal effectiveness (Change Watch CW-001)."
+    },
+    {
+      "id": "CSRD-S-013",
+      "title": "National-law completeness gate",
+      "decisionArea": "National overlay",
+      "result": "INDETERMINATE",
+      "reason": "national_law_unresolved",
+      "reasonCopy": "National law is not encoded yet",
+      "severity": "critical",
+      "relationshipClass": "legal_status_gate",
+      "needs": [
+        {
+          "factType": "entity.governing_member_state",
+          "label": "Governing Member State"
+        }
+      ],
+      "sources": [
+        {
+          "id": "SRC-001",
+          "title": "Directive 2013/34/EU — Accounting Directive (host instrument)",
+          "url": "https://eur-lex.europa.eu/eli/dir/2013/34/oj/eng"
+        }
+      ],
+      "locators": [
+        "Article 53"
+      ],
+      "caution": "CSRD is directive-based law. A negative EU-level threshold result with this gate unresolved must read 'EU-level threshold not met; national-law status requires review' — never 'CSRD does not apply'."
+    },
+    {
+      "id": "CSRD-S-014",
+      "title": "Reporting duty (post-exemption)",
+      "decisionArea": "Reporting duty",
+      "result": "APPLIES",
+      "severity": "critical",
+      "relationshipClass": "direct_legal",
+      "needs": [],
+      "sources": [
+        {
+          "id": "SRC-001",
+          "title": "Directive 2013/34/EU — Accounting Directive (host instrument)",
+          "url": "https://eur-lex.europa.eu/eli/dir/2013/34/oj/eng"
+        }
+      ],
+      "locators": [
+        "Article 19a(1)",
+        "Article 29a(1)"
+      ],
+      "caution": "A standalone promotional sustainability report is not automatically sufficient. First reporting year and filing calendar resolve through the national overlay (S-013) and timing rules (R-005: generally FY beginning on or after 1 Jan 2027 for non-first-wave reporters)."
+    },
+    {
+      "id": "CSRD-S-015",
+      "title": "Limited assurance over sustainability reporting",
+      "decisionArea": "Assurance",
+      "result": "APPLIES",
+      "severity": "critical",
+      "relationshipClass": "direct_legal",
+      "needs": [],
+      "sources": [
+        {
+          "id": "SRC-001",
+          "title": "Directive 2013/34/EU — Accounting Directive (host instrument)",
+          "url": "https://eur-lex.europa.eu/eli/dir/2013/34/oj/eng"
+        }
+      ],
+      "locators": [
+        "Article 34(1)"
+      ],
+      "caution": "Provider eligibility and appointment rules require the national overlay. Limited assurance remains the mandatory level; the assurance standard is due by 1 July 2027."
+    },
+    {
+      "id": "CSRD-S-016",
+      "title": "First-three-years value-chain transition relief",
+      "decisionArea": "Transition disclosure",
+      "result": "INDETERMINATE",
+      "reason": "missing_fact",
+      "reasonCopy": "A fact we need is missing",
+      "severity": "medium",
+      "relationshipClass": "direct_legal",
+      "needs": [
+        {
+          "factType": "reporting.first_reporting_year",
+          "label": "First reporting year"
+        },
+        {
+          "factType": "reporting.value_chain_info_unavailable",
+          "label": "Value-chain data availability"
+        }
+      ],
+      "sources": [
+        {
+          "id": "SRC-001",
+          "title": "Directive 2013/34/EU — Accounting Directive (host instrument)",
+          "url": "https://eur-lex.europa.eu/eli/dir/2013/34/oj/eng"
+        }
+      ],
+      "locators": [
+        "Article 19a(3)"
+      ],
+      "caution": "Track the first reporting year as a sourced fact."
+    }
+  ],
+  "obligations": [
+    {
+      "id": "O-001",
+      "obligation": "Prepare a clearly identifiable sustainability section in the statutory management report.",
+      "actor": "Reporting legal entity",
+      "ownerRole": "Financial reporting lead",
+      "deadlineLogic": "National annual-report calendar (country pack)",
+      "evidenceExpectation": "Approved management-report template and published section",
+      "derivedFrom": [
+        "CSRD-S-014"
+      ]
+    },
+    {
+      "id": "O-002",
+      "obligation": "Apply the legally applicable ESRS version and maintain a versioned requirement-to-disclosure mapping.",
+      "actor": "Reporting organization",
+      "ownerRole": "Sustainability reporting lead",
+      "deadlineLogic": "At reporting-cycle start and on standard change (see CSRD-S-012 selection)",
+      "evidenceExpectation": "Basis-of-preparation memo and disclosure index",
+      "derivedFrom": [
+        "CSRD-S-012",
+        "CSRD-S-014"
+      ]
+    },
+    {
+      "id": "O-003",
+      "obligation": "Perform and approve the double-materiality process.",
+      "actor": "Reporting organization",
+      "ownerRole": "Sustainability lead",
+      "deadlineLogic": "Before detailed disclosure build",
+      "evidenceExpectation": "DMA methodology, evidence, results and approvals",
+      "derivedFrom": [
+        "CSRD-S-014"
+      ]
+    },
+    {
+      "id": "O-004",
+      "obligation": "Document governance roles and an owned inventory of policies, actions, targets, metrics and data sources.",
+      "actor": "Reporting organization",
+      "ownerRole": "Company secretary / sustainability",
+      "deadlineLogic": "Before reporting close",
+      "evidenceExpectation": "RACI, board materials and policy/KPI inventory",
+      "derivedFrom": [
+        "CSRD-S-014"
+      ]
+    },
+    {
+      "id": "O-005",
+      "obligation": "Prepare linked EU Taxonomy Article 8 disclosures.",
+      "actor": "Reporting organization",
+      "ownerRole": "Finance / taxonomy lead",
+      "deadlineLogic": "Same reporting cycle",
+      "evidenceExpectation": "Taxonomy workbook and report section",
+      "derivedFrom": [
+        "CSRD-S-014"
+      ]
+    },
+    {
+      "id": "O-006",
+      "obligation": "Appoint an eligible assurance provider, prepare evidence and obtain limited assurance.",
+      "actor": "Reporting legal entity",
+      "ownerRole": "Audit committee / finance",
+      "deadlineLogic": "Country-specific runway before the publication deadline",
+      "evidenceExpectation": "Engagement letter, control evidence and assurance opinion",
+      "derivedFrom": [
+        "CSRD-S-015"
+      ]
+    },
+    {
+      "id": "O-007",
+      "obligation": "Inform and consult workers' representatives and communicate their opinion where applicable.",
+      "actor": "Management",
+      "ownerRole": "HR / company secretary",
+      "deadlineLogic": "Before final governance approval",
+      "evidenceExpectation": "Notices, minutes and opinion",
+      "derivedFrom": [
+        "CSRD-S-014"
+      ]
+    },
+    {
+      "id": "O-008",
+      "obligation": "Prepare the management report in the applicable electronic format.",
+      "actor": "Reporting legal entity",
+      "ownerRole": "Financial reporting IT",
+      "deadlineLogic": "By publication",
+      "evidenceExpectation": "Validated digital output; do not assume sustainability tagging before the relevant tagging rules exist",
+      "derivedFrom": [
+        "CSRD-S-014"
+      ]
+    },
+    {
+      "id": "O-009",
+      "obligation": "Complete governance approval, filing, publication, language and accessibility steps.",
+      "actor": "Reporting legal entity",
+      "ownerRole": "Company secretary",
+      "deadlineLogic": "Member-State deadline (country pack)",
+      "evidenceExpectation": "Board minutes, filing receipt and public URL",
+      "derivedFrom": [
+        "CSRD-S-014"
+      ]
+    },
+    {
+      "id": "O-017",
+      "obligation": "Operate an evidence registry linking obligations to proof, owners, source locations, freshness and acceptance.",
+      "actor": "Reporting organization",
+      "ownerRole": "Financial control / sustainability",
+      "deadlineLogic": "Continuous; quarterly review",
+      "evidenceExpectation": "Evidence registry records — never mandatory file custody",
+      "derivedFrom": [
+        "CSRD-S-014"
+      ]
+    }
+  ],
+  "gaps": [],
+  "nextQuestions": [
+    {
+      "id": "Q-012",
+      "text": "Which Member State's accounting/reporting law governs this entity?",
+      "whyAsked": "Selects national transposition, options, filing and publication rules.",
+      "unblocks": 1
+    },
+    {
+      "id": "Q-001",
+      "text": "Which legal entity or parent group should DataStrata assess?",
+      "whyAsked": "Creates the legal scope anchor; internal business units cannot substitute.",
+      "unblocks": 0
+    },
+    {
+      "id": "Q-002",
+      "text": "Upload the latest annual report, audited financial statements and — if relevant — group chart. You may continue manually.",
+      "whyAsked": "Pre-fills high-value facts but keeps them unconfirmed until reviewed.",
+      "unblocks": 0
+    },
+    {
+      "id": "Q-004",
+      "text": "What financial year are you assessing?",
+      "whyAsked": "Determines threshold period, wave and deadlines.",
+      "unblocks": 0
+    }
+  ]
+}

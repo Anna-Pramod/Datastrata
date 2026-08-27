@@ -35,7 +35,6 @@
 import type { AuthoredRequirement, Condition, Requirement } from '../types';
 import { sha256Hex } from '../corpus/hash';
 import { requirementSchema } from '../knowledge/schema';
-import { sourceIdsOf } from '../knowledge/provenance';
 
 /** The subset of JSON values this module ever produces. */
 type Canonical = null | boolean | number | string | Canonical[] | { [key: string]: Canonical };
@@ -138,10 +137,16 @@ export function logicalPayloadSha256(requirement: AuthoredRequirement): string {
 }
 
 /**
- * Covers exactly the verification input: the provision citation, the cited
- * `sources[]`, and `logicalPayloadSha256`. Nothing else — per spec §4.2 this
- * must move when the verification input changes and stay still when an
- * unrelated field (e.g. `caution`) is edited.
+ * Covers exactly the verification input: the authored `provenance` and
+ * `logicalPayloadSha256`. Nothing else — per spec §4.2 this must move when the
+ * verification input changes and stay still when an unrelated field (e.g.
+ * `caution`) is edited.
+ *
+ * **The derived `sources` is deliberately absent.** It is `provenance[*]
+ * .sourceId` and nothing more, so hashing it would restate inside one digest a
+ * fact the provenance already fixes — the same two-answers shape the authored
+ * field was removed to end (design §5.6). Changing a `sourceId` still moves
+ * this hash, because it moves the provenance it was read from.
  *
  * `AuthoredRequirement`, for the same reason `logicalPayloadSha256` takes one:
  * every field it reads is authored, and nothing the loader attaches afterwards
@@ -150,8 +155,7 @@ export function logicalPayloadSha256(requirement: AuthoredRequirement): string {
 export function requirementInputSha256(requirement: AuthoredRequirement): string {
   return sha256Hex(
     canonicalJson({
-      provisions: requirement.provisions,
-      sources: sourceIdsOf(requirement),
+      provenance: requirement.provenance,
       logicalPayloadSha256: logicalPayloadSha256(requirement),
     }),
   );

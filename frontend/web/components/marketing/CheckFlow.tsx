@@ -16,7 +16,7 @@ interface Verdict {
   selected?: string; reason?: string; reasonCopy?: string;
   needs: { factType: string; label: string }[];
   sources: { id: string; title: string; url: string }[];
-  provisions?: string; caution?: string;
+  locators: string[]; caution?: string;
 }
 interface CheckResponse {
   assessedAt: string;
@@ -289,7 +289,7 @@ function Group({ title, items }: { title: string; items: Verdict[] }) {
                     {s.url ? <a href={s.url} target="_blank" rel="noreferrer" style={{ color: 'var(--ds-oxide)' }}>{s.id}</a> : s.id}
                   </span>
                 ))}
-                {v.provisions ? ` · ${v.provisions}` : ''}
+                {v.locators.length > 0 ? ` · ${v.locators.join('; ')}` : ''}
               </p>
             </div>
           </article>

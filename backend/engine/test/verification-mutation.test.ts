@@ -43,7 +43,8 @@
 import { describe, expect, it } from 'vitest';
 import { renderRequirement, type RenderContext } from '../src/verification/render';
 import { compareRequirementFeatures, featuresFromEnglish, featuresFromRequirement } from '../src/verification/features';
-import type { Condition, FactType, KnowledgePack, Requirement } from '../src/types';
+import type { AuthoredRequirement, Condition, FactType, KnowledgePack, Requirement } from '../src/types';
+import { sourceIdsOf } from '../src/knowledge/provenance';
 import { csrdPack } from './helpers';
 
 // ---------------------------------------------------------------------------
@@ -334,7 +335,13 @@ const SYNTHETIC_FACT_TYPES: FactType[] = [
 const syntheticCtx: RenderContext = { factTypes: SYNTHETIC_FACT_TYPES, catalogues: {} };
 
 function syntheticRequirement(id: string, condition: Condition): Requirement {
-  return {
+    // **Category B: a loaded requirement**, so it is built the way the loader
+    // builds one — the authored record first, then the derived state attached
+    // on top, with `sources` produced by the production derivation rather than
+    // written by hand. Writing both `provenance` and a literal `sources` is the
+    // two-authorities shape the migration removed, and a fixture is exactly
+    // where it would creep back in unnoticed.
+  const authored: AuthoredRequirement = {
     id,
     version: 1,
     title: 'Synthetic fixture',
@@ -346,11 +353,10 @@ function syntheticRequirement(id: string, condition: Condition): Requirement {
     severity: 'high',
     kind: 'boolean',
     legalStatus: 'in_force',
-    derivedStatus: 'ratified',
-    statusReasons: [],
-    sources: [],
+    provenance: [{ sourceId: 'SRC-001', locators: [{ kind: 'provision', text: 'Article 1' }] }],
     condition,
   };
+  return { ...authored, derivedStatus: 'ratified', statusReasons: [], sources: sourceIdsOf(authored) };
 }
 
 describe('synthetic fixture mutations', () => {

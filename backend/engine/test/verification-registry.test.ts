@@ -48,6 +48,7 @@ function requirement(overrides: Partial<Requirement> = {}): Requirement {
     derivedStatus: 'draft',
     statusReasons: [],
     sources: ['SRC-TEST'],
+    provenance: [{ sourceId: 'SRC-001', locators: [{ kind: 'provision', text: 'Article 1' }] }],
     version: 1,
     ...overrides,
   };

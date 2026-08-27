@@ -26,6 +26,7 @@ function requirement(overrides: Partial<Requirement> = {}): Requirement {
   return {
     id: 'REQ-TEST',
     version: 1,
+    provenance: [{ sourceId: 'SRC-001', locators: [{ kind: 'provision', text: 'Art. 1' }] }],
     title: 'Test requirement',
     program: 'CSRD',
     decisionArea: 'Test area',
@@ -215,22 +216,43 @@ describe('requirementInputSha256', () => {
     expect(requirementInputSha256(base)).toBe(requirementInputSha256(withCaution));
   });
 
-  it('editing sources[] changes requirementInputSha256', () => {
-    const base = requirement({ sources: ['SRC-A'] });
-    const changed = requirement({ sources: ['SRC-A', 'SRC-B'] });
-    expect(requirementInputSha256(base)).not.toBe(requirementInputSha256(changed));
-  });
-
   it('editing the condition changes requirementInputSha256', () => {
     const base = requirement({ condition: { op: 'exists', fact: 'entity.a' } });
     const changed = requirement({ condition: { op: 'exists', fact: 'entity.b' } });
     expect(requirementInputSha256(base)).not.toBe(requirementInputSha256(changed));
   });
 
-  it('covers the provision citation', () => {
-    const base = requirement({ provisions: 'Art. 5(1)' });
-    const changed = requirement({ provisions: 'Art. 5(2)' });
+  it('covers the locator text', () => {
+    const base = requirement({
+      provenance: [{ sourceId: 'SRC-001', locators: [{ kind: 'provision', text: 'Art. 5(1)' }] }],
+    });
+    const changed = requirement({
+      provenance: [{ sourceId: 'SRC-001', locators: [{ kind: 'provision', text: 'Art. 5(2)' }] }],
+    });
     expect(requirementInputSha256(base)).not.toBe(requirementInputSha256(changed));
+  });
+
+  it('covers the cited source identity', () => {
+    // The derived `sources` is deliberately absent from the payload, so this is
+    // the assertion that proves changing a sourceId still moves the hash — it
+    // moves because the provenance it was read from moved.
+    const base = requirement({
+      provenance: [{ sourceId: 'SRC-001', locators: [{ kind: 'provision', text: 'Art. 5(1)' }] }],
+    });
+    const changed = requirement({
+      provenance: [{ sourceId: 'SRC-002', locators: [{ kind: 'provision', text: 'Art. 5(1)' }] }],
+    });
+    expect(requirementInputSha256(base)).not.toBe(requirementInputSha256(changed));
+  });
+
+  it('covers a whole-document locator distinctly from a provision one', () => {
+    const whole = requirement({
+      provenance: [{ sourceId: 'SRC-001', locators: [{ kind: 'whole_document' }] }],
+    });
+    const specific = requirement({
+      provenance: [{ sourceId: 'SRC-001', locators: [{ kind: 'provision', text: 'Art. 5(1)' }] }],
+    });
+    expect(requirementInputSha256(whole)).not.toBe(requirementInputSha256(specific));
   });
 });
 
@@ -258,7 +280,7 @@ function fullRequirement(overrides: Partial<Requirement> = {}): Requirement {
     condition: { op: 'exists', fact: 'entity.turnover' },
     cases: [{ when: { op: 'exists', fact: 'entity.turnover' }, value: 'set_1', label: 'Set one' }],
     defaultValue: 'set_0',
-    provisions: 'Art. 19a(1)',
+    provenance: [{ sourceId: 'SRC-001', locators: [{ kind: 'provision', text: 'Art. 19a(1)' }] }],
     caution: 'Handle with care.',
     obligationTemplates: ['OT-001'],
     ...overrides,
@@ -286,8 +308,10 @@ const AUTHORED_EDITS: Array<[string, Partial<Requirement>]> = [
   ['cases', { cases: [{ when: { op: 'exists', fact: 'entity.employees' }, value: 'set_2' }] }],
   ['defaultValue', { defaultValue: 'set_9' }],
   ['legalStatus', { legalStatus: 'proposed' }],
-  ['sources', { sources: ['SRC-OTHER'] }],
-  ['provisions', { provisions: 'Art. 19a(2)' }],
+  [
+    'provenance',
+    { provenance: [{ sourceId: 'SRC-002', locators: [{ kind: 'provision', text: 'Art. 19a(2)' }] }] },
+  ],
   ['caution', { caution: 'A different caution.' }],
   ['obligationTemplates', { obligationTemplates: ['OT-002'] }],
 ];

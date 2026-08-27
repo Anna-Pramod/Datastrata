@@ -53,7 +53,7 @@
     },
     {
       "id": "W-002",
-      "tier": "legal_record",
+      "tier": "tracker",
       "name": "EUR-Lex — National Transposition Measures for 2026/470",
       "authority": "EU Publications Office / Member States",
       "url": "https://eur-lex.europa.eu/legal-content/EN/NIM/?uri=CELEX:32026L0470",
@@ -63,10 +63,10 @@
       "cadence": "weekly",
       "affectsRequirements": ["CSRD-S-004", "CSRD-S-005", "CSRD-S-013", "CSRD-S-014"],
       "expectedProvenance": ["SRC-015"],
-      "mustCorroborateWith": [],
+      "mustCorroborateWith": ["legal_record"],
       "lastSeen": null,
       "discoveredBy": "migrated from watchlist.json 2026-08-14",
-      "tierRationale": "NIM entries are the official record of notified national measures."
+      "tierRationale": "The NIM collection is a weekly-refreshed aggregation of what Member States have notified — authoritative that a notification exists, and carrying none of the normative text. The national implementing measure is the legal record; this listing points at it."
     },
     {
       "id": "W-003",

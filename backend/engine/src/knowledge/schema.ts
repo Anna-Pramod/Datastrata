@@ -153,8 +153,23 @@ export const requirementSchema = z.object({
   cases: z.array(z.object({ when: conditionSchema, value: z.string(), label: z.string().optional() })).optional(),
   defaultValue: z.string().optional(),
   legalStatus: z.enum(['in_force', 'adopted_not_effective', 'proposed', 'superseded']),
-  sources: z.array(z.string()).min(1),
-  provisions: z.string().optional(),
+  provenance: z
+    .array(
+      z
+        .object({
+          sourceId: z.string().regex(/^SRC-\d{3}$/, 'provenance sourceId must be SRC-NNN'),
+          locators: z
+            .array(
+              z.discriminatedUnion('kind', [
+                z.object({ kind: z.literal('provision'), text: z.string().min(1) }).strict(),
+                z.object({ kind: z.literal('whole_document') }).strict(),
+              ]),
+            )
+            .min(1, 'every cited source needs at least one locator'),
+        })
+        .strict(),
+    )
+    .min(1, 'a requirement must say what it rests on'),
   caution: z.string().optional(),
   obligationTemplates: z.array(z.string()).optional(),
 });

@@ -24,13 +24,35 @@
  * A red golden means the customer-visible payload moved: read the diff and
  * decide whether the move was intended. Regenerating it to green is not a fix —
  * it deletes the only evidence that the surface changed at all.
+ *
+ * # What this file no longer does — retired 2026-08-27
+ *
+ * It used to assert that the current payload equals this recording exactly.
+ * **That comparison is retired**, because §7.2's premise — that nothing on the
+ * customer-visible surface was meant to move — stopped holding when the D1(a)
+ * audit changed which instrument each determination cites and the provenance
+ * migration replaced `provisions` with `locators`. Those *are* customer-visible,
+ * and they were meant to move: a customer reading "Directive (EU) 2026/470"
+ * under a requirement whose text lives in the host directive was being shown
+ * the amending act rather than the law in force.
+ *
+ * Unlike the engine level there was never an adapter here, and none is added:
+ * an adapter would be exactly the pretence that the surface did not change.
+ * What is retired is the comparison; the artefact stays, bytes pinned, as the
+ * record of what the surface looked like before.
+ *
+ * ```text
+ * this file                    historical generation — the recorded bytes
+ * provenance-public-golden     the provenance-era generation, its audit-derived
+ *                              oracle, and the old -> new transition
+ * ```
  */
 
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { buildCheckResponse, type CheckResponse } from '@/lib/checkResponse';
-import { csrdPack } from '@/lib/pack';
+import type { CheckResponse } from '@/lib/checkResponse';
 import type { CheckerAnswers } from '@/lib/checker';
 
 const ARTIFACT = fileURLToPath(new URL('./golden/migration-public-golden.json', import.meta.url));
@@ -67,18 +89,21 @@ function readArtifact(): string {
   }
 }
 
-const payload = () => buildCheckResponse(csrdPack(), FIXED_ANSWERS, FIXED_DATE);
+describe('public migration golden — the historical generation, preserved', () => {
+  it('is byte-identical to the generation it recorded', () => {
+    // What "preserved" means, made checkable. Any edit — a reformat, a
+    // regeneration, a helpful update — reddens here and names itself.
+    const digest = createHash('sha256').update(readFileSync(ARTIFACT)).digest('hex');
+    expect(digest).toBe('7bcdb2416085bf4f4c44e4aa2a4c04e776544ddc1c1ec26366f2e122a6ced8ae');
+  });
 
-const serialise = (value: CheckResponse) => `${JSON.stringify(value, null, 2)}\n`;
-
-describe('public migration golden', () => {
-  it('matches the recorded artifact exactly', () => {
+  it('still records the pre-audit citations, which is why it is kept', () => {
+    // The artefact's evidentiary value, asserted rather than assumed: it is the
+    // only place the surface's pre-audit state survives. If this ever stops
+    // being true the file has been rewritten, whatever its bytes say.
     const recorded = readArtifact();
-    const actual = serialise(payload());
-    // Structural comparison first: on failure vitest names the field that moved.
-    expect(JSON.parse(actual)).toEqual(JSON.parse(recorded));
-    // Then the bytes, which also hold key order and array order.
-    expect(actual).toBe(recorded);
+    expect(recorded).toContain('SRC-004');
+    expect(recorded).toContain('"provisions"');
   });
 
   it('captures a substantial payload, so agreement means something', () => {

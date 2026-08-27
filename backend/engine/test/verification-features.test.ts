@@ -31,7 +31,8 @@ import {
   featuresFromEnglish,
   featuresFromRequirement,
 } from '../src/verification/features';
-import type { Condition, FactType, Requirement, ScopeType } from '../src/types';
+import type { AuthoredRequirement, Condition, FactType, Requirement, ScopeType } from '../src/types';
+import { sourceIdsOf } from '../src/knowledge/provenance';
 import { csrdPack } from './helpers';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -76,7 +77,13 @@ function requirement(
   id: string,
   shape: { condition?: Condition; cases?: Requirement['cases']; defaultValue?: string },
 ): Requirement {
-  return {
+    // **Category B: a loaded requirement**, so it is built the way the loader
+    // builds one — the authored record first, then the derived state attached
+    // on top, with `sources` produced by the production derivation rather than
+    // written by hand. Writing both `provenance` and a literal `sources` is the
+    // two-authorities shape the migration removed, and a fixture is exactly
+    // where it would creep back in unnoticed.
+  const authored: AuthoredRequirement = {
     id,
     version: 1,
     title: 'Example requirement',
@@ -88,11 +95,10 @@ function requirement(
     severity: 'high',
     kind: shape.cases ? 'selection' : 'boolean',
     legalStatus: 'in_force',
-    derivedStatus: 'ratified',
-    statusReasons: [],
-    sources: [],
+    provenance: [{ sourceId: 'SRC-001', locators: [{ kind: 'provision', text: 'Article 1' }] }],
     ...shape,
   };
+  return { ...authored, derivedStatus: 'ratified', statusReasons: [], sources: sourceIdsOf(authored) };
 }
 
 const TURNOVER: Condition = { op: 'cmp', fact: 'entity.turnover', cmp: 'gt', value: 450000000 };

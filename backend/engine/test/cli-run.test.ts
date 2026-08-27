@@ -28,9 +28,14 @@
  * **every** real requirement's closure is both documents — there is no
  * document the corpus holds and a closure does not reach, and therefore no
  * reachable `closure_gap`. Removing the edge makes `CSRD-S-008` (which cites
- * only `SRC-004`) open onto one document while the corpus still holds two,
+ * only `SRC-001`) open onto one document while the corpus still holds two,
  * which is the only shape that exercises the **document** register at the
  * assembly boundary.
+ *
+ * Which document lands on which side moved with the D1a-0b audit: `CSRD-S-008`
+ * used to cite `SRC-004` and open onto `DOC-32026L0470`, leaving
+ * `DOC-32013L0034` held-but-unreached. It now cites `SRC-001` and the two have
+ * swapped. The *shape* is what this world is for, and the shape is unchanged.
  *
  * # What the assertions are worth
  *
@@ -80,6 +85,7 @@ import {
   type VerificationResult,
 } from '../src/verification/result';
 import { installNetworkTrap, type NetworkTrap } from './helpers';
+import { installRealRegister } from './world-register';
 import { lensFromRequest, stubRunner } from './pipeline-fixtures';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -90,9 +96,9 @@ const PACK_ID = 'csrd';
 const COMPLETE_REQ = 'CSRD-S-001';
 /** One served source, so the split world's closure is one document of two. */
 const SPLIT_REQ = 'CSRD-S-008';
-/** Cites SRC-005/006/007, which no document serves: the deterministic source gap. */
+/** Cites SRC-005 and SRC-007, which no document serves: the deterministic source gap. */
 const GAP_REQ = 'CSRD-S-012';
-const GAP_SOURCES = ['SRC-005', 'SRC-006', 'SRC-007'];
+const GAP_SOURCES = ['SRC-005', 'SRC-007'];
 
 const DOC_A = 'DOC-32013L0034';
 const DOC_B = 'DOC-32026L0470';
@@ -119,6 +125,9 @@ function buildWorld(root: string): void {
     recursive: true,
   });
   cpSync(join(engineRoot, 'corpus'), join(root, 'corpus'), { recursive: true });
+  // A runtime world is incomplete without the register: `loadPack` refuses
+  // without one, since requirement-side citability is checked against it.
+  installRealRegister(root);
 }
 
 /**
@@ -466,7 +475,11 @@ describe('verify run — a gap-bearing run', () => {
   });
 
   it('publishes a document-shaped gap when the corpus holds what the closure does not reach', async () => {
-    const injected = capability({ readerGapDocId: DOC_A });
+    // `DOC_B`, not `DOC_A`: with `SPLIT_REQ` citing `SRC-001`, the closure is
+    // `DOC_A` and the document the corpus holds without reaching is `DOC_B`.
+    // Naming the in-closure document here would test nothing — it would be a
+    // gap on a document the run *can* see.
+    const injected = capability({ readerGapDocId: DOC_B });
     const outcome = await verifyRun(SPLIT, SPLIT_REQ, injected);
 
     expect(outcome.exitCode, outcome.lines.join('\n')).toBe(EXIT_OK);
@@ -475,7 +488,7 @@ describe('verify run — a gap-bearing run', () => {
     // `corpus_gap` and the corpus holds the document, so it is a closure gap.
     expect(published.gaps).toHaveLength(1);
     expect.soft(published.gaps[0]?.kind).toBe('closure_gap');
-    expect.soft(published.gaps[0]?.docId).toBe(DOC_A);
+    expect.soft(published.gaps[0]?.docId).toBe(DOC_B);
     expect.soft(published.gaps[0]?.sourceId).toBeUndefined();
     expect.soft(published.reading.elements).toEqual([]);
     expect(trap.calls).toEqual([]);

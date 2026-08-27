@@ -14,30 +14,22 @@
  * the design permits a compatibility surface to expose the derived projection
  * (§5.2) precisely because it is derived rather than separately authored.
  *
- * # Why a function, while the field is still authored
+ * # Why the derivation exists at all
  *
- * Today this returns `requirement.sources` — the authored array — so the
- * derivation is the identity and nothing about the system's behaviour changes
- * by introducing it. **That is transitional and it is stated here rather than
- * left to be inferred.** The D1(a) design (`2026-08-24-d1a-corpus-provenance-design.md`
- * §5.2) settles that `provenance` becomes the single authored declaration and
- * `sources` stops being authored at all, derived instead as
- * `provenance[*].sourceId`. Task 4 of the implementation plan replaces the body
- * below; nothing else has to move, because by then every consumer already asks
- * this question here.
+ * `provenance` is the authored declaration; `sources` is a projection of it the
+ * loader attaches, exactly as it attaches `derivedStatus`. Two *authored*
+ * declarations of one fact would be two authorities with nothing to say which
+ * wins, so there is one, and this is the only place it is unpacked.
  *
- * Extracting the seam first is deliberate. The alternative — changing the
- * schema and thirteen call sites in one commit — would mean auditing every
- * consumer under a shape that was moving while it was being audited, and a
- * consumer quietly left reading the old field would be invisible until it
- * produced a wrong closure.
+ * The seam was extracted a commit before the schema moved (Task 1), so that the
+ * migration changed one function body rather than thirteen call sites under a
+ * shape that was moving while it was being audited.
  *
- * # Why it returns a copy
+ * # Nothing authored escapes
  *
- * The authored array is pack state, and a caller that sorted or spliced the
- * value in place would be editing the requirement every later caller reads.
- * `review-sheet.ts` already spread it defensively for exactly that reason; this
- * makes the guarantee the derivation's rather than each caller's to remember.
+ * `map` builds a fresh array, so no caller can sort or splice its way into pack
+ * state. `review-sheet.ts` used to spread defensively for that reason; the
+ * guarantee is the derivation's now rather than each caller's to remember.
  *
  * # What this is not
  *
@@ -57,14 +49,33 @@ import type { AuthoredRequirement } from '../types';
  * The source ids a requirement cites, in authored order.
  *
  * Order is significant and preserved: it is the order gaps are reported in when
- * the corpus serves none of them. **Nothing on the run path pins that through
- * this function today** — `pipeline-reader.test.ts` pins gap ordering by
- * handing `unservedSourceGaps` a literal array, so a body that sorted would
- * leave it green. What such a body would move is `requirementInputSha256`, over
- * every requirement whose authored `sources` are not already in sorted order.
- * That is a real red, but it names a hash rather than the ordering, so
- * `knowledge-provenance.test.ts` asserts the property here directly.
+ * the corpus serves none of them, and it is `provenance`'s authored order —
+ * the same order the author wrote the instruments down in.
+ *
+ * **Duplicate-free by the schema, not by this function.** `provenance` rejects
+ * a repeated `sourceId` at load, so no de-duplication happens here; doing it
+ * here would hide an authoring error rather than refuse it.
  */
 export function sourceIdsOf(requirement: AuthoredRequirement): string[] {
-  return [...requirement.sources];
+  return requirement.provenance.map((entry) => entry.sourceId);
 }
+
+/**
+ * Every locator a requirement carries, flattened, in authored order.
+ *
+ * **Source identities are dropped here deliberately.** This is what the blind
+ * reader is shown: an address is what a reader needs to find the text, and
+ * *"the pack author says SRC-002 proves this"* is an answer rather than an
+ * address. `sources[]` was always kept out of `ReaderInput`; structuring
+ * provenance must not smuggle it back in through the locator field.
+ */
+export function locatorTextsOf(requirement: AuthoredRequirement): string[] {
+  return requirement.provenance.flatMap((entry) =>
+    entry.locators.map((locator) =>
+      locator.kind === 'whole_document' ? WHOLE_DOCUMENT_LOCATOR : locator.text,
+    ),
+  );
+}
+
+/** How a whole-document locator reads to a role. */
+export const WHOLE_DOCUMENT_LOCATOR = 'the instrument as a whole';

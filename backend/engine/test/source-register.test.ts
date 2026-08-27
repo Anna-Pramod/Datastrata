@@ -51,6 +51,17 @@ const register = (
   governingAuthorities: SourceAuthority[] = [],
 ) => ({ program, updated: '2026-08-14', governingAuthorities, sources });
 
+/** A pack whose sole requirement cites `sourceId`, for firewall fixtures. */
+function citingPack(sourceId: string) {
+  const base = csrdPack();
+  return {
+    ...base,
+    requirements: [
+      { ...base.requirements[0]!, provenance: [{ sourceId, locators: [{ kind: 'provision' as const, text: 'Art. 1' }] }] },
+    ],
+  };
+}
+
 /** The real register's directory, needed by more than one block. */
 const monitoringDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'monitoring');
 
@@ -207,7 +218,10 @@ describe('citation firewall', () => {
         }),
       ]),
     );
-    expect(() => verifyRegisterIntegrity(reg, pack)).toThrow(/W-091/);
+    // The firewall's subject is a source a requirement actually cites: a
+    // catalogue entry nothing rests on cannot bypass corroboration. `pack`
+    // cites SRC-012 on efrag.org, so the news row condemns a real citation.
+    expect(() => verifyRegisterIntegrity(reg, citingPack('SRC-012'))).toThrow(/W-091/);
   });
 
   it('ignores a www. prefix when matching hosts', () => {
@@ -411,13 +425,21 @@ describe('the real CSRD source register', () => {
     }
   });
 
-  it('holds no tracker or news surface yet — those arrive with the first map sweep', () => {
-    expect(reg.sources.every((s) => s.tier === 'legal_record' || s.tier === 'official_body')).toBe(true);
+  it('holds exactly one tracker — the transposition listing — and no news surface', () => {
+    // W-002 became a tracker when the D1a-0b audit established that the NIM
+    // collection reports that notifications exist and carries none of the
+    // normative text. Asserted by id rather than by count alone, so a second
+    // surface quietly demoted would not slip through.
+    const trackers = reg.sources.filter((s) => s.tier === 'tracker').map((s) => s.id);
+    expect(trackers).toEqual(['W-002']);
+    expect(reg.sources.filter((s) => s.tier === 'news')).toHaveLength(0);
   });
 
   it('marks the Official Journal and EUR-Lex records as the legal record', () => {
     const legal = reg.sources.filter((s) => s.tier === 'legal_record').map((s) => s.id);
-    expect(legal).toEqual(expect.arrayContaining(['W-001', 'W-002', 'W-005']));
+    expect(legal).toEqual(expect.arrayContaining(['W-001', 'W-005', 'W-011']));
+    // …and the transposition listing is not among them any more.
+    expect(legal).not.toContain('W-002');
   });
 
   it('passes verifyCitationCoverage against the real pack', () => {

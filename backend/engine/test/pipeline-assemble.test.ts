@@ -358,10 +358,13 @@ describe('assembly refuses rather than repairs', () => {
   }
 
   it('refuses a requirement whose verification input the run never pinned', async () => {
-    // Same id, different provisions: `requirementInputSha256` moves and the id
+    // Same id, different provenance: `requirementInputSha256` moves and the id
     // check cannot fire, so a red here names this gate alone. The substitute is
     // registered, so the registry gate has nothing to say about it.
-    const other = subject({ provisions: 'Some Other Act Art. 9', version: 2 });
+    const other = subject({
+      provenance: [{ sourceId: 'SRC-100', locators: [{ kind: 'provision', text: 'Some Other Act Art. 9' }] }],
+      version: 2,
+    });
     const run = await runPipeline();
     const error = await refusalFrom(
       Promise.resolve().then(() =>

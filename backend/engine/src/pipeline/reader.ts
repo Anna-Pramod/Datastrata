@@ -41,6 +41,7 @@
 import type { AuthoredRequirement } from '../types';
 import { evidenceIsSolelyAbsence } from '../verification/result';
 import { createAgentRole } from './agent-role';
+import { locatorTextsOf } from '../knowledge/provenance';
 import { renderEntitledClosure, type EntitledClosure, type EntitledDocument } from './entitlement';
 import {
   unservedSourceGaps,
@@ -58,18 +59,30 @@ import type { AgentRunner } from './runner';
  *
  * `packId`, `requirementId` and `requirementVersion` identify *which*
  * requirement is being read so a transcript can be placed; none of them says
- * anything about what the law requires. `provisions` is the citation the
- * requirement claims to encode, which §3.1 gives the reader so it knows where in
- * the closure to look — a citation is an address, not an answer, and a reader
- * told to read Article 29a still has to decide for itself what Article 29a says.
- * `closure` is the evidence surface and the only route to any text.
+ * anything about what the law requires. `locators` are the addresses the
+ * requirement's provenance carries, which §3.1 gives the reader so it knows
+ * where in the closure to look — an address is not an answer, and a reader told
+ * to read Article 29a still has to decide for itself what Article 29a says.
+ * **The source ids those locators came from are not here**: which record the
+ * author cited is a claim about the answer, and the reader's blindness to
+ * `sources[]` is what the source-completeness check at the boundary exists to
+ * compensate for. `closure` is the evidence surface and the only route to any
+ * text.
  */
 export interface ReaderInput {
   packId: string;
   requirementId: string;
   requirementVersion: number;
-  /** The provision citation, when the requirement carries one. */
-  provisions: string | undefined;
+  /**
+   * Where in the closure to look — addresses only, never source identity.
+   *
+   * Built by `locatorTextsOf`, which drops `sourceId` on the way out. The type
+   * is `string[]` rather than the authored `ProvenanceEntry[]` for that reason:
+   * a reader handed entries could read the ids off them, and a projection that
+   * *could* leak is one refactor away from leaking. `sources[]` was always kept
+   * out of this input, and structuring provenance must not smuggle it back in.
+   */
+  locators: string[];
   /** The capability. The whole of the evidence surface, and the only route to it. */
   closure: EntitledClosure;
 }
@@ -92,7 +105,7 @@ export function readerInputFor(input: {
     packId: input.packId,
     requirementId: input.requirement.id,
     requirementVersion: input.requirement.version,
-    provisions: input.requirement.provisions,
+    locators: locatorTextsOf(input.requirement),
     closure: input.closure,
   };
 }
@@ -109,7 +122,7 @@ export function readerInputFor(input: {
 export function renderReaderInput(input: ReaderInput): string {
   return [
     `# Requirement\n\n${input.packId}/${input.requirementId} v${input.requirementVersion}`,
-    `# Provisions\n\n${input.provisions ?? '(none cited)'}`,
+    `# Where to look\n\n${input.locators.join('\n')}`,
     `# Entitled closure (${input.closure.sha256})\n\n${renderEntitledClosure(input.closure)}`,
   ].join('\n\n');
 }
@@ -248,8 +261,9 @@ export async function runBlindReader(run: BlindReaderRun): Promise<ReaderOutcome
   // A gap means the declared surface is incomplete: halt, whatever the closure's
   // size. An empty closure with *no* gap is the separate latent case of a
   // requirement citing no sources at all — nothing to report, and nothing to
-  // read either. `min(1)` on `sources` in `knowledge/schema.ts` makes that
-  // unreachable from a loaded pack today, so it stays latent; the guard states
+  // read either. `min(1)` on `provenance` in `knowledge/schema.ts` makes that
+  // unreachable from a loaded pack today — `sources` is derived from it, so the
+  // guarantee is the authored field's — and it stays latent; the guard states
   // the rule anyway, because the schema is a different module's promise.
   //
   // **What the second condition covers, precisely.** It stops *this role* from

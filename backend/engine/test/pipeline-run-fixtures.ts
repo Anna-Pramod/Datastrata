@@ -32,6 +32,7 @@ import { expect } from 'vitest';
 
 import { sha256Hex } from '../src/corpus/hash';
 import { DEFAULT_ROLE_CONFIG, type RoleConfig } from '../src/pipeline/config';
+import { sourceIdsOf } from '../src/knowledge/provenance';
 import { EntitledClosure } from '../src/pipeline/entitlement';
 import { runVerificationPipeline } from '../src/pipeline/orchestrate';
 import { loadPromptSet } from '../src/pipeline/prompts';
@@ -99,7 +100,7 @@ export function subject(overrides: Partial<Requirement> = {}): Requirement {
 export const REQUIREMENT = subject();
 
 export function closureForRun(): EntitledClosure {
-  return EntitledClosure.forSources(corpus, REQUIREMENT.sources);
+  return EntitledClosure.forSources(corpus, sourceIdsOf(REQUIREMENT));
 }
 
 export const CLOSURE = closureForRun();
@@ -262,7 +263,7 @@ export function runPipeline(overrides: RunOverrides = {}) {
     requirementId: requirement.id,
     requirement,
     renderContext,
-    closure: EntitledClosure.forSources(corpus, requirement.sources),
+    closure: EntitledClosure.forSources(corpus, sourceIdsOf(requirement)),
     corpus,
     prompts,
     config: SINGLE_PROSECUTOR,

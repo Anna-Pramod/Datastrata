@@ -149,6 +149,13 @@ const FORBIDDEN_IN_ARTIFACT = [
     matches: (path) => path === 'prompts' || path.startsWith('prompts/'),
   },
   {
+    label: 'backend/engine/monitoring/** except source-register.json',
+    why: 'the register is a declared runtime input, but the directory holding it is not: monitoring/ also carries automation-prompt.md, an agent prompt of exactly the class the prompts/** rule excludes. Naming the one permitted file rather than the directory keeps a folded monitoring/ — the lib/pack.ts failure, one directory-shaped trace away — from shipping the rest of it while hygiene stayed green',
+    matches: (path) =>
+      (path === 'monitoring' || path.startsWith('monitoring/')) &&
+      path !== 'monitoring/source-register.json',
+  },
+  {
     label: 'backend/engine/docs/**',
     why: 'design documentation is not a runtime input',
     matches: (path) => path === 'docs' || path.startsWith('docs/'),

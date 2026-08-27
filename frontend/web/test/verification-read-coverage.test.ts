@@ -175,6 +175,34 @@ describe('every runtime read of verification state is declared in the closure', 
     expect(strayReads).toEqual([]);
   });
 
+  it('declares the source register, which the loader now refuses to run without', () => {
+    // D1(a) Task 4 put requirement-side citability on the production load path,
+    // and `loadPack` throws `SourceRegisterMissingError` when the register is
+    // absent rather than skipping the check. That makes the register a runtime
+    // input like any other — and it was not one: `monitoring/` reached no
+    // artifact while the loader's comment claimed the public site ran the check.
+    //
+    // The member is asserted by name *and* by the glob that spells it, because
+    // a member whose globs were emptied would still satisfy a name check while
+    // shipping nothing.
+    const member = declaration.VERIFICATION_RUNTIME_INPUTS.find(
+      (input) => input.member === 'source-authority-register',
+    );
+    expect(member, 'source-authority-register must be a declared runtime input').toBeDefined();
+    expect(member!.globs).toContain('../../backend/engine/monitoring/source-register.json');
+
+    // `fatal`, not `silent`: absence stops the load outright, so the deployment
+    // gate's liveness half is what catches it rather than the agreement half.
+    expect(member!.onAbsence).toBe('fatal');
+
+    // And it is genuinely in what the build config spends — the projection, not
+    // the prose. `npm run test:standalone` is where physical presence in the
+    // built tree is settled; this is the fast inner loop.
+    expect(declaration.verificationTracingGlobs()).toContain(
+      '../../backend/engine/monitoring/source-register.json',
+    );
+  });
+
   it('declares globs and emits them — the config spends the declaration, not a copy', () => {
     // Asserted on the emitted projection rather than on the file's prose, which
     // names every member in English and would satisfy a grep for a glob that is

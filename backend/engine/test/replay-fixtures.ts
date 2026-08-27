@@ -58,6 +58,26 @@ export const PACK_ID = 'csrd';
 /** Two served sources, so the closure is real and every role has text. */
 export const REQUIREMENT_ID = 'CSRD-S-001';
 
+/**
+ * Recordings that answered a question the repository no longer asks.
+ *
+ * A recording is bound to a run identity, so when the identity legitimately
+ * moves the old recording stops binding. It is **retired, not deleted**: it is
+ * evidence of an execution that happened, and deleting it would erase the only
+ * record of what the pipeline produced under the previous provenance.
+ *
+ * `run-v1-764e571e…` is the pre-D1(a) generation. It was retired on 2026-08-27
+ * by the provenance migration, which moved `pipelineVersion` (the reader prompt
+ * changed when locators replaced source identities in `ReaderInput`) and
+ * `requirementInputSha256` (authored `provenance` replaced `provisions` and
+ * `sources`), and `runId` with them. `packId`, `requirementId`,
+ * `renderedConditionSha256` and `corpusClosureSha256` did not move — measured in
+ * `pipeline-replay.test.ts`, not assumed.
+ */
+export const SUPERSEDED_RUN_IDS: readonly string[] = [
+  'run-v1-764e571e7fb566ba75cc2ff126ac1d7b18cb59a887b033eef9f97c2f1f215d54',
+];
+
 export const DOC_HOST = 'DOC-32013L0034';
 export const DOC_AMENDING = 'DOC-32026L0470';
 

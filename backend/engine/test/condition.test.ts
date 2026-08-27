@@ -131,6 +131,7 @@ function miniPack(legalStatus: 'in_force' | 'adopted_not_effective' = 'in_force'
       {
         id: 'T-001',
         version: 1,
+        provenance: [{ sourceId: 'SRC-T', locators: [{ kind: 'provision', text: 'Article 1' }] }],
         title: 'Test requirement',
         program: 'TEST',
         decisionArea: 'Test',

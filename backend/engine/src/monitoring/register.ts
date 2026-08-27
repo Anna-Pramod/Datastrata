@@ -10,6 +10,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
 import type { KnowledgePack } from '../types';
+import { sourceIdsOf } from '../knowledge/provenance';
 import type { RegisterSource, SourceAuthority, SourceRegister, SourceTier, TierPolicy } from './types';
 
 export const TIER_POLICY: Record<SourceTier, TierPolicy> = {
@@ -178,7 +179,27 @@ export function verifyRegisterIntegrity(register: SourceRegister, pack: Knowledg
   for (const s of register.sources) {
     if (!TIER_POLICY[s.tier].citable) uncitable.set(hostOf(s.url), `${s.id} (${s.tier})`);
   }
+  // Scoped to sources a requirement actually cites, and to sources the register
+  // has not classified.
+  //
+  // Both narrowings are the same correction. The check compares *hosts*, and a
+  // host is shared: `eur-lex.europa.eu` carries the Official Journal and the
+  // national transposition listing alike. Once one surface there is a tracker,
+  // the unnarrowed check condemns every EUR-Lex source in the catalogue — the
+  // host-coincidence defect of §19.2 running backwards, an unrelated row
+  // *denying* authority rather than conferring it.
+  //
+  // What the firewall exists to stop is corroboration being bypassed by citing
+  // a surface too weak to carry a determination. A catalogue entry no
+  // requirement cites carries no determination, and a source the register has
+  // classified is answered by that classification. What is left is the honest
+  // residue: a cited source the register has never placed. Spec §19 replaces
+  // the host rule outright at Task 5.
+  const cited = new Set(pack.requirements.flatMap((r) => sourceIdsOf(r)));
   for (const ps of pack.sources) {
+    if (!cited.has(ps.id)) continue;
+    if (register.governingAuthorities.some((auth) => auth.sourceId === ps.id)) continue;
+
     const owner = uncitable.get(hostOf(ps.url));
     if (owner) {
       problems.push(
@@ -187,6 +208,41 @@ export function verifyRegisterIntegrity(register: SourceRegister, pack: Knowledg
     }
   }
 
+  if (problems.length > 0) throw new RegisterIntegrityError(problems);
+}
+
+/**
+ * Every source a requirement's provenance names must be one the register
+ * permits it to cite.
+ *
+ * The pack-side firewall above asks whether a *catalogue entry* may be cited.
+ * This asks the question that actually decides a determination: a requirement
+ * authored against a tracker would open an entitled closure over a surface the
+ * register says carries no normative text, and the run would proceed as though
+ * it did.
+ *
+ * Scoped to `governingAuthorities`, which is the one statement of what a source
+ * is — not to whichever watch surface happens to name it, because several may
+ * and two of them disagree by design.
+ */
+export function verifyRequirementCitability(register: SourceRegister, pack: KnowledgePack): void {
+  const problems: string[] = [];
+  for (const requirement of pack.requirements) {
+    for (const sourceId of sourceIdsOf(requirement)) {
+      const governing = register.governingAuthorities.find((a) => a.sourceId === sourceId);
+      if (governing === undefined) {
+        problems.push(
+          `${requirement.id}: cites ${sourceId}, which has no governing authority in the source register`,
+        );
+        continue;
+      }
+      if (!TIER_POLICY[governing.tier].citable) {
+        problems.push(
+          `${requirement.id}: cites ${sourceId}, whose governing authority is ${governing.tier} — a non-citable tier may never back a requirement's provenance`,
+        );
+      }
+    }
+  }
   if (problems.length > 0) throw new RegisterIntegrityError(problems);
 }
 
@@ -243,6 +299,7 @@ export function loadSourceRegister(dir: string, pack?: KnowledgePack): SourceReg
   if (pack) {
     verifyRegisterIntegrity(reg, pack);
     verifyCitationCoverage(reg, pack);
+    verifyRequirementCitability(reg, pack);
   }
   return reg;
 }

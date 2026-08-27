@@ -1,7 +1,7 @@
 [
   {
     "id": "CSRD-S-001",
-    "version": 2,
+    "version": 3,
     "ruleRef": "R-001",
     "title": "Individual Article 19a threshold scope",
     "program": "CSRD",
@@ -14,20 +14,47 @@
     "condition": {
       "op": "all",
       "of": [
-        { "op": "in_catalogue", "fact": "entity.incorporation_country", "catalogue": "eu_member_states" },
-        { "op": "in_catalogue", "fact": "entity.legal_form", "catalogue": "accounting_directive_forms" },
-        { "op": "cmp", "fact": "entity.net_turnover_eur", "cmp": "gt", "value": 450000000 },
-        { "op": "cmp", "fact": "entity.avg_employees", "cmp": "gt", "value": 1000 }
+        {
+          "op": "in_catalogue",
+          "fact": "entity.incorporation_country",
+          "catalogue": "eu_member_states"
+        },
+        {
+          "op": "in_catalogue",
+          "fact": "entity.legal_form",
+          "catalogue": "accounting_directive_forms"
+        },
+        {
+          "op": "cmp",
+          "fact": "entity.net_turnover_eur",
+          "cmp": "gt",
+          "value": 450000000
+        },
+        {
+          "op": "cmp",
+          "fact": "entity.avg_employees",
+          "cmp": "gt",
+          "value": 1000
+        }
       ]
     },
     "legalStatus": "in_force",
-    "sources": ["SRC-004", "SRC-001"],
-    "provisions": "Accounting Directive Art. 19a as amended by Directive (EU) 2026/470",
+    "provenance": [
+      {
+        "sourceId": "SRC-001",
+        "locators": [
+          {
+            "kind": "provision",
+            "text": "Article 19a(1)"
+          }
+        ]
+      }
+    ],
     "caution": "Threshold-crossing ranges are indeterminate — ask for the exact value. This is scope, not the final reporting duty (see CSRD-S-014); national transposition may vary timing and options."
   },
   {
     "id": "CSRD-S-002",
-    "version": 2,
+    "version": 3,
     "ruleRef": "R-002",
     "title": "Consolidated Article 29a threshold scope",
     "program": "CSRD",
@@ -40,21 +67,52 @@
     "condition": {
       "op": "all",
       "of": [
-        { "op": "in_catalogue", "fact": "entity.incorporation_country", "catalogue": "eu_member_states" },
-        { "op": "in_catalogue", "fact": "entity.legal_form", "catalogue": "accounting_directive_forms" },
-        { "op": "eq", "fact": "entity.is_parent_undertaking", "value": true },
-        { "op": "cmp", "fact": "group.consolidated_net_turnover_eur", "cmp": "gt", "value": 450000000 },
-        { "op": "cmp", "fact": "group.avg_employees", "cmp": "gt", "value": 1000 }
+        {
+          "op": "in_catalogue",
+          "fact": "entity.incorporation_country",
+          "catalogue": "eu_member_states"
+        },
+        {
+          "op": "in_catalogue",
+          "fact": "entity.legal_form",
+          "catalogue": "accounting_directive_forms"
+        },
+        {
+          "op": "eq",
+          "fact": "entity.is_parent_undertaking",
+          "value": true
+        },
+        {
+          "op": "cmp",
+          "fact": "group.consolidated_net_turnover_eur",
+          "cmp": "gt",
+          "value": 450000000
+        },
+        {
+          "op": "cmp",
+          "fact": "group.avg_employees",
+          "cmp": "gt",
+          "value": 1000
+        }
       ]
     },
     "legalStatus": "in_force",
-    "sources": ["SRC-004", "SRC-001"],
-    "provisions": "Accounting Directive Art. 29a as amended by Directive (EU) 2026/470",
+    "provenance": [
+      {
+        "sourceId": "SRC-001",
+        "locators": [
+          {
+            "kind": "provision",
+            "text": "Article 29a(1)"
+          }
+        ]
+      }
+    ],
     "caution": "Use the legal consolidation perimeter, not internal business units."
   },
   {
     "id": "CSRD-S-003",
-    "version": 2,
+    "version": 3,
     "ruleRef": "R-004",
     "title": "First-wave (FY2024) reporting history",
     "program": "CSRD",
@@ -64,14 +122,28 @@
     "relationshipClass": "timing_context",
     "severity": "medium",
     "kind": "boolean",
-    "condition": { "op": "eq", "fact": "entity.reported_csrd_fy2024", "value": true },
+    "condition": {
+      "op": "eq",
+      "fact": "entity.reported_csrd_fy2024",
+      "value": true
+    },
     "legalStatus": "in_force",
-    "sources": ["SRC-004", "SRC-006"],
+    "provenance": [
+      {
+        "sourceId": "SRC-002",
+        "locators": [
+          {
+            "kind": "provision",
+            "text": "Article 5(2)"
+          }
+        ]
+      }
+    ],
     "caution": "Never tell a former reporter to stop based only on an EU-level threshold screen (see CSRD-S-004 and CSRD-S-013)."
   },
   {
     "id": "CSRD-S-004",
-    "version": 2,
+    "version": 3,
     "ruleRef": "R-006",
     "title": "FY2025–26 national transition exemption",
     "program": "CSRD",
@@ -84,25 +156,65 @@
     "condition": {
       "op": "all",
       "of": [
-        { "op": "in_catalogue", "fact": "entity.incorporation_country", "catalogue": "eu_member_states" },
-        { "op": "fy_start_year_in", "years": [2025, 2026] },
+        {
+          "op": "in_catalogue",
+          "fact": "entity.incorporation_country",
+          "catalogue": "eu_member_states"
+        },
+        {
+          "op": "fy_start_year_in",
+          "years": [
+            2025,
+            2026
+          ]
+        },
         {
           "op": "any",
           "of": [
-            { "op": "not", "of": { "op": "cmp", "fact": "entity.net_turnover_eur", "cmp": "gt", "value": 450000000 } },
-            { "op": "not", "of": { "op": "cmp", "fact": "entity.avg_employees", "cmp": "gt", "value": 1000 } }
+            {
+              "op": "not",
+              "of": {
+                "op": "cmp",
+                "fact": "entity.net_turnover_eur",
+                "cmp": "gt",
+                "value": 450000000
+              }
+            },
+            {
+              "op": "not",
+              "of": {
+                "op": "cmp",
+                "fact": "entity.avg_employees",
+                "cmp": "gt",
+                "value": 1000
+              }
+            }
           ]
         },
-        { "op": "eq", "fact": "entity.member_state_transition_option", "value": true }
+        {
+          "op": "eq",
+          "fact": "entity.member_state_transition_option",
+          "value": true
+        }
       ]
     },
     "legalStatus": "in_force",
-    "sources": ["SRC-004", "SRC-015"],
+    "provenance": [
+      {
+        "sourceId": "SRC-002",
+        "locators": [
+          {
+            "kind": "provision",
+            "text": "Article 5(2), fifth subparagraph"
+          }
+        ]
+      }
+    ],
     "caution": "Requires the governing country pack — this is a national option, not a universal automatic exemption."
   },
   {
     "id": "CSRD-S-005",
-    "version": 2,
+    "version": 3,
     "ruleRef": "R-007",
     "title": "Subsidiary exemption via qualifying EU-parent consolidated report",
     "program": "CSRD",
@@ -115,21 +227,54 @@
     "condition": {
       "op": "all",
       "of": [
-        { "op": "eq", "fact": "entity.is_subsidiary", "value": true },
-        { "op": "in_catalogue", "fact": "group.ultimate_parent_country", "catalogue": "eu_member_states" },
-        { "op": "eq", "fact": "parent.report_includes_entity", "value": true },
-        { "op": "eq", "fact": "parent.report_standard", "value": "ESRS" },
-        { "op": "exists", "fact": "parent.report_public_url" },
-        { "op": "eq", "fact": "entity.national_publication_conditions_met", "value": true }
+        {
+          "op": "eq",
+          "fact": "entity.is_subsidiary",
+          "value": true
+        },
+        {
+          "op": "in_catalogue",
+          "fact": "group.ultimate_parent_country",
+          "catalogue": "eu_member_states"
+        },
+        {
+          "op": "eq",
+          "fact": "parent.report_includes_entity",
+          "value": true
+        },
+        {
+          "op": "eq",
+          "fact": "parent.report_standard",
+          "value": "ESRS"
+        },
+        {
+          "op": "exists",
+          "fact": "parent.report_public_url"
+        },
+        {
+          "op": "eq",
+          "fact": "entity.national_publication_conditions_met",
+          "value": true
+        }
       ]
     },
     "legalStatus": "in_force",
-    "sources": ["SRC-002", "SRC-004"],
+    "provenance": [
+      {
+        "sourceId": "SRC-001",
+        "locators": [
+          {
+            "kind": "provision",
+            "text": "Article 19a(9)"
+          }
+        ]
+      }
+    ],
     "caution": "Scope and exemption are separate determinations: 'threshold in scope but exempt' must never be summarised as 'CSRD does not apply'. Exemption evidence must remain current every year (O-011)."
   },
   {
     "id": "CSRD-S-006",
-    "version": 2,
+    "version": 3,
     "ruleRef": "R-007",
     "title": "Subsidiary exemption via qualifying non-EU parent report",
     "program": "CSRD",
@@ -142,22 +287,66 @@
     "condition": {
       "op": "all",
       "of": [
-        { "op": "eq", "fact": "entity.is_subsidiary", "value": true },
-        { "op": "not", "of": { "op": "in_catalogue", "fact": "group.ultimate_parent_country", "catalogue": "eu_member_states" } },
-        { "op": "eq", "fact": "parent.report_includes_entity", "value": true },
-        { "op": "in_set", "fact": "parent.report_standard", "set": ["ESRS", "EQUIVALENT"] },
-        { "op": "eq", "fact": "parent.assurance_opinion_available", "value": true },
-        { "op": "eq", "fact": "parent.taxonomy_information_included", "value": true },
-        { "op": "eq", "fact": "entity.national_publication_conditions_met", "value": true }
+        {
+          "op": "eq",
+          "fact": "entity.is_subsidiary",
+          "value": true
+        },
+        {
+          "op": "not",
+          "of": {
+            "op": "in_catalogue",
+            "fact": "group.ultimate_parent_country",
+            "catalogue": "eu_member_states"
+          }
+        },
+        {
+          "op": "eq",
+          "fact": "parent.report_includes_entity",
+          "value": true
+        },
+        {
+          "op": "in_set",
+          "fact": "parent.report_standard",
+          "set": [
+            "ESRS",
+            "EQUIVALENT"
+          ]
+        },
+        {
+          "op": "eq",
+          "fact": "parent.assurance_opinion_available",
+          "value": true
+        },
+        {
+          "op": "eq",
+          "fact": "parent.taxonomy_information_included",
+          "value": true
+        },
+        {
+          "op": "eq",
+          "fact": "entity.national_publication_conditions_met",
+          "value": true
+        }
       ]
     },
     "legalStatus": "in_force",
-    "sources": ["SRC-002", "SRC-004", "SRC-009"],
+    "provenance": [
+      {
+        "sourceId": "SRC-001",
+        "locators": [
+          {
+            "kind": "provision",
+            "text": "Article 19a(9)"
+          }
+        ]
+      }
+    ],
     "caution": "'EQUIVALENT' requires a formal equivalence basis — treat as legal judgment with a signed DecisionRecord until an equivalence decision exists."
   },
   {
     "id": "CSRD-S-007",
-    "version": 2,
+    "version": 3,
     "ruleRef": "R-009",
     "title": "Article 40a third-country group gate",
     "program": "CSRD",
@@ -170,18 +359,44 @@
     "condition": {
       "op": "all",
       "of": [
-        { "op": "not", "of": { "op": "in_catalogue", "fact": "group.ultimate_parent_country", "catalogue": "eu_member_states" } },
-        { "op": "cmp", "fact": "third_country.eu_turnover_year_1_eur", "cmp": "gt", "value": 450000000 },
-        { "op": "cmp", "fact": "third_country.eu_turnover_year_2_eur", "cmp": "gt", "value": 450000000 }
+        {
+          "op": "not",
+          "of": {
+            "op": "in_catalogue",
+            "fact": "group.ultimate_parent_country",
+            "catalogue": "eu_member_states"
+          }
+        },
+        {
+          "op": "cmp",
+          "fact": "third_country.eu_turnover_year_1_eur",
+          "cmp": "gt",
+          "value": 450000000
+        },
+        {
+          "op": "cmp",
+          "fact": "third_country.eu_turnover_year_2_eur",
+          "cmp": "gt",
+          "value": 450000000
+        }
       ]
     },
     "legalStatus": "in_force",
-    "sources": ["SRC-004", "SRC-001"],
-    "provisions": "Accounting Directive Art. 40a as amended by Directive (EU) 2026/470"
+    "provenance": [
+      {
+        "sourceId": "SRC-001",
+        "locators": [
+          {
+            "kind": "provision",
+            "text": "Article 40a"
+          }
+        ]
+      }
+    ]
   },
   {
     "id": "CSRD-S-008",
-    "version": 2,
+    "version": 3,
     "ruleRef": "R-010",
     "title": "Article 40a subsidiary gateway",
     "program": "CSRD",
@@ -194,19 +409,46 @@
     "condition": {
       "op": "all",
       "of": [
-        { "op": "requirement_ref", "requirement": "CSRD-S-007", "expect": "APPLIES" },
-        { "op": "in_catalogue", "fact": "entity.incorporation_country", "catalogue": "eu_member_states" },
-        { "op": "eq", "fact": "entity.is_subsidiary", "value": true },
-        { "op": "cmp", "fact": "third_country.eu_subsidiary_turnover_eur", "cmp": "gt", "value": 200000000 }
+        {
+          "op": "requirement_ref",
+          "requirement": "CSRD-S-007",
+          "expect": "APPLIES"
+        },
+        {
+          "op": "in_catalogue",
+          "fact": "entity.incorporation_country",
+          "catalogue": "eu_member_states"
+        },
+        {
+          "op": "eq",
+          "fact": "entity.is_subsidiary",
+          "value": true
+        },
+        {
+          "op": "cmp",
+          "fact": "third_country.eu_subsidiary_turnover_eur",
+          "cmp": "gt",
+          "value": 200000000
+        }
       ]
     },
     "legalStatus": "in_force",
-    "sources": ["SRC-004"],
+    "provenance": [
+      {
+        "sourceId": "SRC-001",
+        "locators": [
+          {
+            "kind": "provision",
+            "text": "Article 40a"
+          }
+        ]
+      }
+    ],
     "caution": "The subsidiary is a publication gateway, not necessarily the reporting parent. Art. 40a reporting runs for financial years beginning on or after 1 January 2028 (R-012)."
   },
   {
     "id": "CSRD-S-009",
-    "version": 2,
+    "version": 3,
     "ruleRef": "R-011",
     "title": "Article 40a branch gateway",
     "program": "CSRD",
@@ -219,18 +461,41 @@
     "condition": {
       "op": "all",
       "of": [
-        { "op": "requirement_ref", "requirement": "CSRD-S-007", "expect": "APPLIES" },
-        { "op": "eq", "fact": "third_country.qualifying_eu_subsidiary_exists", "value": false },
-        { "op": "cmp", "fact": "third_country.eu_branch_turnover_eur", "cmp": "gt", "value": 200000000 }
+        {
+          "op": "requirement_ref",
+          "requirement": "CSRD-S-007",
+          "expect": "APPLIES"
+        },
+        {
+          "op": "eq",
+          "fact": "third_country.qualifying_eu_subsidiary_exists",
+          "value": false
+        },
+        {
+          "op": "cmp",
+          "fact": "third_country.eu_branch_turnover_eur",
+          "cmp": "gt",
+          "value": 200000000
+        }
       ]
     },
     "legalStatus": "in_force",
-    "sources": ["SRC-004"],
+    "provenance": [
+      {
+        "sourceId": "SRC-001",
+        "locators": [
+          {
+            "kind": "provision",
+            "text": "Article 40a"
+          }
+        ]
+      }
+    ],
     "caution": "Evaluate the branch gateway only after the subsidiary gateway."
   },
   {
     "id": "CSRD-S-010",
-    "version": 2,
+    "version": 3,
     "ruleRef": "R-013",
     "title": "Protected value-chain undertaking",
     "program": "CSRD",
@@ -243,18 +508,41 @@
     "condition": {
       "op": "all",
       "of": [
-        { "op": "eq", "fact": "value_chain.requestor_is_csrd_reporter", "value": true },
-        { "op": "eq", "fact": "value_chain.request_purpose", "value": "CSRD_REPORTING" },
-        { "op": "cmp", "fact": "value_chain.respondent_avg_employees", "cmp": "lte", "value": 1000 }
+        {
+          "op": "eq",
+          "fact": "value_chain.requestor_is_csrd_reporter",
+          "value": true
+        },
+        {
+          "op": "eq",
+          "fact": "value_chain.request_purpose",
+          "value": "CSRD_REPORTING"
+        },
+        {
+          "op": "cmp",
+          "fact": "value_chain.respondent_avg_employees",
+          "cmp": "lte",
+          "value": 1000
+        }
       ]
     },
     "legalStatus": "in_force",
-    "sources": ["SRC-004", "SRC-010"],
+    "provenance": [
+      {
+        "sourceId": "SRC-001",
+        "locators": [
+          {
+            "kind": "provision",
+            "text": "Article 19a(3)"
+          }
+        ]
+      }
+    ],
     "caution": "This is NOT a direct CSRD reporting duty and the cap is purpose-limited: it does not restrict requests made for due diligence, lending or other purposes (R-016). Do not infer purpose from the requestor's identity."
   },
   {
     "id": "CSRD-S-011",
-    "version": 2,
+    "version": 3,
     "ruleRef": "R-014",
     "title": "Above-cap request with decline right",
     "program": "CSRD",
@@ -267,17 +555,44 @@
     "condition": {
       "op": "all",
       "of": [
-        { "op": "requirement_ref", "requirement": "CSRD-S-010", "expect": "APPLIES" },
-        { "op": "count_cmp", "fact": "value_chain.items_above_cap", "cmp": "gt", "value": 0 }
+        {
+          "op": "requirement_ref",
+          "requirement": "CSRD-S-010",
+          "expect": "APPLIES"
+        },
+        {
+          "op": "count_cmp",
+          "fact": "value_chain.items_above_cap",
+          "cmp": "gt",
+          "value": 0
+        }
       ]
     },
     "legalStatus": "in_force",
-    "sources": ["SRC-004", "SRC-010", "SRC-008"],
+    "provenance": [
+      {
+        "sourceId": "SRC-001",
+        "locators": [
+          {
+            "kind": "provision",
+            "text": "Article 19a(3)"
+          }
+        ]
+      },
+      {
+        "sourceId": "SRC-008",
+        "locators": [
+          {
+            "kind": "whole_document"
+          }
+        ]
+      }
+    ],
     "caution": "The cap protection does not extend to GHG emissions metrics — never advise declining emissions-data requests on cap grounds. The item catalogue versions against the voluntary-standard delegated act, which is adopted but not yet in force; mappings stay provisional until then."
   },
   {
     "id": "CSRD-S-012",
-    "version": 2,
+    "version": 3,
     "ruleRef": "R-018",
     "title": "Applicable ESRS version",
     "program": "CSRD",
@@ -289,12 +604,21 @@
     "kind": "selection",
     "cases": [
       {
-        "when": { "op": "not", "of": { "op": "pack_flag", "flag": "revised_esrs_in_force" } },
+        "when": {
+          "op": "not",
+          "of": {
+            "op": "pack_flag",
+            "flag": "revised_esrs_in_force"
+          }
+        },
         "value": "ESRS_2023",
         "label": "Revised act not yet in force — 2023 ESRS (incl. quick-fix) apply regardless of FY"
       },
       {
-        "when": { "op": "fy_starts_on_or_after", "date": "2027-01-01" },
+        "when": {
+          "op": "fy_starts_on_or_after",
+          "date": "2027-01-01"
+        },
         "value": "ESRS_REVISED_2026",
         "label": "Revised ESRS mandatory for FY beginning on or after 1 Jan 2027"
       },
@@ -302,8 +626,17 @@
         "when": {
           "op": "all",
           "of": [
-            { "op": "fy_start_year_in", "years": [2026] },
-            { "op": "eq", "fact": "entity.early_adoption_revised_esrs", "value": true }
+            {
+              "op": "fy_start_year_in",
+              "years": [
+                2026
+              ]
+            },
+            {
+              "op": "eq",
+              "fact": "entity.early_adoption_revised_esrs",
+              "value": true
+            }
           ]
         },
         "value": "ESRS_REVISED_2026",
@@ -312,12 +645,34 @@
     ],
     "defaultValue": "ESRS_2023",
     "legalStatus": "in_force",
-    "sources": ["SRC-005", "SRC-006", "SRC-007"],
+    "provenance": [
+      {
+        "sourceId": "SRC-005",
+        "locators": [
+          {
+            "kind": "whole_document"
+          }
+        ]
+      },
+      {
+        "sourceId": "SRC-007",
+        "locators": [
+          {
+            "kind": "provision",
+            "text": "Article 2(1)(a)"
+          },
+          {
+            "kind": "provision",
+            "text": "Article 3"
+          }
+        ]
+      }
+    ],
     "caution": "The revised ESRS were adopted 3 Jul 2026 but were NOT in force at the pack snapshot; they must not alter current obligations until legal effectiveness (Change Watch CW-001)."
   },
   {
     "id": "CSRD-S-013",
-    "version": 2,
+    "version": 3,
     "ruleRef": "R-024",
     "title": "National-law completeness gate",
     "program": "CSRD",
@@ -330,18 +685,40 @@
     "condition": {
       "op": "all",
       "of": [
-        { "op": "in_catalogue", "fact": "entity.incorporation_country", "catalogue": "eu_member_states" },
-        { "op": "exists", "fact": "entity.governing_member_state" },
-        { "op": "in_catalogue", "fact": "entity.governing_member_state", "catalogue": "ratified_country_packs", "missReason": "national_law_unresolved" }
+        {
+          "op": "in_catalogue",
+          "fact": "entity.incorporation_country",
+          "catalogue": "eu_member_states"
+        },
+        {
+          "op": "exists",
+          "fact": "entity.governing_member_state"
+        },
+        {
+          "op": "in_catalogue",
+          "fact": "entity.governing_member_state",
+          "catalogue": "ratified_country_packs",
+          "missReason": "national_law_unresolved"
+        }
       ]
     },
     "legalStatus": "in_force",
-    "sources": ["SRC-015", "SRC-001"],
+    "provenance": [
+      {
+        "sourceId": "SRC-001",
+        "locators": [
+          {
+            "kind": "provision",
+            "text": "Article 53"
+          }
+        ]
+      }
+    ],
     "caution": "CSRD is directive-based law. A negative EU-level threshold result with this gate unresolved must read 'EU-level threshold not met; national-law status requires review' — never 'CSRD does not apply'."
   },
   {
     "id": "CSRD-S-014",
-    "version": 2,
+    "version": 3,
     "ruleRef": "R-017",
     "title": "Reporting duty (post-exemption)",
     "program": "CSRD",
@@ -357,8 +734,16 @@
         {
           "op": "any",
           "of": [
-            { "op": "requirement_ref", "requirement": "CSRD-S-001", "expect": "APPLIES" },
-            { "op": "requirement_ref", "requirement": "CSRD-S-002", "expect": "APPLIES" }
+            {
+              "op": "requirement_ref",
+              "requirement": "CSRD-S-001",
+              "expect": "APPLIES"
+            },
+            {
+              "op": "requirement_ref",
+              "requirement": "CSRD-S-002",
+              "expect": "APPLIES"
+            }
           ]
         },
         {
@@ -366,21 +751,47 @@
           "of": {
             "op": "any",
             "of": [
-              { "op": "requirement_ref", "requirement": "CSRD-S-004", "expect": "APPLIES" },
-              { "op": "requirement_ref", "requirement": "CSRD-S-005", "expect": "APPLIES" },
-              { "op": "requirement_ref", "requirement": "CSRD-S-006", "expect": "APPLIES" }
+              {
+                "op": "requirement_ref",
+                "requirement": "CSRD-S-004",
+                "expect": "APPLIES"
+              },
+              {
+                "op": "requirement_ref",
+                "requirement": "CSRD-S-005",
+                "expect": "APPLIES"
+              },
+              {
+                "op": "requirement_ref",
+                "requirement": "CSRD-S-006",
+                "expect": "APPLIES"
+              }
             ]
           }
         }
       ]
     },
     "legalStatus": "in_force",
-    "sources": ["SRC-002", "SRC-004"],
+    "provenance": [
+      {
+        "sourceId": "SRC-001",
+        "locators": [
+          {
+            "kind": "provision",
+            "text": "Article 19a(1)"
+          },
+          {
+            "kind": "provision",
+            "text": "Article 29a(1)"
+          }
+        ]
+      }
+    ],
     "caution": "A standalone promotional sustainability report is not automatically sufficient. First reporting year and filing calendar resolve through the national overlay (S-013) and timing rules (R-005: generally FY beginning on or after 1 Jan 2027 for non-first-wave reporters)."
   },
   {
     "id": "CSRD-S-015",
-    "version": 2,
+    "version": 3,
     "ruleRef": "R-020",
     "title": "Limited assurance over sustainability reporting",
     "program": "CSRD",
@@ -390,14 +801,28 @@
     "relationshipClass": "direct_legal",
     "severity": "critical",
     "kind": "boolean",
-    "condition": { "op": "requirement_ref", "requirement": "CSRD-S-014", "expect": "APPLIES" },
+    "condition": {
+      "op": "requirement_ref",
+      "requirement": "CSRD-S-014",
+      "expect": "APPLIES"
+    },
     "legalStatus": "in_force",
-    "sources": ["SRC-002", "SRC-004"],
+    "provenance": [
+      {
+        "sourceId": "SRC-001",
+        "locators": [
+          {
+            "kind": "provision",
+            "text": "Article 34(1)"
+          }
+        ]
+      }
+    ],
     "caution": "Provider eligibility and appointment rules require the national overlay. Limited assurance remains the mandatory level; the assurance standard is due by 1 July 2027."
   },
   {
     "id": "CSRD-S-016",
-    "version": 2,
+    "version": 3,
     "ruleRef": "R-023",
     "title": "First-three-years value-chain transition relief",
     "program": "CSRD",
@@ -410,13 +835,35 @@
     "condition": {
       "op": "all",
       "of": [
-        { "op": "requirement_ref", "requirement": "CSRD-S-014", "expect": "APPLIES" },
-        { "op": "year_diff_lt", "fromFact": "reporting.first_reporting_year", "years": 3 },
-        { "op": "eq", "fact": "reporting.value_chain_info_unavailable", "value": true }
+        {
+          "op": "requirement_ref",
+          "requirement": "CSRD-S-014",
+          "expect": "APPLIES"
+        },
+        {
+          "op": "year_diff_lt",
+          "fromFact": "reporting.first_reporting_year",
+          "years": 3
+        },
+        {
+          "op": "eq",
+          "fact": "reporting.value_chain_info_unavailable",
+          "value": true
+        }
       ]
     },
     "legalStatus": "in_force",
-    "sources": ["SRC-004"],
+    "provenance": [
+      {
+        "sourceId": "SRC-001",
+        "locators": [
+          {
+            "kind": "provision",
+            "text": "Article 19a(3)"
+          }
+        ]
+      }
+    ],
     "caution": "Track the first reporting year as a sourced fact."
   }
 ]

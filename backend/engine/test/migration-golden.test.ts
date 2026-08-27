@@ -31,9 +31,34 @@
  * whether the move was intended. Regenerating it to green is not a fix — it
  * deletes the only evidence that anything happened, and a migration that
  * rewrites its own expected output proves nothing.
+ *
+ * # What this file no longer does — retired 2026-08-27
+ *
+ * It used to assert `adaptRecording(recording) === current output`. **That
+ * comparison has reached the end of its life and is retired**, because the D1(a)
+ * provenance migration replaced authored `sources`/`provisions` with authored
+ * `provenance`, projected to `sources`/`locators`. `adaptRecording` was built
+ * for exactly one mapping — `ratificationStatus` to `derivedStatus` — and
+ * teaching it a second, structural schema transition would make it lie about a
+ * change it was never designed to represent. The rule that it must not grow is
+ * only enforceable if it is honoured when growing it would be convenient.
+ *
+ * What is retired is the *comparison*, not the artefact and not the adapter.
+ * Both are preserved here, with their contracts still asserted:
+ *
+ * ```text
+ * this file            historical generation — the artefact's bytes, and the
+ *                      adapter's contract, exactly as they were
+ * provenance-golden    the provenance-era generation, and the audit-derived
+ *                      oracle for what it should contain
+ * ```
+ *
+ * The current output's correctness is established there, against the audit —
+ * not here, against a recording that predates the audit.
  */
 
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -145,15 +170,20 @@ function readArtifact(path: string): string {
   }
 }
 
-describe('engine migration golden', () => {
-  it('matches the recorded artifact exactly, under the one named transformation', () => {
-    const { adapted } = adaptRecording(JSON.parse(readArtifact(ARTIFACT)));
-    const recorded = canonicalPretty(adapted);
-    const actual = canonicalPretty(fixedResult());
-    // Structural comparison first: on failure vitest prints which field moved.
-    expect(JSON.parse(actual)).toEqual(JSON.parse(recorded));
-    // Then exact text, which also holds array order and the canonical form.
-    expect(actual).toBe(recorded);
+describe('engine migration golden — the historical generation, preserved', () => {
+  /**
+   * The recorded artefact's bytes, pinned.
+   *
+   * This is the one assertion that makes "preserved byte-for-byte" checkable
+   * rather than merely stated. The digest is of the file exactly as committed
+   * before the provenance migration; an edit of any kind — a reformat, a
+   * regeneration, a helpful update — reddens here and names itself.
+   */
+  it('is byte-identical to the generation it recorded', () => {
+    const bytes = readFileSync(ARTIFACT);
+    expect(createHash('sha256').update(bytes).digest('hex')).toBe(
+      '33f3addd3f2ee205195929ac5135f11315c3de7bbc87e1440bb7ed9ceb8f8003',
+    );
   });
 
   it('leaves the recording untouched apart from that mapping', () => {
@@ -161,6 +191,11 @@ describe('engine migration golden', () => {
     // *not* touch has to be checked too: everything outside `determinations`
     // compares byte-for-byte against the pre-migration recording, with no
     // adapter in the path at all.
+    //
+    // The live half of this comparison moved to the transition test when the
+    // forward comparison was retired: whether *current* output still agrees
+    // outside `determinations` is a question about the new generation, and it
+    // is asked there, against the new golden.
     const recording = JSON.parse(readArtifact(ARTIFACT)) as Record<string, unknown>;
     const { adapted } = adaptRecording(recording);
     const withoutDeterminations = (value: Record<string, unknown>) => {
@@ -168,9 +203,6 @@ describe('engine migration golden', () => {
       return canonicalPretty(rest);
     };
     expect(withoutDeterminations(adapted as Record<string, unknown>)).toBe(
-      withoutDeterminations(recording),
-    );
-    expect(withoutDeterminations(fixedResult() as unknown as Record<string, unknown>)).toBe(
       withoutDeterminations(recording),
     );
   });

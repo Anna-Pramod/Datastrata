@@ -11,7 +11,7 @@
  * pinned result is what closes it.
  *
  * **It is a repository, not a mock.** The layout below is the production layout
- * — `backend/engine/{knowledge,corpus,verification}` beneath a root a process
+ * — `backend/engine/{knowledge,corpus,monitoring,verification}` beneath a root a process
  * can `chdir` into — so `lib/pack.ts` discovers it through the shipped
  * `CANDIDATE_ROOTS` probe and loads it through the shipped `loadPack`. Nothing
  * here replaces a production function. Authored knowledge, the corpus and the
@@ -232,6 +232,11 @@ export function buildFixtureRepository(options: FixtureOptions = {}): FixtureRep
   // Symlinked, not copied: the fixture must be about the real content.
   symlinkSync(join(REAL_ENGINE_ROOT, 'knowledge'), join(engineRoot, 'knowledge'));
   symlinkSync(join(REAL_ENGINE_ROOT, 'corpus'), join(engineRoot, 'corpus'));
+  // The source register, for the same reason: since D1(a) Task 4 `loadPack`
+  // refuses without it, because requirement-side citability is checked against
+  // it on every load. A fixture repository missing it is not a runtime
+  // repository — it is one the loader would reject.
+  symlinkSync(join(REAL_ENGINE_ROOT, 'monitoring'), join(engineRoot, 'monitoring'));
   const verificationDir = join(engineRoot, 'verification');
   mkdirSync(verificationDir, { recursive: true });
   symlinkSync(

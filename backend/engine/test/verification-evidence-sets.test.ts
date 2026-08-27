@@ -128,6 +128,7 @@ const COMPOUND: Condition = {
 
 const REQUIREMENT = {
   ...fixtureRequirement({ condition: COMPOUND }),
+  sources: ['SRC-100'],
   derivedStatus: 'draft',
   statusReasons: [],
 } as Requirement;

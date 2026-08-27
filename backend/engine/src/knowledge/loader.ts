@@ -12,7 +12,7 @@
  * This is the first layer of "regression testing for law" (Pass 2 §4).
  */
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
 import type { AuthoredRequirement, Condition, KnowledgePack, Requirement } from '../types';
@@ -20,6 +20,7 @@ import { assertFactVocabularyCoverage } from '../verification/vocabulary';
 import { requirementSha256 } from '../verification/canonical';
 import { assertVersionIntegrity, parseVersionRegistry, VersionIntegrityError } from '../verification/registry';
 import { governingEntry, parseLedger, type SigningEntry } from '../verification/ledger';
+import { parseSourceRegister, verifyRequirementCitability } from '../monitoring/register';
 import type { RenderContext } from '../verification/render';
 import { sourceIdsOf } from './provenance';
 import {
@@ -115,6 +116,15 @@ function defaultLedgerPath(packDir: string): string {
   return join(defaultVerificationDir(packDir), 'signatures.jsonl');
 }
 
+function readRegisterFile(dir: string): unknown {
+  return JSON.parse(readFileSync(join(dir, 'source-register.json'), 'utf8'));
+}
+
+/** `monitoring/` — the surface register, beside `knowledge/`. */
+function defaultSourceRegisterDir(packDir: string): string {
+  return join(packDir, '..', '..', 'monitoring');
+}
+
 /**
  * Everything the loader hands a resolver, and deliberately nothing more.
  *
@@ -169,6 +179,22 @@ export interface LoadPackOptions {
    * the signature's own `kind`.
    */
   freshnessResolver?: FreshnessResolver;
+  /**
+   * Overrides the directory holding `source-register.json`. Defaults to the
+   * convention above.
+   *
+   * **An absent register is a load failure**, not a skipped check: the register
+   * is where requirement-side citability is decided, and a check that switches
+   * itself off when its input is missing is not a check. This paragraph
+   * previously said the opposite — *"an absent register file is not a failure —
+   * many packs are built in temporary directories with no monitoring tree"* —
+   * and that convenience was the defect: `monitoring/` reached no deployed
+   * artifact, so the public site skipped citability entirely. A temporary world
+   * that means to be a runtime world now installs a register
+   * (`test/world-register.ts`); one that means to test the absence asserts
+   * `SourceRegisterMissingError`.
+   */
+  sourceRegisterDir?: string;
 }
 
 /**
@@ -223,10 +249,16 @@ function attachDerivedStatus(
     text = '';
   }
   const entries = parseLedger(text);
+  // `sources` is attached here, beside the status, because both are projections
+  // over authored knowledge rather than authored knowledge itself. Doing it in
+  // one place keeps `sourceIdsOf` the only derivation and keeps the projected
+  // field out of `requirementSchema.parse()`'s output — and therefore out of
+  // `requirementSha256`, exactly as `derivedStatus` is kept out.
+  const projected = (r: AuthoredRequirement) => ({ ...r, sources: sourceIdsOf(r) });
   return requirements.map((r) => {
     const governing = governingEntry(entries, packId, r.id);
-    if (governing === null) return { ...r, ...deriveStatus(toStatusInput(null)) };
-    if (governing.kind === 'revoked') return { ...r, ...deriveStatus(toStatusInput(governing)) };
+    if (governing === null) return { ...projected(r), ...deriveStatus(toStatusInput(null)) };
+    if (governing.kind === 'revoked') return { ...projected(r), ...deriveStatus(toStatusInput(governing)) };
     // The assessment goes in unexamined and unmodified: it is the whole of what
     // the resolver found, and second-guessing any part of it here would create
     // a quietly different opinion about the same question.
@@ -234,7 +266,7 @@ function attachDerivedStatus(
       freshnessResolver === undefined
         ? { checked: false }
         : freshnessResolver({ packId, requirement: r, entry: governing, renderContext });
-    return { ...r, ...deriveStatus(toStatusInput(governing, freshness)) };
+    return { ...projected(r), ...deriveStatus(toStatusInput(governing, freshness)) };
   });
 }
 
@@ -305,10 +337,112 @@ export function loadPack(dir: string, options: LoadPackOptions = {}): KnowledgeP
     questions: z.array(questionSchema).parse(read('questionnaire.json')),
     catalogues,
   };
+  refuseAuthoredDerivedFields(rawRequirements);
   verifyIntegrity(pack, rawRequirements);
+
+  // Requirement-side citability, on the production load path.
+  //
+  // `verifyRequirementCitability` asks whether the register permits each cited
+  // source to back a determination — the question the pack-side firewall does
+  // not ask. It runs here, in the loader every production entry point goes
+  // through (`readWorld`, the review sheet, the public site), rather than only
+  // in `loadSourceRegister`, which nothing calls yet.
+  //
+  // **An absent register refuses, and this is the second time that rule has had
+  // to be learned in this file.** The check was originally guarded by
+  // `existsSync`, so a pack loaded where no register sat was answered as though
+  // every citation were permitted. That is the shape `assertRequirementVersions`
+  // rejects sixty lines below for the same reason: an integrity check that can
+  // be switched off by deleting a file is not an integrity check. It was not
+  // hypothetical — `monitoring/` was not in the deployable closure, so the
+  // deployed site skipped citability entirely while the comment above claimed
+  // it ran there. The register is now a declared runtime input
+  // (`frontend/web/verification-runtime-inputs.mjs`, member
+  // `source-authority-register`).
+  //
+  // **Two states, deliberately not conflated.** A *missing register* is a
+  // missing integrity dependency and refuses here, before any policy runs. A
+  // *present register that carries no governing authority for some source* is a
+  // different thing — an explicit, settled fallback path that
+  // `verifyRequirementCitability` and the host rule evaluate on their own terms
+  // until Task 5 replaces them. Falling through to the host rule when the
+  // register itself is absent would let a fallback pretend to decide a question
+  // nothing had the evidence to answer.
+  //
+  // **Boundary with Task 5.** This establishes whether a *source* may be cited.
+  // Whether a corpus *artefact* is an authorised origin for the source it claims
+  // to serve is `AuthorisedCorpus`, and is not decided here.
+  const registerDir = options.sourceRegisterDir ?? defaultSourceRegisterDir(dir);
+  const registerPath = join(registerDir, 'source-register.json');
+  if (!existsSync(registerPath)) {
+    throw new SourceRegisterMissingError(registerPath, pack.id);
+  }
+  verifyRequirementCitability(parseSourceRegister(readRegisterFile(registerDir)), pack);
   assertFactVocabularyCoverage(pack);
   assertRequirementVersions(pack, options.versionRegistryDir ?? defaultVersionRegistryDir(dir));
   return pack;
+}
+
+/**
+ * Refuses a requirement that still authors a field the loader now derives.
+ *
+ * **Raw records only, and that is the whole point.** `requirementSchema` is not
+ * `.strict()`, so a field it no longer declares is stripped in silence: it
+ * would be invisible in the parsed pack, invisible to `requirementSha256`, and
+ * invisible to a reviewer reading the loaded object — while sitting in the file
+ * looking authoritative. A leftover `sources` is a second authored answer to
+ * the question `provenance` now owns, and nothing would say which wins.
+ *
+ * It cannot live in `verifyIntegrity`, whose default subject is
+ * `pack.requirements` — those are *projected*, and the projection attaches
+ * `sources` deliberately. Checking them would refuse every correctly loaded
+ * pack. `ratification` is different and stays there: nothing attaches it, so
+ * the raw and projected shapes agree.
+ */
+/**
+ * The source register a pack's citability check depends on is not there.
+ *
+ * Its own error rather than a `PackIntegrityError` so a caller — and a test —
+ * can tell "the integrity dependency is missing" apart from "the pack is
+ * internally wrong". They call for different repairs: one is a packaging or
+ * deployment fault, the other an authoring fault.
+ */
+export class SourceRegisterMissingError extends Error {
+  constructor(
+    readonly path: string,
+    readonly packId: string,
+  ) {
+    super(
+      `no source register at ${path} — pack ${packId} cannot be loaded without it, ` +
+        'because requirement-side citability is checked against it on every load and a ' +
+        'check that skips itself when its input is missing is not a check. If this is a ' +
+        'deployed artifact, the `source-authority-register` runtime input did not reach it.',
+    );
+    this.name = 'SourceRegisterMissingError';
+  }
+}
+
+export function refuseAuthoredDerivedFields(rawRequirements: readonly unknown[]): void {
+  const derived: Array<{ field: string; why: string }> = [
+    {
+      field: 'sources',
+      why: 'the cited source set is derived from `provenance` and may not be authored; delete the field',
+    },
+    {
+      field: 'provisions',
+      why: 'provision citations moved into `provenance[].locators`; delete the field',
+    },
+  ];
+  const problems: string[] = [];
+  for (const record of rawRequirements) {
+    if (typeof record !== 'object' || record === null) continue;
+    const id = (record as { id?: unknown }).id;
+    const named = typeof id === 'string' ? id : 'a requirement';
+    for (const { field, why } of derived) {
+      if (field in record) problems.push(`${named}: carries an authored \`${field}\` field — ${why}`);
+    }
+  }
+  if (problems.length > 0) throw new PackIntegrityError(problems);
 }
 
 /**
