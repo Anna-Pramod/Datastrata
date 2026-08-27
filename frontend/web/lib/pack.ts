@@ -44,6 +44,7 @@ import {
   loadCorpus,
   loadPack,
   resolvedStaleness,
+  sourceIdsOf,
   verificationResultSchema,
 } from '@datastrata/engine';
 import type {
@@ -203,7 +204,7 @@ export function buildCsrdFreshnessResolver(root: string): FreshnessResolver {
 
     let closure;
     try {
-      closure = computeClosure(loaded.index, docsForSources(loaded.index, requirement.sources));
+      closure = computeClosure(loaded.index, docsForSources(loaded.index, sourceIdsOf(requirement)));
     } catch (error) {
       integrityFailure(
         'unresolved_gap',

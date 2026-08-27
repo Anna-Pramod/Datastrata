@@ -110,6 +110,7 @@ import {
   type StalenessReason,
 } from '../verification/staleness';
 import { deriveStatus, toStatusInput } from '../verification/status';
+import { sourceIdsOf } from '../knowledge/provenance';
 import {
   EXIT_FORENSICS_REQUIRED,
   EXIT_INTEGRITY_FAILURE,
@@ -315,7 +316,7 @@ export function readWorld(paths: VerifyPaths, packId: string, requirementId: str
 
   let closure;
   try {
-    closure = computeClosure(corpus.index, docsForSources(corpus.index, requirement.sources));
+    closure = computeClosure(corpus.index, docsForSources(corpus.index, sourceIdsOf(requirement)));
   } catch (error) {
     if (error instanceof ClosureEntryNotFoundError) {
       // Factory §4.2 files this as a `corpus_gap`, answered by ingesting the

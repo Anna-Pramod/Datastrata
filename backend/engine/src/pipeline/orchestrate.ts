@@ -71,6 +71,7 @@ import {
 import type { RoleExecution } from './roles';
 import { requireRunner, type AgentRunner } from './runner';
 import { buildRunId } from './run-identity';
+import { sourceIdsOf } from '../knowledge/provenance';
 import { runDeterministicTail, type TailOutcome } from './tail';
 import {
   TRANSCRIPT_SCHEMA_VERSION,
@@ -417,7 +418,7 @@ export async function runVerificationPipeline(
       requirement: input.requirement,
       closure: input.closure,
     }),
-    sourceIds: input.requirement.sources,
+    sourceIds: sourceIdsOf(input.requirement),
     prompt: input.prompts.reader,
     model: input.config.models.reader,
     runner,

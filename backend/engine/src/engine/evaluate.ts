@@ -26,6 +26,7 @@ import { instantiateObligations } from './obligations';
 import { deriveGaps } from './gaps';
 import { rankNextQuestions } from './nextQuestion';
 import { summarise } from './summary';
+import { sourceIdsOf } from '../knowledge/provenance';
 
 /**
  * The lowest derived status a requirement may hold and still be evaluated.
@@ -190,7 +191,7 @@ export function assess(pack: KnowledgePack, profile: Profile, ctx: AssessmentCon
         reason: m.outcome.reason,
         needs: m.outcome.needs,
         trace: m.outcome.trace,
-        sources: req.sources,
+        sources: sourceIdsOf(req),
         provisions: req.provisions,
         caution: req.caution,
         legalStatus: req.legalStatus,

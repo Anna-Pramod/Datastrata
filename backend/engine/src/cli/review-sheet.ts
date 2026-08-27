@@ -93,6 +93,7 @@ import { candidateRenderedConditionSha256 } from '../verification/sign';
 import { BLOCKING, type CurrentState, type StalenessReason } from '../verification/staleness';
 import { deriveStatus, toStatusInput, type RequirementStatus } from '../verification/status';
 import { factLabel, factsReferencedBy } from '../verification/vocabulary';
+import { sourceIdsOf } from '../knowledge/provenance';
 import { cliFailure, outcomeFor, readLedgerOrFail, resolvedStaleness, type VerifyPaths } from './sign';
 import {
   EXIT_INTEGRITY_FAILURE,
@@ -488,7 +489,7 @@ function gatherRequirement(input: GatherOneInput): SheetRequirement {
   try {
     const closure = computeClosure(
       corpus.index,
-      docsForSources(corpus.index, requirement.sources),
+      docsForSources(corpus.index, sourceIdsOf(requirement)),
     );
     closureDocIds = closure.docIds;
     closureSha256 = closure.sha256;
@@ -610,7 +611,7 @@ function gatherRequirement(input: GatherOneInput): SheetRequirement {
     plainEnglish: requirement.plainEnglish,
     version: requirement.version,
     legalStatus: requirement.legalStatus,
-    sources: [...requirement.sources],
+    sources: sourceIdsOf(requirement),
     status,
     staleness,
     integrityProblems,

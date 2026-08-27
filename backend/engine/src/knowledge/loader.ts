@@ -21,6 +21,7 @@ import { requirementSha256 } from '../verification/canonical';
 import { assertVersionIntegrity, parseVersionRegistry, VersionIntegrityError } from '../verification/registry';
 import { governingEntry, parseLedger, type SigningEntry } from '../verification/ledger';
 import type { RenderContext } from '../verification/render';
+import { sourceIdsOf } from './provenance';
 import {
   deriveStatus,
   toStatusInput,
@@ -343,7 +344,7 @@ export function verifyIntegrity(pack: KnowledgePack, authored: readonly unknown[
   const tplIds = new Set(pack.obligationTemplates.map((t) => t.id));
 
   for (const r of pack.requirements) {
-    for (const s of r.sources) if (!sourceIds.has(s)) problems.push(`${r.id}: cites unknown source ${s}`);
+    for (const s of sourceIdsOf(r)) if (!sourceIds.has(s)) problems.push(`${r.id}: cites unknown source ${s}`);
     if (r.kind === 'boolean' && !r.condition) problems.push(`${r.id}: boolean requirement missing condition`);
     if (r.kind === 'selection' && (!r.cases || r.cases.length === 0)) problems.push(`${r.id}: selection requirement missing cases`);
     const conds = [

@@ -72,6 +72,7 @@ import { RoleOutputError } from '../pipeline/roles';
 import { MissingAgentRunnerError, type AgentRunner } from '../pipeline/runner';
 import type { RunTranscript } from '../pipeline/transcript';
 import { writeVerificationResult } from '../pipeline/write-result';
+import { sourceIdsOf } from '../knowledge/provenance';
 import type { GapIdentityRegisters } from '../verification/result';
 import { EXIT_INTEGRITY_FAILURE, EXIT_OK, EXIT_REFUSED, type CliOutcome } from './exit-codes';
 import {
@@ -177,7 +178,7 @@ export async function runRun(
   // The capability object, built once and handed to every role. Not a second
   // traversal: `EntitledClosure.forSources` wraps `docsForSources` and
   // `computeClosure`, which is the same pair `readWorld` went through.
-  const closure = EntitledClosure.forSources(world.corpus, world.requirement.sources);
+  const closure = EntitledClosure.forSources(world.corpus, sourceIdsOf(world.requirement));
 
   let run;
   try {

@@ -35,6 +35,7 @@
 import type { AuthoredRequirement, Condition, Requirement } from '../types';
 import { sha256Hex } from '../corpus/hash';
 import { requirementSchema } from '../knowledge/schema';
+import { sourceIdsOf } from '../knowledge/provenance';
 
 /** The subset of JSON values this module ever produces. */
 type Canonical = null | boolean | number | string | Canonical[] | { [key: string]: Canonical };
@@ -150,7 +151,7 @@ export function requirementInputSha256(requirement: AuthoredRequirement): string
   return sha256Hex(
     canonicalJson({
       provisions: requirement.provisions,
-      sources: requirement.sources,
+      sources: sourceIdsOf(requirement),
       logicalPayloadSha256: logicalPayloadSha256(requirement),
     }),
   );
