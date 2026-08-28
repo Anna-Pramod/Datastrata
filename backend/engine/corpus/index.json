@@ -31,6 +31,23 @@
       ]
     },
     {
+      "docId": "DOC-32022L2464",
+      "serves": [
+        "SRC-002"
+      ],
+      "title": "Directive (EU) 2022/2464 — CSRD",
+      "url": "https://eur-lex.europa.eu/eli/dir/2022/2464/2026-03-18",
+      "versionLabel": "consolidated text dated 2026-03-18 (CELEX 02022L2464-20260318)",
+      "retrievedOn": "2026-08-28",
+      "rawPath": "raw/32022L2464.html",
+      "normalizedPath": "normalized/32022L2464.txt",
+      "sha256Raw": "6578c015d89f65a3b754ffbe9e5b0c232c3ab58b2f7e8c67e28887752256821e",
+      "sha256Normalized": "c9c9780f6b2ac7520a00e598c6e2e2d36d65654715704a99c4960a6dbdb06a70",
+      "normalizerVersion": "1.0.2",
+      "contentSelector": "#text",
+      "edges": []
+    },
+    {
       "docId": "DOC-32023R2772",
       "serves": [
         "SRC-005"

@@ -442,14 +442,20 @@ Spec §14. One commit per document, each through `cli/ingest.ts` **as modified b
 |---|---|---|
 | **T6** | `2023/2772` consolidated 01/01/2025 → `SRC-005` | ≈889k chars. Ingest whole. **Landed** |
 | ~~**T7**~~ | ~~`2025/1416` → `SRC-006`, with an `amends` edge to T6's document~~ | **Retired at T6 — not applicable.** See below |
-| **T8** | Commission Notice `C/2024/6792` → `SRC-009` | `official_body`; likely first user of the whole-document locator |
-| **T9** | `2022/2464` consolidated 18/03/2026 → `SRC-002` | **Only if Task 2 left a real dependency.** If not, skip and record why |
+| ~~**T8**~~ | ~~Commission Notice `C/2024/6792` → `SRC-009`~~ | **Retired at T9 — not applicable.** See below |
+| **T9** | `2022/2464` consolidated 18/03/2026 → `SRC-002` | Dependency real: S-003 and S-004 cite it and nothing else. **Landed** |
 
 **T7 is retired, and the reason is recorded rather than the row deleted.** T7 existed only to satisfy spec §14 rule 2 — *"where consolidation lags a known amendment, ingest base and amending act"* — on the premise that the 01/01/2025 consolidation of `2023/2772` predated `2025/1416`. T6 established that the premise was wrong: EUR-Lex dates a consolidation by the date its text applies, `2025/1416` applies with respect to financial years beginning on or after 1 January 2025, and the pinned expression carries M1-derived operative text in its enacting terms. Spec §12.1 holds the corrected statement and the evidence.
 
 With rule 2 not engaged, **§14 rule 1 governs `SRC-006`**: *"a source that is legally relevant but relied on by nothing stays registered and unserved."* The D1a-0b audit removed `SRC-006` from S-012's provenance, so no requirement cites it, and it keeps its register row without an artefact.
 
 Two things this retirement is **not**. It is not a judgement that ingesting `2025/1416` would be too expensive — the structural-edge blast radius in spec §15 and the token cost are real but were never the reason, and if the premise had held, both would simply have been costs to pay. And it is not a general rule about EUR-Lex consolidations: whether a consolidation lags an amendment is a per-instrument fact to check, which is what §14 rule 2 continues to say. Should a later amendment of `2023/2772` genuinely postdate the pinned consolidation, rule 2 is engaged again and a T7-shaped task returns on its own merits.
+
+**T8 is retired for the same reason as T7, and it is the cleaner case of the two.** T8 would have ingested Commission Notice `C/2024/6792` for `SRC-009`. No requirement cites `SRC-009`: the D1a-0b audit removed it from S-006, recording that *"the determination rests on the host's equivalence mechanism, not on the Notice's gloss"*, and listing it among the sources cited by nothing after the audit. **§14 rule 1 therefore governs it** — *"a source that is legally relevant but relied on by nothing stays registered and unserved"* — exactly as it governs `SRC-006`.
+
+Unlike T7, no factual correction was needed to reach this: the audit had already decided it, and the commit table simply kept a row the audit had emptied. The audit also records the condition for return — *"if the gloss is judged load-bearing for the `EQUIVALENT` value, `SRC-009` returns"* — so this is a retirement with a stated way back, not a deletion.
+
+**What that leaves.** The Class-A ingestion sequence is `6, 9`, both landed. `SRC-007` and `SRC-008` remain the only cited-and-unserved sources; they are Class-B, gated behind envelopes E1–E4, and belong to Task 12. `SRC-003`, `SRC-006`, `SRC-009` and `SRC-010` stay registered and unserved under rule 1.
 
 **The ingestion invariant — per source, computed from the audited provenance, never from one representative requirement.** For each source `SRC-X`:
 
@@ -675,7 +681,7 @@ Every row is subject to evidence-standard rule 2: confirm the mutation landed be
 | 3 | Give every cited source a row that says what kind of authority it is | D1a-0a |
 | 4 | Give a requirement one authored place to say what it rests on | D1a-0a + D1a-1 (+ D1a-6 for each requirement whose probe passed) |
 | 5 | Make a document earn entitlement before it can be read | D1a-0a |
-| 6, 8–9 | Ingestion commits, one per document (9 conditional). **7 retired — see §3 T7** | D1a-2 |
+| 6, 9 | Two ingestion commits, one per document. **7 and 8 retired — see §3** | D1a-2 |
 | 10 | Measure what the corpus now costs to read | D1a-3 |
 | 11 | Watch the transposition tracker instead of citing it — **only for the unresolved subset**; one commit each, the last carrying the retier | D1a-6 |
 | — | E1–E4 sub-plan, if approved | D1a-4 |

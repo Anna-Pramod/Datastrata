@@ -874,29 +874,27 @@ describe('a requirement whose evidence is only partly served (the real corpus)',
     sourceIds: pack.sources.map((source) => source.id),
   };
 
-  it('is no longer one of the requirements with an empty entitled closure', () => {
-    // Measured, not assumed — and the positive control for everything below:
-    // most requirements do open onto a real surface, so an empty closure is a
-    // finding about these two rather than a broken corpus.
-    //
-    // **Two, and the movement is T6.** Before the D1a-0b audit `CSRD-S-012` was
-    // the only requirement citing nothing the corpus serves; the audit moved
-    // S-003 onto the unserved `SRC-002` and the 2026-08-27 correction moved
-    // S-004 there too, making three. Ingesting the ESRS consolidation for
-    // `SRC-005` then took `CSRD-S-012` back out — it now opens onto a real
-    // document while still halting on `SRC-007`. The predecessor of this test
-    // said the number "will move again when the host instruments are ingested";
-    // this is that move, recorded rather than absorbed.
+  it('is one of none: no requirement now opens onto an empty closure', () => {
+    // Measured, not assumed. The set is computed from the real corpus rather
+    // than asserted from a list, so the number is a reading of what the corpus
+    // holds today and moves when the corpus does.
     const empty = pack.requirements.filter(
       (entry) => EntitledClosure.forSources(realCorpus, realRegister, entry.sources).docIds.length === 0,
     );
-    expect(empty.map((entry) => entry.id)).toEqual(['CSRD-S-003', 'CSRD-S-004']);
+    // **None, and the movement is T9.** T6 took CSRD-S-012 out of this set by
+    // serving SRC-005; T9 took the last two out by serving SRC-002, which was
+    // the only source either of them cites. Every requirement in the pack now
+    // opens onto at least one real document — which is a measurement of the
+    // corpus, not a claim that every requirement can be verified: CSRD-S-011
+    // and CSRD-S-012 still halt, over closures that are no longer empty.
+    expect(empty.map((entry) => entry.id)).toEqual([]);
     expect(pack.requirements).toHaveLength(16);
 
     // **Empty closure is not the same question as gap-bearing.** `CSRD-S-011`
     // cites the served `SRC-001` and the unserved `SRC-008`, so it gaps over a
-    // closure that is genuinely non-empty — four requirements halt, three of
-    // them with nothing entitled at all. Asserted here so the set above is not
+    // closure that is genuinely non-empty — and since T9 that is the only shape
+    // left: two requirements halt, neither of them over nothing. Asserted here
+    // so the set above is not
     // read as the pack's halt list.
     const eleven = pack.requirements.find((entry) => entry.id === 'CSRD-S-011')!;
     expect(EntitledClosure.forSources(realCorpus, realRegister, eleven.sources).docIds.length).toBeGreaterThan(0);
@@ -969,18 +967,15 @@ describe('a requirement whose evidence is only partly served (the real corpus)',
     // against the real corpus index and the real source register.
     expect(() => assertResultConsistency(accompanied, registers)).not.toThrow();
 
-    // **The refusal half needs a genuinely empty closure.** The rule it proves
-    // is that an empty closure never travels without gaps — so since T6 gave
-    // CSRD-S-012 a document, this requirement can no longer exercise it: a
-    // non-empty closure with no gaps is an ordinary completed result, and
-    // asserting a throw here would have been asserting the wrong rule. S-003
-    // still cites only the unserved SRC-002, so it still opens onto nothing.
-    const stillEmpty = pack.requirements.find((entry) => entry.id === 'CSRD-S-003')!;
-    expect(
-      EntitledClosure.forSources(realCorpus, realRegister, stillEmpty.sources).docIds,
-    ).toEqual([]);
+    // **The refusal half is about the record's shape, not about this corpus.**
+    // The rule is that a result claiming an empty closure must carry gaps. It
+    // once used CSRD-S-012, then CSRD-S-003 after T6 served SRC-005; T9 served
+    // SRC-002 and no requirement opens onto an empty closure any more. Rather
+    // than hunt for a fourth subject, the case is stated as what it actually
+    // is: a *record* asserting `EMPTY_CLOSURE_SHA256` with no gaps is refused,
+    // whatever the corpus happens to hold for that requirement today.
     const unaccompanied = resultOver({
-      requirementId: stillEmpty.id,
+      requirementId: requirement.id,
       corpusClosureSha256: EMPTY_CLOSURE_SHA256,
     });
     let thrown: string[] = [];

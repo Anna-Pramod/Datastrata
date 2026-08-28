@@ -554,14 +554,14 @@ describe('ingest refuses a document the source has not authorised', () => {
   });
 
   it('refuses a source with no authorisedOrigins declaration, and writes nothing', async () => {
-    // SRC-002 is registered and cited, and nothing has declared an origin for
+    // SRC-007 is registered and cited, and nothing has declared an origin for
     // it because nothing serves it. Fail closed.
     const { before, after, errors } = await refusedRun(
-      'SRC-002',
+      'SRC-007',
       'https://eur-lex.europa.eu/eli/dir/2022/2464/oj/eng',
     );
     expect(errors.join('\n')).toContain('no declaration');
-    expect(errors.join('\n')).toContain('SRC-002');
+    expect(errors.join('\n')).toContain('SRC-007');
     expect(after).toEqual(before);
   });
 
@@ -652,7 +652,7 @@ describe('ingest validates the whole candidate corpus, with authority it obtaine
       documents: { docId: string; serves: string[] }[];
     };
     const victim = onDisk.documents.find((d) => d.docId === 'DOC-32013L0034')!;
-    victim.serves = ['SRC-002']; // registered, cited, and declared by nothing
+    victim.serves = ['SRC-007']; // registered, cited, and declared by nothing
     writeFileSync(indexPath, `${JSON.stringify(onDisk, null, 2)}\n`, 'utf8');
 
     const { packDir, registerDir } = buildWorld();
@@ -678,7 +678,7 @@ describe('ingest validates the whole candidate corpus, with authority it obtaine
 
     // The refusal names the *existing* document, not the incoming one.
     expect(errors.join('\n')).toContain('DOC-32013L0034');
-    expect(errors.join('\n')).toContain('SRC-002');
+    expect(errors.join('\n')).toContain('SRC-007');
     expect(errors.join('\n')).not.toContain('DOC-NEW');
     expect(errors.join('\n')).toContain('Nothing was written.');
     expect(snapshot(dir)).toEqual(before);

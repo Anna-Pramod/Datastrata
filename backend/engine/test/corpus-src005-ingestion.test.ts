@@ -318,15 +318,18 @@ describe('closing one gap is not becoming readable — CSRD-S-012', () => {
     }
   });
 
-  it('leaves the model-reachable partition exactly where it was', () => {
-    // Twelve and four, before and after. The requirement gained evidence and
-    // did not gain reachability, which is the distinction T6 exists to keep.
+  it('leaves CSRD-S-012 in the gap-bearing partition', () => {
+    // The requirement gained evidence and did not gain reachability, which is
+    // the distinction T6 exists to keep. The partition *totals* moved later —
+    // T9 served SRC-002 and took CSRD-S-003 and CSRD-S-004 out — so this
+    // asserts the membership T6 is responsible for rather than a count T6 does
+    // not own.
     const { index } = loadCorpus(corpusDir);
     const served = new Set(index.documents.flatMap((d) => d.serves));
     const bearing = pack.requirements
       .filter((r) => r.sources.some((s) => !served.has(s)))
       .map((r) => r.id);
-    expect(bearing).toEqual(['CSRD-S-003', 'CSRD-S-004', 'CSRD-S-011', 'CSRD-S-012']);
+    expect(bearing).toContain('CSRD-S-012');
     expect(pack.requirements).toHaveLength(16);
   });
 });

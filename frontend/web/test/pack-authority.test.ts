@@ -51,7 +51,7 @@ function buildRoot(unauthorise: boolean): string {
     // the authority question moves.
     const path = join(engine, 'corpus', 'index.json');
     const index = JSON.parse(readFileSync(path, 'utf8')) as { documents: { docId: string; serves: string[] }[] };
-    index.documents.find((d) => d.docId === 'DOC-32013L0034')!.serves = ['SRC-002'];
+    index.documents.find((d) => d.docId === 'DOC-32013L0034')!.serves = ['SRC-007'];
     writeFileSync(path, `${JSON.stringify(index, null, 2)}\n`, 'utf8');
   }
   return engine;
@@ -85,7 +85,7 @@ function resolverInput(engine: string, entry: Partial<SigningEntry> = {}) {
 describe('the public site refuses a corpus that is not authorised for what it claims', () => {
   it('refuses when the freshness root consumes the corpus', () => {
     // **Asserted as the authority failure, not merely as a failure.** This test
-    // used to match `/SRC-002|authoris/i` on the thrown value. Removing
+    // used to match a loose regex on the thrown value. Removing
     // `authoriseCorpus` from this root still reddened it — but only because the
     // unauthorised corpus then crashed downstream with `entry.corpus is not
     // iterable`, an incidental TypeError that says nothing about authority. A
@@ -102,7 +102,7 @@ describe('the public site refuses a corpus that is not authorised for what it cl
       expect((error as CorpusAuthorityError).failures).toContainEqual(
         expect.objectContaining({
           docId: 'DOC-32013L0034',
-          sourceId: 'SRC-002',
+          sourceId: 'SRC-007',
           reason: 'no declaration',
         }),
       );
@@ -119,7 +119,7 @@ describe('the public site refuses a corpus that is not authorised for what it cl
     try {
       resolve(resolverInput(engine) as never);
     } catch (error) {
-      authorityFailure = /authoris|SRC-002/i.test(String(error)) ? error : undefined;
+      authorityFailure = /authoris|SRC-007/i.test(String(error)) ? error : undefined;
     }
     expect(authorityFailure, 'authorised corpus must not fail authorisation').toBeUndefined();
   });

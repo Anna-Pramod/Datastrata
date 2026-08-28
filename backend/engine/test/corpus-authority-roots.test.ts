@@ -60,7 +60,7 @@ function buildWorld(unauthorise: boolean): string {
   if (unauthorise) {
     const path = join(world, 'corpus', 'index.json');
     const index = JSON.parse(readFileSync(path, 'utf8')) as { documents: { docId: string; serves: string[] }[] };
-    index.documents.find((d) => d.docId === 'DOC-32013L0034')!.serves = ['SRC-002'];
+    index.documents.find((d) => d.docId === 'DOC-32013L0034')!.serves = ['SRC-007'];
     writeFileSync(path, `${JSON.stringify(index, null, 2)}\n`, 'utf8');
   }
   return world;
@@ -97,7 +97,7 @@ describe('readWorld — the verify run / verify sign root', () => {
     } catch (error) {
       const message = (error as { lines?: string[] }).lines?.join('\n') ?? String(error);
       expect(message).toContain('DOC-32013L0034');
-      expect(message).toContain('SRC-002');
+      expect(message).toContain('SRC-007');
       expect(message).toContain('no declaration');
     }
   });
@@ -137,7 +137,7 @@ describe('the authority error survives as itself', () => {
     // The CLI wraps it, but the underlying validator produced structured
     // failures — asserted through the message rather than the type, since the
     // wrap is deliberate.
-    expect(String((caught as { lines?: string[] }).lines?.join('\n'))).toMatch(/SRC-002/);
+    expect(String((caught as { lines?: string[] }).lines?.join('\n'))).toMatch(/SRC-007/);
     expect(new CorpusAuthorityError([]).name).toBe('CorpusAuthorityError');
   });
 });

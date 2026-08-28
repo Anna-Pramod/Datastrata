@@ -830,22 +830,42 @@ describe('the dossier sections', () => {
     expect(sectionFor(html, FRESH)).not.toContain('the corpus holds no document serving any of them');
     // **CSRD-S-012's surface is no longer empty, and the sheet must say so.**
     // T6 ingested the ESRS consolidation for SRC-005, so the requirement now
-    // names a real document while still halting on the unserved SRC-007. The
-    // empty-surface warning would now be false, and the requirement it belongs
-    // to is CSRD-S-003, which cites only the unserved SRC-002.
+    // names a real document while still halting on the unserved SRC-007, and
+    // the empty-surface warning would be false here.
     const selection = sectionFor(html, SELECTION);
     expect(selection).toContain('DOC-32023R2772');
     expect(selection).not.toContain('the corpus holds no document serving any of them');
 
-    // **The warning still has to be provably reachable.** CSRD-S-012 was this
-    // suite's only positive witness for it, and T6 took that away by serving
-    // SRC-005 — leaving two negative assertions, which an implementation that
-    // never emits the warning at all would satisfy just as well. CSRD-S-003
-    // cites only the unserved SRC-002, so it still opens onto nothing and is
-    // the honest witness now.
-    const revoked = sectionFor(html, REVOKED);
-    expect(revoked).toContain('the corpus holds no document serving any of them');
-    expect(revoked).toContain('Nobody could have read the law behind this rule');
+    // **The warning still has to be provably reachable, and now needs a world
+    // built for it.** CSRD-S-012 was this suite's only positive witness until
+    // T6 served SRC-005; CSRD-S-003 took over until T9 served SRC-002. No
+    // requirement in the real corpus opens onto an empty evidence surface any
+    // more, so every assertion available here is a negative — which an
+    // implementation that never emitted the warning at all would satisfy just
+    // as well. The positive witness therefore moves to a corpus copy with
+    // SRC-002 unserved: the state this sheet exists to describe, preserved
+    // rather than dropped when the real corpus outgrew it.
+    const scratch = mkdtempSync(join(tmpdir(), 'sheet-unserved-'));
+    try {
+      cpSync(CORPUS_DIR, join(scratch, 'corpus'), { recursive: true });
+      const indexPath = join(scratch, 'corpus', 'index.json');
+      const index = JSON.parse(readFileSync(indexPath, 'utf8')) as {
+        documents: { serves: string[] }[];
+      };
+      for (const document of index.documents) {
+        document.serves = document.serves.filter((sourceId) => sourceId !== 'SRC-002');
+      }
+      writeFileSync(indexPath, `${JSON.stringify(index, null, 2)}\n`, 'utf8');
+
+      const unserved = renderSheet(
+        gatherSheet(PACK_ID, { ...paths, corpusDir: join(scratch, 'corpus') }),
+      );
+      const revoked = sectionFor(unserved, REVOKED);
+      expect(revoked).toContain('the corpus holds no document serving any of them');
+      expect(revoked).toContain('Nobody could have read the law behind this rule');
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
   });
 
   it('renders open questions', () => {

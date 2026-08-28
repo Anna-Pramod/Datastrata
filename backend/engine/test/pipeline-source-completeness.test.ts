@@ -100,6 +100,18 @@ const TWO_MISSING = 'CSRD-S-012';
 let worldsRoot = '';
 /** The real pack and corpus, copied. */
 let REAL = '';
+/**
+ * The real world with `SRC-002` unserved, built for the one proposition the
+ * real corpus can no longer carry.
+ *
+ * T9 ingested the consolidated CSRD, so `CSRD-S-003` and `CSRD-S-004` close
+ * over a real document and **no requirement in the real pack gaps over an
+ * empty closure any more**. The proposition still matters — a `corpus_gap` may
+ * coincide with an empty closure, and the repair must not have swung the other
+ * way into *requiring* a non-empty one — so it moves to a world built for it,
+ * exactly as severing did when the audit took that shape away from the pack.
+ */
+let REAL_SRC002_UNSERVED = '';
 let verificationDir = '';
 let trap: NetworkTrap;
 
@@ -280,6 +292,9 @@ beforeAll(() => {
   worldsRoot = mkdtempSync(join(tmpdir(), 'source-completeness-'));
   REAL = join(worldsRoot, 'real');
   buildWorld(REAL);
+  REAL_SRC002_UNSERVED = join(worldsRoot, 'real-src002-unserved');
+  buildWorld(REAL_SRC002_UNSERVED);
+  unserve(REAL_SRC002_UNSERVED, 'SRC-002');
   buildSyntheticWorlds(worldsRoot);
 });
 
@@ -333,8 +348,26 @@ function capabilityFor(
   const paths = conditionPathsFor(requirement, renderCtx);
   const requests: RoleRequest[] = [];
 
+  // **Quote from a document the requirement is actually entitled to.**
+  // This used to cite `corpus.index.documents[0]`, which worked only because
+  // that document happened to sit in the closure of every requirement the
+  // suite exercised. T9 ended the coincidence: CSRD-S-003 and CSRD-S-004 close
+  // over the newly served CSRD alone, so a quote from the Accounting Directive
+  // is evidence they were never entitled to and the pipeline refuses the run —
+  // correctly. Selecting from the requirement's own closure makes the stub
+  // honest for every requirement rather than accidentally right for some.
+  const entitledDocIds = EntitledClosure.forSources(
+    authoriseCorpus(corpus, parseSourceRegister(
+      JSON.parse(readFileSync(join(world, 'monitoring', 'source-register.json'), 'utf8')),
+    ), pack),
+    parseSourceRegister(
+      JSON.parse(readFileSync(join(world, 'monitoring', 'source-register.json'), 'utf8')),
+    ),
+    requirement.sources,
+  ).docIds;
+
   const quote = () => {
-    const docId = corpus.index.documents[0]!.docId;
+    const docId = entitledDocIds[0] ?? corpus.index.documents[0]!.docId;
     const doc = corpus.document(docId);
     const text = readFileSync(join(world, 'corpus', doc.normalizedPath), 'utf8');
     return [{
@@ -542,19 +575,26 @@ describe('a cited source nothing serves halts the run, whatever the closure hold
     '%s gaps over a genuinely empty closure, and invents nothing to fill it',
     async (requirementId) => {
       // The other end of the range from `PARTIAL`. Both requirements cite
-      // `SRC-002` alone and nothing serves it, so there is no entitled document
-      // at all — the case where a `corpus_gap` and an empty closure genuinely
-      // coincide. Asserted because the repair must not have swung the other
-      // way: `corpus_gap` may not *require* a non-empty closure either.
+      // `SRC-002` alone, and in this world nothing serves it, so there is no
+      // entitled document at all — the case where a `corpus_gap` and an empty
+      // closure genuinely coincide. Asserted because the repair must not have
+      // swung the other way: `corpus_gap` may not *require* a non-empty closure.
+      //
+      // **Run against a purpose-built world since T9.** The real corpus now
+      // serves SRC-002, so these two requirements reach the reader there — which
+      // the reachability cases below assert. Keeping this case on the real world
+      // would have meant asserting something false; moving it preserves the
+      // proposition with a subject that still exhibits it.
       //
       // The pair runs together deliberately. They are twins produced by the
       // 2026-08-27 correction, which moved S-004 onto S-003's host, and running
       // only one would leave the other's provenance unexercised on this path.
-      const capability = capabilityFor(REAL, requirementId);
-      const outcome = await runRun({ packId: PACK_ID, requirementId }, pathsFor(REAL), capability);
+      const world = REAL_SRC002_UNSERVED;
+      const capability = capabilityFor(world, requirementId);
+      const outcome = await runRun({ packId: PACK_ID, requirementId }, pathsFor(world), capability);
 
       expect(outcome.exitCode).toBe(EXIT_OK);
-      const result = readback(resultPath(pathsFor(REAL), PACK_ID, requirementId));
+      const result = readback(resultPath(pathsFor(world), PACK_ID, requirementId));
 
       expect(result.gaps).toHaveLength(1);
       expect(result.gaps[0]!.kind).toBe('corpus_gap');
@@ -672,15 +712,16 @@ describe('the real CSRD pack, partitioned by what a live run could reach', () =>
   it('the resulting partition is a measurement, and covers the pack', () => {
     // Recorded, not targeted. If ingestion later moves these numbers, that is
     // the corpus becoming more complete — the test states what is true today.
-    // Four gap-bearing requirements, and the partition is unchanged by T6:
-    // ingesting SRC-005 removed one of CSRD-S-012's two gaps without moving it
-    // out of this list, because SRC-007 still blocks it. That is the whole
-    // point of counting requirements here and gaps above — a requirement does
-    // not become readable by having *fewer* unserved sources, only none.
-    expect(DETERMINISTIC_GAP).toEqual([
-      'CSRD-S-003', 'CSRD-S-004', 'CSRD-S-011', 'CSRD-S-012',
-    ]);
-    expect(MODEL_REACHABLE).toHaveLength(12);
+    // **Two, and the movement is T9.** T6 removed one of CSRD-S-012's two gaps
+    // without moving it out of this list, because SRC-007 still blocked it —
+    // fewer unserved sources is not readability. T9 is the other case: SRC-002
+    // was the *only* source CSRD-S-003 and CSRD-S-004 cite, so serving it took
+    // both out of the partition entirely and 12/4 became 14/2. The two kinds of
+    // movement are why this counts requirements while the cases above count
+    // gaps, and why reachability is asserted from an observed request rather
+    // than from this list.
+    expect(DETERMINISTIC_GAP).toEqual(['CSRD-S-011', 'CSRD-S-012']);
+    expect(MODEL_REACHABLE).toHaveLength(14);
     expect([...MODEL_REACHABLE, ...DETERMINISTIC_GAP].sort()).toEqual(
       Object.keys(AUDITED_SOURCES).sort(),
     );
@@ -701,6 +742,12 @@ describe('the real CSRD pack, partitioned by what a live run could reach', () =>
     expect(outcome.exitCode).toBe(EXIT_OK);
     expect(readback(resultPath(pathsFor(REAL), PACK_ID, requirementId)).gaps).toEqual([]);
     expect(capability.requests.filter((r) => r.role === 'reader')).toHaveLength(1);
+    // The whole role set, so "reachable" means the run completed rather than
+    // merely started, and the network trap asserted explicitly rather than
+    // relied upon to throw: reachability is proven against a stub, never a
+    // provider. T9 brought CSRD-S-003 and CSRD-S-004 into this case.
+    expect(capability.requests).toHaveLength(2 + DEFAULT_ROLE_CONFIG.prosecutorCount);
+    expect(trap.calls).toEqual([]);
   });
 
 });

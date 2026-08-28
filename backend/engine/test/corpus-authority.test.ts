@@ -95,16 +95,21 @@ describe('authoriseCorpus over the committed corpus and register', () => {
   });
 
   it('refuses a served source with no declaration, and says which', () => {
-    // 5. SRC-002 is a real, registered, cited source — and nothing has declared
+    // 5. SRC-007 is a real, registered, cited source — and nothing has declared
     // an origin for it, because nothing serves it. Fail closed.
-    const corpus = corpusOver(realIndexWith({ [HOST_DOC]: ['SRC-002'] }));
+    //
+    // SRC-007 rather than SRC-002: T9 gave SRC-002 a declaration when it
+    // ingested the consolidated CSRD, so it no longer models an undeclared
+    // source. SRC-007 is Class-B and gated behind E1–E4, so it stays undeclared
+    // until Task 12 — which will need this fixture repointed again.
+    const corpus = corpusOver(realIndexWith({ [HOST_DOC]: ['SRC-007'] }));
     try {
       authoriseCorpus(corpus, realRegister(), csrdPack());
       throw new Error('expected a refusal');
     } catch (error) {
       expect(error).toBeInstanceOf(CorpusAuthorityError);
       expect((error as CorpusAuthorityError).failures[0]).toMatchObject({
-        sourceId: 'SRC-002',
+        sourceId: 'SRC-007',
         reason: 'no declaration',
       });
     }
