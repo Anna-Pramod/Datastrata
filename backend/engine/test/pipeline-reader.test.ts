@@ -859,7 +859,7 @@ describe('an empty closure never travels alone', () => {
 // The real corpus: CSRD-S-012's sources are served by nothing
 // ---------------------------------------------------------------------------
 
-describe('a requirement whose sources serve no document (the real corpus)', () => {
+describe('a requirement whose evidence is only partly served (the real corpus)', () => {
   // Authorised, like every production consumer of the real corpus: `forSources`
   // takes only a validated corpus, and a test that reached round it would be
   // exercising a path production cannot use.
@@ -874,20 +874,23 @@ describe('a requirement whose sources serve no document (the real corpus)', () =
     sourceIds: pack.sources.map((source) => source.id),
   };
 
-  it('is one of the three requirements in the pack with an empty entitled closure', () => {
+  it('is no longer one of the requirements with an empty entitled closure', () => {
     // Measured, not assumed — and the positive control for everything below:
-    // thirteen requirements do open onto a real surface, so an empty closure is
-    // a finding about these three rather than a broken corpus.
+    // most requirements do open onto a real surface, so an empty closure is a
+    // finding about these two rather than a broken corpus.
     //
-    // Three, not one. Before the D1a-0b audit `CSRD-S-012` was the only
-    // requirement citing nothing the corpus serves; the audit moved S-003 onto
-    // the unserved `SRC-002`, and the 2026-08-27 correction moved S-004 there
-    // too. The number is a measurement of the corpus, and it will move again
-    // when the host instruments are ingested.
+    // **Two, and the movement is T6.** Before the D1a-0b audit `CSRD-S-012` was
+    // the only requirement citing nothing the corpus serves; the audit moved
+    // S-003 onto the unserved `SRC-002` and the 2026-08-27 correction moved
+    // S-004 there too, making three. Ingesting the ESRS consolidation for
+    // `SRC-005` then took `CSRD-S-012` back out — it now opens onto a real
+    // document while still halting on `SRC-007`. The predecessor of this test
+    // said the number "will move again when the host instruments are ingested";
+    // this is that move, recorded rather than absorbed.
     const empty = pack.requirements.filter(
       (entry) => EntitledClosure.forSources(realCorpus, realRegister, entry.sources).docIds.length === 0,
     );
-    expect(empty.map((entry) => entry.id)).toEqual(['CSRD-S-003', 'CSRD-S-004', 'CSRD-S-012']);
+    expect(empty.map((entry) => entry.id)).toEqual(['CSRD-S-003', 'CSRD-S-004']);
     expect(pack.requirements).toHaveLength(16);
 
     // **Empty closure is not the same question as gap-bearing.** `CSRD-S-011`
@@ -899,7 +902,12 @@ describe('a requirement whose sources serve no document (the real corpus)', () =
     expect(EntitledClosure.forSources(realCorpus, realRegister, eleven.sources).docIds.length).toBeGreaterThan(0);
   });
 
-  it('produces a corpus_gap per cited source, and no reading assembled from memory', async () => {
+  it('gaps on its one unserved source over a closure that is not empty', async () => {
+    // **The T6 tooth.** Two cited sources, one of them now served: the closure
+    // holds real text, exactly one `corpus_gap` remains, and the reader is
+    // still never called. Closing a gap is not the same as becoming readable,
+    // and a requirement that gained evidence without gaining reachability is
+    // the case where those two could most easily be confused.
     expect(requirement).toBeDefined();
     if (requirement === undefined) throw new Error('unreachable');
     expect(requirement.sources).toEqual(['SRC-005', 'SRC-007']);
@@ -916,11 +924,16 @@ describe('a requirement whose sources serve no document (the real corpus)', () =
 
     // The canonical gap-bearing shape, asserted in full.
     expect(outcome.output.elements).toEqual([]);
-    expect(outcome.gaps).toEqual([
-      ...corpusGapsForUnservedSources(['SRC-005', 'SRC-007']),
-    ]);
-    expect(outcome.gaps.map((gap) => gap.docId)).toEqual([undefined, undefined]);
-    expect(closure.sha256).toBe(EMPTY_CLOSURE_SHA256);
+    expect(outcome.gaps).toEqual([...corpusGapsForUnservedSources(['SRC-007'])]);
+    expect(outcome.gaps.map((gap) => gap.docId)).toEqual([undefined]);
+
+    // Served and unserved, side by side on one requirement.
+    expect(closure.corpusServes('SRC-005')).toBe(true);
+    expect(closure.corpusServes('SRC-007')).toBe(false);
+    expect(closure.docIds).toEqual(['DOC-32023R2772']);
+    expect(closure.sha256).not.toBe(EMPTY_CLOSURE_SHA256);
+
+    // And still nothing was asked of a model.
     expect(runner.requests).toHaveLength(0);
     expect(outcome.execution).toBeNull();
   });
@@ -942,17 +955,32 @@ describe('a requirement whose sources serve no document (the real corpus)', () =
       runner: stubRunner(() => JSON.stringify(wholeReading())),
     });
     const gaps = outcome.gaps;
+    // The closure's own digest, not the empty constant: since T6 this
+    // requirement halts over a closure that holds a document.
+    const liveClosureSha = EntitledClosure.forSources(
+      realCorpus, realRegister, requirement.sources,
+    ).sha256;
     const accompanied = resultOver({
       requirementId: requirement.id,
-      corpusClosureSha256: EMPTY_CLOSURE_SHA256,
+      corpusClosureSha256: liveClosureSha,
       gaps,
     });
     // The identifiers land in the field their own register owns, checked
     // against the real corpus index and the real source register.
     expect(() => assertResultConsistency(accompanied, registers)).not.toThrow();
 
+    // **The refusal half needs a genuinely empty closure.** The rule it proves
+    // is that an empty closure never travels without gaps — so since T6 gave
+    // CSRD-S-012 a document, this requirement can no longer exercise it: a
+    // non-empty closure with no gaps is an ordinary completed result, and
+    // asserting a throw here would have been asserting the wrong rule. S-003
+    // still cites only the unserved SRC-002, so it still opens onto nothing.
+    const stillEmpty = pack.requirements.find((entry) => entry.id === 'CSRD-S-003')!;
+    expect(
+      EntitledClosure.forSources(realCorpus, realRegister, stillEmpty.sources).docIds,
+    ).toEqual([]);
     const unaccompanied = resultOver({
-      requirementId: requirement.id,
+      requirementId: stillEmpty.id,
       corpusClosureSha256: EMPTY_CLOSURE_SHA256,
     });
     let thrown: string[] = [];
@@ -994,9 +1022,12 @@ describe('a requirement whose sources serve no document (the real corpus)', () =
     // The tail still computed pins and collated the gap-bearing dossier: it
     // performs no substantive judgment, but a record that cannot be pinned is
     // Invalid whatever else is true of it.
-    expect(outcome.tail.pins.corpusClosureSha256).toBe(EMPTY_CLOSURE_SHA256);
-    expect(outcome.tail.pins.corpus).toEqual([]);
-    expect(outcome.tail.gaps.map((gap) => gap.sourceId)).toEqual(['SRC-005', 'SRC-007']);
+    // Pinned over a real closure, not an empty one: T6 gave this requirement a
+    // document while leaving it halted, so the tail must pin what was entitled
+    // even though no role read it.
+    expect(outcome.tail.pins.corpusClosureSha256).not.toBe(EMPTY_CLOSURE_SHA256);
+    expect(outcome.tail.pins.corpus.map((pin) => pin.docId)).toEqual(['DOC-32023R2772']);
+    expect(outcome.tail.gaps.map((gap) => gap.sourceId)).toEqual(['SRC-007']);
 
     // The positive control: a served requirement runs every role through the
     // same call, so the emptiness above is the halt and not a broken wiring.
@@ -1044,16 +1075,28 @@ describe('a requirement whose sources serve no document (the real corpus)', () =
     expect(whole.executions.adjudicator).not.toBeNull();
   });
 
-  it('has no document outside any closure, which is why closure_gap is tested elsewhere', () => {
-    // Recorded as a test so the claim cannot quietly go stale: the day the
-    // corpus grows a third document, this fails and the fixture-corpus
-    // justification has to be rewritten rather than inherited.
+  it('now holds a document outside other closures — the day the predecessor predicted', () => {
+    // The predecessor of this test asserted that **no** document sat outside a
+    // non-empty closure, and said in as many words that the day the corpus grew
+    // a third document it would fail and its justification would have to be
+    // rewritten rather than inherited. T6 is that day, so it is rewritten here.
+    //
+    // `DOC-32023R2772` serves only `SRC-005` and carries no edge, so it is
+    // entitled for `CSRD-S-012` and outside every other requirement's closure —
+    // which is the real-corpus shape `closure_gap` needs and could previously
+    // only be exercised against the fixture corpus.
     const held = new Set(realCorpus.index.documents.map((document) => document.docId));
-    for (const entry of pack.requirements) {
-      const closure = EntitledClosure.forSources(realCorpus, realRegister, entry.sources);
-      const outside = [...held].filter((docId) => !closure.entitled(docId));
-      if (closure.docIds.length === 0) continue;
-      expect(outside).toEqual([]);
-    }
+    expect(held).toContain('DOC-32023R2772');
+
+    const closureOf = (id: string) => {
+      const entry = pack.requirements.find((r) => r.id === id)!;
+      return EntitledClosure.forSources(realCorpus, realRegister, entry.sources);
+    };
+    expect(closureOf('CSRD-S-012').entitled('DOC-32023R2772')).toBe(true);
+    expect(closureOf('CSRD-S-001').entitled('DOC-32023R2772')).toBe(false);
+
+    // …and it is outside because nothing links it, not because it is unheld.
+    const isolated = realCorpus.index.documents.find((d) => d.docId === 'DOC-32023R2772')!;
+    expect(isolated.edges).toEqual([]);
   });
 });

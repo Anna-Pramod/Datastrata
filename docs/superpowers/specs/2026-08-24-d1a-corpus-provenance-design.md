@@ -363,7 +363,7 @@ official consolidation, unlabelled  a role reads the current law correctly,
 
 An official consolidation is a faithful rendering of the law in force at its consolidation date; reading it yields the same obligations as reading the authentic publications it consolidates. What is missing is a claim nobody makes — no role asserts "this artefact has legal effect", and the pack's provenance names the *instrument*, not the artefact (the invariant above). So the consolidations already in the corpus, and those D1a-2 will add, are honest today and remain so; E2 makes the classification explicit rather than repairing an error.
 
-**§14 rule 2 is unaffected and must not be read through this section.** *"Where consolidation lags a known amendment, ingest base and amending act"* is an ingestion-completeness rule about being able to **read** the current text. It creates no citation: an amending act ingested for completeness does not thereby enter any requirement's provenance. `SRC-005` is the live case — its consolidation predates `2025/1416`, so both are ingested, and only `2023/2772` is cited.
+**§14 rule 2 is unaffected and must not be read through this section.** *"Where consolidation lags a known amendment, ingest base and amending act"* is an ingestion-completeness rule about being able to **read** the current text. It creates no citation: an amending act ingested for completeness does not thereby enter any requirement's provenance. `SRC-005` was cited here as the live case, on the premise that its consolidation predates `2025/1416`. §12.1 records why that premise was wrong and why the rule is not engaged for `SRC-005`; the rule itself stands for any instrument whose consolidation does lag.
 
 ---
 
@@ -479,7 +479,17 @@ Investigated 2026-08-24. Repository evidence cites `file:line`; external evidenc
 
 OJ L, 2023/2772, 22.12.2023; C/2023/5303; "In force: This act has been changed. Current consolidated version: **01/01/2025**."
 
-**The consolidation is behind its own amendment.** It predates `2025/1416` (OJ 10.11.2025), so consolidated-text-only ingestion would silently omit the postponement. Ingest the consolidated base **and** the amending act, joined by a structural edge — the pattern already in the index. Operational consequences in §15.
+**Corrected at T6 — the consolidation is *not* behind its own amendment.** This section previously read: *"The consolidation is behind its own amendment. It predates `2025/1416` (OJ 10.11.2025), so consolidated-text-only ingestion would silently omit the postponement. Ingest the consolidated base and the amending act, joined by a structural edge."* That reasoning compared the consolidation's date against the amendment's **publication** date. EUR-Lex dates a consolidation by the date its text **applies**, and `2025/1416` states that it *"shall apply with respect to financial years beginning on or after 1 January 2025"* — the same date the consolidation carries.
+
+What T6 established, and nothing wider:
+
+- `2023/2772` has a consolidated expression, CELEX **`02023R2772-20250101`**, served at `https://eur-lex.europa.eu/eli/reg_del/2023/2772/2025-01-01`.
+- `2025/1416` applies with respect to financial years beginning on or after 1 January 2025.
+- The pinned expression contains **M1-derived operative text in its enacting terms**, not merely an entry in its "Amended by" header — which lists an amendment whether or not the consolidation incorporates it, and is therefore not evidence of incorporation. The discriminating passage is the paragraph conditioned on *"the rows of Appendix C of ESRS 1 showing 'All disclosure requirements'"*, which cannot exist unless M1 was woven in. Asserted against the pinned bytes in `test/corpus-src005-ingestion.test.ts`.
+
+**Consequence for §14 rule 2.** The rule is unchanged and still correct where a consolidation genuinely lags. It is simply **not engaged for `SRC-005`**, so no separate amending-act artefact is required to read the applicable text. This is a finding about this consolidation, not a general claim about EUR-Lex consolidations: the relationship between a consolidation date and an amendment's application date has to be checked per instrument.
+
+**Consequence for `SRC-006`.** With the completeness argument withdrawn, §14 rule 1 governs: no requirement cites `2025/1416`, so it stays registered and unserved. Operational consequences in §15.
 
 ### 12.2 SRC-006 — Delegated Regulation (EU) 2025/1416
 
@@ -558,7 +568,7 @@ Applies to whichever of `SRC-002`, `SRC-005`, `SRC-006`, `SRC-009` the audit lea
 3. **Edges are declared, never inferred.** `EdgeProvenance` is `eli_metadata`, `celex_metadata` or `human`, each with `recordedOn` and enough detail to re-check by hand.
 4. **Register row first.** No source is ingested before it has a row with tier, `authority`, `governs`, `cadence`, `expectedProvenance` and `tierRationale`. This closes F-4 for the ingested set and for `SRC-001`/`SRC-003` while the file is open.
 5. **Hashes as the module already computes them.** No new normalizer for class A.
-6. **Order matters, because structural edges are free.** Ingest `2023/2772` before `2025/1416` so the amending act's edge has a live endpoint when written.
+6. **Order matters, because structural edges are free.** Where a base and an amending act are both ingested, ingest the base first so the amending act's edge has a live endpoint when written. This was written for `2023/2772` and `2025/1416`; per §12.1 only the base is ingested, so the ordering does not arise for them.
 
 ---
 
@@ -582,7 +592,7 @@ Token figures are estimates at ~3.5 chars/token for consolidated legal English; 
 **Two structural consequences:**
 
 1. `2023/2772` alone exceeds a 200k-token context before the revised act, before scaffolding, and before any other document in its closure. `renderEntitledClosure` concatenates every document's full text.
-2. **It does not stay confined to S-012.** `CLOSURE_POLICY_V0` follows structural kinds in **both directions at no depth cost**, so ingesting `2025/1416` with an `amends` edge to `2023/2772` pulls the 907k-char ESRS text into **S-003's** closure — a requirement about FY2024 reporting history.
+2. **It would not have stayed confined to S-012.** `CLOSURE_POLICY_V0` follows structural kinds in **both directions at no depth cost**, so ingesting `2025/1416` with an `amends` edge to `2023/2772` would pull the ESRS text into **S-003's** closure — a requirement about FY2024 reporting history. Since §12.1's correction that ingestion is not required, no such edge exists and the document reaches only S-012. The consequence is recorded because it constrains any future decision to ingest an amending act here, not because it is scheduled.
 
 D1a-3 measures, per requirement: closure documents; rendered closure chars and bytes; exact or estimated input tokens; and **which additional requirements inherit a document through structural traversal**.
 

@@ -440,10 +440,16 @@ Spec §14. One commit per document, each through `cli/ingest.ts` **as modified b
 
 | Task | Document | Notes |
 |---|---|---|
-| **T6** | `2023/2772` consolidated 01/01/2025 → `SRC-005` | ≈907k chars. Ingest whole |
-| **T7** | `2025/1416` → `SRC-006`, with an `amends` edge to T6's document | Ordering: the edge needs a live endpoint |
+| **T6** | `2023/2772` consolidated 01/01/2025 → `SRC-005` | ≈889k chars. Ingest whole. **Landed** |
+| ~~**T7**~~ | ~~`2025/1416` → `SRC-006`, with an `amends` edge to T6's document~~ | **Retired at T6 — not applicable.** See below |
 | **T8** | Commission Notice `C/2024/6792` → `SRC-009` | `official_body`; likely first user of the whole-document locator |
 | **T9** | `2022/2464` consolidated 18/03/2026 → `SRC-002` | **Only if Task 2 left a real dependency.** If not, skip and record why |
+
+**T7 is retired, and the reason is recorded rather than the row deleted.** T7 existed only to satisfy spec §14 rule 2 — *"where consolidation lags a known amendment, ingest base and amending act"* — on the premise that the 01/01/2025 consolidation of `2023/2772` predated `2025/1416`. T6 established that the premise was wrong: EUR-Lex dates a consolidation by the date its text applies, `2025/1416` applies with respect to financial years beginning on or after 1 January 2025, and the pinned expression carries M1-derived operative text in its enacting terms. Spec §12.1 holds the corrected statement and the evidence.
+
+With rule 2 not engaged, **§14 rule 1 governs `SRC-006`**: *"a source that is legally relevant but relied on by nothing stays registered and unserved."* The D1a-0b audit removed `SRC-006` from S-012's provenance, so no requirement cites it, and it keeps its register row without an artefact.
+
+Two things this retirement is **not**. It is not a judgement that ingesting `2025/1416` would be too expensive — the structural-edge blast radius in spec §15 and the token cost are real but were never the reason, and if the premise had held, both would simply have been costs to pay. And it is not a general rule about EUR-Lex consolidations: whether a consolidation lags an amendment is a per-instrument fact to check, which is what §14 rule 2 continues to say. Should a later amendment of `2023/2772` genuinely postdate the pinned consolidation, rule 2 is engaged again and a T7-shaped task returns on its own merits.
 
 **The ingestion invariant — per source, computed from the audited provenance, never from one representative requirement.** For each source `SRC-X`:
 
@@ -465,11 +471,11 @@ after ingestion
 The affected population is computed by filtering on `sourceIdsOf(requirement)`. **Two positive controls are required, and together they are the point:**
 
 - a requirement for which `SRC-X` was the last unserved source → its gap set empties **and** it genuinely reaches the agents (`2 + prosecutorCount` requests);
-- a requirement with another unserved source → `corpus_gap(SRC-X)` disappears **and** requests stay **zero**. S-012 is the live example: ingesting `SRC-005` must remove `corpus_gap(SRC-005)` while S-012 still halts on `SRC-006` and/or `SRC-007`.
+- a requirement with another unserved source → `corpus_gap(SRC-X)` disappears **and** requests stay **zero**. S-012 is the live example, and T6 is the run of it: ingesting `SRC-005` removed `corpus_gap(SRC-005)` while S-012 still halts on **`SRC-007`**. (`SRC-006` is named in the original sentence but cannot gap for S-012 — the D1a-0b audit removed it from that requirement's provenance, which is also why it is not ingested; see the T7 retirement above.)
 
 Asserting only the first would let "one gap disappeared" pass as "the requirement reached the reader", which is false for every multi-gap requirement.
 
-**Structural closure expansion is a separate observation and must not be conflated with it.** Serving relationships decide which source gaps disappear; structural edges decide which documents enter a closure. T7's `amends` edge is predicted to pull the 907k-char ESRS text into S-003's closure without changing S-003's gap set at all. Record both facts separately; neither is evidence for the other.
+**Structural closure expansion is a separate observation and must not be conflated with it.** Serving relationships decide which source gaps disappear; structural edges decide which documents enter a closure. The prediction written here was that T7's `amends` edge would pull the ESRS text into S-003's closure without changing S-003's gap set at all. T7 is retired, so no such edge exists and `DOC-32023R2772` reaches only S-012 — but the *distinction* stands and is what T6 recorded separately: one gap closed, no closure but S-012's changed. Neither fact is evidence for the other.
 
 For each task:
 
@@ -669,7 +675,7 @@ Every row is subject to evidence-standard rule 2: confirm the mutation landed be
 | 3 | Give every cited source a row that says what kind of authority it is | D1a-0a |
 | 4 | Give a requirement one authored place to say what it rests on | D1a-0a + D1a-1 (+ D1a-6 for each requirement whose probe passed) |
 | 5 | Make a document earn entitlement before it can be read | D1a-0a |
-| 6–9 | Four ingestion commits, one per document (9 conditional) | D1a-2 |
+| 6, 8–9 | Ingestion commits, one per document (9 conditional). **7 retired — see §3 T7** | D1a-2 |
 | 10 | Measure what the corpus now costs to read | D1a-3 |
 | 11 | Watch the transposition tracker instead of citing it — **only for the unresolved subset**; one commit each, the last carrying the retier | D1a-6 |
 | — | E1–E4 sub-plan, if approved | D1a-4 |

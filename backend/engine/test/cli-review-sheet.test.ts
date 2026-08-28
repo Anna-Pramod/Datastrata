@@ -828,12 +828,24 @@ describe('the dossier sections', () => {
     // CSRD-S-001's sources resolve to two corpus documents.
     expect(sectionFor(html, FRESH)).toContain(DOC_A);
     expect(sectionFor(html, FRESH)).not.toContain('the corpus holds no document serving any of them');
-    // CSRD-S-012's resolve to none at all: nobody could have read the law
-    // behind it, and quoting cannot reveal that because there is nothing to
-    // quote. Verified against the pack and the corpus.
+    // **CSRD-S-012's surface is no longer empty, and the sheet must say so.**
+    // T6 ingested the ESRS consolidation for SRC-005, so the requirement now
+    // names a real document while still halting on the unserved SRC-007. The
+    // empty-surface warning would now be false, and the requirement it belongs
+    // to is CSRD-S-003, which cites only the unserved SRC-002.
     const selection = sectionFor(html, SELECTION);
-    expect(selection).toContain('the corpus holds no document serving any of them');
-    expect(selection).toContain('SRC-005');
+    expect(selection).toContain('DOC-32023R2772');
+    expect(selection).not.toContain('the corpus holds no document serving any of them');
+
+    // **The warning still has to be provably reachable.** CSRD-S-012 was this
+    // suite's only positive witness for it, and T6 took that away by serving
+    // SRC-005 — leaving two negative assertions, which an implementation that
+    // never emits the warning at all would satisfy just as well. CSRD-S-003
+    // cites only the unserved SRC-002, so it still opens onto nothing and is
+    // the honest witness now.
+    const revoked = sectionFor(html, REVOKED);
+    expect(revoked).toContain('the corpus holds no document serving any of them');
+    expect(revoked).toContain('Nobody could have read the law behind this rule');
   });
 
   it('renders open questions', () => {

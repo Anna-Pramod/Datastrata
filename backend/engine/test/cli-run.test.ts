@@ -96,9 +96,12 @@ const PACK_ID = 'csrd';
 const COMPLETE_REQ = 'CSRD-S-001';
 /** One served source, so the split world's closure is one document of two. */
 const SPLIT_REQ = 'CSRD-S-008';
-/** Cites SRC-005 and SRC-007, which no document serves: the deterministic source gap. */
+/**
+ * Cites SRC-005 and SRC-007. Since T6 the corpus serves SRC-005, so SRC-007
+ * alone is the deterministic source gap — and it alone still halts the run.
+ */
 const GAP_REQ = 'CSRD-S-012';
-const GAP_SOURCES = ['SRC-005', 'SRC-007'];
+const GAP_SOURCES = ['SRC-007'];
 
 const DOC_A = 'DOC-32013L0034';
 const DOC_B = 'DOC-32026L0470';

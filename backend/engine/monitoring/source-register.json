@@ -47,6 +47,13 @@
         { "kind": "exact", "url": "https://eur-lex.europa.eu/eli/dir/2026/470/oj/eng" }
       ],
       "rationale": "The Omnibus is served from its OJ publication and nothing else is authorised for it today. Declared exactly rather than by prefix because no consolidation of this act is pinned: the narrower matcher is the truthful one, and widening it later is a decision to record rather than a default to inherit."
+    },
+    {
+      "sourceId": "SRC-005",
+      "origins": [
+        { "kind": "exact", "url": "https://eur-lex.europa.eu/eli/reg_del/2023/2772/2025-01-01" }
+      ],
+      "rationale": "ESRS Set 1 is served from its consolidated expression at 01/01/2025 (CELEX 02023R2772-20250101), and nothing else is authorised for it today. Declared exactly rather than by prefix because that one expression is what the corpus pins, and because it is already current: EUR-Lex dates a consolidation by the date its text applies, and Delegated Regulation (EU) 2025/1416 applies to financial years beginning on or after 1 January 2025, so this consolidation carries the amended Annex I rather than lagging it. A later consolidation would be a different expression and a decision to record, not a permission inherited from this one. Note that EUR-Lex also serves this expression under a language-suffixed path ending `/eng`; that is a different path and this declaration does not authorise it, deliberately — the corpus pins the language-neutral consolidation form, as `DOC-32013L0034` does."
     }
   ],
   "sources": [

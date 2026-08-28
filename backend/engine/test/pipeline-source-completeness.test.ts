@@ -87,7 +87,14 @@ const PARTIAL = 'CSRD-S-011';
 const EMPTY_CLOSURE_GAP = 'CSRD-S-003';
 /** Its twin, on the same unserved source, from the S-004 correction. */
 const EMPTY_CLOSURE_GAP_TWIN = 'CSRD-S-004';
-/** `SRC-005` + `SRC-007`, neither served — two gaps, one requirement. */
+/**
+ * `SRC-005` + `SRC-007`, of which **only `SRC-007`** is still unserved.
+ *
+ * T6 ingested the ESRS consolidation, so this requirement moved from two gaps
+ * to one without becoming reachable — which is the property it is used for
+ * here. The name is kept deliberately: what it selects is the requirement whose
+ * gap set is a strict subset of its cited sources, and that is still true.
+ */
 const TWO_MISSING = 'CSRD-S-012';
 
 let worldsRoot = '';
@@ -501,8 +508,12 @@ describe('a cited source nothing serves halts the run, whatever the closure hold
   });
 
   it('names one gap per missing source, and never invents a docId', async () => {
-    // CSRD-S-012 cites SRC-005 and SRC-007, neither served. Two gaps, one
-    // requirement — the count follows the sources, not the requirement.
+    // CSRD-S-012 cites SRC-005 and SRC-007. Since T6 the corpus serves
+    // SRC-005, so exactly one gap remains — the count follows the *unserved*
+    // sources, not the cited ones and not the requirement. Before T6 this
+    // asserted two; the drop to one is the ingestion's semantic consequence,
+    // and the requirement staying in the gap-bearing partition below is why
+    // closing one gap is not the same as becoming readable.
     const capability = capabilityFor(REAL, TWO_MISSING);
     const outcome = await runRun(
       { packId: PACK_ID, requirementId: TWO_MISSING }, pathsFor(REAL), capability);
@@ -510,7 +521,7 @@ describe('a cited source nothing serves halts the run, whatever the closure hold
     expect(outcome.exitCode).toBe(EXIT_OK);
     const result = readback(resultPath(pathsFor(REAL), PACK_ID, TWO_MISSING));
 
-    expect(result.gaps).toHaveLength(2);
+    expect(result.gaps).toHaveLength(1);
     // Exact identities.
     //
     // This does **not** discriminate ordering: for this requirement
@@ -518,7 +529,7 @@ describe('a cited source nothing serves halts the run, whatever the closure hold
     // and corpus-index order. The permutation case in `pipeline-reader.test.ts`
     // is what proves order follows the requirement's own declaration — it feeds
     // `['SRC-901','SRC-900']` in and requires the same sequence out.
-    expect(result.gaps.map((gap) => gap.sourceId)).toEqual(['SRC-005', 'SRC-007']);
+    expect(result.gaps.map((gap) => gap.sourceId)).toEqual(['SRC-007']);
     for (const gap of result.gaps) {
       expect.soft(gap.kind).toBe('corpus_gap');
       expect.soft(gap.docId).toBeUndefined();
@@ -661,9 +672,11 @@ describe('the real CSRD pack, partitioned by what a live run could reach', () =>
   it('the resulting partition is a measurement, and covers the pack', () => {
     // Recorded, not targeted. If ingestion later moves these numbers, that is
     // the corpus becoming more complete — the test states what is true today.
-    // Four gap-bearing requirements, not four gaps: CSRD-S-012 carries two
-    // (SRC-005 and SRC-007) and is one requirement. The partition counts
-    // requirements; the gap count per requirement is asserted above.
+    // Four gap-bearing requirements, and the partition is unchanged by T6:
+    // ingesting SRC-005 removed one of CSRD-S-012's two gaps without moving it
+    // out of this list, because SRC-007 still blocks it. That is the whole
+    // point of counting requirements here and gaps above — a requirement does
+    // not become readable by having *fewer* unserved sources, only none.
     expect(DETERMINISTIC_GAP).toEqual([
       'CSRD-S-003', 'CSRD-S-004', 'CSRD-S-011', 'CSRD-S-012',
     ]);

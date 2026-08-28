@@ -725,8 +725,9 @@ describe('the committed corpus is covered by the committed register', () => {
         ).toBe(true);
       }
     }
-    // Not vacuous: the loop ran over real pairs.
-    expect(pairs).toBe(2);
+    // Not vacuous: the loop ran over real pairs. Three since T6 ingested the
+    // ESRS consolidation for SRC-005; the covering check itself is unchanged.
+    expect(pairs).toBe(3);
   });
 
   it('a declaration authorises its own source and no other on the same host', () => {

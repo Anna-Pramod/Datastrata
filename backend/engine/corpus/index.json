@@ -1,5 +1,5 @@
 {
-  "updated": "2026-08-20",
+  "updated": "2026-08-28",
   "documents": [
     {
       "docId": "DOC-32013L0034",
@@ -29,6 +29,23 @@
           }
         }
       ]
+    },
+    {
+      "docId": "DOC-32023R2772",
+      "serves": [
+        "SRC-005"
+      ],
+      "title": "Commission Delegated Regulation (EU) 2023/2772 — ESRS Set 1",
+      "url": "https://eur-lex.europa.eu/eli/reg_del/2023/2772/2025-01-01",
+      "versionLabel": "consolidated text applicable from 2025-01-01 (CELEX 02023R2772-20250101)",
+      "retrievedOn": "2026-08-28",
+      "rawPath": "raw/32023R2772.html",
+      "normalizedPath": "normalized/32023R2772.txt",
+      "sha256Raw": "905d86060b989de6b0822cc718737ccc1d45fdd254576631c38e4c364a29e9b0",
+      "sha256Normalized": "e120ea16ec6133934782742aebc4f0e5814e4a3358c074762ea6393662111858",
+      "normalizerVersion": "1.0.2",
+      "contentSelector": "#text",
+      "edges": []
     },
     {
       "docId": "DOC-32026L0470",

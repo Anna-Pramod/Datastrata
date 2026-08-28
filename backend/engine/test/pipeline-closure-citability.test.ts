@@ -219,10 +219,15 @@ describe('a closure document the register never said may carry normative text', 
   });
 
   it('refuses a document one of whose two sources is not citable', () => {
-    // One citable member must not rescue another. SRC-005 is `legal_record`;
+    // One citable member must not rescue another. SRC-002 is `legal_record`;
     // SRC-012 has no row. A rule reading "some source is citable" admits this.
-    const index = worldReaching(['SRC-005', UNCLASSIFIED]);
-    const register = registerWith([], [originFor('SRC-005'), originFor(UNCLASSIFIED)]);
+    //
+    // SRC-002 rather than another classified source because the committed
+    // register must not already declare an origin for it — a second declaration
+    // for the same source is refused at parse time, and a fixture that collided
+    // with a real row would fail for a reason that is not this test's subject.
+    const index = worldReaching(['SRC-002', UNCLASSIFIED]);
+    const register = registerWith([], [originFor('SRC-002'), originFor(UNCLASSIFIED)]);
     const corpus = authoriseCorpus(corpusOver(index), register, csrdPack());
     try {
       EntitledClosure.forSources(corpus, register, ['SRC-001']);
@@ -237,10 +242,10 @@ describe('a closure document the register never said may carry normative text', 
   it('admits the same document once both of its sources are citable', () => {
     // The sibling that keeps the case above from passing against a rule that
     // refuses every multi-source document.
-    const index = worldReaching(['SRC-005', UNCLASSIFIED]);
+    const index = worldReaching(['SRC-002', UNCLASSIFIED]);
     const register = registerWith(
       [{ sourceId: UNCLASSIFIED, tier: 'legal_record', rationale: 'Fixture: now classified.' }],
-      [originFor('SRC-005'), originFor(UNCLASSIFIED)],
+      [originFor('SRC-002'), originFor(UNCLASSIFIED)],
     );
     const corpus = authoriseCorpus(corpusOver(index), register, csrdPack());
     expect(() => EntitledClosure.forSources(corpus, register, ['SRC-001'])).not.toThrow();

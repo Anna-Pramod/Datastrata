@@ -4,6 +4,8 @@
 **Base:** `fdc0fe5` *Read the cited source set through one function*
 **Task:** D1a-0b of `docs/superpowers/plans/2026-08-24-d1a-corpus-provenance.md`. Document only — no code, no data, no schema.
 **Governs:** where this audit and the spec's §12 disposition table disagree, **this audit governs the expectation**. It does not change any settled architectural rule.
+**Corrected 2026-08-28 — the `SRC-005` ingestion aside (T6).** §8 stated that EUR-Lex's 01/01/2025 consolidation of `2023/2772` predates `2025/1416` and that both must therefore be ingested. That compared the consolidation against the amendment's *publication* date; EUR-Lex dates a consolidation by the date its text *applies*, and 2025/1416 applies to financial years beginning on or after 1 January 2025. The pinned consolidation carries M1-derived operative text in its enacting terms, so it reads the current Annex I on its own. The correction is confined to that ingestion aside: **no provenance disposition in this audit changes**, and `SRC-006` remains removed from S-012 for the reasons §8 already gives. Spec §12.1 holds the corrected statement.
+
 **Corrected 2026-08-27 — S-004.** One disposition in this audit was wrong and is corrected below: **`S-004` cites `SRC-002`, locator `Article 5(2), fifth subparagraph`** — not `SRC-004`. The audited universe is **five** sources, not six, and `SRC-004` is cited by no requirement. §3, §5, §8 Q2, §11 and §14 carry the correction; the §10 probe transcripts are left as the record of runs that happened, and their `SRC-015` conclusion is unaffected.
 
 ---
@@ -177,7 +179,7 @@ and its Annex begins *"in ESRS 1, Appendix C, 'List of phased-in Disclosure Requ
 
 So it amends **Annex I of 2023/2772** — it changes *what the 2023 ESRS contain* (which disclosure requirements are phased in), not *which version applies*. S-012 selects a version; the quick-fix bears on neither branch. The only place it appears in S-012 is the case **label** "(incl. quick-fix)", which the logical payload excludes. Under *currency, not lineage*, the current 2023 ESRS is 2023/2772 as amended, and the host instrument is `SRC-005`. **`SRC-006` is removed** — the same pattern as `SRC-004`, one layer down.
 
-*Not to be confused with an ingestion question.* EUR-Lex's consolidation of 2023/2772 is dated 01/01/2025 and therefore predates the quick-fix (OJ 10.11.2025). Anyone ingesting `SRC-005` must ingest base **and** amending act to read the current Annex I (spec §14 rule 2). That is a D1a-2 completeness matter; it does not make 2025/1416 *requirement provenance* for S-012.
+*Not to be confused with an ingestion question.* ~~EUR-Lex's consolidation of 2023/2772 is dated 01/01/2025 and therefore predates the quick-fix (OJ 10.11.2025). Anyone ingesting `SRC-005` must ingest base **and** amending act to read the current Annex I (spec §14 rule 2).~~ **Corrected 2026-08-28 at T6 — see the header note.** The consolidation does not predate the amendment: it is dated by the date its text *applies*, and 2025/1416 applies to financial years beginning on or after 1 January 2025. Ingesting the consolidation alone reads the current Annex I. The disposition this paragraph supports is untouched — 2025/1416 is still not *requirement provenance* for S-012, which is what this section decides.
 
 **`SRC-007` — the revised ESRS delegated act, C(2026) 5010 — SURVIVES, uniquely, and its locators are pinned.**
 
