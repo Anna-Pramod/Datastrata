@@ -140,11 +140,15 @@ Commission page verbatim *"not in force until it is published in the Official Jo
 
 ## 3. Normative corrections — applied by B-NORM, not here
 
-**Thirty stale passages across three files.** An earlier revision of this plan claimed nine and was wrong: an independent audit found stale normative text outside that set, and a sweep against `018da3f` confirmed every lead and found more. **B-NORM cannot rely on a broad supersession note while false normative sentences remain live** — each would either survive as a contradiction or trip A-NORM-1 on contact.
+**Thirty-two stale passages across three files.** An earlier revision of this plan claimed nine and was wrong: an independent audit found stale normative text outside that set, and a sweep against `018da3f` confirmed every lead and found more. A first B-NORM attempt on 2026-09-01 then **aborted under A-NORM-1**, having applied all thirty rows the map carried at the time: applying them exposed further live contradictions the map did not list, most of them stale text left *on lines the boundary had just edited*. Those findings are folded in here as rows `#32`–`#33` and as changed treatments on **twelve** existing rows — of which four (`#18`, `#23`, `#26`, `#27`) are the fragment-application failures that caused the abort, the other eight being cross-reference, wording and governed-deviation repairs. **B-NORM cannot rely on a broad supersession note while false normative sentences remain live** — each would either survive as a contradiction or trip A-NORM-1 on contact, which is exactly what §3.1 caused, and is why §3.1 now **replaces** rather than annotates.
 
 #### 3.0 The complete passage map
 
-Swept for six defect classes: standing located on `CorpusDocument`/"the corpus" rather than the pack source; Task 12 coupled to PDF extraction or to all of E1–E4; four-artefact assumptions; E1 on Route A's critical path; E3 required before an OJ successor exists; stale sequence descriptions.
+Swept for six defect classes: standing located on `CorpusDocument`/"the corpus" rather than the pack source — **including framing that merely implies that placement**; Task 12 coupled to PDF extraction or to all of E1–E4; four-artefact assumptions; E1 on Route A's critical path; E3 required before an OJ successor exists; stale sequence descriptions.
+
+**A mapped row governs its whole passage, not only the fragment quoted below.** The 2026-09-01 abort was caused by clause-by-clause application: rows `#18`, `#23`, `#26` and `#27` were each discharged by replacing the quoted fragment, leaving stale text alive on the same line. The quoted text identifies the row; the sentence, table cell or paragraph containing it is the unit that must end up true.
+
+**Every line number in this map is a committed-baseline coordinate**, against `80ac013` — before any B-NORM edit. The aborted pass shifted both files (spec `+14`, parent plan `+2`), so against the current working tree those numbers point elsewhere, and several land on a **different mapped row's** passage: baseline spec `:611` (row `#10`, condition 5) is now the §16 head that row `#8` owns, and baseline plan `:528` (row `#23`, the E2 row) is now a table separator. **Locate every passage by its quoted text, never by line number.** That is how the aborted pass was executed, and it is the only method that survives a partially-applied tree.
 
 | # | File | Line | Stale text | Class | Diff |
 |---|---|---|---|---|---|
@@ -165,30 +169,38 @@ Swept for six defect classes: standing located on `CorpusDocument`/"the corpus" 
 | 15 | plan | `:7` | *"Thirteen implementation tasks and **four deferred capability envelopes**"* | sequence | **§3.8** |
 | 16 | plan | `:9` | *"Class-B capability (E1–E4) is a gated sub-plan boundary"* | sequence | **§3.8** |
 | 17 | plan | `:136` | flow diagram — *"OPTIONAL E1–E4 envelopes ─► approved sub-plan ─► T12"* | sequence | **§3.8** |
-| 18 | plan | `:143` | Task 13 — *"does not wait on the optional branch"* | sequence | **§3.8** |
+| 18 | plan | `:143` | Task 13 — *"does not wait on the optional branch"*, **and** the dangling *"if **it** was deferred"* that repair leaves behind | sequence | **§3.8** |
 | 19 | plan | `:458` | *"`SRC-007` and `SRC-008` … are Class-B, gated behind envelopes E1–E4"* | sequence + E1-on-critical-path | **§3.8** |
 | 20 | plan | `:521` | heading — *"Envelopes E1–E4 — class-B capability (deferred, not implementation-ready)"* | sequence | **§3.8** |
 | 21 | plan | `:523` | *"each requires a dedicated implementation sub-plan before execution"* | sequence | **§3.8** |
 | 22 | plan | `:527` | E1 row | E1-on-critical-path | **§3.8** |
-| 23 | plan | `:528` | E2 row — *"`CorpusDocument` **document standing**"* | standing-on-corpus | **§3.8** |
+| 23 | plan | `:528` | E2 row, **both cells** — subject *"`CorpusDocument` **document standing**"*; acceptance *"mutating **either** classification away"*, two where corrected condition 5 carries three | standing-on-corpus | **§3.8** |
 | 24 | plan | `:530` | E4 row | capability restatement | §3.4 |
 | 25 | plan | `:536` | Task 12 — *"Gated behind E1–E4… Four artefacts (two acts, two annexes)"* | four-artefact + sequence | §3.5 |
-| 26 | plan | `:547` | Task 13 — *"If E1–E4 and Task 12 completed"* | sequence | **§3.8** |
-| 27 | plan | `:642` | §5 readiness — *"envelopes E1–E4 and Task 12, which depends on them"* | sequence | **§3.8** |
+| 26 | plan | `:547` | Task 13, **the whole lead** — *"independent of the optional branch"* **and** *"If E1–E4 and Task 12 completed"* | sequence | **§3.8** |
+| 27 | plan | `:642` | §5 readiness — *"envelopes E1–E4 and Task 12, which depends on them"*, **and** the next sentence's *"each needs a dedicated sub-plan written when its gate opens"*, false for Task 12 once Route A exists | sequence | **§3.8** |
 | 28 | plan | `:687` | sequence table — *"E1–E4 sub-plan, if approved \| D1a-4"* | sequence | **§3.8** |
 | 29 | plan | `:703` | Risk 5 — *"If no PDF extractor… E1–E4 and Task 12 stay deferred"* | E1-on-critical-path | **§3.8** |
 | 30 | plan | `:717` | audit row — *"E1–E4 are capability envelopes requiring their own sub-plan"* | sequence | **§3.8** |
 | 31 | `CLAUDE.md` | `:52–54` | *"must stay at exactly **five** pre-existing hits"* — the gate is **seven** | stale contract | **§3.9** |
+| 32 | spec | `:289` | §7 *"The gap this exposes"* — **`CorpusDocument` has no status field at all**… *"nothing about legal effect"*, which reads as locating the remedy on the document | standing-on-corpus (framing) | §3.3 |
+| 33 | spec | `:814` | §24 — *"the field names and value set for **document standing** … how **the classification** reaches a role"*, singular against the two-axis model | standing-on-corpus (framing) | §3.3 |
 
-**Thirty stale passages plus one verified-not-stale (`#14`) — thirty-one rows.** The unit is **the row**, and one row (`#9`) carries two line references, so §4's reference lists are longer than the row counts by one; both numbers are given there rather than left to be inferred. Rows were added by three successive sweeps, the later ones after independent audits found the earlier sweeps incomplete — recorded because it is the reason §4 verifies against this table rather than against a remembered total.
+**Thirty-two stale passages plus one verified-not-stale (`#14`) — thirty-three rows.** The unit is **the row**, and one row (`#9`) carries two line references, so §4's spec reference list is longer than its row count by one; both numbers are given there rather than left to be inferred. Rows `#32`–`#33` were added by the 2026-09-01 A-NORM-1 abort and are appended **out of file order deliberately**, so that every earlier row number stays stable across the reports and diffs that already cite them. Rows were added by four successive sweeps, the later ones after independent audits found the earlier sweeps incomplete — recorded because it is the reason §4 verifies against this table rather than against a remembered total.
 
 B-NORM's file scope in §4 is the operative list.
 
 ### 3.1 spec §12.4 — the PDF assumption is superseded
 
-> **Proposed addition** at the end of §12.4:
+**Replacement, not annotation — corrected 2026-09-01.** An earlier revision proposed only an addition at the end of §12.4 and left `:517` untouched. The aborted B-NORM run applied it exactly, and the false sentence survived two lines above its own retraction — the precise failure §3's opening forbids. The stale sentence is therefore **replaced**; the four PDF filenames at `:511–514` stay as the record of what the Commission page offered, which the correction note reframes.
+
+> **Proposed replacement of `:517`** — the whole sentence, both clauses:
 >
-> > **Corrected 2026-08-30 — the artefacts are not PDF-only.** This section recorded only the Commission landing page's PDF links. EUR-Lex serves both adopted acts as **complete HTML expressions including their annexes**, which the existing `NORMALIZER_VERSION 1.0.2` extractor handles with the `#text` selector — verified at `89b0b86`. Route A ingests those expressions. The sentence *"They are served from host `ec.europa.eu`, which is not in the citable host set (F-5)"* is doubly stale: F-5's host rule was **retired at Task 5** (`src/monitoring/register.ts:312`), and `ec.europa.eu` is not the serving host under Route A. §16's PDF conditions are **not invoked** for `SRC-007`/`SRC-008`.
+> > They were linked as PDFs from host `ec.europa.eu`. **Route A does not ingest them from that surface** — see the correction below. Artefact-origin authority is §19's; §16's PDF conditions are **not invoked** for these two sources (§16 as corrected).
+>
+> **Proposed addition** immediately after it:
+>
+> > **Corrected 2026-08-30 — the artefacts are not PDF-only.** This section recorded only the Commission landing page's PDF links, listed above as the record of what that page offered. EUR-Lex serves both adopted acts as **complete HTML expressions including their annexes**, which the existing `NORMALIZER_VERSION 1.0.2` extractor handles with the `#text` selector — verified at `89b0b86`. Route A ingests those expressions. The retired sentence also claimed `ec.europa.eu` *"is not in the citable host set (F-5)"*: **F-5's host rule was retired at Task 5** (`src/monitoring/register.ts:312`), so that claim had already stopped being true on its own terms, and `ec.europa.eu` is not the serving host under Route A either.
 
 ### 3.2 spec §16 — scope, not retirement
 
@@ -196,13 +208,13 @@ B-NORM's file scope in §4 is the operative list.
 >
 > > **Scope, corrected 2026-08-30.** **Conditions 1 and 3 are PDF-specific: they govern only an artefact for which no official machine-readable expression exists.** `SRC-007` and `SRC-008` are not such artefacts (§12.4 as corrected), so those two are **not invoked**. The remaining conditions are format-independent and govern every Class-B artefact, Route A's included.
 > >
-> > Condition **2** applies, read in HTML terms rather than PDF ones: the raw/normalized hash split is retained exactly as it is for every other document — `sha256Raw` over the bytes as served, `sha256Normalized` over the extracted text. Conditions **4, 6 and 8 apply unchanged**. Condition **5 is amended by §3.3**.
+> > Condition **2** applies, read in HTML terms rather than PDF ones: the raw/normalized hash split is retained exactly as it is for every other document — `sha256Raw` over the bytes as served, `sha256Normalized` over the extracted text. Conditions **4, 6 and 8 apply unchanged**. Condition **5 is amended in place below**, per the Route A sub-plan's §3.3.
 > >
 > > Condition **7** (lifecycle and supersession metadata) is **settled as not-yet-applicable rather than unmet**: no OJ successor exists, so there is no lifecycle relation to record. The head's *"may not be ingested until all eight are settled"* is satisfied — a condition with no subject is settled by that fact, and it reopens the moment an OJ expression appears.
 
-### 3.3 spec §16 condition 5, §7.1's enforcement paragraph, §9 and §6's mapping table — one collapse, four times
+### 3.3 spec §16 condition 5, §7.1's enforcement paragraph, §9, §6's mapping table, §7's gap paragraph and §24 — one collapse, six times
 
-§7.1 fixes three axes and states *"no field may answer two"*, assigning temporal status to the **instrument**. Four other passages then assign it to the **artefact**:
+§7.1 fixes three axes and states *"no field may answer two"*, assigning temporal status to the **instrument**. Six other passages then assign it to the **artefact**, or frame it as though they did — the last two found by the 2026-09-01 abort:
 
 | Passage | Offending text |
 |---|---|
@@ -210,12 +222,16 @@ B-NORM's file scope in §4 is the operative list.
 | §7.1 "Who owns enforcement" | *"the artefact-level classification…"* (sentence 1) and *"put a document-level field on `CorpusDocument`"* (sentence 2) |
 | §9 | its `CorpusDocument` code block, which lists `legalStatus` beside the lifecycle relation *(paraphrased — the others in this column are verbatim)* |
 | §6 mapping table, row B | *"`legal_record` row + corpus document carrying `adopted_not_effective` status"* |
+| §7 *"The gap this exposes"* (`:289`) | *"**`CorpusDocument` has no status field at all**… nothing about legal effect"* — accurate about today's code, but bolded as *the* gap it reads as locating the remedy on the document |
+| §24 (`:814`) | *"the field names and **value set** for document standing… how **the classification** reaches a role"* — singular where the corrected design has two fields on two axes |
 
 > **Proposed replacement — §16 condition 5:**
 >
 > > 5. **Document standing, reaching verification** — temporal legal status (§7) **and** serving-artefact authenticity (§7.1), carried as **two fields on two axes**: temporal standing per instrument in the knowledge pack, authenticity per artefact on the corpus document (§9 as corrected). A role is shown a derived projection of both. No single field answers both questions.
 > >
 > >    **A third distinction rides with them, and is normative rather than an implementation detail: within a composite artefact, official explanatory material is not operative provision.** An artefact may lawfully carry both — an explanatory memorandum ahead of the enacting terms — and neither of the two axes above says so: temporal standing answers *when the instrument takes effect* and authenticity answers *what kind of artefact this is*, and both apply equally to every part of the document. A role must therefore be told, per artefact, which sections are non-operative, and that statement must be committed by the same identity mechanisms as the other two. Where an artefact serves sources of differing standing, the statement must say that legal effect differs by served source.
+> >
+> >    **This is a within-artefact region annotation, not a fourth standing axis.** §7.1's three dimensions — source authority, serving-artefact authenticity, temporal legal status — each classify a whole object, and each remains exactly as §7.1 states it. Non-operative sections partition *within* a single artefact, which is why neither document-level axis can express it, and why §7.1's *"no field may answer two"* is unweakened rather than superseded. §7.1's heading and its three-dimension block are **not** stale and are not on §3.0's map.
 >
 > **Proposed replacement — the whole "Who owns enforcement" paragraph of §7.1** (both sentences; the collapse appears in each — *"artefact-level classification"* in the first, *"document-level field on `CorpusDocument`"* in the second, so replacing either alone leaves it standing):
 >
@@ -223,7 +239,7 @@ B-NORM's file scope in §4 is the operative list.
 >
 > **Proposed replacement — the `CorpusDocument` block of §9:**
 >
-> > **Corrected 2026-08-30 (D-5).** Storage follows §7.1's axis assignment:
+> > **Corrected 2026-08-30, per decision D-5 of the Route A sub-plan** (`docs/superpowers/plans/2026-08-30-d1a-route-a-class-b.md`). Storage follows §7.1's axis assignment:
 > >
 > > ```
 > > knowledge pack (sources)   temporalStanding      per instrument
@@ -236,6 +252,14 @@ B-NORM's file scope in §4 is the operative list.
 > **Proposed replacement — §6 mapping table, row B:**
 >
 > > | B — adopted, not yet in force | `legal_record` row + corpus document whose **artefact authenticity** is recorded, with the instrument's `adopted_not_effective` **temporal standing held in the knowledge pack** (§7, §9) |
+
+> **Proposed addition — §7's "The gap this exposes" paragraph (`:289`, row `#32`).** The paragraph is **not replaced**: every clause in it is true, `CorpusDocument` genuinely has no status field (`corpus/types.ts:41`, verified 2026-09-01), and the closing sentence states the real gap — that standing does not reach the reader. What it lacks is any statement of *where* the remedy goes, so a reader meeting the bolded absence before `:291` infers a legal-status field on the document, which D-5 forbids. One sentence is appended:
+>
+> > *(Corrected 2026-08-30: the absence recorded here is real and still true, but it does not locate the remedy. Under §7.1 and §9 as corrected the remedy is **split by axis** — artefact authenticity is added to `CorpusDocument`; temporal standing is held per instrument in the knowledge pack and never copied onto the artefacts serving it. The gap this paragraph names is that standing does not reach the reader, not that `CorpusDocument` lacks a legal-status field.)*
+
+> **Proposed replacement — §24's document-standing bullet (`:814`, row `#33`):**
+>
+> > - the field names for **document standing** — carried as **two fields on two axes** (§7.1, §9 as corrected): serving-artefact authenticity per artefact, temporal standing per instrument in the knowledge pack — together with the artefact's own statement of which sections are non-operative, and how each of the three reaches a role (envelope E2).
 
 ### 3.4 parent plan — restate E4
 
@@ -283,9 +307,9 @@ Parent plan `:536` reads *"Four artefacts (two acts, two annexes), same shape an
 >
 > **`:9` readiness header** — replace *"**Class-B capability (E1–E4) is a gated sub-plan boundary, not a set of implementation-ready tasks** — see §5"* with *"**Class-B capability is split: E2 and E4 are planned and approved under Route A; E1 and E3 remain gated sub-plan boundaries** — see §5."*
 >
-> **`:136` flow diagram** — replace the `OPTIONAL E1–E4 envelopes ─► approved sub-plan ─► T12` branch with `ROUTE A  B-NORM ─► B-E4 ─► B-E2 ─► B-T12   (E1, E3 deferred)`, and record beneath the diagram what the redrawn branch no longer spells out: *"Task 12 proceeds under Route A via `docs/superpowers/plans/2026-08-30-d1a-route-a-class-b.md`, sequence `B-NORM → B-E4 → B-E2 → B-T12`. **E1 is not on Task 12's critical path** and E3 is deferred until an OJ successor exists."* Row `#17` **is** the sequence repair, so the corrected-sequence note lands with it rather than standing alone. This absorbs the retired §3.6: it adds **no** row, and §4's sixteen plan rows are unchanged.
+> **`:136` flow diagram** — replace the `OPTIONAL E1–E4 envelopes ─► approved sub-plan ─► T12` branch with `ROUTE A  B-NORM ─► B-E4 ─► B-E2 ─► B-T12   (E1, E3 deferred)`, and record beneath the diagram what the redrawn branch no longer spells out, carrying the same **Corrected** prefix the other in-place notes use: *"**Corrected 2026-08-30.** Task 12 proceeds under Route A via `docs/superpowers/plans/2026-08-30-d1a-route-a-class-b.md`, sequence `B-NORM → B-E4 → B-E2 → B-T12`. **E1 is not on Task 12's critical path** and E3 is deferred until an OJ successor exists."* Row `#17` **is** the sequence repair, so the corrected-sequence note lands with it rather than standing alone. This absorbs the retired §3.6: it adds **no** row, and §4's sixteen plan rows are unchanged.
 >
-> **`:143` Task 13 framing** — replace *"does not wait on the optional branch"* with *"does not wait on the deferred envelopes (E1, E3)"*, and the conditional *"If class-B capability was approved and completed"* with *"If Route A's boundaries and Task 12 completed"*.
+> **`:143` Task 13 framing** — replace *"does not wait on the optional branch"* with *"does not wait on the deferred envelopes (E1, E3)"*, and the conditional *"If class-B capability was approved and completed"* with *"If Route A's boundaries and Task 12 completed"*. **Then repair the pronoun the second replacement strands:** *"if **it** was deferred"* becomes *"if **they** were deferred"*, its antecedent (*"the optional branch"*) having been removed by this same edit. The paragraph's closing sentence — *"An explicitly optional capability must not become a release dependency by accident of drawing"* — **stays**, and the reason is worth stating because the `:547` correction below condemns text for pointing at a branch the diagram no longer draws: this sentence points at no branch. It states a **rule about drawing**, and the rule still binds — E1 and E3 are explicitly optional capabilities, and the corrected `:136` diagram still carries them as *"(E1, E3 deferred)"*. It is therefore not on the map.
 >
 > **`:458` what-that-leaves** — replace *"they are Class-B, **gated behind envelopes E1–E4**, and belong to Task 12"* with *"they are Class-B and belong to Task 12, which under Route A depends on **E2 and E4 only** (§12.4 as corrected)."*
 >
@@ -295,11 +319,15 @@ Parent plan `:536` reads *"Four artefacts (two acts, two annexes), same shape an
 >
 > **`:527` E1 row** — append: *"**Not on Route A's critical path** — invoked only for an artefact with no official machine-readable expression (§12.4 as corrected)."*
 >
-> **`:528` E2 row** — replace *"`CorpusDocument` **document standing**"* with *"**Document standing** — artefact authenticity on `CorpusDocument`, temporal standing on the knowledge-pack source (§9 as corrected)"*.
+> **`:528` E2 row — replace the whole row, both cells.** Substituting only the subject fragment leaves an ungrammatical clause and a tail restating what the new text already says, and leaves the acceptance cell counting **two** classifications where corrected condition 5 carries **three**. The cross-reference is written *spec §9* because the parent plan has its own `## 9. Self-review`:
 >
-> **`:547` Task 13** — replace *"If E1–E4 and Task 12 completed"* with *"If Route A's boundaries and Task 12 completed"*.
+> > | **E2** | **Document standing** reaching verification — artefact authenticity on `CorpusDocument`, temporal standing on the knowledge-pack source (**spec** §9 as corrected), and the artefact's own statement of which sections are non-operative | No role can read an `adopted_not_effective` document as current law, nor an official consolidation as the authentic publication, nor official explanatory material as operative provision; mutating **any of the three** away reds a run-level assertion |
 >
-> **`:642` §5 readiness** — replace *"envelopes E1–E4 and Task 12, which depends on them"* with *"envelopes E1 and E3, and Task 12, which depends on E2 and E4 only"*.
+> **`:547` Task 13 — replace the whole lead sentence and its conditional**, not the conditional alone. The 2026-09-01 run replaced only the conditional; *"independent of the optional branch"* survived on the same line, contradicting the corrected `:143` and pointing at a branch the corrected `:136` diagram no longer draws:
+>
+> > **Runs after all required work, independent of the deferred envelopes (E1, E3).** If Route A's boundaries and Task 12 completed, it measures with `SRC-007`/`SRC-008` represented and their temporal status recorded. If they were deferred, it measures both as residual gaps, records that the inability to represent adopted-not-effective evidence is itself the truthful finding, and **D1(a) completes**.
+>
+> **`:642` §5 readiness** — replace *"envelopes E1–E4 and Task 12, which depends on them"* with *"envelopes E1 and E3, and Task 12, which depends on E2 and E4 only"*, **and** the following sentence's *"each needs a dedicated sub-plan written when its gate opens"* with *"E1 and E3 each need a dedicated sub-plan written when their gate opens; Task 12's is this sub-plan's B-T12"*. Leaving that sentence would assert Task 12 still lacks a sub-plan, two pages after `:523` records that it has one.
 >
 > **`:687` sequence table** — replace *"E1–E4 sub-plan, if approved | D1a-4"* with *"Route A sub-plan (B-NORM, B-E4, B-E2) | D1a-4"*.
 >
@@ -313,7 +341,7 @@ Parent plan `:536` reads *"Four artefacts (two acts, two annexes), same shape an
 
 **A stale contract with no owner, and this plan takes ownership rather than leaving it as an observation.** `CLAUDE.md:52–54` states the program-agnosticism gate must stay at *"exactly **five** pre-existing hits: `types.ts` (1), `cli/assess.ts` (1), `verification/render.ts` (2), `engine/summary.ts` (1)"*. The established gate — asserted by this plan's §1, by Task 10's report and by every recent boundary — is **seven**. Verified at `018da3f`: `grep -ri csrd backend/engine/src/ | wc -l` = **7**.
 
-> **Proposed replacement for the count and its enumeration.** The two additional hits are identified here rather than left for B-NORM to discover: **`src/monitoring/types.ts:113`** and **`src/monitoring/register.ts:83`**, both docstring sentences reading *"twelve of seventeen CSRD sources share `eur-lex.europa.eu`"* — program-agnosticism-compliant prose explaining why a host matcher is no permission. The corrected contract reads **seven**, enumerated as `types.ts` (1), `cli/assess.ts` (1), `verification/render.ts` (2), `engine/summary.ts` (1), `monitoring/types.ts` (1), `monitoring/register.ts` (1). **The correction states the true count; it does not license new hits.**
+> **Proposed replacement for the count and its enumeration.** The two additional hits are identified here rather than left for B-NORM to discover: **`src/monitoring/types.ts:113`** and **`src/monitoring/register.ts:83`**, both docstring sentences reading *"twelve of seventeen CSRD sources share `eur-lex.europa.eu`"* — program-agnosticism-compliant prose explaining why a host matcher is no permission. The corrected contract reads **seven**, enumerated as `types.ts` (1), `cli/assess.ts` (1), `verification/render.ts` (2), `engine/summary.ts` (1), `monitoring/types.ts` (1), `monitoring/register.ts` (1). **The correction states the true count; it does not license new hits** — and that clause is carried **into the file itself** as a closing sentence, not left only here: *"The count states the true pre-existing total; it does not license new program-specific references."* A contract that states a number without stating its own limit invites the next boundary to read the number as headroom.
 
 **This is the one B-NORM passage outside the parent spec and parent plan**, and it is included deliberately: leaving a documented gate contradicting the gate every boundary actually runs is the same defect class as the rest of §3, one file over. If the user prefers, it can be split into a preceding micro-boundary — but it must not stay unowned.
 
@@ -327,15 +355,16 @@ Parent plan `:536` reads *"Four artefacts (two acts, two annexes), same shape an
 
   | File | Passages |
   |---|---|
-  | `docs/superpowers/specs/2026-08-24-d1a-corpus-provenance-design.md` | `:267`, `:291`, `:341`, `:349`, `:394`, `:408`, `:473–474`, `:511–514`, `:517`, `:605`, `:607`, `:609`, `:611`, `:777` — **13 rows, 14 line references** (`#9` carries both `:607` and `:609`) |
+  | `docs/superpowers/specs/2026-08-24-d1a-corpus-provenance-design.md` | `:267`, `:289`, `:291`, `:341`, `:349`, `:394`, `:408`, `:473–474`, `:511–514`, `:517`, `:605`, `:607`, `:609`, `:611`, `:777`, `:814` — **15 rows, 16 line references** (`#9` carries both `:607` and `:609`) |
   | `docs/superpowers/plans/2026-08-24-d1a-corpus-provenance.md` | `:7`, `:9`, `:136`, `:143`, `:458`, `:521`, `:523`, `:527`, `:528`, `:530`, `:536`, `:547`, `:642`, `:687`, `:703`, `:717` — **16 rows** |
   | `CLAUDE.md` | `:52–54` — the grep contract (§3.9) |
 
-  **Thirty stale passages in thirty-one rows.** `:11` of the parent plan was swept and found **not** stale and is the thirty-first.
+  **Thirty-two stale passages in thirty-three rows.** `:11` of the parent plan was swept and found **not** stale, and is row `#14` — the one row of the thirty-three requiring no change. The spec's two additions (`:289`, `:814`) are rows `#32`–`#33`, appended out of file order so earlier row numbers stay stable.
 - **No code, no schema, no data, no test changes. No engine gate may move.**
 - **Verification:** `git diff --stat` shows exactly those **three** files; `cd backend/engine && npx vitest run` and `npx tsc --noEmit` unchanged from `89b0b86` (54/1574, exit 0); `grep -ri csrd backend/engine/src/ | wc -l` still 7.
+- **Resuming over a partially-applied tree.** This plan repair is committed **first, on its own**; the aborted 2026-09-01 pass then remains as the only uncommitted change, so B-NORM's own `git diff --stat` is again exactly the three files above. The resumed boundary verifies **each row's final text against this plan**, not against a clean baseline, and locates every passage by quoted text rather than by line number (§3.0). **Twelve existing rows changed treatment here and must be re-applied over what that pass left:** `#7`/`#11` (§3.1 now *replaces* `:517` rather than annotating it), `#5` (§3.3's D-5 attribution), `#8`/`#9` (§3.2's cross-document qualification), `#10` (§3.3's within-artefact clarification), `#17` (§3.8's `Corrected` prefix), `#18`, `#23`, `#26`, `#27` (§3.8 now governs whole passages), and `#31` (§3.9 carries the non-licensing sentence into the file itself). Rows `#32`–`#33` are new. The remaining **eighteen** stale rows are already in their final form and must come out byte-identical.
 - **Teeth:** none — a docs boundary has no runtime behaviour to red. Its evidence is the diff and the unchanged gates, stated as such rather than dressed up as a test.
-- **Abort A-NORM-1:** if applying a correction reveals a *further* contradiction not listed in §3, stop and report rather than widening the diff.
+- **Abort A-NORM-1:** if applying a correction reveals a *further* contradiction not listed in §3, stop and report rather than widening the diff. **It fired once already**, on 2026-09-01, after the pass had applied all thirty rows the map then carried; the response was to repair this plan — the governing authority — rather than to widen that diff, and it remains binding on the resumed pass. **Its unit is the whole mapped passage:** stale text left beside a corrected fragment, on a line the boundary itself edited, is a §3 defect rather than a new discovery, and §3.0 now says so explicitly.
 - **Commit boundary:** one commit. *Say once where standing lives.*
 
 ---
@@ -1080,7 +1109,7 @@ OJ publication of C(2026) 5010 / 5011
 | | Condition | Action |
 |---|---|---|
 | **A-0** | **Pre-ingest publication gate** — §10.1 | stop, recompute |
-| A-NORM-1 | Applying a §3 correction reveals a further contradiction not listed | stop; do not widen the diff |
+| A-NORM-1 | Applying a §3 correction reveals a further contradiction not listed — **including stale text surviving beside a corrected fragment in the same passage** | stop; do not widen the diff. Repair §3, then resume. Fired 2026-09-01; this revision is that repair |
 | A-E4-1 | The matcher cannot be expressed generically without naming a host or scheme-specific identifier in production code | stop; abstraction is wrong |
 | A-E2-1 | I-2 cannot be implemented without moving a **requirement** version | stop; standing has leaked onto the requirement axis |
 | A-E2-2 | T1 and T2 cannot both be green in one world | stop; the rule is a blanket exclusion, not D-6's |
@@ -1102,7 +1131,7 @@ OJ publication of C(2026) 5010 / 5011
 ## 11. Sequencing, and the decisions as settled
 
 ```
-B-NORM  apply 30 normative passages (§3)           docs only · no gate moves
+B-NORM  apply 32 normative passages (§3)           docs only · no gate moves
 B-E4    exact_query origin matcher                 no identity moves
 B-E2    standing, authenticity, operative status,  moves every corpusClosureSha256;
         identity, traversal                        RESULT_SCHEMA_VERSION → 1.3.0,
