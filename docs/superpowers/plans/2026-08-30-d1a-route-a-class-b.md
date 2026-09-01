@@ -140,7 +140,49 @@ Commission page verbatim *"not in force until it is published in the Official Jo
 
 ## 3. Normative corrections — applied by B-NORM, not here
 
-**Six subsections, nine discrete passages** — six in the parent spec (§6 row B, §7.1's enforcement paragraph, §9's `CorpusDocument` block, §12.4, §16's head, §16 condition 5) and three in the parent plan (the E4 row, Task 12's four-artefacts sentence at `:536`, the sequence note). B-NORM's file scope in §4 is the operative list.
+**Thirty stale passages across three files.** An earlier revision of this plan claimed nine and was wrong: an independent audit found stale normative text outside that set, and a sweep against `018da3f` confirmed every lead and found more. **B-NORM cannot rely on a broad supersession note while false normative sentences remain live** — each would either survive as a contradiction or trip A-NORM-1 on contact.
+
+#### 3.0 The complete passage map
+
+Swept for six defect classes: standing located on `CorpusDocument`/"the corpus" rather than the pack source; Task 12 coupled to PDF extraction or to all of E1–E4; four-artefact assumptions; E1 on Route A's critical path; E3 required before an OJ successor exists; stale sequence descriptions.
+
+| # | File | Line | Stale text | Class | Diff |
+|---|---|---|---|---|---|
+| 1 | spec | `:267` | §6 row B — *"corpus document carrying `adopted_not_effective` status"* | standing-on-corpus | §3.3 |
+| 2 | spec | `:291` | §7 Rule — *"representable **in the corpus**"* | standing-on-corpus | **§3.7** |
+| 3 | spec | `:341` | §7.1 "Who owns enforcement", both sentences | standing-on-corpus | §3.3 |
+| 4 | spec | `:349` | §7.1 — *"it may not enter the corpus until its status is representable"* | standing-on-corpus | **§3.7** |
+| 5 | spec | `:394` | §9 `CorpusDocument { legalStatus, … }` | standing-on-corpus | §3.3 |
+| 6 | spec | `:473–474` | §12 disposition — SRC-007/008 *"ingest **after** the §16 capability"* | E1-on-critical-path | **§3.7** |
+| 7 | spec | `:511–514` | §12.4 the four PDF filenames | four-artefact | §3.1 |
+| 8 | spec | `:605` | §16 head — *"may not be ingested until all eight are settled"* | E1-on-critical-path | §3.2 |
+| 9 | spec | `:607`, `:609` | §16 conditions **1 and 3** — PDF acquisition; `NORMALIZER_VERSION` bump. *(`:608` is condition 2, which §3.2 **retains**)* | E1-on-critical-path | §3.2 |
+| 10 | spec | `:611` | §16 condition 5 — *"One artefact-level classification"* | standing-on-corpus | §3.3 |
+| 11 | spec | `:517` | §12.4 — *"served from host `ec.europa.eu`, which is not in the citable host set (F-5). Capability requirements in §16"* | four-artefact + E1-on-critical-path | §3.1 |
+| 12 | spec | `:408` | §9 — *"If the OJ text differs from **the adopted PDF**"* | four-artefact (format noun) | **§3.7** |
+| 13 | spec | `:777` | §21 D1a-4 row — *"PDF normalization, authority validation…"* | E1-on-critical-path | **§3.7** |
+| 14 | plan | `:11` | *"a PDF extractor is a dependency question belonging to envelope E1's sub-plan"* | **not stale** — still true generally; recorded so the sweep is auditable | — |
+| 15 | plan | `:7` | *"Thirteen implementation tasks and **four deferred capability envelopes**"* | sequence | **§3.8** |
+| 16 | plan | `:9` | *"Class-B capability (E1–E4) is a gated sub-plan boundary"* | sequence | **§3.8** |
+| 17 | plan | `:136` | flow diagram — *"OPTIONAL E1–E4 envelopes ─► approved sub-plan ─► T12"* | sequence | **§3.8** |
+| 18 | plan | `:143` | Task 13 — *"does not wait on the optional branch"* | sequence | **§3.8** |
+| 19 | plan | `:458` | *"`SRC-007` and `SRC-008` … are Class-B, gated behind envelopes E1–E4"* | sequence + E1-on-critical-path | **§3.8** |
+| 20 | plan | `:521` | heading — *"Envelopes E1–E4 — class-B capability (deferred, not implementation-ready)"* | sequence | **§3.8** |
+| 21 | plan | `:523` | *"each requires a dedicated implementation sub-plan before execution"* | sequence | **§3.8** |
+| 22 | plan | `:527` | E1 row | E1-on-critical-path | **§3.8** |
+| 23 | plan | `:528` | E2 row — *"`CorpusDocument` **document standing**"* | standing-on-corpus | **§3.8** |
+| 24 | plan | `:530` | E4 row | capability restatement | §3.4 |
+| 25 | plan | `:536` | Task 12 — *"Gated behind E1–E4… Four artefacts (two acts, two annexes)"* | four-artefact + sequence | §3.5 |
+| 26 | plan | `:547` | Task 13 — *"If E1–E4 and Task 12 completed"* | sequence | **§3.8** |
+| 27 | plan | `:642` | §5 readiness — *"envelopes E1–E4 and Task 12, which depends on them"* | sequence | **§3.8** |
+| 28 | plan | `:687` | sequence table — *"E1–E4 sub-plan, if approved \| D1a-4"* | sequence | **§3.8** |
+| 29 | plan | `:703` | Risk 5 — *"If no PDF extractor… E1–E4 and Task 12 stay deferred"* | E1-on-critical-path | **§3.8** |
+| 30 | plan | `:717` | audit row — *"E1–E4 are capability envelopes requiring their own sub-plan"* | sequence | **§3.8** |
+| 31 | `CLAUDE.md` | `:52–54` | *"must stay at exactly **five** pre-existing hits"* — the gate is **seven** | stale contract | **§3.9** |
+
+**Thirty stale passages plus one verified-not-stale (`#14`) — thirty-one rows.** The unit is **the row**, and one row (`#9`) carries two line references, so §4's reference lists are longer than the row counts by one; both numbers are given there rather than left to be inferred. Rows were added by three successive sweeps, the later ones after independent audits found the earlier sweeps incomplete — recorded because it is the reason §4 verifies against this table rather than against a remembered total.
+
+B-NORM's file scope in §4 is the operative list.
 
 ### 3.1 spec §12.4 — the PDF assumption is superseded
 
@@ -152,7 +194,7 @@ Commission page verbatim *"not in force until it is published in the Official Jo
 
 > **Proposed addition** to the head of §16:
 >
-> > **Scope, corrected 2026-08-30.** These conditions govern any artefact for which no official machine-readable HTML expression exists. `SRC-007` and `SRC-008` are not such artefacts (§12.4 as corrected), so conditions **1** and **3** are **not invoked**.
+> > **Scope, corrected 2026-08-30.** **Conditions 1 and 3 are PDF-specific: they govern only an artefact for which no official machine-readable expression exists.** `SRC-007` and `SRC-008` are not such artefacts (§12.4 as corrected), so those two are **not invoked**. The remaining conditions are format-independent and govern every Class-B artefact, Route A's included.
 > >
 > > Condition **2** applies, read in HTML terms rather than PDF ones: the raw/normalized hash split is retained exactly as it is for every other document — `sha256Raw` over the bytes as served, `sha256Normalized` over the extracted text. Conditions **4, 6 and 8 apply unchanged**. Condition **5 is amended by §3.3**.
 > >
@@ -207,9 +249,73 @@ Parent plan `:536` reads *"Four artefacts (two acts, two annexes), same shape an
 >
 > > Gated behind the Route A sub-plan's boundaries being approved and green. **Two artefacts** — one complete HTML expression per act, each carrying its enacting terms and both annexes — same ingestion invariant as Tasks 6–9, plus: the instrument's `adopted_not_effective` standing asserted through the production path, and S-011's cap-catalogue dependency shown to resolve to **Annex II within the same artefact**.
 
-### 3.6 parent plan — record the corrected sequence
+*(**§3.6 is retired.** It proposed a standalone corrected-sequence note routed from no row of §3.0's map — the map B-NORM treats as operative — so it was an instruction with no source insertion point and no route to an applying boundary. Its content is folded into §3.8's `:136` correction, the row that actually carries the sequence repair. The heading number is retired rather than reused, so §3.0's routing, §3.8's fourteen passages and §4's counts are all unchanged.)*
 
-> **Corrected 2026-08-30.** Task 12 proceeds under Route A via `docs/superpowers/plans/2026-08-30-d1a-route-a-class-b.md`, sequence `B-NORM → B-E4 → B-E2 → B-T12`. **E1 is not on Task 12's critical path** and E3 is deferred until an OJ successor exists.
+### 3.7 spec §7's two "in the corpus" sentences, §12's disposition rows, and §21's D1a-4 row
+
+> **§7 Rule (`:291`) — proposed replacement:**
+>
+> > **Rule:** an adopted-not-effective artefact may enter the corpus only when its temporal status is **representable and reaching verification** — held on the instrument in the knowledge pack (§9 as corrected), projected to every role beside the artefact's own authenticity — so no role can treat a future act as current operative law. Until then the requirement citing it halts, and that halt is correct.
+>
+> **§7.1 (`:349`) — proposed replacement:**
+>
+> > §7 gates an **adopted-not-effective** artefact: it may not enter the corpus until its status is representable **and reaches verification**, because a role shown that document would read a future obligation as a current one.
+>
+> **§12 disposition rows (`:473–474`) — proposed replacement of the middle cell in both:**
+>
+> > ingest under Route A once **document standing (E2) and artefact origin (E4)** are in place; §16's PDF conditions are not invoked (§12.4, §16 as corrected)
+>
+> **§9 (`:408`) — replace the *first sentence only*; the paragraph's second sentence (*"Exact field names are implementation-plan work; the semantics above are not."*) is untouched:**
+>
+> > If the OJ text differs from the **adopted text**, **both are preserved**, and the later artefact becomes the current legal record according to its temporal status.
+>
+> *(Route A's adopted artefacts are HTML expressions; "the adopted PDF" was written when only the Commission PDFs were in view. The preservation rule itself is unchanged and §8's B-OJ cascade depends on it.)*
+>
+> **§21 D1a-4 row (`:777`) — proposed replacement:**
+>
+> > | **D1a-4** | Adopted-not-effective corpus capability: **document standing**, artefact-origin authority, lifecycle metadata (§7, §9, §19). **PDF normalization belongs to §16 and is not invoked where an official machine-readable expression exists** |
+
+### 3.8 parent plan — the E1/E4 gating cluster
+
+**Fourteen passages.** Thirteen assert together that Task 12 waits on all four envelopes and on a PDF extractor; the fourteenth (`:528`, the E2 row) is a **standing-on-corpus** repair that lands here because it sits inside the same envelope table and would otherwise be edited twice. Every row §3.0 routes here has a diff below — an earlier revision listed seven and left four routed rows with no correction, which would have tripped A-NORM-1 on contact.
+
+> **`:7` architecture header** — replace *"Thirteen implementation tasks and **four deferred capability envelopes**"* with *"Thirteen implementation tasks and **two deferred capability envelopes (E1, E3)**; E2 and E4 are on Route A's critical path."*
+>
+> **`:9` readiness header** — replace *"**Class-B capability (E1–E4) is a gated sub-plan boundary, not a set of implementation-ready tasks** — see §5"* with *"**Class-B capability is split: E2 and E4 are planned and approved under Route A; E1 and E3 remain gated sub-plan boundaries** — see §5."*
+>
+> **`:136` flow diagram** — replace the `OPTIONAL E1–E4 envelopes ─► approved sub-plan ─► T12` branch with `ROUTE A  B-NORM ─► B-E4 ─► B-E2 ─► B-T12   (E1, E3 deferred)`, and record beneath the diagram what the redrawn branch no longer spells out: *"Task 12 proceeds under Route A via `docs/superpowers/plans/2026-08-30-d1a-route-a-class-b.md`, sequence `B-NORM → B-E4 → B-E2 → B-T12`. **E1 is not on Task 12's critical path** and E3 is deferred until an OJ successor exists."* Row `#17` **is** the sequence repair, so the corrected-sequence note lands with it rather than standing alone. This absorbs the retired §3.6: it adds **no** row, and §4's sixteen plan rows are unchanged.
+>
+> **`:143` Task 13 framing** — replace *"does not wait on the optional branch"* with *"does not wait on the deferred envelopes (E1, E3)"*, and the conditional *"If class-B capability was approved and completed"* with *"If Route A's boundaries and Task 12 completed"*.
+>
+> **`:458` what-that-leaves** — replace *"they are Class-B, **gated behind envelopes E1–E4**, and belong to Task 12"* with *"they are Class-B and belong to Task 12, which under Route A depends on **E2 and E4 only** (§12.4 as corrected)."*
+>
+> **`:521` envelopes heading** — replace *"Envelopes E1–E4 — class-B capability (deferred, not implementation-ready)"* with *"Envelopes E1–E4 — class-B capability (**E2 and E4 planned under Route A; E1 and E3 deferred**)"*.
+>
+> **`:523` the "not tasks" paragraph** — narrow it to the deferred pair: *"**E1 and E3 are capability envelopes, not tasks.** Each states the spec's acceptance conditions and its gate, and each requires a dedicated sub-plan before execution — writing file lists and mutants for them now would be speculation about a dependency that has not been selected. **E2 and E4 have such a sub-plan** (`docs/superpowers/plans/2026-08-30-d1a-route-a-class-b.md`), so this paragraph no longer governs them."*
+>
+> **`:527` E1 row** — append: *"**Not on Route A's critical path** — invoked only for an artefact with no official machine-readable expression (§12.4 as corrected)."*
+>
+> **`:528` E2 row** — replace *"`CorpusDocument` **document standing**"* with *"**Document standing** — artefact authenticity on `CorpusDocument`, temporal standing on the knowledge-pack source (§9 as corrected)"*.
+>
+> **`:547` Task 13** — replace *"If E1–E4 and Task 12 completed"* with *"If Route A's boundaries and Task 12 completed"*.
+>
+> **`:642` §5 readiness** — replace *"envelopes E1–E4 and Task 12, which depends on them"* with *"envelopes E1 and E3, and Task 12, which depends on E2 and E4 only"*.
+>
+> **`:687` sequence table** — replace *"E1–E4 sub-plan, if approved | D1a-4"* with *"Route A sub-plan (B-NORM, B-E4, B-E2) | D1a-4"*.
+>
+> **`:703` Risk 5** — replace with: *"**Risk 5 — E1's dependency, no longer on the critical path.** Route A ingests official HTML expressions, so Task 12 does not wait on a PDF extractor. E1 reopens only if an artefact has no machine-readable expression; a residual gap on such an artefact remains a truthful finding."*
+
+> **`:717` audit row** — replace *"E1–E4 are capability envelopes requiring their own sub-plan"* with *"E1 and E3 are capability envelopes requiring their own sub-plan; E2 and E4 are planned under the Route A sub-plan"*.
+
+---
+
+### 3.9 root `CLAUDE.md` — the CSRD grep contract
+
+**A stale contract with no owner, and this plan takes ownership rather than leaving it as an observation.** `CLAUDE.md:52–54` states the program-agnosticism gate must stay at *"exactly **five** pre-existing hits: `types.ts` (1), `cli/assess.ts` (1), `verification/render.ts` (2), `engine/summary.ts` (1)"*. The established gate — asserted by this plan's §1, by Task 10's report and by every recent boundary — is **seven**. Verified at `018da3f`: `grep -ri csrd backend/engine/src/ | wc -l` = **7**.
+
+> **Proposed replacement for the count and its enumeration.** The two additional hits are identified here rather than left for B-NORM to discover: **`src/monitoring/types.ts:113`** and **`src/monitoring/register.ts:83`**, both docstring sentences reading *"twelve of seventeen CSRD sources share `eur-lex.europa.eu`"* — program-agnosticism-compliant prose explaining why a host matcher is no permission. The corrected contract reads **seven**, enumerated as `types.ts` (1), `cli/assess.ts` (1), `verification/render.ts` (2), `engine/summary.ts` (1), `monitoring/types.ts` (1), `monitoring/register.ts` (1). **The correction states the true count; it does not license new hits.**
+
+**This is the one B-NORM passage outside the parent spec and parent plan**, and it is included deliberately: leaving a documented gate contradicting the gate every boundary actually runs is the same defect class as the rest of §3, one file over. If the user prefers, it can be split into a preceding micro-boundary — but it must not stay unowned.
 
 ---
 
@@ -217,9 +323,17 @@ Parent plan `:536` reads *"Four artefacts (two acts, two annexes), same shape an
 
 **Docs only.** The code must not be implemented against normative text this plan declares contradictory.
 
-- **Files:** `docs/superpowers/specs/2026-08-24-d1a-corpus-provenance-design.md` (§6 table row B, §7.1 enforcement paragraph, §9 `CorpusDocument` block, §12.4, §16 head, §16 condition 5); `docs/superpowers/plans/2026-08-24-d1a-corpus-provenance.md` (E4 row, **Task 12's four-artefacts sentence at `:536`**, sequence note).
+- **Files — three, and the passage list is §3.0's map, not a summary of it:**
+
+  | File | Passages |
+  |---|---|
+  | `docs/superpowers/specs/2026-08-24-d1a-corpus-provenance-design.md` | `:267`, `:291`, `:341`, `:349`, `:394`, `:408`, `:473–474`, `:511–514`, `:517`, `:605`, `:607`, `:609`, `:611`, `:777` — **13 rows, 14 line references** (`#9` carries both `:607` and `:609`) |
+  | `docs/superpowers/plans/2026-08-24-d1a-corpus-provenance.md` | `:7`, `:9`, `:136`, `:143`, `:458`, `:521`, `:523`, `:527`, `:528`, `:530`, `:536`, `:547`, `:642`, `:687`, `:703`, `:717` — **16 rows** |
+  | `CLAUDE.md` | `:52–54` — the grep contract (§3.9) |
+
+  **Thirty stale passages in thirty-one rows.** `:11` of the parent plan was swept and found **not** stale and is the thirty-first.
 - **No code, no schema, no data, no test changes. No engine gate may move.**
-- **Verification:** `git diff --stat` shows exactly those two files; `cd backend/engine && npx vitest run` and `npx tsc --noEmit` unchanged from `89b0b86` (54/1574, exit 0); `grep -ri csrd backend/engine/src/ | wc -l` still 7.
+- **Verification:** `git diff --stat` shows exactly those **three** files; `cd backend/engine && npx vitest run` and `npx tsc --noEmit` unchanged from `89b0b86` (54/1574, exit 0); `grep -ri csrd backend/engine/src/ | wc -l` still 7.
 - **Teeth:** none — a docs boundary has no runtime behaviour to red. Its evidence is the diff and the unchanged gates, stated as such rather than dressed up as a test.
 - **Abort A-NORM-1:** if applying a correction reveals a *further* contradiction not listed in §3, stop and report rather than widening the diff.
 - **Commit boundary:** one commit. *Say once where standing lives.*
@@ -246,9 +360,16 @@ Additive only — **`exact` and `path_prefix` behaviour must not change**.
 | Empty query | a declaration of this kind with no parameters is refused — it would be `exact` renamed |
 | **Documented edge cases** | `?a` and `?a=` both decode to `["a",""]`; `+` and `%20` both decode to a space. Neither bites Route A; both belong in the docstring |
 
-**Canonical key must be injective (D-2).** `canonicalQueryKey` serialises the sorted decoded pairs with **`JSON.stringify(sortedDecodedPairs)`**, never delimiter concatenation. Delimiter joining is unsafe here because decoded names and values may themselves contain `&`, `=` or any chosen separator, so two different multisets could produce one key — a matcher silently authorising a document nobody declared. This is the argument `closure.ts:157–162` already makes for JSON-encoding closure lines, adopted for the same reason.
+**The canonical key must be injective as a whole, not only in its query part.** Two levels:
 
-`canonicalOriginKey` incorporates the query key so per-row duplicate detection stays correct. **Per C-1, no cross-source uniqueness rule is added.**
+1. **The query sub-key** serialises the sorted decoded pairs with `JSON.stringify(sortedDecodedPairs)`, never delimiter concatenation: decoded names and values may contain `&`, `=` or any chosen separator, so two different multisets could produce one key. This is the argument `closure.ts:157–162` already makes for JSON-encoding closure lines.
+2. **The composed key is encoded structurally too — as defence in depth, and the honest reason is stated.** `canonicalOriginKey` is today `` `${kind} ${parsed.origin}${canonicalOriginPath(parsed)}` `` (`src/monitoring/origin.ts:58–61`) — delimiter-concatenated. It **becomes** `JSON.stringify([kind, origin, canonicalPath, sortedDecodedPairs])`.
+
+   **A draft of this plan claimed the concatenated form could collide and offered path `/a` + query `?b=1` against path `/a?b=1`. That example is false and is withdrawn**: `canonicalOriginPath` returns the pathname with a trailing slash trimmed except at the root (`origin.ts:46–49`), and no URL parses to a pathname containing a raw `?` — `https://h/a?b=1` gives pathname `/a`, and `https://h/a%3Fb=1` gives pathname `/a%3Fb=1`. **I could not construct a collision, and say so rather than shipping a tooth with no failing case.** Once point 1's query sub-key is JSON, the concatenated key is in fact already injective: a non-empty sub-key always contains a raw `"`, and a canonical path never can — `"` always encodes to `%22`, and the trailing-slash trim removes a character rather than introducing one.
+
+   **So the change is not a bug fix and is not toothed as one.** It is adopted because a uniform encoding does not depend on that argument surviving future edits: it is the same reasoning `closure.ts:157–162` gives for JSON-encoding closure lines, where the safety follows from the encoding rather than from which characters happen to be unavailable in a component. **A10 guards the whole-tuple re-encoding against behavioural regression** — the existing origins must behave identically after it — but **no tooth detects its omission**: leaving `canonicalOriginKey` delimiter-concatenated would keep every tooth in §5.2 green, because there is no collision for one to catch. **It is an explicitly reviewed hygiene refactor, not a bug fix proved by mutation**, and no unfalsifiable tooth is invented to dress it as one. *(M-A4 mutates `canonicalQueryKey`, the query sub-key, where A9 does have failing cases; the whole-tuple composition has none.)* The key is computed inside `register.ts:185`'s `superRefine` and is **never persisted**, so re-formatting changes no stored data.
+
+**Per C-1, no cross-source uniqueness rule is added.**
 
 ### 5.1 Files
 
@@ -352,6 +473,28 @@ Required-for-all was considered and rejected on truthfulness. The catalogue hold
 | SRC-017 | EU Delegated Regulation | *In force, as amended* | `in_force` |
 
 Ten instruments carry a standing; seven do not. **Every source served today (`SRC-001`, `SRC-002`, `SRC-004`, `SRC-005`) and every source B-T12 serves (`SRC-007`, `SRC-008`) is in the instrument set**, so the fail-closed rule is satisfiable at both boundaries.
+
+#### The consequence for non-instruments — O-1 selected, implementation deferred
+
+**Absence plus fail-closed makes the seven non-instrument sources permanently unservable, and the parent spec plans to serve one of them.** The conflict is concrete, not theoretical:
+
+| Evidence | Location |
+|---|---|
+| *"Its Notice is immutable and **ingestible**; its tier stays `official_body` with `sufficientAlone: 'non_binding_only'`"* | spec §7, `:293` |
+| `SRC-009 \| S-006 \| **ingest**, weight preserved \| `official_body` row (new) + corpus document` | spec §12 disposition, `:472` |
+| D1a-2 — *"Ingest the immutable surviving evidentiary artefacts — expected `SRC-005`, `SRC-006`, **`SRC-009`**…"* | spec §21, `:775` |
+
+So the spec intends `SRC-009` to be ingested and cited at its preserved tier. Under the rule as drafted it could never enter a closure. Neither the repository nor the specification selected a resolution, so it was put to the user as the product question it is. **It is now decided: O-1, with implementation deferred.** The three options are kept below because a decision is only auditable beside what it rejected — smallest first:
+
+| | Option | Assessment |
+|---|---|---|
+| **O-1** | **A structured `not_applicable` value**, declared explicitly on every non-instrument source. `temporalStanding` becomes required for **all 17**; the seven declare `not_applicable`. | **Selected.** Fail-closed is preserved — *absence* still refuses, because absence is no longer expressible. It never pretends guidance has an effective date: `not_applicable` is a claim about the *kind* of source, which is exactly what is true. It costs one enum value on a **new** field, so nothing existing is reinterpreted, and the requirement-side `legalStatus` enum (`schema.ts:155`) is untouched — the two vocabularies stop being identical, which the plan should say out loud rather than let drift. |
+| **O-2** | **Derive applicability from `legalType`** — require standing only where `legalType` names an instrument. | **Rejected.** `legalType` is free text (`z.string()`, `schema.ts:96`) with values like *"Official policy/source hub"*. Inferring a structural rule from free text is the anti-pattern D-5 exists to remove, one field over. |
+| **O-3** | **Declare non-instruments permanently unservable** and correct spec §7/§12/§21 to withdraw the intent to ingest `SRC-009`. | **Rejected.** Coherent, and cheapest in code, but it is a **product decision** — it removes official Commission guidance from the corpus permanently — and the direction taken is the opposite: official guidance and other non-instrument sources must remain ingestible. B-NORM's passage map therefore does **not** grow by the three spec passages this option would have required. |
+
+**O-1 selected; implementation deferred to a named future sub-plan before the first non-instrument ingestion.** The product direction is settled — official guidance and other non-instrument sources remain ingestible, and deriving applicability from free-text `legalType` stays rejected. **Route A implements none of it:** no boundary in this plan adds `not_applicable`, makes `temporalStanding` required, or serves a non-instrument source. It therefore blocks nothing here — no non-instrument source is served today or by B-T12, so the fail-closed rule is satisfiable exactly as drafted.
+
+**Boundary B-STANDING-ALL — the deferred implementation, scoped here and planned elsewhere.** It must settle, together and before the first non-instrument source is served: the `not_applicable` enum value and the `sources.json` schema migration introducing it; `temporalStanding` becoming **required across all seventeen sources**; how a `not_applicable` standing renders on the review sheet and in the closure grammar; R-b's treatment of a served non-instrument, whose indivisibility rule was written for instruments; the fixtures and mutations that hold the fail-closed rule once absence stops being expressible; and the identity consequences of a pack-shape change made after B-E2's surfaces have already moved. **No file list is written here** — that would be speculation about a tree B-E2 and B-T12 have not yet produced. On the current sequence the gate is D1a-2's `SRC-009` ingestion.
 
 **Tooth B9 — the fail-closed rule.** A synthetic world whose served source carries no `temporalStanding` must **refuse** at closure construction, naming the source; its sibling with a standing present succeeds. **M-B10:** default a missing standing to `in_force` → B9 reds.
 
@@ -469,23 +612,44 @@ computeClosure(index, entryDocIds, standing, policy?)
 
 **The expansion rule — R-b (D-8).** A document is **expansion-eligible** — reachable by structural traversal from a document that does not serve it — only if **every** source it serves is `in_force`. A multi-source artefact is indivisible: its text is rendered whole, so if any served source is adopted-not-effective, R-a would expose future-law material through an unrelated structural path. **Direct citation still admits the artefact** (`docsForSources`), so R-b is the conservative rule that actually satisfies D-6.
 
-**The purpose-built world.** The real pack cannot prove this — the corpus holds **exactly one edge** and B-T12 adds none. Identifiers are new: `SRC-901`/`SRC-902`/`SYN-R-A` are already bound at `test/pipeline-source-completeness.test.ts:182–184`, in a world whose docstring (`:175–179`) says edges were *deliberately dropped* so traversal would not occur; reusing them with an edge present and the opposite expectation would make the two fixtures read as contradicting each other.
+**The purpose-built world.** The real pack cannot prove this — the corpus holds **exactly one edge** and B-T12 adds none. Identifiers are new: `SRC-901`/`SRC-902`/`SYN-R-A` are already bound at `test/pipeline-source-completeness.test.ts:182–184`, in a world whose docstring (`:175–179`) says edges were *deliberately dropped* so traversal would not occur.
+
+**The previous draft's world could not prove R-b, and this is the correction.** It gave the multi-source target `serves: [SRC-911, SRC-912]` while the probing requirement cited `SRC-911` — and `docsForSources` (`src/corpus/closure.ts:78–85`) selects **any** document whose `serves` intersects the wanted set. The target was therefore a **direct entry**, admitted under D-8 by both quantifiers, so T4 could not red on a flip and M-T3 was false. The same draft's T2 expected `{DOC-RN}` alone, which is also wrong: structural edges are followed **in both directions** (`closure.ts:130–133`, the `structural.has(e.kind)` branch — `:132` forward, `:133` reverse), so a closure entered at the target reaches its edge partner too.
+
+**The corrected world. The probing requirement cites neither source the multi-source target serves, and the target is reachable only through a structural edge.**
+
+**The four documents are the real corpus's files, copied and re-labelled**, as `pipeline-source-completeness.test.ts:170–179` already requires of synthetic corpora: a hand-written document cannot satisfy the raw-reproduces-normalized check under the real normalizer, and faking that is how a fixture starts lying about integrity. The corpus holds exactly four documents, which is the number this world needs; their `edges` are replaced with the two declared here.
 
 ```
-SRC-911 in_force               DOC-RM serves SRC-911  ── amendedBy ──▶ DOC-RN
-SRC-912 adopted_not_effective  DOC-RN serves SRC-912
+standing:  SRC-911 in_force   SRC-912 adopted_not_effective   SRC-913 in_force
+           SRC-914 in_force   SRC-915 in_force                SRC-916 in_force
 
-STD-R-M   cites SRC-911 only  → closure MUST hold {DOC-RM}       (DOC-RN must NOT arrive by expansion)
-STD-R-N   cites SRC-912       → closure MUST hold {DOC-RN}       (entry point admitted)
+DOC-RM serves [SRC-911]           ──amendedBy──▶  DOC-RN serves [SRC-912, SRC-913]   ← MIXED target
+DOC-RQ serves [SRC-914]           ──amendedBy──▶  DOC-RP serves [SRC-915, SRC-916]   ← all-in_force target
+
+STD-R-MIXED    cites [SRC-911]    (neither SRC-912 nor SRC-913 — the target is expansion-only)
+STD-R-INFORCE  cites [SRC-914]    (neither SRC-915 nor SRC-916 — likewise)
+STD-R-DIRECT   cites [SRC-912]    (direct citation of the adopted-not-effective source)
 ```
 
-- **T1 — expansion refused.** `STD-R-M`'s closure excludes `DOC-RN` despite the structural edge.
-- **T2 — entry point admitted.** `STD-R-N`'s closure holds `DOC-RN`. **T1 and T2 in the same world**, so a blanket exclusion cannot pass.
-- **T3 — standing-driven, not document-driven.** Flip `SRC-912` to `in_force`; `DOC-RN` now *does* reach `STD-R-M` by expansion. Without T3, an implementation hardcoding "`DOC-RN` never expands" would be green.
-- **T4 — R-b, on mixed standing (D-8).** Give `DOC-RN` `serves: [SRC-911, SRC-912]` — one `in_force`, one `adopted_not_effective`. **Expansion must still be refused.** Its sibling: an all-`in_force` multi-source document **does** expand. The pair proves R-b rather than R-a, and proves the rule is not "any multi-source document is blocked".
-- **M-T1** delete the standing consultation → T1 reds naming the document that arrived by expansion.
-- **M-T2** exclude the document entirely → T2 reds.
-- **M-T3** flip the quantifier to R-a (any-`in_force`) → **T4 reds**.
+**Exact closure sets, computed under both quantifiers, entry documents included:**
+
+| Requirement | Entry | Closure under **R-b** | Closure under R-a |
+|---|---|---|---|
+| `STD-R-MIXED` | `{DOC-RM}` | **`{DOC-RM}`** | `{DOC-RM, DOC-RN}` |
+| `STD-R-INFORCE` | `{DOC-RQ}` | **`{DOC-RP, DOC-RQ}`** | `{DOC-RP, DOC-RQ}` |
+| `STD-R-DIRECT` | `{DOC-RN}` | **`{DOC-RM, DOC-RN}`** | `{DOC-RM, DOC-RN}` |
+
+**Exactly one row differs between the quantifiers**, and that is what makes the flip detectable.
+
+- **T1 — expansion refused on mixed standing.** `STD-R-MIXED`'s closure is **exactly `{DOC-RM}`**. `DOC-RN` serves one `in_force` and one `adopted_not_effective` source and does not arrive.
+- **T2 — direct citation admits, and the closure is stated in full.** `STD-R-DIRECT`'s closure is **exactly `{DOC-RM, DOC-RN}`**: `DOC-RN` as the cited entry despite its adopted-not-effective source, **and** `DOC-RM` reached back along the same edge because it is expansion-eligible. T1 and T2 hold **in one world**, so a blanket exclusion cannot pass.
+- **T3 — standing-driven, not document-driven.** Flip `SRC-912` to `in_force` and `STD-R-MIXED`'s closure becomes **`{DOC-RM, DOC-RN}`**. Without T3 an implementation hardcoding "`DOC-RN` never expands" would be green.
+- **T4 — R-b is not "block every multi-source document".** `STD-R-INFORCE`'s closure is **exactly `{DOC-RP, DOC-RQ}`**: `DOC-RP` serves **two** sources and expands, because both are `in_force`. T4 is the *unflipped* case that keeps R-b honest — it states positively that multi-source expansion works when standing permits. *(It is not the sole detector of M-T4: a blanket multi-source refusal also reds T3, since `DOC-RN` serves two sources there. T4 names the proposition directly rather than leaving it inferable from another tooth's failure.)*
+- **M-T1** delete the standing consultation → **T1** reds, naming `DOC-RN` as arriving by expansion. *(M-T1 and M-T3 produce identical closures in this world, because `DOC-RN` happens to serve one `in_force` source. Both correctly red T1; they are listed separately because they are different edits with different intents — removing the gate versus weakening it — not because either detects something the other misses.)*
+- **M-T2** exclude adopted-not-effective documents entirely, entries included → **T2** reds.
+- **M-T3 — the quantifier flip.** Change R-b to R-a (eligible if *any* served source is `in_force`) → **T1** reds, its closure gaining `DOC-RN`. This is the single load-bearing tooth for the quantifier, and unlike the previous draft's version it genuinely moves.
+- **M-T4** refuse expansion into any document serving more than one source → **T4** reds.
 
 **`STRUCTURAL_EDGE_KINDS`' docstring must be corrected** in the same commit: *"Kinds that lead to the same law in its currently governing form"* is the premise this rule refines — an adopted-not-effective amendment leads to a **future** governing form.
 
@@ -522,12 +686,14 @@ D-12 makes I-2's approval conditional on this table closing.
 | Pack/knowledge surface | Contract | Verdict |
 |---|---|---|
 | `sourceRecordSchema` (`src/knowledge/schema.ts:93`) | none — the pack has **no per-file schema version** | **A genuine absence, recorded rather than invented.** The shape changes with nothing to bump. Introducing a pack-schema version is out of scope here and is not smuggled in |
-| `pack.version` (`manifestSchema`, `src/knowledge/schema.ts:225`; today `0.1.0`) | authored string, **no documented bump rule**; recorded on every signature (`src/verification/ledger.ts:117`, `['integrity','audit']` at `accounting.ts:304`) **and embedded in every engine result** by `src/engine/evaluate.ts:201` as `` `${pack.id}@${pack.version} (legal snapshot …)` `` | **Unchanged at `0.1.0`** — see the note below |
+| `pack.version` (`manifestSchema`, `src/knowledge/schema.ts:225`; today `0.1.0`) | authored string whose **documented bump rule is a pack-flag flip** (`backend/engine/CLAUDE.md:65`), not a schema-shape change; recorded on every signature (`src/verification/ledger.ts:117`, `['integrity','audit']` at `accounting.ts:304`) **and embedded in every engine result** by `src/engine/evaluate.ts:201` as `` `${pack.id}@${pack.version} (legal snapshot …)` `` | **Unchanged at `0.1.0`** — see the note below |
 | `requirementInputSha256` (`src/verification/canonical.ts:155`) | covers **only** `provenance` + `logicalPayloadSha256` | **Unchanged.** `sources.json` is not in the payload, so **no requirement version moves** — the claim in §6.5.4 is proved here, not assumed |
 | `ledger.signing.rendererVersion` (`src/verification/ledger.ts:124`, `['audit']`) | records which renderer produced the English a signature pins — today the **condition** renderer | **DECIDED: the signature also records `closureRendererVersion`.** A renderer version hashed into `pipelineVersion` but absent from the signature record would leave the human-verification answer incomplete — a verifier could not say which grammar produced the closure text the signature attests to. Requirements in §6.5.5 |
 | `frontend/web/lib/pack.ts:419–423` | none — it **regex-matches `statusAtSnapshot`** (`/^in force/i`, and `/adopted/i` with `/not in force\|pending/i`) | **Must be repointed to `temporalStanding`.** This is a **second, undeclared derivation of standing from free text** — precisely what D-5's single-owner rule forbids — and the rename would break it anyway. Finding it is the strongest argument for the rename |
 
-**Why `pack.version` does not bump, and what it would have cost.** A bump was the intuitive answer and it is wrong here. `evaluate.ts:201` embeds the version string in every assessed requirement, and **both goldens carry `csrd@0.1.0 (legal snapshot 2026-07-26)` eleven times each** (`test/golden/migration-engine-golden.json`, `provenance-engine-golden.json`), compared exactly against `assess(csrdPack(), …)` by `provenance-golden.test.ts` and `migration-golden.test.ts`. Bumping would red both and force 22 embedded strings to be re-recorded — **re-recording a protected historical artefact for a change that moves no determination**. Nothing an assessment reads changes. `assess` reads `pack.requirements`, `factTypes`, `catalogues`, `packFlags`, `changeWatch`, and — at the line under discussion — `pack.id`, `pack.version` and `pack.legalSnapshot`; B-E2 touches **none** of them. What it does touch is `sources.json`, and **nothing under `src/engine/` reads `pack.sources` at all** (every `pack.sources` reader is in `corpus/`, `cli/`, `knowledge/loader.ts` or `monitoring/`), so no determination can move. `pack.version` also has **no documented bump rule** to oblige it.
+**Why `pack.version` does not bump, and what it would have cost.** A bump was the intuitive answer and it is wrong here. `evaluate.ts:201` embeds the version string in every assessed requirement, and **both goldens carry `csrd@0.1.0 (legal snapshot 2026-07-26)` eleven times each** (`test/golden/migration-engine-golden.json`, `provenance-engine-golden.json`), compared exactly against `assess(csrdPack(), …)` by `provenance-golden.test.ts` and `migration-golden.test.ts`. Bumping would red both and force 22 embedded strings to be re-recorded — **re-recording a protected historical artefact for a change that moves no determination**. **The documented bump rule is tied to a flag flip, and B-E2 does not flip a flag.** `backend/engine/CLAUDE.md:65` states the contract: *"If the revised ESRS / voluntary standard enter into force: flip the pack flag in `pack.json`, **bump `version`**, run tests, and note the delta."* The trigger is entry into force — a determination change — not a schema-shape change. B-E2 flips no flag and moves no determination, so the rule does not fire.
+
+Nothing an assessment reads changes. `assess` reads `pack.requirements`, `factTypes`, `catalogues`, `packFlags`, `changeWatch`, and — at the line under discussion — `pack.id`, `pack.version` and `pack.legalSnapshot`; B-E2 touches **none** of them. What it does touch is `sources.json`, and **nothing under `src/engine/` reads `pack.sources` at all** (every `pack.sources` reader is in `corpus/`, `cli/`, `knowledge/loader.ts` or `monitoring/`), so no determination can move. **No pack-version bump rule is triggered by B-E2's schema-shape change; the documented rule applies when the pack flag flips**, and B-E2 flips none.
 
 So the version stays, §9's protection of the goldens holds, and the residue is recorded **accurately**, which an earlier draft did not manage: **two pack source-record shapes will be indistinguishable by any authored pack identifier.** Not by `pack.version` — unchanged by decision. Not by `legalSnapshot` — unchanged, because the legal snapshot has not moved. Not by any requirement digest — `requirementInputSha256` covers `provenance` + `logicalPayloadSha256` and never reads `sources.json`, which is the same fact that makes this decision safe. Claiming either of the last two as a discriminator would have been false.
 
@@ -558,20 +724,41 @@ It was never *uncommitted* — `requestSha256` digests the content, and after I-
 - **Every `corpusClosureSha256` moves.** All three current digests change.
 - **`RESULT_SCHEMA_VERSION` → `1.3.0`; `PIPELINE_IDENTITY_SCHEME` → `v3`; `CLOSURE_POLICY_V0` → `V1` with a hashed identity.** `pipelineVersion` moves for all three reasons and — unlike the previous draft — now moves *because traversal semantics changed*, not merely as a side effect of a schema literal.
 - **Requirement versions do not move.** All sixteen stay at v3; `verification/requirement-versions/csrd.json` untouched.
-- **Exactly one transcript generation retires** (§1.5) via `SUPERSEDED_RUN_IDS` — appended to, never deleted. `replay-fixtures.ts:73–75`'s comment must be extended to record that this retirement **does** move `corpusClosureSha256`.
+- **Exactly one transcript generation retires — and a replacement must be *recorded*, not merely promised.** `pipeline-replay.test.ts:199–204`'s `committed()` asserts `toHaveLength(1)` over the non-superseded generations. Retiring the only live one leaves **zero** and reds that helper before any assertion about content.
+
+  **The order is fixed by a real dependency, and an earlier revision of this plan had it backwards.** `PROVENANCE.md` is not edited — it is *generated*. `test/record-replay-fixture.ts:120–169` rewrites the whole file on every run from a hardcoded template, with the generation table at `:149–152`:
+
+  ```
+  '| pre-D1(a) | `run-v1-764e571e…` | retired 2026-08-27 |',
+  `| provenance-era | \`${transcript.runId.slice(0, 20)}…\` | current |`,
+  ```
+
+  Running the recorder *before* correcting that template would label the **new** standing-era recording *"provenance-era … current"*, erase the retiring run's row entirely, and regenerate the stale `:158` sentence as a freshly written false statement — a false provenance record produced by the very step meant to establish provenance. Appending to `PROVENANCE.md` by hand is not the alternative: the next run clobbers it. **The corrected recorder must execute before its own output is accepted.** So B-E2 schedules:
+
+  1. **Correct the recorder first, before it is run.** In `test/record-replay-fixture.ts`: the hardcoded table (`:149–152`) gains a `provenance-era | run-v1-e77e9d0d… | retired` row while its interpolated row becomes the **standing-era** `current` entry; the heading *"## Two generations live here"* (`:140`) becomes three; and the prose at `:158` — *"`renderedConditionSha256` and `corpusClosureSha256` did **not** move"* — is corrected to say that this retirement, unlike the provenance migration, **does** move `corpusClosureSha256`. Nothing has been generated yet, so no false record is ever written. *(The recorder imports `engineRoot`, `FIXTURE_TRANSCRIPT_ROOT`, `PACK_ID`, `REQUIREMENT_ID` and `syntheticCapability` from `replay-fixtures.ts` — **not** `SUPERSEDED_RUN_IDS` — so this edit's only ordering constraint is that it precede step 3.)*
+  2. **Land B-E2's implementation and the retirement bookkeeping the replacement depends on.** The identity moves must already be in the tree — `RESULT_SCHEMA_VERSION 1.3.0`, `PIPELINE_IDENTITY_SCHEME v3`, `CLOSURE_POLICY_V1`, `CLOSURE_RENDERER_VERSION 1.0.0` — or the recording carries the identity B-E2 has just superseded. **Append the retiring `runId`** — `run-v1-e77e9d0d…` — to `SUPERSEDED_RUN_IDS` (`replay-fixtures.ts:77`), leaving its file in place as the record of a run that happened, and **extend `replay-fixtures.ts:73–75`'s comment** with the same correction step 1 made to its twin sentence inside the recorder. Appending here rather than after the run is what makes the recorder's hardcoded *"retired"* row true at the moment it is generated. **`superseded()` (`pipeline-replay.test.ts:207–212`) needs the same pass:** it asserts `toHaveLength(SUPERSEDED_RUN_IDS.length)` and then returns `retired[0]!`, which with two retired identities selects **by position** — the very thing `committed()`'s own docstring says `readTranscriptsFor` refuses to do. Its three call sites (`:1724`, `:1754`, `:1774`) all mean the pre-D1(a) recording, so it must select by `runId`. `pipeline-replay` is already in §6.6's file list; this names what changes inside it.
+  3. **Run the corrected recorder against that post-B-E2 tree** — `npx tsx test/record-replay-fixture.ts`, which drives `syntheticCapability` with **no network and no credential** (`PROVENANCE.md`: *"No model was contacted and no credential existed in the process that wrote it"*). The recording then carries the new `corpusClosureSha256`, `pipelineVersion` and `resultSchemaVersion`, and the `PROVENANCE.md` it regenerates is the corrected one.
+  4. **The new transcript lands as a new file** under `test/verification-transcripts/csrd/CSRD-S-001/`. `writeRunTranscript` files by `runId` (`transcript.ts:437–442`) and the `runId` has moved, so **neither existing recording is overwritten or deleted** — §9's append-only rule holds by construction rather than by care. The *"never overwriting a file"* rule stated inside `PROVENANCE.md` governs the **transcript artefacts**, which this honours; `PROVENANCE.md` itself is regenerated by design, which is exactly why it is corrected at its source in step 1 rather than edited here.
+  5. **Verify the three explanations agree** — stated as a check rather than assumed: the regenerated `PROVENANCE.md` table and prose, the two entries in `SUPERSEDED_RUN_IDS`, and `replay-fixtures.ts:73–75`'s comment must tell one story about which generations exist, which are retired, and what moved. `committed()` returns exactly one live generation; `superseded()` finds both retired files present.
+
+  **A-E2-7:** if the replacement cannot be recorded without a network call or a credential, **stop** — the recorder's no-model guarantee is the reason these fixtures are admissible evidence.
 - **Both goldens unaffected — and the reason is not only the one it appears to be.** Neither embeds `corpusClosureSha256` or `sha256Normalized`, so the identity moves above miss them. But both **do** embed `csrd@0.1.0 (legal snapshot 2026-07-26)` eleven times each, via `src/engine/evaluate.ts:201`, and would red on a `pack.version` bump. They stay green because §6.5.2 decides **not** to bump it.
 - **`FIELD_ROLES` (D-10), with the display consumer now traced rather than deferred.** `test/verification-accounting.test.ts:282–286` asserts every result-schema path is classified; new pin fields surface under `ledger.signing.corpus[].*` **and** `result.corpus[].*`.
 
   **`freshness` is ruled out** by what the role means: `forFreshness` (`current-state.ts:200–207`) projects `docId, sha256Raw, sha256Normalized, normalizerVersion`, and `documentReason` (`staleness.ts:137–143`) compares only the last three — exactly the set roled `['freshness','audit']` (`accounting.ts:299–301`). The analogue is `docId`, the other identity-bearing field freshness does not compare, roled `['integrity','audit']` on both roots (`:298`, `:392`).
 
-  **The display consumer exists, and it is named.** `src/cli/review-sheet.ts:1020–1027` renders a *"Documents this signature pins"* table — `docId | version | sha256Normalized | normalizer` — iterating `signature.corpus`, i.e. the **`ledger.signing.corpus[]`** root. So the human verification surface already renders pin fields, and `versionLabel` is `['display','audit']` there (`:305`) for exactly that reason.
+  **The display consumer exists and is named — but it does not imply the `display` role, and an earlier revision of this plan got that wrong.** `src/cli/review-sheet.ts:1020–1030` renders a *"Documents this signature pins"* table iterating `signature.corpus`. It renders **four** pin fields, and **three of them are not `display`**: `docId` `['integrity','audit']` (`:298`), `sha256Normalized` `['freshness','audit']` (`:299`), `normalizerVersion` `['freshness','audit']` (`:301`). Only `versionLabel` is `['display','audit']` (`:305`). **So there is no "per-table convention" — that claim was false and is withdrawn.**
 
-  **Decision, on that evidence:** standing **must** appear in that table. A reviewer reading "documents this signature pins" who cannot see that a document is `adopted_not_effective` is the same failure E2 exists to prevent, moved from the model surface to the human one — and "standing reaching verification" (spec §16 condition 5) is not satisfied by a field a verifier cannot see. Therefore:
+  Read against the definition (`accounting.ts:74`, *"`display` — shown to a human; decides nothing"*), the table is consistent and the discriminator is the second clause: `versionLabel` takes `display` because it **decides nothing**; the other three decide integrity or freshness and take those roles instead. Being rendered is necessary for `display`, not sufficient.
+
+  **Decision, on that reading:** after I-2 the new pin fields enter `corpusClosureSha256` — they **decide**. They are therefore identity-bearing exactly as `docId` is, and take the same role, on **both** roots:
 
   | Root | Roles | Why |
   |---|---|---|
-  | `ledger.signing.corpus[].*` | **`['integrity','display','audit']`** | identity-bearing **and** rendered by the review sheet — `display` is added on established evidence, per D-10, not speculatively |
-  | `result.corpus[].*` | **`['integrity','audit']`** | no consumer renders the result root's pins; unchanged |
+  | `ledger.signing.corpus[].*` | **`['integrity','audit']`** | identity-bearing after I-2 — the `docId` analogue. **No `display`**: they do not "decide nothing" |
+  | `result.corpus[].*` | **`['integrity','audit']`** | same reasoning; unchanged |
+
+  **Rendering is required regardless, and is toothed independently.** Standing must appear on the review sheet because "standing reaching verification" (spec §16 condition 5) is not satisfied by a field a verifier cannot see — but that obligation rests on §6.5.6's teeth, not on a `FIELD_ROLES` role. The two are now decoupled, which is what the false convention had obscured.
 
   **This adds a production file to B-E2:** `src/cli/review-sheet.ts`. **The exact columns, formats and teeth are specified in §6.5.6**, because *"standing columns"* is not a specification once the ledger carries authenticity, per-source standing, declared non-operative sections and a closure-renderer version. Every field taking `display` must be shown, and each is separately toothed.
 
@@ -588,16 +775,17 @@ Decided; no conditional phrasing remains anywhere in this plan. B-E2 must delive
 
    **Why `['audit']` and not `['display','audit']`, against first appearances.** Being rendered on the review sheet does **not** imply `display` in this table, and the sibling proves it: `ledger.signing.rendererVersion` is `['audit']` (`accounting.ts:295`) and *is* rendered on the same signoff table (`review-sheet.ts:1011`). So are `pipelineVersion` `['signability','audit']` (`:303`) and `corpusClosureSha256` `['freshness','audit']` (`:296`). `closureRendererVersion` is the exact analogue of `rendererVersion` — same kind of value, same table, same purpose — and takes the same role. **Landing it at `['display','audit']` beside an identically-situated `['audit']` sibling would introduce an inconsistency this plan has no reason to create.**
 
-   **The convention is per-table, and that is an observation rather than a rule anyone wrote down:** inside the *pins* table rendered fields do take `display` (`corpus[].versionLabel` is `['display','audit']`, `:305`), which is why §6.5.4 gives the new pin fields `display`; on the *signoff* table they do not. **Rendering is required either way** — tooth B11d stands on its own, and does not depend on the role.
+   **No "per-table convention" is claimed** — §6.5.4 examined that idea and withdrew it: three of the four pin fields rendered in the pins table are *not* `display`. The argument here rests only on the sibling: `closureRendererVersion` is the exact analogue of `rendererVersion`, same table, same kind of value, so it takes the same role. **Rendering is required either way** — tooth B11d stands on its own and does not depend on any role.
 3. **Population during signing** — `buildSignature` (`src/verification/sign.ts`) takes it as a parameter exactly as it takes `rendererVersion` (`:180`, `:362`), so the value is passed in rather than reached for.
 4. **Round-trip verification** — the recorded value survives write and re-read through the ledger, and a signature carrying a different value from the one in force is refused, not silently accepted.
-5. **Tooth B14 — the recorded value is the constant.** A signature's `closureRendererVersion` equals `CLOSURE_RENDERER_VERSION`. **M-B16:** record a literal or a stale value instead → B14 reds.
+5. **The result surface carries it too — decided, not deferred.** `verificationResultSchema` already carries `rendererVersion` (`src/verification/result.ts:235`) at `['audit']` (`accounting.ts:371`), so a result verifier is *given* the condition-renderer grammar identity today. Leaving the closure renderer out would answer that question for one grammar and not the other, on the same record. **`pipelineVersion` is not a substitute**: it is a digest, so it proves *that* something changed without saying *what*, which is the exact reason `RENDERER_VERSION`'s docstring says a named version exists. `RESULT_SCHEMA_VERSION` is **already** moving to `1.3.0` for the pin fields, so the field is free now and would otherwise force a second bump later — the outcome this decision exists to prevent. **`result.closureRendererVersion` at `['audit']`**, matching `result.rendererVersion`. **Tooth B15:** a published result's `closureRendererVersion` equals the constant. **M-B18:** omit it from the result while keeping it on the signature → B15 reds.
+6. **Tooth B14 — the recorded value is the constant.** A signature's `closureRendererVersion` equals `CLOSURE_RENDERER_VERSION`. **M-B16:** record a literal or a stale value instead → B14 reds.
 
 **A-E2-6 is narrowed accordingly.** It no longer covers *whether* the field should exist — that is settled — but only an **unexpected additional schema or version consequence**: if adding it forces a second ledger variant, a further schema version beyond `RESULT_SCHEMA_VERSION 1.3.0`, or a migration of existing ledger lines, **stop and report** rather than absorbing it.
 
 #### 6.5.6 The review-sheet surface, specified exactly
 
-*"Standing columns"* was underspecified once the ledger carries three separate document facts plus a signature-level one. **Every one of the four must actually appear.** For the three pin fields that carries a second obligation — they take the `display` role, and an unrendered `display` field is an unbacked claim. `closureRendererVersion` is `['audit']` (§6.5.5) and is rendered anyway, because a verifier needs to know which grammar produced the closure text the signature attests to; its rendering requirement stands on that, not on a role.
+*"Standing columns"* was underspecified once the ledger carries three separate document facts plus a signature-level one. **Every one of the four must actually appear**, and **none of the four is required by a `FIELD_ROLES` role** — all are `['integrity','audit']` or `['audit']` (§6.5.4, §6.5.5). The obligation is spec §16 condition 5's *"document standing, reaching verification"*: a verifier who cannot see that a pinned document is adopted-not-effective, or which grammar produced the closure text, has not been reached. The teeth below are what make that mechanical.
 
 **The signature-metadata table** (`src/cli/review-sheet.ts:999–1018`, the `signoff` `row(label, value)` list) gains one row, immediately after `rendererVersion` (`:1011`):
 
@@ -633,15 +821,18 @@ The empty-state row at `:1023` carries `colspan="4"` today and becomes `colspan=
 |---|---|
 | `knowledge/csrd/sources.json` | **`temporalStanding` per source** (authoritative); `statusAtSnapshot` → `statusNote` (non-authoritative) |
 | `src/knowledge/schema.ts` | source schema gains `temporalStanding`; `statusNote` docstring says it carries no machine meaning |
+| **`src/types.ts`** (`:303`) | the `SourceRecord` interface mirrors the zod shape and carries `statusAtSnapshot`; it must move with the schema or the two disagree |
+| **`test/condition.test.ts`** (`:122`) | builds a synthetic source with `statusAtSnapshot: 'in force'` |
+| **`test/pipeline-source-completeness.test.ts`** (`:227`) | the inline `write('sources.json', …)` at `:226–229` sets `statusAtSnapshot: 'in_force'` for `SRC-901`/`SRC-902`, **both of which are served** in that world — under **B9's fail-closed rule they refuse immediately** unless given a structured `temporalStanding`. This is the largest single test consequence of B9 and the previous draft missed it |
 | `src/corpus/types.ts`, `schema.ts` | `artefactAuthenticity`, `nonOperativeSections` on `CorpusDocument` |
 | `src/corpus/closure.ts` | signature `(index, entryDocIds, standing, policy?)`; R-b expansion rule; canonical line; `CLOSURE_POLICY_V1` with a hashed identity; `STRUCTURAL_EDGE_KINDS` docstring |
 | `src/index.ts` | re-export signature follows |
 | `src/cli/sign.ts` (`:343`), `src/cli/review-sheet.ts` (`:508`), `src/cli/run.ts` (`:181`) | supply the pack at their `EntitledClosure.forSources` calls |
 | `src/pipeline/entitlement.ts` | derive `DocumentStanding` from the pack; pass standing to `computeClosure`; `EntitledDocument` gains the projection; `renderEntitledClosure` emits standing **and** the operative-status clause; **declare `CLOSURE_RENDERER_VERSION = '1.0.0'`** |
 | `src/pipeline/identity.ts` | `PIPELINE_IDENTITY_SCHEME` → `v3`; `identityPayload` gains **both** the closure-policy identity and `CLOSURE_RENDERER_VERSION` |
-| `src/verification/result.ts` | `resultSchemaVersion` literal → `1.3.0` (`:233`); `corpusPinSchema` parse site (`:240`) |
+| `src/verification/result.ts` | `resultSchemaVersion` literal → `1.3.0` (`:233`); `corpusPinSchema` parse site (`:240`); **`closureRendererVersion` beside `rendererVersion` (`:235`)** |
 | `src/verification/corpus-pin.ts` | pin gains the standing fields |
-| `src/verification/accounting.ts` | new `FIELD_ROLES` rows: **`['integrity','display','audit']`** under `ledger.signing.corpus[].*` and **`['integrity','audit']`** under `result.corpus[].*` (§6.5.4); plus the **required** `ledger.signing.closureRendererVersion` row at **`['audit']`** — matching its sibling `rendererVersion`, not `display`; see §6.5.5 for why "rendered" does not imply `display` on this table |
+| `src/verification/accounting.ts` | new `FIELD_ROLES` rows at **`['integrity','audit']`** under **both** `ledger.signing.corpus[].*` and `result.corpus[].*` (§6.5.4 — no `display`, because these fields decide); plus **`ledger.signing.closureRendererVersion`** and **`result.closureRendererVersion`**, both at **`['audit']`**, matching their `rendererVersion` siblings |
 | `src/verification/sign.ts` | `CorpusPin[]` construction (`:340–346`) populates the new pin fields; `buildSignature` takes and records `closureRendererVersion` as it already takes `rendererVersion` (`:180`, `:362`) |
 | `src/verification/ledger.ts` | `corpusPinSchema` parse site (`:126`); **`signingEntrySchema` (`:112–138`) gains `closureRendererVersion`** beside `rendererVersion` (`:124`) — §6.5.5 |
 | `src/verification/current-state.ts` | `forFreshness` — deliberate decision to exclude standing (§6.5.4) |
@@ -651,7 +842,7 @@ The empty-state row at `:1023` carries `colspan="4"` today and becomes `colspan=
 | `src/cli/ingest.ts` | the CLI contract in §6.6.1 — **not** invented during implementation |
 | `corpus/index.json` | both new fields on the four existing documents |
 | `frontend/web/lib/pack.ts` (`:419–423`) | **repoint `traceSeries` from regex over `statusAtSnapshot` to `temporalStanding`** — a second, undeclared derivation of standing that D-5 forbids (§6.5.2) |
-| `test/` | `corpus-closure`, `pipeline-entitlement`, `pipeline-reader`, `pipeline-seam`, `pipeline-closure-citability`, `cli-sign`, `cli-review-sheet`, `corpus-store`, `corpus-src002-ingestion`, `corpus-src005-ingestion`, `verification-pins`, `verification-accounting`, `pipeline-replay`, `replay-fixtures`, `source-register`, `knowledge-integrity`, `corpus-ingest` (the CLI contract, B12/B13), `pipeline-fixtures` (comment only, `:105` — see §1.4), plus the new standing/traversal world. **`signingEntrySchema` is `.strict()` (`ledger.ts:138`), so a required `closureRendererVersion` reds every hand-built signing entry**: `verification-ledger` (`unsignedSigning()` at `:45–73` sets `rendererVersion` at `:56` and no closure renderer) and `verification-sign` (`buildSignature` gains a parameter) are therefore in scope and named. **Frontend:** `frontend/web/` tests covering `traceSeries` |
+| `test/` | `corpus-closure`, `pipeline-entitlement`, `pipeline-reader`, `pipeline-seam`, `pipeline-closure-citability`, `cli-sign`, `cli-review-sheet`, `corpus-store`, `corpus-src002-ingestion`, `corpus-src005-ingestion`, `verification-pins`, `verification-accounting`, `pipeline-replay`, `replay-fixtures`, **`record-replay-fixture` (the generation table and the "did not move" prose — §6.5.4 step 4)**, `source-register`, `knowledge-integrity`, `corpus-ingest` (the CLI contract, B12/B13), `pipeline-fixtures` (comment only, `:105` — see §1.4), plus the new standing/traversal world. **`signingEntrySchema` is `.strict()` (`ledger.ts:138`), so a required `closureRendererVersion` reds every hand-built signing entry**: `verification-ledger` (`unsignedSigning()` at `:45–73` sets `rendererVersion` at `:56` and no closure renderer) and `verification-sign` (`buildSignature` gains a parameter) are therefore in scope and named. **Frontend:** `frontend/web/` tests covering `traceSeries` |
 
 #### 6.6.1 The ingest CLI contract, specified here
 
@@ -691,8 +882,8 @@ The empty-state row at `:1023` carries `colspan="4"` today and becomes `colspan=
 - **M-B13** accept `undefined` as equivalent to `[]` → **B4g** reds, and the two spellings would otherwise hash differently.
 - **B9 / M-B10** the fail-closed standing rule (§6.1).
 - **B10 — `CLOSURE_RENDERER_VERSION` is hashed:** changing it moves `pipelineVersion`.
-- **B14 — the signature records it** (§6.5.5): a signature's `closureRendererVersion` equals the constant, and round-trips through the ledger. **M-B16:** record a stale or literal value → B14 reds.
-- **B11a–B11d — every rendered standing surface is backed** (§6.5.6): authenticity; per-source standing with `SRC-NNN` preserved, proved on a multi-source document; declared non-operative sections including the `[]` case; and `closureRendererVersion` in the signature metadata. The first three also back their `display` role; the fourth is `['audit']` and is rendered on its own merits. **M-B14** is four mutations, one per surface.
+- **B14 / B15 — the signature *and* the result record it** (§6.5.5): both `closureRendererVersion` fields equal the constant and round-trip. **M-B16:** record a stale or literal value → B14 reds. **M-B18:** omit it from the result while keeping it on the signature → B15 reds.
+- **B11a–B11d — every rendered surface is backed** (§6.5.6): authenticity; per-source standing with `SRC-NNN` preserved, proved on a multi-source document; declared non-operative sections including the `[]` case; and `closureRendererVersion` in the signature metadata. **None of the four rests on a `FIELD_ROLES` role** — all are `['integrity','audit']` or `['audit']`, and the rendering obligation is spec §16 condition 5's, proved here. **M-B14** is four mutations, one per surface.
 - **B12 / B13 — the ingest CLI contract** (§6.6.1): a repeated `--non-operative-section` yields both headings in order and its absence yields `[]`; an unknown `--authenticity` value is refused before any write, with `index.json`, `raw/` and `normalized/` byte-unchanged.
 - **M-B8** leave the closure-policy identity out of `identityPayload` → a test asserting `pipelineVersion` moves when traversal semantics change reds.
 - **M-B11** remove `CLOSURE_RENDERER_VERSION` from `identityPayload` while leaving the export → **B10** reds.
@@ -848,6 +1039,25 @@ All four move to **purpose-built worlds** inside B-T12; **A-T12-2 covers them**.
 
 **N-1 — pre-fetch authority check.** Deferred hardening (D-11, §5.4). The no-write guarantee remains mandatory.
 
+**B-OJ — the post-publication cascade, named so it is not rediscovered as surprise scope.** When the OJ publishes either act, a chain of consequences fires that no boundary in this plan owns. Named, not planned — **no speculative file list, because the artefacts do not exist yet**:
+
+```
+OJ publication of C(2026) 5010 / 5011
+  → A-0 fires (§10.1): the preferred artefact is recomputed, not ingested by default
+  → the instrument's temporalStanding moves adopted_not_effective → in_force
+  → the OJ expression is an authentic_publication, unlike the pre-publication text
+  → packFlags.revised_esrs_in_force / voluntary_standard_in_force flip
+  → engine/CLAUDE.md:65's documented rule fires: pack.version bumps
+  → both goldens' 22 embedded "csrd@0.1.0 (legal snapshot …)" strings move, and are
+    re-recorded under an explicit disposition — legitimate here, because a determination
+    HAS moved (S-012's selection changes), unlike in B-E2
+  → E3 acquires its subject: the adopted text and the OJ text are two artefacts of one
+    instrument, related by lifecycle metadata outside closure traversal (spec §9)
+  → the pre-publication artefacts are retained, not replaced (spec §9: "both are preserved")
+```
+
+**The contrast with B-E2 is the point.** B-E2 declines a `pack.version` bump because nothing determinative moves; B-OJ takes it because something does. Recording the cascade here stops the golden re-recording from arriving later as an unexplained cost, and stops E3 from being reopened before it has a subject.
+
 ---
 
 ## 9. Protected artefacts
@@ -860,7 +1070,7 @@ All four move to **purpose-built worlds** inside B-T12; **A-T12-2 covers them**.
 | `test/golden/*.json` | unchanged; neither embeds a corpus hash |
 | `test/verification-transcripts/csrd/CSRD-S-001/` | append-only. B-E2 retires **one** generation via `SUPERSEDED_RUN_IDS`; nothing deleted or overwritten |
 | `verification/CSRD-S-001.md` | unchanged |
-| Parent spec and parent plan | modified **only** by B-NORM, only as §3 states |
+| `docs/superpowers/specs/2026-08-24-d1a-corpus-provenance-design.md`, `docs/superpowers/plans/2026-08-24-d1a-corpus-provenance.md`, root `CLAUDE.md` | modified **only** by B-NORM, only as §3 states. **These three files are B-NORM's entire write set** (§4) — root `CLAUDE.md` included, because §3.9's grep contract lives there. No other file in the repository is touched by that boundary |
 | The three deferred observations (SRC-005 matcher, `DOC-32013L0034` label, four T9 NITs) | out of scope, unaddressed |
 
 ---
@@ -877,7 +1087,8 @@ All four move to **purpose-built worlds** inside B-T12; **A-T12-2 covers them**.
 | A-E2-3 | `standing` cannot be a **required** `computeClosure` parameter without a caller that has no pack | stop and report: such a caller builds an entitled closure it cannot justify |
 | A-E2-4 | Standing cannot reach entitlement without writing it into the register or the corpus index | stop; the §6.1 ownership decision has failed |
 | A-E2-5 | The closure-policy identity cannot enter `identityPayload` without a scheme change beyond `v3` | stop; re-open the §6.5.2 audit |
-| A-E2-6 | Recording `closureRendererVersion` on the signature has an **unexpected additional** schema/version consequence — a second ledger variant, a version beyond `RESULT_SCHEMA_VERSION 1.3.0`, or a migration of existing ledger lines | stop and report. **Not** an abort on whether the field should exist: §6.5.5 settles that |
+| A-E2-6 | Recording `closureRendererVersion` has an **unexpected additional** schema/version consequence — a second ledger variant, a version beyond `RESULT_SCHEMA_VERSION 1.3.0`, or a migration of existing ledger lines | stop and report. **Not** an abort on whether the field should exist: §6.5.5 settles that |
+| A-E2-7 | The replacement transcript generation cannot be recorded without a network call or a credential | stop; the recorder's no-model guarantee is why these fixtures are admissible evidence |
 | A-T12-1 | A cited locator is absent from the ingested normalized text | stop; Route A's completeness premise has failed and E1 reopens |
 | A-T12-2 | Retargeting **any** dying witness class would reduce coverage — the four §7.2 names (gap machinery, `'no declaration'` origin refusal, `unresolved_gap` sign gate, multi-source citability fixtures) **and any fifth the sweep surfaces** | stop; §7.2's synthetic worlds are required, not optional |
 | A-T12-3 | §7.2's sweep produces a red that is not disposition (a) or (b), **or a name-set difference (d) that no dying-witness class explains** | stop; something moved that this plan did not predict |
@@ -891,7 +1102,7 @@ All four move to **purpose-built worlds** inside B-T12; **A-T12-2 covers them**.
 ## 11. Sequencing, and the decisions as settled
 
 ```
-B-NORM  apply nine normative passages (§3)         docs only · no gate moves
+B-NORM  apply 30 normative passages (§3)           docs only · no gate moves
 B-E4    exact_query origin matcher                 no identity moves
 B-E2    standing, authenticity, operative status,  moves every corpusClosureSha256;
         identity, traversal                        RESULT_SCHEMA_VERSION → 1.3.0,
@@ -902,18 +1113,29 @@ B-T12   ingest two HTML artefacts, zero edges      partition 14/2 → 16/0
         E1, E3, N-1 deferred (§8)
 ```
 
-**Settled by D-1…D-12 and not reopened:** Route A; `exact_query`; the three authenticity values; R-b; N-2; the §3 normative corrections; I-2. **`FIELD_ROLES` is settled per root** — `['integrity','display','audit']` on the ledger root, `['integrity','audit']` on the result root — D-10's bar being met by the named consumer in §6.5.4, not waived.
+**Settled by D-1…D-12 and not reopened:** Route A; `exact_query`; the three authenticity values; R-b; N-2; the §3 normative corrections; I-2. **`FIELD_ROLES` is settled** — `['integrity','audit']` on **both** pin roots, `['audit']` for both `closureRendererVersion` fields. D-10's bar is **not** met and no `display` role is added: being rendered is necessary for `display` but not sufficient, and these fields decide (§6.5.4). Review-sheet rendering is required anyway, on §6.5.6's teeth.
 
-**All design decisions are closed.** Nothing in this plan is left for an implementer to settle.
+**No decision is open.** The one user-level product question this plan carried — non-instrument standing — is decided; its implementation is deferred, which is not the same as pending.
+
+> ### Decided — non-instrument sources and the fail-closed rule (§6.1)
+>
+> `temporalStanding` is absent on the seven non-instrument sources, and closure construction fails closed for every served source lacking one — so official Commission guidance such as `SRC-009` could not be served, while spec §7 (`:293`), §12 (`:472`) and §21 (`:775`) all plan to ingest and cite it.
+>
+> **O-1 selected; implementation deferred to a named future sub-plan before the first non-instrument ingestion.** A structured `not_applicable` value is declared explicitly on all seven, making `temporalStanding` required for all 17 sources: fail-closed survives because absence stops being expressible, nothing pretends guidance has an effective date, and the requirement-side `legalStatus` enum is untouched. **O-2** (infer from free-text `legalType`) is **rejected** as the anti-pattern D-5 removes. **O-3** (declare non-instruments permanently unservable) is **rejected**: official guidance and other non-instrument sources must remain ingestible.
+>
+> **Route A implements none of it.** The deferred boundary — **B-STANDING-ALL**, scoped in §6.1 — owns the enum value and schema migration, the all-seventeen requirement, rendering, R-b treatment, fixtures, mutations and identity consequences. It blocks nothing here, because no non-instrument source is served by B-T12, and it must land before D1a-2 ingests `SRC-009`.
+
+**Everything is closed.** Nothing in this plan is left for an implementer to settle.
 
 | Decision | Resolution |
 |---|---|
 | Pipeline version audit (§6.5.2) | **Four bumps:** `RESULT_SCHEMA_VERSION` → `1.3.0`; `PIPELINE_IDENTITY_SCHEME` → `v3`; `CLOSURE_POLICY_V0` → `V1` with hashed identity; **`CLOSURE_RENDERER_VERSION` new at `1.0.0`, hashed into `identityPayload`**. Five pipeline constants and two knowledge-plane surfaces argued unchanged from their own contracts. D-12 is final |
 | `pack.version` (§6.5.2) | **Stays at `0.1.0`.** The bump would red both goldens over a string that moves no determination; the identity residue is carried on the corpus and pipeline surfaces and is stated exactly there |
-| `closureRendererVersion` on the signature (§6.5.5) | **Required.** Schema field, `FIELD_ROLES` row at **`['audit']`** (matching `rendererVersion`; `display` is a per-table convention that does not hold on the signoff table), populated at signing, round-tripped, tooth B14 / M-B16. A-E2-6 aborts only on an *unexpected additional* schema consequence |
+| `closureRendererVersion` (§6.5.5) | **Required on the signature *and* the result**, both at `['audit']` matching their `rendererVersion` siblings. Populated at signing, round-tripped, teeth B14/B15, mutations M-B16/M-B18. Added to the result now because `RESULT_SCHEMA_VERSION` is already moving, avoiding a second bump later. A-E2-6 aborts only on an *unexpected additional* schema consequence |
 | Review-sheet surface (§6.5.6) | **Specified exactly** — three new pins columns (`authenticity`, `standing`, `nonOperative`), the `colspan` correction, and the `closureRendererVersion` metadata row, with teeth B11a–B11d and four separate mutations |
 | `statusAtSnapshot` → `statusNote` (§6.1) | **Approved.** The free-text status claim is replaced, not kept beside the structured value |
 | Standing coverage (§6.1) | **Optional in the catalogue, fail-closed for every served pair.** Ten instruments carry a standing, seven non-instruments do not; no default is ever inferred |
+| Non-instrument standing (§6.1) | **O-1 selected; implementation deferred to a named future sub-plan — B-STANDING-ALL — before the first non-instrument ingestion.** Non-instrument sources stay ingestible; O-2 (derive from free-text `legalType`) and O-3 (permanent exclusion) are rejected. Route A implements none of it |
 | `nonOperativeSections` (§6.3) | **Required canonical array**, `[]` the empty form, rendered as a **standing projection** that never characterises the undeclared remainder |
 | Titles and `versionLabel` (§7.1) | **Approved.** `title` is the served official heading, measured and flattened as declared; `versionLabel` is the authored neutral form |
 
