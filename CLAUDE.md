@@ -50,8 +50,10 @@ produced it, are listed in that file.
 ## Engine constraints
 
 - `backend/engine/src/` is program-agnostic. `grep -ri csrd backend/engine/src/`
-  must stay at exactly **five** pre-existing hits: `types.ts` (1),
-  `cli/assess.ts` (1), `verification/render.ts` (2), `engine/summary.ts` (1).
+  must stay at exactly **seven** pre-existing hits: `types.ts` (1),
+  `cli/assess.ts` (1), `verification/render.ts` (2), `engine/summary.ts` (1),
+  `monitoring/types.ts` (1), `monitoring/register.ts` (1). The count states the
+  true pre-existing total; it does not license new program-specific references.
 - `src/verification/` is pure — no filesystem, network or clock. The CLIs read
   and write; verification modules are handed values.
 - Every file opens with a JSDoc block saying *why* it exists, not what it does.

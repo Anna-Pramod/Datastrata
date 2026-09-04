@@ -4,9 +4,9 @@
 
 **Goal:** Give every requirement one authored place to say what its determination rests on, make that place mandatory, structured and authority-checked, and make it impossible for a document to become entitled without its source and artefact authority having been validated first.
 
-**Architecture:** Thirteen implementation tasks and four deferred capability envelopes. The seam and the audit come first; the audit's findings then determine the register universe, the migration's expected state, and which provenance corrections are knowable in time to land in one version bump rather than two.
+**Architecture:** Thirteen implementation tasks and **two deferred capability envelopes (E1, E3)**; E2 and E4 are on Route A's critical path. The seam and the audit come first; the audit's findings then determine the register universe, the migration's expected state, and which provenance corrections are knowable in time to land in one version bump rather than two.
 
-**What this plan is ready for:** implementation through Task 10 (D1a-0a → D1a-3) and the provenance corrections whose evidence exists by then. **Class-B capability (E1–E4) is a gated sub-plan boundary, not a set of implementation-ready tasks** — see §5.
+**What this plan is ready for:** implementation through Task 10 (D1a-0a → D1a-3) and the provenance corrections whose evidence exists by then. **Class-B capability is split: E2 and E4 are planned and approved under Route A; E1 and E3 remain gated sub-plan boundaries** — see §5.
 
 **Tech Stack:** TypeScript (strict, ESM), zod, vitest. No new runtime dependencies in any task in this plan; a PDF extractor is a dependency question belonging to envelope E1's sub-plan.
 
@@ -19,7 +19,7 @@
 - **Historical evidence is appended to, never overwritten.** Version-registry entries, transcript recordings and goldens each record what was true under a previous pipeline. §4 states the policy and every task inherits it.
 - **No new runtime dependencies.** `zod` and `node:*` only.
 - **TypeScript strict, with `noUncheckedIndexedAccess`.** `tsconfig.json` includes `test`, so `@ts-expect-error` assertions are compiled by `npm run typecheck`.
-- **Program-agnostic.** `grep -ri csrd backend/engine/src/` must stay at exactly **five** pre-existing hits.
+- **Program-agnostic.** `grep -ri csrd backend/engine/src/` must stay at exactly **seven** pre-existing hits: `types.ts` (1), `cli/assess.ts` (1), `verification/render.ts` (2), `engine/summary.ts` (1), `monitoring/types.ts` (1), `monitoring/register.ts` (1). The count states the true pre-existing total; it does not license new program-specific references.
 - **`src/verification/` stays pure** — no filesystem, network or clock.
 - **Every file starts with a JSDoc block saying *why* it exists**, not what it does.
 - **Commit message style is imperative sentence-case with no prefix.** No `Co-Authored-By` trailer.
@@ -133,14 +133,16 @@ T10 topology / closure / context remeasurement
  ├─ REQUIRED   T11  deferred provenance correction — for whatever subset
  │              remains unresolved after Task 4 (§4.3)
  │
- ├─ OPTIONAL   E1–E4 envelopes ─► approved sub-plan ─► T12 ingest SRC-007/008
+ ├─ ROUTE A    B-NORM ─► B-E2 ─► B-E4 ─► B-T12   (E1, E3 deferred)
  │
  └──────────────────────────────────────────────────────────┐
                                                             ↓
 T13 final topology measurement
 ```
 
-**T13 runs after all REQUIRED D1(a) work and does not wait on the optional branch.** If class-B capability was approved and completed, it measures with `SRC-007`/`SRC-008` represented; if it was deferred, it measures them as truthful residual gaps and records why, and **D1(a) may still complete**. An explicitly optional capability must not become a release dependency by accident of drawing.
+**Corrected 2026-08-30.** Task 12 proceeds under Route A via `docs/superpowers/plans/2026-08-30-d1a-route-a-class-b.md`, sequence `B-NORM → B-E2 → B-E4 → B-T12`, the last two conditional on that plan's publication gate. **E1 is not on Task 12's critical path** and E3 is deferred until an OJ successor exists.
+
+**T13 runs after all REQUIRED D1(a) work and does not wait on the deferred envelopes (E1, E3).** If Route A's boundaries and Task 12 completed, it measures with `SRC-007`/`SRC-008` represented; if they were deferred, it measures them as truthful residual gaps and records why, and **D1(a) may still complete**. An explicitly optional capability must not become a release dependency by accident of drawing.
 
 Three orderings are load-bearing and each has a reason:
 
@@ -455,7 +457,7 @@ Two things this retirement is **not**. It is not a judgement that ingesting `202
 
 Unlike T7, no factual correction was needed to reach this: the audit had already decided it, and the commit table simply kept a row the audit had emptied. The audit also records the condition for return — *"if the gloss is judged load-bearing for the `EQUIVALENT` value, `SRC-009` returns"* — so this is a retirement with a stated way back, not a deletion.
 
-**What that leaves.** The Class-A ingestion sequence is `6, 9`, both landed. `SRC-007` and `SRC-008` remain the only cited-and-unserved sources; they are Class-B, gated behind envelopes E1–E4, and belong to Task 12. `SRC-003`, `SRC-006`, `SRC-009` and `SRC-010` stay registered and unserved under rule 1.
+**What that leaves.** The Class-A ingestion sequence is `6, 9`, both landed. `SRC-007` and `SRC-008` remain the only cited-and-unserved sources; they are Class-B and belong to Task 12, which under Route A depends on **E2 and E4 only** (§12.4 as corrected). `SRC-003`, `SRC-006`, `SRC-009` and `SRC-010` stay registered and unserved under rule 1.
 
 **The ingestion invariant — per source, computed from the audited provenance, never from one representative requirement.** For each source `SRC-X`:
 
@@ -518,22 +520,22 @@ Runs **only** for the requirements whose Task 2 paired probe failed (§4.3). On 
 
 ---
 
-### Envelopes E1–E4 — class-B capability (deferred, not implementation-ready)
+### Envelopes E1–E4 — class-B capability (**E2 and E4 planned under Route A; E1 and E3 deferred**)
 
-Spec §7, §9, §16. **These are capability envelopes, not tasks.** Each states the spec's acceptance conditions and its gate; **each requires a dedicated implementation sub-plan before execution.** Writing file lists and mutants now would be speculation about a dependency that has not been selected and an API that does not exist.
+Spec §7, §9, §16. **E1 and E3 are capability envelopes, not tasks.** Each states the spec's acceptance conditions and its gate, and each requires a dedicated sub-plan before execution — writing file lists and mutants for them now would be speculation about a dependency that has not been selected. **E2 and E4 have such a sub-plan** (`docs/superpowers/plans/2026-08-30-d1a-route-a-class-b.md`), so this paragraph no longer governs them.
 
 | Envelope | Subject | Acceptance condition from the spec |
 |---|---|---|
-| **E1** | Deterministic PDF text extraction; `NORMALIZER_VERSION` bump from `1.0.2` | Byte-identical extraction across machines, or the envelope fails. A new runtime dependency needs its own approval |
-| **E2** | `CorpusDocument` **document standing** reaching verification — temporal legal status (§7) and serving-artefact authenticity (§7.1) | No role can read an `adopted_not_effective` document as current law, nor an official consolidation as the authentic publication; mutating either classification away reds a run-level assertion |
+| **E1** | Deterministic PDF text extraction; `NORMALIZER_VERSION` bump from `1.0.2` | Byte-identical extraction across machines, or the envelope fails. A new runtime dependency needs its own approval. **Not on Route A's critical path** — invoked only for an artefact with no official machine-readable expression (§12.4 as corrected) |
+| **E2** | **Document standing** reaching verification — artefact authenticity on `CorpusDocument`, temporal standing on the knowledge-pack source (**spec** §9 as corrected), and the artefact's own statement of which sections are non-operative | No role can read an `adopted_not_effective` document as current law, nor an official consolidation as the authentic publication, nor official explanatory material as operative provision; mutating **any of the three** away reds a run-level assertion |
 | **E3** | Lifecycle metadata and successor–predecessor relation, **outside** closure traversal | Adding a lifecycle relation must **not** change any `corpusClosureSha256`. Implementing it as an edge must red that assertion |
-| **E4** | Source-scoped artefact origin for Commission PDFs | Extends Task 5's declaration; generic, no host named in code |
+| **E4** | **Generic full-URL exact artefact origin** (`exact_query`) | A source whose artefact identity lives in a URL query can declare it exactly. Scheme, host, port, path **and complete query** compared together, under an injective canonical key. No host, regex or glob kind; no host or scheme-specific identifier in production code |
 
 ---
 
 ### Task 12 — Ingest `SRC-007` / `SRC-008`
 
-Gated behind E1–E4's sub-plan being approved and green. Four artefacts (two acts, two annexes), same shape and same ingestion invariant as Tasks 6–9, plus: the `adopted_not_effective` status asserted through the production path, and S-011's cap-catalogue dependency shown to resolve to the annex.
+Gated behind the Route A sub-plan's boundaries being approved and green. **Two artefacts** — one complete HTML expression per act, each carrying its enacting terms and both annexes — same ingestion invariant as Tasks 6–9, plus: the instrument's `adopted_not_effective` standing asserted through the production path, and S-011's cap-catalogue dependency shown to resolve to **Annex II within the same artefact**.
 
 - **Does NOT prove:** that either act is in force. The point of the status field is that it never can.
 - **Commit boundary:** one commit.
@@ -544,7 +546,7 @@ Gated behind E1–E4's sub-plan being approved and green. Four artefacts (two ac
 
 Same shape as Task 10, over the finished tree. Records the resulting partition **as a measurement**, states which residual gaps are truthful and why, and either unblocks B3 or names the feasibility failure that does not.
 
-**Runs after all required work, independent of the optional branch.** If E1–E4 and Task 12 completed, it measures with `SRC-007`/`SRC-008` represented and their temporal status recorded. If they were deferred, it measures both as residual gaps, records that the inability to represent adopted-not-effective evidence is itself the truthful finding, and **D1(a) completes**.
+**Runs after all required work, independent of the deferred envelopes (E1, E3).** If Route A's boundaries and Task 12 completed, it measures with `SRC-007`/`SRC-008` represented and their temporal status recorded. If they were deferred, it measures both as residual gaps, records that the inability to represent adopted-not-effective evidence is itself the truthful finding, and **D1(a) completes**.
 
 - **Commit boundary:** one commit. *Record what the corpus can and cannot answer.*
 
@@ -639,7 +641,7 @@ FAIL / FAIL
 
 **Implementation-ready:** Tasks 1–10, plus Task 11 over whatever subset Task 2 leaves unresolved, and Task 13.
 
-**Not implementation-ready:** envelopes E1–E4 and Task 12, which depends on them. They carry the spec's acceptance conditions and a gate; each needs a dedicated sub-plan written when its gate opens. Claiming otherwise would put speculative file lists and mutants against a dependency nobody has selected.
+**Not implementation-ready:** envelopes E1 and E3, and Task 12, which depends on E2 and E4 only. They carry the spec's acceptance conditions and a gate. E1 and E3 each need a dedicated sub-plan written when their gate opens; Task 12's sub-plan exists — boundary B-T12 of `docs/superpowers/plans/2026-08-30-d1a-route-a-class-b.md`. Claiming implementation-readiness for E1 or E3 would put speculative file lists and mutants against a dependency nobody has selected.
 
 ---
 
@@ -684,7 +686,7 @@ Every row is subject to evidence-standard rule 2: confirm the mutation landed be
 | 6, 9 | Two ingestion commits, one per document. **7 and 8 retired — see §3** | D1a-2 |
 | 10 | Measure what the corpus now costs to read | D1a-3 |
 | 11 | Watch the transposition tracker instead of citing it — **only for the unresolved subset**; one commit each, the last carrying the retier | D1a-6 |
-| — | E1–E4 sub-plan, if approved | D1a-4 |
+| — | Route A sub-plan (B-NORM, B-E2, B-E4) | D1a-4 |
 | 12 | Ingest the two adopted acts, as adopted | D1a-5 |
 | 13 | Record what the corpus can and cannot answer | D1a-7 |
 
@@ -700,7 +702,7 @@ Every row is subject to evidence-standard rule 2: confirm the mutation landed be
 
 **Risk 4 — Task 5 and the public site.** `AuthorisedCorpus` must cross into the frontend workspace, and the standalone artifact gate has produced this class of failure before.
 
-**Risk 5 — E1's dependency.** If no PDF extractor gives byte-identical output across environments, E1–E4 and Task 12 stay deferred and the two adopted acts remain truthful gaps. An acceptable outcome, not a failure.
+**Risk 5 — E1's dependency, no longer on the critical path.** Route A ingests official HTML expressions, so Task 12 does not wait on a PDF extractor. E1 reopens only if an artefact has no machine-readable expression; a residual gap on such an artefact remains a truthful finding.
 
 ---
 
@@ -714,7 +716,7 @@ Every row is subject to evidence-standard rule 2: confirm the mutation landed be
 | 4. Does any migration overwrite historical evidence? | No. §4.2 makes preservation uniform across goldens, transcripts and the version registry, with diff-empty acceptance gates |
 | 5. Is requirement-side citability a production invariant before W-002 is retiered? | Yes. It lands in Task 4; the retier is atomic with the **final** citation removal (§4.3) |
 | 6. Does any planned version represent a provenance state already known to be wrong? | No. §4.3 applies the criterion per source **and per requirement**: `SRC-010` folds into v3; each of S-004 and S-013 drops `SRC-015` in v3 as soon as its own path is proven, and defers to v4 only where the fix genuinely does not exist yet |
-| 7. Are deferred envelopes described honestly? | Yes. E1–E4 are capability envelopes requiring their own sub-plan, and §5 states the readiness claim explicitly |
+| 7. Are deferred envelopes described honestly? | Yes. E1 and E3 are capability envelopes requiring their own sub-plan; E2 and E4 are planned under the Route A sub-plan, and §5 states the readiness claim explicitly |
 | 8. Does the replay proof require a failure the lookup order cannot produce? | No. §4.2 step 1 compares the two bindings directly and asserts three moved fields including `runId`; step 2 asserts a *selection* miss and reads `.differences` as a near-miss explanation, not as a rejection |
 | 9. Is authority validated at ingestion as well as at entitlement? | Yes. Task 5 modifies `cli/ingest.ts` and states why no shared lower-level function can carry the check; both directions have their own tooth |
 | 10. Is the Task-4 committed tree unambiguous in every probe outcome? | Yes. Task 4 states the file set and the end state per outcome, and notes that a citation of a `legal_record` row stays valid while W-002 has not been retiered |

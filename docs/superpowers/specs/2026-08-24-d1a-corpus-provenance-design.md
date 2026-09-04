@@ -1,7 +1,7 @@
 # D1(a) — corpus provenance: what a cited source means, and what serves it
 
 **Date:** 2026-08-24
-**Status:** Design, revision 4 — complete. §7.1 added 2026-08-27, closing the one gate the D1a-0b audit raised. No implementation. Nothing ingested, no requirement edited, no schema changed, no PDF support written.
+**Status:** Design, revision 4 — complete. §7.1 added 2026-08-27, closing the one gate the D1a-0b audit raised. No implementation. Nothing ingested, no requirement edited, no schema changed, no PDF support written. **State at base `1e16f24`.** The present-tense clauses above describe that tree; Tasks 4–10 have since landed. Passages carrying a dated correction note are governed by `docs/superpowers/plans/2026-08-30-d1a-route-a-class-b.md` §3.
 **Base:** `1e16f24` *Stop verification when any cited source is unserved*
 **Branch/worktree:** `feature/b1b-ii-a-record` — `/Users/vivin/Documents/DataStrata/b1b-record`
 **Blocks:** B3. The real pack cannot serve as a model-quality benchmark until every cited source has a semantically correct disposition and every requirement has correctly weighted provenance.
@@ -264,7 +264,7 @@ A `legal_record` nobody has ingested is citable and unserved — that is the ten
 | planning label | runtime expression |
 |---|---|
 | A — authoritative immutable instrument | `legal_record` row + corpus document |
-| B — adopted, not yet in force | `legal_record` row + corpus document carrying `adopted_not_effective` status (§7) |
+| B — adopted, not yet in force | `legal_record` row + corpus document whose **artefact authenticity** is recorded, with the instrument's `adopted_not_effective` **temporal standing held in the knowledge pack** (§7, §9) |
 | C — mutable authoritative surface | `tracker` row; `citable: false` already forbids citing it |
 | D — monitoring/context, not evidence | register row of the appropriate tier, **absent** from the cited set |
 
@@ -286,9 +286,9 @@ temporal status    adopted_not_effective   it is not operative law until the OJ
 
 **No new tier is invented for not-yet-effective legislation.** `SRC-007` and `SRC-008` stay `legal_record`. W-004's rationale — *"authoritative for expected timing, not sufficient alone to flip a pack flag"* — remains true of the Commission *status page*, which is a different artefact from the adopted act.
 
-**The gap this exposes.** The pack already has the vocabulary on the requirement side: `legalStatus: z.enum(['in_force', 'adopted_not_effective', 'proposed', 'superseded'])` (`knowledge/schema.ts:155`). **`CorpusDocument` has no status field at all** (`corpus/types.ts:41`): it carries `versionLabel`, `retrievedOn` and hashes, and nothing about legal effect. An adopted-not-effective act ingested today would sit in an entitled closure indistinguishable from law in force, and the blind reader — shown documents, not their standing — would read it as current obligation.
+**The gap this exposes.** The pack already has the vocabulary on the requirement side: `legalStatus: z.enum(['in_force', 'adopted_not_effective', 'proposed', 'superseded'])` (`knowledge/schema.ts:155`). **`CorpusDocument` has no status field at all** (`corpus/types.ts:41`): it carries `versionLabel`, `retrievedOn` and hashes, and nothing about legal effect. An adopted-not-effective act ingested today would sit in an entitled closure indistinguishable from law in force, and the blind reader — shown documents, not their standing — would read it as current obligation. *(Corrected 2026-08-30: the absence recorded here is real and still true, but it does not locate the remedy. Under §7.1 and §9 as corrected the remedy is **split by axis** — artefact authenticity is added to `CorpusDocument`; temporal standing is held per instrument in the knowledge pack and never copied onto the artefacts serving it. The gap this paragraph names is that standing does not reach the reader, not that `CorpusDocument` lacks a legal-status field.)*
 
-**Rule:** an adopted-not-effective artefact may enter the corpus only when its temporal status is representable **in the corpus** and reaches verification, so no role can treat a future act as current operative law. Until then the requirement citing it halts, and that halt is correct.
+**Rule:** an adopted-not-effective artefact may enter the corpus only when its temporal status is **representable and reaching verification** — held on the instrument in the knowledge pack (§9 as corrected), projected to every role beside the artefact's own authenticity — so no role can treat a future act as current operative law. Until then the requirement citing it halts, and that halt is correct.
 
 **The same separation protects `SRC-009` in the other direction.** Its Notice is immutable and ingestible; its tier stays `official_body` with `sufficientAlone: 'non_binding_only'`. Ingesting official guidance never turns guidance into law.
 
@@ -338,7 +338,7 @@ So Task 4 can author provenance now, without any metadata existing: it names ins
 
 #### Who owns enforcement
 
-**Envelope E2**, widened from *temporal legal status* to **document standing** — the artefact-level classification that must reach verification so that no role mistakes an official reading for the authentic text, and no role mistakes an adopted act for effective law. E2 already exists to put a document-level field on `CorpusDocument` and prove it reaches a run; authenticity class is the same kind of field answering an adjacent question, so it belongs there rather than in a parallel subsystem.
+**Envelope E2**, widened from *temporal legal status* to **document standing**: the classification that must reach verification so that no role mistakes an official reading for the authentic text, nor an adopted act for effective law, **nor official explanatory material for an operative provision**. E2 places **authenticity on `CorpusDocument`** and reads **temporal standing from the knowledge pack**, which already owns it, deriving the role-facing projection from both, and carries the artefact's own statement of which sections are non-operative. Authenticity belongs on the artefact because it is a property of the artefact; temporal status belongs to the instrument and is therefore read from the pack rather than copied onto every artefact that serves it.
 
 **Not Task 5.** `AuthorisedCorpus` (§19) validates *origin authority* — whether an artefact comes from a surface the register authorises **for the source it claims to serve**. A EUR-Lex consolidation is an authorised origin for `SRC-001`, and Task 5 will correctly admit it. That answer is orthogonal to whether the artefact is authentic, and Task 5 must not be read as having settled it. Its scope is unchanged; §19 gains one sentence saying so.
 
@@ -346,7 +346,7 @@ So Task 4 can author provenance now, without any metadata existing: it names ins
 
 #### Authenticity does not gate ingestion the way temporal status does
 
-§7 gates an **adopted-not-effective** artefact: it may not enter the corpus until its status is representable, because a role shown that document would read a future obligation as a current one — the *answer* changes. **No equivalent gate applies to an official consolidation**, and D1a-2 is not blocked by this section.
+§7 gates an **adopted-not-effective** artefact: it may not enter the corpus until its status is representable **and reaches verification**, because a role shown that document would read a future obligation as a current one — the *answer* changes. **No equivalent gate applies to an official consolidation**, and D1a-2 is not blocked by this section.
 
 The asymmetry is in what a misreading costs:
 
@@ -387,13 +387,17 @@ The closure graph has one job — it decides what a role is entitled to read —
 
 The existing vocabulary is `'amends' | 'amendedBy' | 'consolidates' | 'references' | 'definesTermsFor'` (`corpus/types.ts:14`), and none of them is true here. `amends`/`amendedBy` are wrong — the OJ text does not amend the adopted text, it *is* the same act at a later stage, and `amendmentDirection` plus the cycle check in `corpus/schema.ts` would reason about it as an amendment. `consolidates` is wrong — consolidation merges an act with its amendments. `references` is too weak and costs traversal depth. **None of the three is used for this relation unless the law itself establishes it.**
 
-**Required semantics, carried by document-level lifecycle metadata rather than by the edge graph:**
+**Corrected 2026-08-30, per decision D-5 of the Route A sub-plan** (`docs/superpowers/plans/2026-08-30-d1a-route-a-class-b.md`). Storage follows §7.1's axis assignment:
 
 ```
-CorpusDocument
-  legalStatus                      in_force | adopted_not_effective | superseded | …
-  lifecycle identity / successor-predecessor relation
+knowledge pack (sources)   temporalStanding      per instrument
+CorpusDocument             artefactAuthenticity  per artefact
+CorpusDocument             lifecycle identity / successor–predecessor  (E3, deferred)
 ```
+
+A role is shown a derived projection combining both, assembled at entitlement and never stored pre-combined. Neither field may be derived from the other, and neither may be inferred from `versionLabel`.
+
+**Required semantics, carried by document-level lifecycle metadata rather than by the edge graph:**
 
 ```
 adopted artefact remains immutable and hash-addressable
@@ -405,7 +409,7 @@ current verification can distinguish which artefact is legally operative
 historical verification remains replayable against the adopted artefact
 ```
 
-If the OJ text differs from the adopted PDF, **both are preserved**, and the later artefact becomes the current legal record according to its temporal status. Exact field names are implementation-plan work; the semantics above are not.
+If the OJ text differs from the **adopted text**, **both are preserved**, and the later artefact becomes the current legal record according to its temporal status. Exact field names are implementation-plan work; the semantics above are not.
 
 ---
 
@@ -470,8 +474,8 @@ Investigated 2026-08-24. Repository evidence cites `file:line`; external evidenc
 | SRC-005 | S-012 | ingest | `legal_record` row (new) + corpus document |
 | SRC-006 | S-003, S-012 | **conditional for S-003** (§13.2); expected to survive for S-012 | `legal_record` row (new) + corpus document |
 | SRC-009 | S-006 | ingest, weight preserved | `official_body` row (new) + corpus document |
-| SRC-007 | S-012 | ingest **after** the §16 capability | `legal_record` + `adopted_not_effective` |
-| SRC-008 | S-011 | ingest **after** the §16 capability | `legal_record` + `adopted_not_effective` |
+| SRC-007 | S-012 | ingest under Route A once **document standing (E2) and artefact origin (E4)** are in place; §16's PDF conditions are not invoked (§12.4, §16 as corrected) | `legal_record` + `adopted_not_effective` |
+| SRC-008 | S-011 | ingest under Route A once **document standing (E2) and artefact origin (E4)** are in place; §16's PDF conditions are not invoked (§12.4, §16 as corrected) | `legal_record` + `adopted_not_effective` |
 | SRC-010 | S-010, S-011 | re-author, **only if** §17 passes | `official_body` (W-009 exists), no longer cited |
 | SRC-015 | S-004, S-013 | tier → `tracker` (settled, §18.1); citation removed **only after** the §18.2 probes | `tracker` row + country-pack monitor |
 
@@ -514,7 +518,9 @@ csrd-delegated-act-2026-5011_en.pdf         C(2026) 5011, voluntary standard
 csrd-delegated-act-2026-5011-annex_en.pdf   its annexes — the cap catalogue S-011 needs
 ```
 
-They are served from host `ec.europa.eu`, which is not in the citable host set (F-5). Capability requirements in §16; authority architecture in §19.
+They were linked as PDFs from host `ec.europa.eu`. **Route A does not ingest them from that surface** — see the correction below. Artefact-origin authority is §19's; §16's PDF conditions are **not invoked** for these two sources (§16 as corrected).
+
+> **Corrected 2026-08-30 — the artefacts are not PDF-only.** This section recorded only the Commission landing page's PDF links, listed above as the record of what that page offered. EUR-Lex serves both adopted acts as **complete HTML expressions including their annexes**, which the existing `NORMALIZER_VERSION 1.0.2` extractor handles with the `#text` selector — verified at `89b0b86`. Route A ingests those expressions. The retired sentence also claimed `ec.europa.eu` *"is not in the citable host set (F-5)"*: **F-5's host rule was retired at Task 5** (`src/monitoring/register.ts:312`), so that claim had already stopped being true on its own terms, and `ec.europa.eu` is not the serving host under Route A either.
 
 ### 12.5 SRC-010 — value-chain-cap explanatory page, 6 May 2026
 
@@ -604,11 +610,21 @@ D1a-3 measures, per requirement: closure documents; rendered closure chars and b
 
 `SRC-007` and `SRC-008` may not be ingested until all eight are settled.
 
+> **Scope, corrected 2026-08-30.** **Conditions 1 and 3 are PDF-specific: they govern only an artefact for which no official machine-readable expression exists.** `SRC-007` and `SRC-008` are not such artefacts (§12.4 as corrected), so those two are **not invoked**. The remaining conditions are format-independent and govern every Class-B artefact, Route A's included.
+>
+> Condition **2** applies, read in HTML terms rather than PDF ones: the raw/normalized hash split is retained exactly as it is for every other document — `sha256Raw` over the bytes as served, `sha256Normalized` over the extracted text. Conditions **4, 6 and 8 apply unchanged**. Condition **5 is amended in place below**, per the Route A sub-plan's §3.3.
+>
+> Condition **7** (lifecycle and supersession metadata) is **settled as not-yet-applicable rather than unmet**: no OJ successor exists, so there is no lifecycle relation to record. The head's *"may not be ingested until all eight are settled"* is satisfied — a condition with no subject is settled by that fact, and it reopens the moment an OJ expression appears.
+
 1. **PDF acquisition and deterministic normalization.** `normalize` (`corpus/normalize.ts:270`) extracts over decoded HTML with an `#id` selector. PDF extraction must be deterministic across runs and machines, or `sha256Normalized` stops meaning anything.
 2. **Raw-byte hash and normalized hash.** `sha256Raw` over the PDF bytes as served; `sha256Normalized` over extracted text. The existing split is retained, not special-cased.
 3. **`NORMALIZER_VERSION` consequences.** A new extractor is a version bump from `1.0.2`. The bump must not silently re-describe already-ingested text; re-normalizing existing documents is an explicit decision.
 4. **Stable adopted-document identity.** A `docId` for an act with no CELEX number. `C(2026) 5010` is the durable identifier; what happens to that identity at publication follows §9.
-5. **Document standing in the corpus, reaching verification** — temporal legal status (§7) **and** serving-artefact authenticity (§7.1). One artefact-level classification answering two adjacent questions, so that no role reads an adopted act as effective law, and none reads an official consolidation as the authentic publication.
+5. **Document standing, reaching verification** — temporal legal status (§7) **and** serving-artefact authenticity (§7.1), carried as **two fields on two axes**: temporal standing per instrument in the knowledge pack, authenticity per artefact on the corpus document (§9 as corrected). A role is shown a derived projection of both. No single field answers both questions.
+
+   **A third distinction rides with them, and is normative rather than an implementation detail: within a composite artefact, official explanatory material is not operative provision.** An artefact may lawfully carry both — an explanatory memorandum ahead of the enacting terms — and neither of the two axes above says so: temporal standing answers *when the instrument takes effect* and authenticity answers *what kind of artefact this is*, and both apply equally to every part of the document. A role must therefore be told, per artefact, which sections are non-operative, and that statement must be committed by the same identity mechanisms as the other two. Where an artefact serves sources of differing standing, the statement must say that legal effect differs by served source.
+
+   **This is a within-artefact region annotation, not a fourth standing axis.** §7.1's three dimensions — source authority, serving-artefact authenticity, temporal legal status — each classify a whole object, and each remains exactly as §7.1 states it. Non-operative sections partition *within* a single artefact, which is why neither document-level axis can express it, and why §7.1's *"no field may answer two"* is unweakened rather than superseded. The statement of non-operative sections partitions material *within* an artefact; it does not classify the source, the artefact or the instrument, and therefore adds no fourth dimension to §7.1's three.
 6. **Tier is unaffected** — `legal_record` with `adopted_not_effective`, no new tier (§7).
 7. **Lifecycle and supersession metadata, outside closure traversal** — §9.
 8. **Artefact-origin authority, source-specific and generic** — §19.
@@ -774,7 +790,7 @@ Conceptual. The implementation plan comes after this spec is approved.
 | **D1a-1** | Versioned requirement re-authoring (§11) — the schema migration and whatever the audit determined |
 | **D1a-2** | Ingest the immutable surviving evidentiary artefacts — expected `SRC-005`, `SRC-006`, `SRC-009`, plus `SRC-002` only if §13.1 leaves a real dependency, plus anything §13.3 adds |
 | **D1a-3** | Production-path topology, closure and context measurement (§15, §20) |
-| **D1a-4** | Adopted-not-effective corpus capability: PDF normalization, authority validation, temporal legal status, lifecycle metadata (§16, §7, §9, §19) |
+| **D1a-4** | Adopted-not-effective corpus capability: **document standing**, artefact-origin authority, lifecycle metadata (§7, §9, §19). **PDF normalization belongs to §16 and is not invoked where an official machine-readable expression exists** |
 | **D1a-5** | Ingest `SRC-007`, `SRC-008` if D1a-4 is approved |
 | **D1a-6** | Complete the `SRC-010` and `SRC-015` versioned re-authoring, once the substitution test (§17) and country-path probes (§18.2) exist |
 | **D1a-7** | Final production-path topology measurement |
@@ -811,7 +827,7 @@ The final model-reachable count is measured from the resulting corpus. It is nev
 - the exact field names for corpus lifecycle metadata and the successor–predecessor relation (§9);
 - the exact branded-TypeScript expression of `AuthorisedCorpus` and its test builder (§19.3);
 - migration helper naming and the order in which the call sites in §5.3 are moved to the single derivation and the renamed field (§5.3).
-- the field names and value set for **document standing** — temporal legal status and serving-artefact authenticity — and how the classification reaches a role (§7.1, envelope E2).
+- the field names for **document standing** — carried as **two fields on two axes** (§7.1, §9 as corrected): serving-artefact authenticity per artefact, temporal standing per instrument in the knowledge pack — together with the artefact's own statement of which sections are non-operative, and how each of the three reaches a role (envelope E2).
 
 Two findings are settled in principle and must be **recorded as evidence** at D1a-0b rather than asserted: whether S-005/S-014/S-015 retain `SRC-002` (§13.1), and whether S-003 retains `SRC-006` (§13.2). Both are audit outputs, not open questions.
 
