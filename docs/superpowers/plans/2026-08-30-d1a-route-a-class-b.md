@@ -272,7 +272,7 @@ B-NORM's file scope in §4 is the operative list.
 > >
 > >    **A third distinction rides with them, and is normative rather than an implementation detail: within a composite artefact, official explanatory material is not operative provision.** An artefact may lawfully carry both — an explanatory memorandum ahead of the enacting terms — and neither of the two axes above says so: temporal standing answers *when the instrument takes effect* and authenticity answers *what kind of artefact this is*, and both apply equally to every part of the document. A role must therefore be told, per artefact, which sections are non-operative, and that statement must be committed by the same identity mechanisms as the other two. Where an artefact serves sources of differing standing, the statement must say that legal effect differs by served source.
 > >
-> >    **This is a within-artefact region annotation, not a fourth standing axis.** §7.1's three dimensions — source authority, serving-artefact authenticity, temporal legal status — each classify a whole object, and each remains exactly as §7.1 states it. Non-operative sections partition *within* a single artefact, which is why neither document-level axis can express it, and why §7.1's *"no field may answer two"* is unweakened rather than superseded. §7.1's heading and its three-dimension block are **not** stale and are not on §3.0's map.
+> >    **This is a within-artefact region annotation, not a fourth standing axis.** §7.1's three dimensions — source authority, serving-artefact authenticity, temporal legal status — each classify a whole object, and each remains exactly as §7.1 states it. Non-operative sections partition *within* a single artefact, which is why neither document-level axis can express it, and why §7.1's *"no field may answer two"* is unweakened rather than superseded. The statement of non-operative sections partitions material *within* an artefact; it does not classify the source, the artefact or the instrument, and therefore adds no fourth dimension to §7.1's three.
 >
 > **Proposed replacement — the whole "Who owns enforcement" paragraph of §7.1** (both sentences; the collapse appears in each — *"artefact-level classification"* in the first, *"document-level field on `CorpusDocument`"* in the second, so replacing either alone leaves it standing):
 >
@@ -428,7 +428,7 @@ The parent plan's header already dates itself against its base and needs no equi
   |---|---|
   | **Already in final form — must come out byte-identical (20)** | `#1` `#2` `#3` `#4` `#6` `#8` `#9` `#12` `#13` `#15` `#16` `#19` `#20` `#21` `#22` `#24` `#25` `#29` `#30` `#31` |
   | **No change by design (2)** | `#7` (the four filenames stay), `#14` (not stale) |
-  | **Pending (13)** | `#5` §9 block — attribution and placement (§3.3) · `#10` condition 5 — third paragraph missing (§3.3) · `#11` `:517` — the stale sentence still stands two lines above its retraction; replace it and bring the note to §3.1's text · `#17` `:136` — diagram and note carry the old `B-E4 → B-E2` order (§3.8) · `#18` — *"if it was deferred"* → *"if they were deferred"* · `#23` — E2 row, both cells · `#26` — Task 13 lead sentence · `#27` — §5 readiness, second and third sentences (§3.8 as corrected) · `#28` `:687` — sequence-table enumeration carries the old order (§3.8) · `#32` §7 gap paragraph · `#33` §24 bullet · `#34` parent plan `:22` (§3.9) · `#35` spec `:4` (§3.10) |
+  | **Pending (13)** | `#5` §9 block — attribution and placement (§3.3) · `#10` condition 5 — the third paragraph is present; only its closing sentence, the one ending *"not on §3.0's map"*, remains pending and is replaced by the closing sentence §3.3 now prescribes · `#11` `:517` — the stale sentence still stands two lines above its retraction; replace it and bring the note to §3.1's text · `#17` `:136` — diagram and note carry the old `B-E4 → B-E2` order (§3.8) · `#18` — *"if it was deferred"* → *"if they were deferred"* · `#23` — E2 row, both cells · `#26` — Task 13 lead sentence · `#27` — §5 readiness, second and third sentences (§3.8 as corrected) · `#28` `:687` — sequence-table enumeration carries the old order (§3.8) · `#32` §7 gap paragraph · `#33` §24 bullet · `#34` parent plan `:22` (§3.9) · `#35` spec `:4` (§3.10) |
 
 - **No code, no schema, no data, no test changes. No engine gate may move.**
 - **Evidence — checks that can fail, not a prose ledger.** A docs boundary has no runtime behaviour to red, so its evidence is the diff and the residue. All of the following must hold before the boundary is reported:
@@ -448,7 +448,7 @@ The parent plan's header already dates itself against its base and needs no equi
   | `if it was deferred` | 0 | 0 | 0 |
   | `if they were deferred` | 0 | 1 | 0 |
   | `mutating either classification` | 0 | 0 | 0 |
-  | `mutating any of the three` | 0 | 1 | 0 |
+  | `mutating \*\*any of the three\*\*` | 0 | 1 | 0 |
   | `gated behind envelopes E1` | 0 | 0 | 0 |
   | `One artefact-level classification` | 0 | 0 | 0 |
   | `document-level field on` | 0 | 0 | 0 |
@@ -469,8 +469,10 @@ The parent plan's header already dates itself against its base and needs no equi
   | `B-NORM, B-E4, B-E2` | 0 | 0 | 0 |
   | `boundary B-T12 of` | 0 | 1 | 0 |
   | `State at base` | 1 | 0 | 0 |
+  | `§3.0's map` | 0 | 0 | 0 |
+  | `adds no fourth dimension` | 1 | 0 | 0 |
 
-  A count off by one is a failed boundary, not a note.
+  Fragments are basic-regex patterns exactly as written, run as `grep -c -- "<fragment>" <file>` against the three files above and nothing else; `\*` is a literal asterisk, and the double quotes keep the apostrophe in `§3.0's map` safe. A count off by one is a failed boundary, not a note.
 - **Resuming over the partially-applied tree.** This plan repair is committed first, on its own; the frozen pass then remains the only uncommitted change, so B-NORM's own `git diff --stat` is again exactly the three files above. The resumed pass verifies **each row's final text against §3** by quoted-text anchor, never by line number (§3.0), and touches no row in the *already final* set.
 - **Abort A-NORM-1:** if applying a correction reveals a *further* contradiction not listed in §3 — including stale text surviving beside a corrected fragment in the same passage — stop and report rather than widening the diff. It fired on 2026-09-01; its unit is the whole mapped passage.
 - **Commit boundary:** one commit. *Say once where standing lives.*
@@ -1339,7 +1341,7 @@ E1, E3, N-1 deferred; B-PROMPT, B-EVID-SPAN, B-STANDING-ALL named (§6.1, §8)
 
 | Boundary | Ready? | Evidence (date) | What would change the answer |
 |---|---|---|---|
-| **B-NORM** | **Yes** | pending set verified row by row against the frozen tree, 2026-09-04 (§4); prescriptions `#17`, `#27`, `#28`, `#34`, `#35` repaired or added here | A-NORM-1 on contact — repair §3 again; do not widen the diff |
+| **B-NORM** | **Yes** | pending set verified row by row against the frozen tree, 2026-09-04 (§4); prescriptions `#10`, `#17`, `#27`, `#28`, `#34`, `#35` repaired or added here | A-NORM-1 on contact — repair §3 again; do not widen the diff |
 | **B-FIX-WITNESS** | **Scoped; go/no-go after B-NORM** | seven files carry real ids as fixture roles; `DETERMINISTIC_GAP` shrinks to `[]` at B-T12 and vitest 2.1.9 registers nothing for `it.each([])`; `superseded()` selects by position; `source-register.test.ts:418` hand-copies what `test/audit-expected-provenance.ts:45` exports (§4.1) | taken only if every retarget is behaviour-preserving and every synthetic witness reds against its named defect |
 | **B-E2** | **Yes, with §6 as corrected** | §6.4 T5, §6.5.2 R-6, §6.5.4 R-13 and the sweep, §6.5.5 R-7, §6.6 additions — each verified against the tree 2026-09-04 | A-E2-1…7 |
 | **B-INGEST** | **Yes** | §5.4; the 2026-09-04 responses (§2.4) are the failing cases A12/A13 reproduce | — |
