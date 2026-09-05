@@ -193,8 +193,8 @@ function pathsFor(outDir: string): VerifyPaths {
  * The current-generation recording.
  *
  * The directory holds more than one now: the provenance migration retired the
- * pre-migration recording without deleting it, so the fixture carries both
- * generations and `SUPERSEDED_RUN_IDS` says which are history. Selecting by
+ * pre-migration recording without deleting it, so the fixture carries every
+ * generation and `SUPERSEDED_RUN_IDS` says which are history. Selecting by
  * "the only file" stopped being possible then, and selecting by *position*
  * would be the very thing `readTranscriptsFor` refuses to do.
  */
@@ -207,7 +207,7 @@ function committed(): RunTranscript {
 
 /**
  * A retired recording, selected by the identity it is filed under — never by
- * position. With two retired generations, `retired[0]` would answer a
+ * position. With several retired generations, `retired[0]` would answer a
  * different question depending on directory order, which is the selection
  * `readTranscriptsFor` itself refuses to make.
  */
@@ -367,7 +367,8 @@ describe('the committed replay fixture', () => {
         .digest('hex');
     expect(digestOf(RETIRED.preD1a)).toBe('91ad7485be3572062b9af245127eab5ee6fd4ba574baeb9475a4876586e167c9');
     expect(digestOf(RETIRED.provenanceEra)).toBe('84e3d2ca67f22717f738e3ffb04fd40c2c7436a2cf2193d6b111fde701435b60');
-    expect(SUPERSEDED_RUN_IDS).toEqual([RETIRED.preD1a, RETIRED.provenanceEra]);
+    expect(digestOf(RETIRED.standingEra)).toBe('534ffe431d4cc380fc1e441b70f79cda45c65ed23572e223a11ace80a6e5f888');
+    expect(SUPERSEDED_RUN_IDS).toEqual([RETIRED.preD1a, RETIRED.provenanceEra, RETIRED.standingEra]);
   });
 
   it('records one exchange per configured execution, each bound', () => {
@@ -1790,9 +1791,10 @@ describe('the binding the provenance migration moved', () => {
  */
 describe('the binding B-E2 moved', () => {
   const provenanceEra = () => supersededById(RETIRED.provenanceEra);
+  const standingEra = () => supersededById(RETIRED.standingEra);
 
   it('B16 — moves exactly pipelineVersion, corpusClosureSha256 and runId', () => {
-    const differences = bindingDifferences(committed(), provenanceEra());
+    const differences = bindingDifferences(standingEra(), provenanceEra());
     expect(differences.map((d) => d.field).sort()).toEqual([
       'corpusClosureSha256',
       'pipelineVersion',
@@ -1802,7 +1804,7 @@ describe('the binding B-E2 moved', () => {
 
   it('leaves packId, requirementId, requirementInputSha256 and renderedConditionSha256 untouched', () => {
     const before = provenanceEra();
-    const now = committed();
+    const now = standingEra();
     for (const field of ['packId', 'requirementId', 'requirementInputSha256', 'renderedConditionSha256'] as const) {
       expect(now[field], field).toBe(before[field]);
     }
@@ -1815,9 +1817,39 @@ describe('the binding B-E2 moved', () => {
     expect(now.runId).not.toBe(before.runId);
   });
 
-  it('the live pipeline binds to the standing-era recording and to nothing retired', async () => {
-    // Positive control for both partitions: the current recording really is
-    // the one the production path selects today.
+});
+
+// ---------------------------------------------------------------------------
+// B-PROMPT's effect on run identity
+// ---------------------------------------------------------------------------
+
+/**
+ * What B-PROMPT did to the binding, measured between the standing-era
+ * recording and the prompt-era one. Prompts are hashed into `pipelineVersion`
+ * and so is the closure renderer's grammar, so the identity had to move; the
+ * closure hash covers stored text rather than its rendering, so it must not.
+ */
+describe('the binding B-PROMPT moved', () => {
+  const standingEra = () => supersededById(RETIRED.standingEra);
+
+  it('P6 — moves exactly pipelineVersion and runId', () => {
+    const differences = bindingDifferences(committed(), standingEra());
+    expect(differences.map((d) => d.field).sort()).toEqual(['pipelineVersion', 'runId']);
+  });
+
+  it('leaves the closure and every other binding field untouched', () => {
+    const before = standingEra();
+    const now = committed();
+    for (const field of ['packId', 'requirementId', 'requirementInputSha256', 'renderedConditionSha256', 'corpusClosureSha256'] as const) {
+      expect(now[field], field).toBe(before[field]);
+    }
+    expect(now.pipelineVersion).not.toBe(before.pipelineVersion);
+    expect(now.runId).not.toBe(before.runId);
+  });
+
+  it('the live pipeline binds to the prompt-era recording and to nothing retired', async () => {
+    // Positive control for all three partitions: the current recording really
+    // is the one the production path selects today.
     const outcome = await verifyRun(verificationDir, REQUIREMENT_ID, FIXTURE_TRANSCRIPT_ROOT);
     expect(outcome.exitCode).toBe(EXIT_OK);
   });

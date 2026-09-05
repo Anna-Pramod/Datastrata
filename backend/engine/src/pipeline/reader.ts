@@ -42,7 +42,7 @@ import type { AuthoredRequirement } from '../types';
 import { evidenceIsSolelyAbsence } from '../verification/result';
 import { createAgentRole } from './agent-role';
 import { locatorTextsOf } from '../knowledge/provenance';
-import { renderEntitledClosure, type EntitledClosure, type EntitledDocument } from './entitlement';
+import { composeRoleMessage, type EntitledClosure, type EntitledDocument } from './entitlement';
 import {
   unservedSourceGaps,
   gapForUnreachableDocument,
@@ -120,11 +120,13 @@ export function readerInputFor(input: {
  * every other field one keystroke away.
  */
 export function renderReaderInput(input: ReaderInput): string {
-  return [
-    `# Requirement\n\n${input.packId}/${input.requirementId} v${input.requirementVersion}`,
-    `# Where to look\n\n${input.locators.join('\n')}`,
-    `# Entitled closure (${input.closure.sha256})\n\n${renderEntitledClosure(input.closure)}`,
-  ].join('\n\n');
+  return composeRoleMessage(
+    [
+      { heading: 'Requirement', body: `${input.packId}/${input.requirementId} v${input.requirementVersion}` },
+      { heading: 'Where to look', body: input.locators.join('\n') },
+    ],
+    input.closure,
+  );
 }
 
 /** What a request for a document comes back as. Text, or a gap. Never both. */

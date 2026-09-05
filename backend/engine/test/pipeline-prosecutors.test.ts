@@ -1199,7 +1199,11 @@ describe('the closure renderer stays shared', () => {
 
   it('no second closure renderer exists in the prosecutor module', () => {
     const source = readFileSync('src/pipeline/prosecutors.ts', 'utf8');
-    expect(source).toContain('renderEntitledClosure(input.closure)');
+    // Since B-PROMPT the whole message goes through the shared composer, which
+    // renders the closure itself; the prosecutor module no longer even names
+    // the closure renderer, so a fork would have to reintroduce the call.
+    expect(source).toContain('composeRoleMessage(');
+    expect(source).not.toContain('renderEntitledClosure(');
     // The construct a fork would use: iterating the closure's documents here.
     const strip = (text: string) => text.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
     expect(strip(source)).not.toContain('.documents()');

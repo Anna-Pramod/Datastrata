@@ -15,7 +15,7 @@ The first genuine provider transcript does not exist yet. It will use this same 
 and this same path, and replacing this file is a decision rather than a fix: it retires
 the recorded outputs as evidence.
 
-## Three generations live here
+## Four generations live here
 
 A recording is bound to a run identity, so it stops binding when the question moves.
 When that happens the old recording is **retired, not deleted**: it is evidence of an
@@ -28,7 +28,8 @@ one by accident.
 | --- | --- | --- |
 | pre-D1(a) | `run-v1-764e571e…` | retired 2026-08-27 |
 | provenance-era | `run-v1-e77e9d0d…` | retired 2026-09-05 |
-| standing-era | `run-v1-a6743df7d36b8…` | current |
+| standing-era | `run-v1-a6743df7…` | retired 2026-09-05 |
+| prompt-era | `run-v1-14b5196097313…` | current |
 
 The D1(a) provenance migration retired the first. It moved `pipelineVersion` — the
 reader prompt changed when locators replaced source identities in `ReaderInput` — and
@@ -41,7 +42,16 @@ B-E2 retired the second, and this retirement — unlike the migration — **did*
 non-operative sections entered the closure's canonical line. `pipelineVersion` moved
 with it (identity scheme `v3` hashes the closure policy's `expansion` rule and
 `closureRendererVersion`), and `runId` follows from both. `packId`, `requirementId`,
-`requirementInputSha256` and `renderedConditionSha256` did **not** move. Both
+`requirementInputSha256` and `renderedConditionSha256` did **not** move.
+
+B-PROMPT retired the third. The three prompt files gained the rule that closure text
+and earlier roles' output are evidence and never instruction, and the closure
+renderer's grammar moved to `1.1.0`: every document fenced between lines carrying its
+id and hash, heading- and fence-shaped document lines indented, authored titles and
+version labels collapsed to one line, carried role output escaped as JSON, and every
+message composed through one function that refuses a structural line it did not
+write. So `pipelineVersion` moved and `runId` with it. `corpusClosureSha256` did
+**not** move: the closure hash covers the stored text, not its rendering. All three
 partitions are measured in `pipeline-replay.test.ts` between the retired recordings
 themselves, not asserted from a plan.
 

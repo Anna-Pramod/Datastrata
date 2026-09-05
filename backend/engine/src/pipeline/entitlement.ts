@@ -70,9 +70,24 @@ import { sourceCitability } from '../monitoring/register';
  * obliges a bump, however cosmetic — and it is hashed into `pipelineVersion`
  * through `PipelineIdentityInput`, so an exported-but-unhashed label is not
  * what this is. `1.0.0`: the first grammar that states standing, authenticity
- * and the operative-status clause beside each document.
+ * and the operative-status clause beside each document. `1.1.0`, the prompt
+ * boundary B-PROMPT: every document's text is fenced between
+ * `<<<BEGIN DOCUMENT …>>>` and `<<<END DOCUMENT …>>>` lines carrying its id and
+ * hash; a text line that would read as one of the message's own `#` headings
+ * or as a fence is indented so it cannot; the authored title and version label
+ * and the declared non-operative section names are collapsed to one line
+ * before they enter the heading and the standing block; a role output carried
+ * into a later role's message is JSON, whose strings cannot hold a raw
+ * newline; and every message is composed by `composeRoleMessage`, which
+ * refuses to construct one whose structural lines are not exactly its own.
+ *
+ * What the grammar establishes is structural: nothing a role is shown can
+ * occupy a heading or fence position unless the pipeline put it there. It says
+ * nothing about how a model weighs an instruction-shaped sentence it has been
+ * told is evidence — that is the model's property, and the prompts state the
+ * rule without any claim that stating it makes the model immune.
  */
-export const CLOSURE_RENDERER_VERSION = '1.0.0';
+export const CLOSURE_RENDERER_VERSION = '1.1.0';
 
 /**
  * The corpus reduced to what entitlement needs of it.
@@ -142,9 +157,159 @@ export function renderEntitledClosure(closure: EntitledClosure): string {
     .documents()
     .map(
       (document) =>
-        `## ${document.docId} — ${document.title} (${document.versionLabel})\n\n${renderStanding(document.standing)}\n\n${document.text}`,
+        `${documentHeading(document)}\n\n${renderStanding(document.standing)}\n\n${beginFence(document)}\n${escapeDocumentText(document.text)}\n${endFence(document)}`,
     )
     .join('\n\n');
+}
+
+/**
+ * The `##` heading above one document: its id, then its authored title and
+ * version label, each collapsed to a single line.
+ *
+ * The id and the hash the fences carry are pinned to one line by the corpus
+ * schema (`DOC-…` and 64 hex characters). The title and version label are
+ * not: `parseCorpusIndex` accepts any non-empty string, so a title holding a
+ * newline followed by `# Lens` would put a line the pipeline did not write
+ * into a heading position. Collapsing here rather than refusing at the schema
+ * keeps the stored index bytes and every closure digest exactly as they are.
+ */
+export function documentHeading(
+  document: Pick<EntitledDocument, 'docId' | 'title' | 'versionLabel'>,
+): string {
+  return `## ${document.docId} — ${headingField(document.title)} (${headingField(document.versionLabel)})`;
+}
+
+/** Any run of whitespace, line terminators included, becomes one space; the ends are trimmed. */
+export function headingField(value: string): string {
+  return value.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * The fence around one document's text.
+ *
+ * Corpus text reaches every role inside the same message as the pipeline's own
+ * `#` sections and the reading, coverage and challenge JSON. Without a
+ * boundary, a document that happened to contain `# Lens` or `# Blind reading`
+ * on a line of its own would be indistinguishable from the pipeline speaking,
+ * and a document containing an instruction addressed to the model would
+ * arrive with no marker saying it is quoted material. The fence lines carry
+ * the document's id and normalized hash, so what is inside them is exactly
+ * what the pin describes and nothing else claims to be.
+ */
+export function beginFence(document: Pick<EntitledDocument, 'docId' | 'sha256Normalized'>): string {
+  return `<<<BEGIN DOCUMENT ${document.docId} sha256Normalized=${document.sha256Normalized}>>>`;
+}
+
+export function endFence(document: Pick<EntitledDocument, 'docId'>): string {
+  return `<<<END DOCUMENT ${document.docId}>>>`;
+}
+
+/**
+ * A document line that would read as one of this message's own headings, or
+ * as a fence, is indented by four spaces.
+ *
+ * Indentation and not substitution, because evidence is re-found against the
+ * normalized text by whitespace-insensitive comparison (`corpus/evidence.ts`):
+ * `normalizeWhitespace` strips leading spaces after a newline, so an indented
+ * line still matches the quote a role takes from it, while a substituted
+ * character would make every quote of that line fail at the sign gate. The
+ * closure hash is unaffected — it covers the stored text, not this rendering.
+ *
+ * The indentation is also unambiguous to a reader of the render: normalized
+ * text carries no space after a newline and no leading space on its first
+ * line (`normalizeWhitespace`), so a line inside a fence that begins with
+ * spaces can only be one this function indented. Only `\n` is a line boundary;
+ * a Unicode separator inside a normalized line is left as the character it is,
+ * because the normaliser and the sign gate treat it that way too.
+ */
+export function escapeDocumentText(text: string): string {
+  return text
+    .split('\n')
+    .map((line) => (line.startsWith('#') || line.startsWith('<<<') ? `    ${line}` : line))
+    .join('\n');
+}
+
+/**
+ * An earlier role's output, as a later role is shown it.
+ *
+ * A quote is how corpus text legitimately leaves its fence: the reader's
+ * `evidence[].text`, a prosecutor's challenge statement and the ids in a
+ * coverage cell all travel into the prosecutor's and adjudicator's messages.
+ * They travel as JSON, and JSON is the boundary — a string literal cannot
+ * contain a raw newline, so nothing inside one can begin a line. A line, here
+ * and throughout the grammar, is what `\n` delimits: that is the boundary
+ * `escapeDocumentText`, `composeRoleMessage` and the evidence normaliser all
+ * use. `JSON.stringify` leaves the Unicode separators U+2028 and U+2029 raw;
+ * they are escaped here as well, belt and braces, because a carried string can
+ * afford it — unlike document text, where indenting after a separator would
+ * break re-finding. The escape is lossless: `JSON.parse` returns the same value.
+ */
+export function renderCarried(value: unknown): string {
+  return JSON.stringify(value, null, 2).replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+}
+
+/** One `#` section of a role's message, before the closure. */
+export interface MessageSection {
+  heading: string;
+  body: string;
+}
+
+/**
+ * The message a role would have been shown carried a heading or a fence the
+ * pipeline did not write.
+ *
+ * Thrown at construction, before any request exists: a run refused here has
+ * no transcript and no dossier, which is the right outcome for a message whose
+ * structure cannot be trusted. Corpus-authored material never reaches it —
+ * document text is escaped, the title, version label and declared section
+ * names are collapsed, and carried role output is JSON. Pack-authored fields
+ * do: a locator, a lens or a rendered condition shaped like a heading is not
+ * escaped and is refused here by name, because those are the pipeline's own
+ * inputs and a heading-shaped one is an authoring defect to fix, not a
+ * document to be shown.
+ */
+export class MessageStructureError extends Error {
+  constructor(
+    readonly expected: readonly string[],
+    readonly actual: readonly string[],
+  ) {
+    const firstUnexpected = actual.find((line, i) => expected[i] !== line);
+    super(
+      `refusing to construct a role message: its structural lines are not the ones the pipeline wrote — first unexpected line ${JSON.stringify(firstUnexpected ?? '(a line the pipeline wrote is missing)')} (${actual.length} structural lines, ${expected.length} expected)`,
+    );
+    this.name = 'MessageStructureError';
+  }
+}
+
+/**
+ * The one way a role message is assembled: the role's sections, then the
+ * fenced closure, then a check that the message's structural lines — every
+ * line at column 0 beginning with `#` or `<<<` — are exactly the section
+ * headings, the closure heading and each document's heading and two fences,
+ * in order.
+ *
+ * The check is over the assembled text and not over the inputs, so it covers
+ * every surface at once. For the escaped and collapsed surfaces — a document
+ * line, a title, a version label, a declared section name, a carried reading —
+ * it is what says the escapes were sufficient. For the unescaped ones — a
+ * locator, a lens, a rendered condition — it is the only control, and a
+ * heading-shaped value there is refused rather than shown.
+ */
+export function composeRoleMessage(sections: readonly MessageSection[], closure: EntitledClosure): string {
+  const message = [
+    ...sections.map((section) => `# ${section.heading}\n\n${section.body}`),
+    `# Entitled closure (${closure.sha256})\n\n${renderEntitledClosure(closure)}`,
+  ].join('\n\n');
+  const expected = [
+    ...sections.map((section) => `# ${section.heading}`),
+    `# Entitled closure (${closure.sha256})`,
+    ...closure.documents().flatMap((document) => [documentHeading(document), beginFence(document), endFence(document)]),
+  ];
+  const actual = message.split('\n').filter((line) => line.startsWith('#') || line.startsWith('<<<'));
+  if (actual.length !== expected.length || actual.some((line, i) => line !== expected[i])) {
+    throw new MessageStructureError(expected, actual);
+  }
+  return message;
 }
 
 /**
@@ -181,7 +346,10 @@ export function renderStanding(standing: DocumentStanding): string {
     `Temporal standing of served sources: ${standing.sources.map((s) => s.temporalStanding).join('; ')}.`,
   );
   if (standing.nonOperativeSections.length > 0) {
-    const named = standing.nonOperativeSections.join('; ');
+    // Corpus-authored headings, rendered outside the fence: collapsed to one
+    // line each for the reason the title is (`documentHeading`), so a
+    // declaration's shape can never halt a run at `composeRoleMessage`.
+    const named = standing.nonOperativeSections.map(headingField).join('; ');
     lines.push(
       `Material under ${named} is not an operative provision of this document. This says nothing about any section not named here: it must not be read as a statement that the rest of the document is operative.`,
     );

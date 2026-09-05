@@ -51,7 +51,7 @@
  * closure did all the reading.
  */
 
-import { renderEntitledClosure, type EntitledClosure } from './entitlement';
+import { composeRoleMessage, renderCarried, type EntitledClosure } from './entitlement';
 import { gapForUnreachableDocument, type DocumentGap } from './gaps';
 import type { RolePrompt } from './prompts';
 import { createAgentRole } from './agent-role';
@@ -313,21 +313,30 @@ export function adjudicatorInputFor(input: {
  * transcript cannot be *held*; this says it cannot be *written into the
  * prompt*, because the only thing in scope here is the projection.
  *
- * **`renderEntitledClosure` is the shared renderer, called unparameterised.**
- * Task 2 made it shared across every role renderer precisely so that two copies
- * could not drift and silently change what a role sees. Nothing about the
- * adjudicator needs the closure presented differently: it reads the same
- * documents for the same reason. If that ever changes, the function is
- * parameterised, never forked.
+ * **`composeRoleMessage` is the shared composer, called unparameterised.**
+ * Task 2 made the closure renderer shared across every role renderer precisely
+ * so that two copies could not drift and silently change what a role sees, and
+ * B-PROMPT moved the whole message assembly behind one function for the same
+ * reason. Nothing about the adjudicator needs the closure presented
+ * differently: it reads the same documents for the same reason. If that ever
+ * changes, the function is parameterised, never forked.
+ *
+ * The reading, coverage and challenges are carried as JSON through
+ * `renderCarried`: they are earlier roles' output, and the quotes and
+ * statements inside them are corpus text and prosecutors' words that have left
+ * the fence. JSON is what keeps that text from beginning a line, and the
+ * prompt says what it is.
  */
 export function renderAdjudicatorInput(input: AdjudicatorInput): string {
-  return [
-    `# Blind reading\n\n${JSON.stringify(input.reading, null, 2)}`,
-    `# Rendered condition\n\n${input.renderedCondition}`,
-    `# Coverage\n\n${JSON.stringify(input.coverage, null, 2)}`,
-    `# Challenges\n\n${JSON.stringify(input.challenges, null, 2)}`,
-    `# Entitled closure (${input.closure.sha256})\n\n${renderEntitledClosure(input.closure)}`,
-  ].join('\n\n');
+  return composeRoleMessage(
+    [
+      { heading: 'Blind reading', body: renderCarried(input.reading) },
+      { heading: 'Rendered condition', body: input.renderedCondition },
+      { heading: 'Coverage', body: renderCarried(input.coverage) },
+      { heading: 'Challenges', body: renderCarried(input.challenges) },
+    ],
+    input.closure,
+  );
 }
 
 // ---------------------------------------------------------------------------

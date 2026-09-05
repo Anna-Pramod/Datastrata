@@ -83,16 +83,28 @@ export const REQUIREMENT_ID = 'CSRD-S-001';
  * `closureRendererVersion` are hashed), and `runId` follows from both.
  * `packId`, `requirementId`, `requirementInputSha256` and
  * `renderedConditionSha256` did not move — again measured, not assumed.
+ *
+ * `run-v1-a6743df7…` is the standing-era generation, retired on 2026-09-05 by
+ * B-PROMPT: the three prompt files gained the evidence-not-instruction rule
+ * for closure text and for earlier roles' output, and the closure renderer's
+ * grammar moved to `1.1.0` (fenced documents, indented heading-shaped lines,
+ * collapsed metadata, JSON-escaped carried output, one composer that refuses
+ * a structural line it did not write), so `pipelineVersion` moved and `runId`
+ * with it. Nothing else did — the closure hash covers stored text, not its
+ * rendering — and that partition is measured in `pipeline-replay.test.ts`
+ * like the two before it.
  */
 export const SUPERSEDED_RUN_IDS: readonly string[] = [
   'run-v1-764e571e7fb566ba75cc2ff126ac1d7b18cb59a887b033eef9f97c2f1f215d54',
   'run-v1-e77e9d0d4f4ce72d5543f6e21d99074051ad3d8d10ba4c661d2f73f0656574df',
+  'run-v1-a6743df7d36b87e9495aadc1094b3894ee74fb976b41f884cda28ab5215b7688',
 ];
 
 /** The retired identities by generation, so a test selects a recording by what it is and never by position. */
 export const RETIRED = {
   preD1a: 'run-v1-764e571e7fb566ba75cc2ff126ac1d7b18cb59a887b033eef9f97c2f1f215d54',
   provenanceEra: 'run-v1-e77e9d0d4f4ce72d5543f6e21d99074051ad3d8d10ba4c661d2f73f0656574df',
+  standingEra: 'run-v1-a6743df7d36b87e9495aadc1094b3894ee74fb976b41f884cda28ab5215b7688',
 } as const;
 
 export const DOC_HOST = 'DOC-32013L0034';

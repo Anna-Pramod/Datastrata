@@ -44,7 +44,7 @@
  */
 
 import { lensFor, type RoleConfig } from './config';
-import { renderEntitledClosure, type EntitledClosure } from './entitlement';
+import { composeRoleMessage, renderCarried, type EntitledClosure } from './entitlement';
 import { gapForUnreachableDocument, type DocumentGap } from './gaps';
 import type { RolePrompt } from './prompts';
 import { parseRoleOutput, type ProsecutorOutput, type ReaderOutput } from './role-outputs';
@@ -345,21 +345,30 @@ export function prosecutorInputFor(input: {
 /**
  * The message one prosecutor receives, as a function of `ProsecutorInput` alone.
  *
- * **`renderEntitledClosure` is the shared renderer, called unparameterised.**
- * Task 2 made it shared across all four role renderers precisely so that two
- * copies could not drift and silently change what the *reader* sees — the
- * blindness boundary. Nothing about the prosecutor needs the closure presented
- * differently: it reads the same documents for the same reason. If that ever
- * changes, the function is parameterised, never forked.
+ * **`composeRoleMessage` is the shared composer, called unparameterised.**
+ * Task 2 made the closure renderer shared across all four role renderers
+ * precisely so that two copies could not drift and silently change what the
+ * *reader* sees — the blindness boundary — and B-PROMPT moved the whole
+ * message assembly behind one function for the same reason. Nothing about the
+ * prosecutor needs the closure presented differently: it reads the same
+ * documents for the same reason. If that ever changes, the function is
+ * parameterised, never forked.
+ *
+ * The reading is carried as JSON through `renderCarried`: it is an earlier
+ * role's output, and the quotes inside it are corpus text that has left its
+ * fence. JSON is what keeps that text from beginning a line, and the prompt
+ * says what it is.
  */
 export function renderProsecutorInput(input: ProsecutorInput): string {
-  return [
-    `# Lens\n\n${input.lens}`,
-    `# Blind reading\n\n${JSON.stringify(input.reading, null, 2)}`,
-    `# Rendered condition\n\n${input.renderedCondition}`,
-    `# Condition addresses\n\n${input.conditionPaths.join('\n')}`,
-    `# Entitled closure (${input.closure.sha256})\n\n${renderEntitledClosure(input.closure)}`,
-  ].join('\n\n');
+  return composeRoleMessage(
+    [
+      { heading: 'Lens', body: input.lens },
+      { heading: 'Blind reading', body: renderCarried(input.reading) },
+      { heading: 'Rendered condition', body: input.renderedCondition },
+      { heading: 'Condition addresses', body: input.conditionPaths.join('\n') },
+    ],
+    input.closure,
+  );
 }
 
 // ---------------------------------------------------------------------------
