@@ -252,6 +252,7 @@ describe('the loader reads the ledger, rather than answering draft unconditional
       conditionSha256: HASH('c'),
       renderedConditionSha256: HASH('d'),
       rendererVersion: 'renderer-1.0.0',
+      closureRendererVersion: 'closure-renderer-1.0.0',
       corpusClosureSha256: HASH('e'),
       corpus: [
         {
@@ -260,6 +261,9 @@ describe('the loader reads the ledger, rather than answering draft unconditional
           sha256Raw: HASH('f'),
           sha256Normalized: HASH('0'),
           normalizerVersion: 'normalize-1.0.0',
+          artefactAuthenticity: 'official_consolidation',
+          nonOperativeSections: [],
+          sources: [{ sourceId: 'SRC-001', temporalStanding: 'in_force' }],
         },
       ],
       resultSha256: HASH('1'),

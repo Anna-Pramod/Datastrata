@@ -180,6 +180,7 @@ export function assembleVerificationResult(input: ResultAssemblyInput): Verifica
     resultSchemaVersion: tail.resultSchemaVersion,
     pipelineVersion: tail.pipelineVersion,
     rendererVersion: tail.rendererVersion,
+    closureRendererVersion: tail.closureRendererVersion,
     requirementInputSha256: tail.pins.requirementInputSha256,
     conditionSha256: tail.pins.conditionSha256,
     renderedConditionSha256: tail.pins.renderedConditionSha256,

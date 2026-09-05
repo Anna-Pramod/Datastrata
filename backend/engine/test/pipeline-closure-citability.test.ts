@@ -46,6 +46,7 @@ import { EntitledClosure, ClosureCitabilityError } from '../src/pipeline/entitle
 import type { CorpusIndex } from '../src/corpus/types';
 import type { SourceRegister } from '../src/monitoring/types';
 import { csrdPack } from './helpers';
+import { standingMapFor } from '../src/corpus/standing';
 
 const engineRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const realIndex = (): CorpusIndex => loadCorpus(join(engineRoot, 'corpus')).index;
@@ -112,14 +113,36 @@ function worldReaching(serves: string[]): CorpusIndex {
   };
 }
 
+/**
+ * The real pack, with the two sources these fixtures serve given an in-force
+ * standing in memory. Since B-E2 a served source with no `temporalStanding` is
+ * refused at closure construction, and a document serving an
+ * adopted-not-effective source is not reached by expansion at all — both
+ * *before* citability is asked, and both proved in `corpus-standing.test.ts`.
+ * Here the subject is the citability guard over a traversal-reached document,
+ * so `SRC-012` (a non-instrument) and `SRC-007` (adopted, undeclared in the
+ * register, which is why the fixtures use it) are given `in_force` so the
+ * probe is reached, and the tier question is left exactly as the committed
+ * register poses it.
+ */
+function standingPack(): ReturnType<typeof csrdPack> {
+  const pack = csrdPack();
+  return {
+    ...pack,
+    sources: pack.sources.map((s) =>
+      s.id === 'SRC-012' || s.id === 'SRC-007' ? { ...s, temporalStanding: 'in_force' as const } : s,
+    ),
+  };
+}
+
 describe('uncited is not non-citable — the committed corpus', () => {
   it('admits a traversal-reached document whose source is citable but cited by nothing', () => {
     // SRC-004 is `legal_record` and no requirement cites it. DOC-32026L0470 is
     // reached only from DOC-32013L0034's `amendedBy` edge, so this is the
     // positive control for the whole file: the guard must read the *tier*, not
     // whether anything currently rests on the source.
-    const corpus = authoriseCorpus(loadCorpus(join(engineRoot, 'corpus')), registerWith(), csrdPack());
-    const closure = EntitledClosure.forSources(corpus, registerWith(), ['SRC-001']);
+    const corpus = authoriseCorpus(loadCorpus(join(engineRoot, 'corpus')), registerWith(), standingPack());
+    const closure = EntitledClosure.forSources(corpus, registerWith(), standingPack(), ['SRC-001']);
     expect(closure.docIds).toContain('DOC-32026L0470');
     expect(docsForSources(realIndex(), ['SRC-001'])).not.toContain('DOC-32026L0470');
   });
@@ -136,15 +159,15 @@ describe('a closure document the register never said may carry normative text', 
     const register = registerWith([], [originFor(UNCLASSIFIED)]);
 
     // 1. Corpus admission succeeds — the artefact's recorded origin is declared.
-    const corpus = authoriseCorpus(corpusOver(index), register, csrdPack());
+    const corpus = authoriseCorpus(corpusOver(index), register, standingPack());
 
     // 2. It is not an entry point, and structural traversal reaches it anyway.
     const entries = docsForSources(index, ['SRC-001']);
     expect(entries).not.toContain('DOC-PROBE');
-    expect(computeClosure(index, entries).docIds).toContain('DOC-PROBE');
+    expect(computeClosure(index, entries, standingMapFor(index, standingPack())).docIds).toContain('DOC-PROBE');
 
     // 3. Exposure refuses. This is the line the defect crossed.
-    expect(() => EntitledClosure.forSources(corpus, register, ['SRC-001'])).toThrow(
+    expect(() => EntitledClosure.forSources(corpus, register, standingPack(), ['SRC-001'])).toThrow(
       ClosureCitabilityError,
     );
   });
@@ -152,9 +175,9 @@ describe('a closure document the register never said may carry normative text', 
   it('names the document, the source and which failure it was', () => {
     const index = worldReaching([UNCLASSIFIED]);
     const register = registerWith([], [originFor(UNCLASSIFIED)]);
-    const corpus = authoriseCorpus(corpusOver(index), register, csrdPack());
+    const corpus = authoriseCorpus(corpusOver(index), register, standingPack());
     try {
-      EntitledClosure.forSources(corpus, register, ['SRC-001']);
+      EntitledClosure.forSources(corpus, register, standingPack(), ['SRC-001']);
       expect.unreachable('should have refused');
     } catch (error) {
       expect(error).toBeInstanceOf(ClosureCitabilityError);
@@ -182,8 +205,8 @@ describe('a closure document the register never said may carry normative text', 
         [{ sourceId: UNCLASSIFIED, tier, rationale: `Fixture: a ${tier} classification.` }],
         [originFor(UNCLASSIFIED)],
       );
-      const corpus = authoriseCorpus(corpusOver(index), register, csrdPack());
-      const run = () => EntitledClosure.forSources(corpus, register, ['SRC-001']);
+      const corpus = authoriseCorpus(corpusOver(index), register, standingPack());
+      const run = () => EntitledClosure.forSources(corpus, register, standingPack(), ['SRC-001']);
       if (admitted) expect(run).not.toThrow();
       else expect(run).toThrow(ClosureCitabilityError);
     });
@@ -202,13 +225,13 @@ describe('a closure document the register never said may carry normative text', 
     // over closure *documents*, not over the source ids they happen to list.
     const index = worldReaching([]);
     const register = registerWith();
-    const corpus = authoriseCorpus(corpusOver(index), register, csrdPack());
+    const corpus = authoriseCorpus(corpusOver(index), register, standingPack());
 
     // Both upstream boundaries admit it, which is why this one has to refuse.
-    expect(computeClosure(index, docsForSources(index, ['SRC-001'])).docIds).toContain('DOC-PROBE');
+    expect(computeClosure(index, docsForSources(index, ['SRC-001']), standingMapFor(index, standingPack())).docIds).toContain('DOC-PROBE');
 
     try {
-      EntitledClosure.forSources(corpus, register, ['SRC-001']);
+      EntitledClosure.forSources(corpus, register, standingPack(), ['SRC-001']);
       expect.unreachable('should have refused');
     } catch (error) {
       expect(error).toBeInstanceOf(ClosureCitabilityError);
@@ -230,9 +253,9 @@ describe('a closure document the register never said may carry normative text', 
     // behind E1–E4, so it stays undeclared until Task 12.
     const index = worldReaching(['SRC-007', UNCLASSIFIED]);
     const register = registerWith([], [originFor('SRC-007'), originFor(UNCLASSIFIED)]);
-    const corpus = authoriseCorpus(corpusOver(index), register, csrdPack());
+    const corpus = authoriseCorpus(corpusOver(index), register, standingPack());
     try {
-      EntitledClosure.forSources(corpus, register, ['SRC-001']);
+      EntitledClosure.forSources(corpus, register, standingPack(), ['SRC-001']);
       expect.unreachable('should have refused');
     } catch (error) {
       const failures = (error as ClosureCitabilityError).failures;
@@ -249,7 +272,7 @@ describe('a closure document the register never said may carry normative text', 
       [{ sourceId: UNCLASSIFIED, tier: 'legal_record', rationale: 'Fixture: now classified.' }],
       [originFor('SRC-007'), originFor(UNCLASSIFIED)],
     );
-    const corpus = authoriseCorpus(corpusOver(index), register, csrdPack());
-    expect(() => EntitledClosure.forSources(corpus, register, ['SRC-001'])).not.toThrow();
+    const corpus = authoriseCorpus(corpusOver(index), register, standingPack());
+    expect(() => EntitledClosure.forSources(corpus, register, standingPack(), ['SRC-001'])).not.toThrow();
   });
 });

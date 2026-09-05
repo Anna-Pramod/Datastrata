@@ -35,6 +35,7 @@ import {
   stubReaderOutput,
   stubRunner,
 } from './pipeline-fixtures';
+import { fixtureStanding, pinInputFor } from './pipeline-fixtures';
 
 // ---------------------------------------------------------------------------
 // Layer 1 — the compile boundary
@@ -74,7 +75,7 @@ export type CompileBoundaryWitnesses = [
 const closure = (() => {
   const index = fixtureIndex();
   const entries = docsForSources(index, ['SRC-100']);
-  return computeClosure(index, entries);
+  return pinInputFor(computeClosure(index, entries, fixtureStanding()));
 })();
 
 function tailInput(roleOutputs: Parameters<typeof runDeterministicTail>[0]['roleOutputs']) {
@@ -83,11 +84,12 @@ function tailInput(roleOutputs: Parameters<typeof runDeterministicTail>[0]['role
     requirementId: 'TEST-R-001',
     requirement: fixtureRequirement(),
     renderContext: fixtureRenderContext(),
-    closure: { sha256: closure.sha256, docIds: closure.docIds },
+    closure: { sha256: closure.sha256, docIds: closure.docIds, sourcesStanding: closure.sourcesStanding },
     corpus: fixtureCorpus(),
     pipelineVersion: 'pipeline-v1-unpromoted',
     rendererVersion: 'renderer-1.1.0',
-    resultSchemaVersion: '1.2.0',
+    closureRendererVersion: 'closure-renderer-1.0.0',
+    resultSchemaVersion: '1.3.0',
     roleOutputs,
   };
 }
@@ -221,7 +223,7 @@ describe('the hostile-pin boundary at runtime', () => {
     const expected = producePins({
       requirement: fixtureRequirement(),
       renderContext: fixtureRenderContext(),
-      closure: { sha256: closure.sha256, docIds: closure.docIds },
+      closure: { sha256: closure.sha256, docIds: closure.docIds, sourcesStanding: closure.sourcesStanding },
       corpus: fixtureCorpus(),
     });
 
@@ -244,7 +246,7 @@ describe('the hostile-pin boundary at runtime', () => {
         prosecutions: [],
         adjudication: stubAdjudicatorOutput(),
       }),
-      closure: { sha256: 'a'.repeat(64), docIds: [] },
+      closure: { sha256: 'a'.repeat(64), docIds: [], sourcesStanding: new Map() },
     });
     expect(outcome.pins.corpusClosureSha256).toBe('a'.repeat(64));
     expect(outcome.pins.corpusClosureSha256).not.toBe(closure.sha256);

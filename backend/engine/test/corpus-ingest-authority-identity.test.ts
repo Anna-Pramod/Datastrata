@@ -104,7 +104,7 @@ describe('the register deciding origin authority is the validated one', () => {
     await main([
       '--url', 'https://eur-lex.europa.eu/eli/dir/2013/34/2023-01-01',
       '--doc-id', 'DOC-IDENT', '--slug', 'ident', '--serves', 'SRC-001',
-      '--title', 'Identity probe', '--version-label', 'v1', '--retrieved-on', '2026-08-27',
+      '--title', 'Identity probe', '--version-label', 'v1', '--retrieved-on', '2026-08-27', '--authenticity', 'official_consolidation',
       '--corpus-dir', dir,
       '--pack-dir', join(world, 'knowledge', 'csrd'),
       '--register-dir', join(world, 'monitoring'),
@@ -144,7 +144,7 @@ describe('the register deciding origin authority is the validated one', () => {
     await main([
       '--url', 'https://eur-lex.europa.eu/eli/dir/2013/34/2024-01-01',
       '--doc-id', 'DOC-ONCE', '--slug', 'once', '--serves', 'SRC-001',
-      '--title', 'Once probe', '--version-label', 'v1', '--retrieved-on', '2026-08-27',
+      '--title', 'Once probe', '--version-label', 'v1', '--retrieved-on', '2026-08-27', '--authenticity', 'official_consolidation',
       '--corpus-dir', dir,
       '--pack-dir', join(world, 'knowledge', 'csrd'),
       '--register-dir', join(world, 'monitoring'),

@@ -91,13 +91,14 @@ import {
   stubRunner,
   fixtureRegister,
 } from './pipeline-fixtures';
+import { fixtureSourceUniverse } from './pipeline-fixtures';
 
 const corpus = fixtureAuthorisedCorpus();
 const prompts = loadPromptSet();
 const ctxRender = fixtureRenderContext();
 
 function fixtureClosure(): EntitledClosure {
-  return EntitledClosure.forSources(corpus, fixtureRegister(), ['SRC-100']);
+  return EntitledClosure.forSources(corpus, fixtureRegister(), fixtureSourceUniverse(), ['SRC-100']);
 }
 
 function quote(text = 'The operative test is stated here.') {
@@ -1161,6 +1162,7 @@ describe('the record carries the adjudicator\'s own evidence, not only the prose
       resultSchemaVersion: outcome.tail.resultSchemaVersion,
       pipelineVersion: outcome.pipelineVersion,
       rendererVersion: outcome.tail.rendererVersion,
+      closureRendererVersion: 'closure-renderer-1.0.0',
       // Spread verbatim, `corpus[]` included. `producePins` used to omit
       // `versionLabel`, which `corpusPinSchema` requires, and this test patched
       // it back in from the corpus; the producer now emits the record-shaped pin
@@ -1175,7 +1177,7 @@ describe('the record carries the adjudicator\'s own evidence, not only the prose
     };
 
     const parsed = parseVerificationResult(result);
-    expect(parsed.resultSchemaVersion).toBe('1.2.0');
+    expect(parsed.resultSchemaVersion).toBe('1.3.0');
     expect(() => assertResultConsistency(parsed)).not.toThrow();
 
     // And the boundary really does see the adjudicator's evidence: every quote

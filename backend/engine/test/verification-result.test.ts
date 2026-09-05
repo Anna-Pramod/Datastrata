@@ -82,9 +82,10 @@ function result(overrides: Record<string, unknown> = {}): Record<string, unknown
     packId: 'testpack',
     requirementId: 'REQ-001',
     requirementVersion: 1,
-    resultSchemaVersion: '1.2.0',
+    resultSchemaVersion: '1.3.0',
     pipelineVersion: 'pipeline-1.0.0',
     rendererVersion: 'renderer-1.0.0',
+    closureRendererVersion: 'closure-renderer-1.0.0',
     requirementInputSha256: HASH('b'),
     conditionSha256: HASH('c'),
     renderedConditionSha256: HASH('d'),
@@ -96,6 +97,9 @@ function result(overrides: Record<string, unknown> = {}): Record<string, unknown
         sha256Raw: HASH('f'),
         sha256Normalized: HASH('a'),
         normalizerVersion: '1',
+        artefactAuthenticity: 'official_consolidation',
+        nonOperativeSections: [],
+        sources: [{ sourceId: 'SRC-001', temporalStanding: 'in_force' }],
       },
     ],
     reading: {
@@ -202,7 +206,7 @@ describe('verificationResultSchema — structure', () => {
     }
   });
 
-  it('rejects a resultSchemaVersion other than 1.2.0, naming the version rather than a downstream field', () => {
+  it('rejects a resultSchemaVersion other than 1.3.0, naming the version rather than a downstream field', () => {
     // The literal is what rejects a record written against a different shape,
     // so it has to move with the shape. 1.0.0 is the shape whose `gaps[]`
     // required a `docId`, and a 1.0.0 record read as if it were this one would
@@ -669,6 +673,9 @@ describe('assertResultConsistency — adjudicated challenges carry their own evi
       sha256Raw: HASH('f'),
       sha256Normalized: HASH('a'),
       normalizerVersion: '1',
+      artefactAuthenticity: 'official_consolidation',
+      nonOperativeSections: [],
+      sources: [{ sourceId: 'SRC-001', temporalStanding: 'in_force' }],
     },
     {
       docId: 'DOC-2',
@@ -676,6 +683,9 @@ describe('assertResultConsistency — adjudicated challenges carry their own evi
       sha256Raw: HASH('7'),
       sha256Normalized: HASH('8'),
       normalizerVersion: '1',
+      artefactAuthenticity: 'official_consolidation',
+      nonOperativeSections: [],
+      sources: [{ sourceId: 'SRC-001', temporalStanding: 'in_force' }],
     },
   ];
 
@@ -1124,6 +1134,9 @@ describe('assertResultConsistency — evidence rests on the corpus this record p
     sha256Raw: HASH('f'),
     sha256Normalized: normalized,
     normalizerVersion: '1',
+    artefactAuthenticity: 'official_consolidation',
+    nonOperativeSections: [],
+    sources: [{ sourceId: 'SRC-001', temporalStanding: 'in_force' }],
   });
 
   const withElementEvidence = (evidence: EvidenceItem[]): Record<string, unknown> =>

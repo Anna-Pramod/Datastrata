@@ -230,9 +230,14 @@ export const verificationResultSchema = z
     packId: z.string(),
     requirementId: z.string(),
     requirementVersion: z.number().int().min(1),
-    resultSchemaVersion: z.literal('1.2.0'),
+    // 1.3.0: the corpus pin gains standing (authenticity, non-operative
+    // sections, per-source temporal standing) and the record names the closure
+    // renderer's grammar beside the condition renderer's.
+    resultSchemaVersion: z.literal('1.3.0'),
     pipelineVersion: z.string(),
     rendererVersion: z.string(),
+    /** Which grammar produced the closure text the roles read. Copied by the signature; never a signer's input. */
+    closureRendererVersion: z.string(),
     requirementInputSha256: z.string(),
     conditionSha256: z.string(),
     renderedConditionSha256: z.string(),

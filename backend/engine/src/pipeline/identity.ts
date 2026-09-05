@@ -64,8 +64,15 @@ export const RESULT_SCHEMA_VERSION: string =
  * describe a run that reads one. A promotion record for a `v1` identity does not
  * match a `v2` pipeline, which is the behaviour that stops evidence gathered
  * before this distinction existed from carrying across it.
+ *
+ * `v3` adds two things to what is hashed: the closure policy's behavioural
+ * `expansion` rule, because traversal that consults standing is a different
+ * pipeline from one that does not, and `closureRendererVersion`, because the
+ * model-facing closure text gained a grammar and a version of its own. Both are
+ * changes to *what* is hashed, which is exactly the event this constant exists
+ * to make visible.
  */
-export const PIPELINE_IDENTITY_SCHEME = 'v2';
+export const PIPELINE_IDENTITY_SCHEME = 'v3';
 
 /** Everything §5.1 says the identity pins, and nothing else. */
 export interface PipelineIdentityInput {
@@ -76,7 +83,14 @@ export interface PipelineIdentityInput {
   /** Prosecutor count, lens set and ordering. */
   roleConfig: Pick<RoleConfig, 'prosecutorCount' | 'lenses' | 'order'>;
   resultSchemaVersion: string;
-  /** The traversal policy the entitled closure was computed under. */
+  /**
+   * The grammar the roles' closure text was rendered under. Supplied by the
+   * orchestrator from `CLOSURE_RENDERER_VERSION`, exactly as
+   * `resultSchemaVersion` is supplied from its schema — never authored by a
+   * caller of the pipeline.
+   */
+  closureRendererVersion: string;
+  /** The traversal policy the entitled closure was computed under, `expansion` included. */
   closurePolicy: ClosurePolicy;
   /**
    * Which provider semantics the run is defined over (`provider-adapter.ts`).
@@ -120,6 +134,7 @@ function identityPayload(input: PipelineIdentityInput): unknown {
       order: [...input.roleConfig.order],
     },
     resultSchemaVersion: input.resultSchemaVersion,
+    closureRendererVersion: input.closureRendererVersion,
     // Both fields, written out. Hashing only `id` would make a version bump —
     // the one signal an author has that semantics moved — invisible.
     providerAdapter: {
@@ -130,6 +145,9 @@ function identityPayload(input: PipelineIdentityInput): unknown {
       referenceDepth: input.closurePolicy.referenceDepth,
       structuralKinds: [...input.closurePolicy.structuralKinds],
       referenceKinds: [...input.closurePolicy.referenceKinds],
+      // Behavioural, not a label: `computeClosure` reads it, so a policy that
+      // hashes as standing-aware is one that traverses standing-aware.
+      expansion: input.closurePolicy.expansion,
     },
   };
 }
@@ -137,7 +155,7 @@ function identityPayload(input: PipelineIdentityInput): unknown {
 /**
  * The identity, as it appears in a result and in a signature.
  *
- * `pipeline-<scheme>-<64 hex>`, currently `pipeline-v2-…`. Prefixed rather than
+ * `pipeline-<scheme>-<64 hex>`, currently `pipeline-v3-…`. Prefixed rather than
  * bare so a reader of
  * `signatures.jsonl` can tell what the string is, and so `isPromoted`'s exact
  * string equality (never a prefix test) has something legible to compare.

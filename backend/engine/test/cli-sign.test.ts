@@ -86,6 +86,8 @@ import {
 import { runSign, verifyAfterWrite, type VerifyPaths } from '../src/cli/sign';
 import { runRevoke } from '../src/cli/revoke';
 import { dispatch, parseFlags } from '../src/cli/verify';
+import { pinnedStandingFor, standingMapFor } from '../src/corpus/standing';
+import { csrdPack } from './helpers';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const engineRoot = join(here, '..');
@@ -122,6 +124,9 @@ function currentPins(): SigningEntry['corpus'] {
       sha256Raw: d.sha256Raw,
       sha256Normalized: d.sha256Normalized,
       normalizerVersion: d.normalizerVersion,
+      artefactAuthenticity: d.artefactAuthenticity,
+      nonOperativeSections: [...d.nonOperativeSections],
+      sources: pinnedStandingFor(standingMapFor(corpus.index, pack), docId),
     };
   });
 }
@@ -137,9 +142,10 @@ function makeResult(overrides: Record<string, unknown> = {}): VerificationResult
     packId: PACK_ID,
     requirementId: REQ_ID,
     requirementVersion: requirement.version,
-    resultSchemaVersion: '1.2.0',
+    resultSchemaVersion: '1.3.0',
     pipelineVersion: PIPELINE,
     rendererVersion: RENDERER_VERSION,
+    closureRendererVersion: 'closure-renderer-1.0.0',
     requirementInputSha256: requirementInputSha256(requirement),
     conditionSha256: candidateConditionSha256(requirement),
     renderedConditionSha256: candidateRenderedConditionSha256(requirement, renderCtx),
@@ -235,6 +241,7 @@ function rivalEntry(by = 'B. Other'): SigningEntry {
     conditionSha256: candidateConditionSha256(requirement),
     renderedConditionSha256: candidateRenderedConditionSha256(requirement, renderCtx),
     rendererVersion: RENDERER_VERSION,
+    closureRendererVersion: 'closure-renderer-1.0.0',
     corpusClosureSha256: closureSha256,
     corpus: currentPins(),
     resultSha256: resultSha256(makeResult()),
@@ -259,7 +266,7 @@ beforeEach(() => {
   if (found === undefined) throw new Error(`fixture requires ${REQ_ID}`);
   requirement = found;
   renderCtx = { factTypes: pack.factTypes, catalogues: pack.catalogues };
-  const closure = computeClosure(corpus.index, docsForSources(corpus.index, requirement.sources));
+  const closure = computeClosure(corpus.index, docsForSources(corpus.index, requirement.sources), standingMapFor(corpus.index, csrdPack()));
   closureSha256 = closure.sha256;
   closureDocIds = closure.docIds;
 
@@ -710,6 +717,9 @@ describe('exit codes', () => {
           sha256Raw: 'a'.repeat(64),
           sha256Normalized: 'b'.repeat(64),
           normalizerVersion: NORMALIZER_VERSION,
+          artefactAuthenticity: 'official_consolidation',
+          nonOperativeSections: [],
+          sources: [{ sourceId: 'SRC-001', temporalStanding: 'in_force' }],
         },
       ],
     });
@@ -764,6 +774,9 @@ describe('resolveNormalizerChanged', () => {
           sha256Raw: now.sha256Raw,
           sha256Normalized,
           normalizerVersion: '0.9.0',
+          artefactAuthenticity: now.artefactAuthenticity,
+          nonOperativeSections: [...now.nonOperativeSections],
+          sources: pinnedStandingFor(standingMapFor(corpus.index, pack), DOC_A),
         },
       ],
     });
@@ -860,6 +873,9 @@ describe('the CLI resolves normalizer_changed against the retained raw bytes', (
           sha256Raw: now.sha256Raw,
           sha256Normalized,
           normalizerVersion: '0.9.0',
+          artefactAuthenticity: now.artefactAuthenticity,
+          nonOperativeSections: [...now.nonOperativeSections],
+          sources: pinnedStandingFor(standingMapFor(corpus.index, pack), DOC_A),
         },
       ],
     });

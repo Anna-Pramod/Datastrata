@@ -361,9 +361,9 @@ describe('verify run — a complete run', () => {
     const destination = destinationIn(CONNECTED, COMPLETE_REQ);
     expect(existsSync(destination)).toBe(true);
 
-    // Parses under the record contract, at 1.2.0 and no other version.
+    // Parses under the record contract, at 1.3.0 and no other version.
     const published = readback(destination);
-    expect(published.resultSchemaVersion).toBe('1.2.0');
+    expect(published.resultSchemaVersion).toBe('1.3.0');
     expect(published.packId).toBe(PACK_ID);
     expect(published.requirementId).toBe(COMPLETE_REQ);
     expect(published.gaps).toEqual([]);

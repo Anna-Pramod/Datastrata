@@ -360,6 +360,8 @@ export function buildSignature(input: SignatureInput): SignatureCandidate {
     conditionSha256: candidateConditionSha256(requirement),
     renderedConditionSha256: input.renderedConditionSha256,
     rendererVersion: input.rendererVersion,
+    // From the result, never from a parameter: see `signingEntrySchema`.
+    closureRendererVersion: result.closureRendererVersion,
     corpusClosureSha256: input.corpusClosureSha256,
     corpus,
     resultSha256: resultSha256(result),

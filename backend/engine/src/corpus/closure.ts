@@ -3,9 +3,20 @@
  *
  * Bounded on purpose. An unbounded transitive walk eventually reaches most of
  * the corpus, and every ingest would then invalidate every signature. The bound
- * is asymmetric because the edge kinds are: structural edges do not lead
- * somewhere new, they lead to the same law in the form that currently governs,
- * so they cost no depth. `references` leads to different law, so it does.
+ * is asymmetric because the edge kinds are: structural edges lead to the same
+ * law in another form, so they cost no depth; `references` leads to different
+ * law, so it does.
+ *
+ * **Expansion is gated on standing.** A structural edge from law in force can
+ * lead to a *future* form of it — an adopted amending act not yet in force —
+ * and a `references` edge can lead to future law directly. Under
+ * `CLOSURE_POLICY_V1` a document is reached by expansion, along either kind of
+ * edge, only if every source it serves is `in_force`; a document is indivisible
+ * and its text is rendered whole, so one adopted-not-effective source makes the
+ * whole artefact ineligible. Direct citation still admits it: a requirement
+ * that names an adopted act is entitled to read it, labelled as what it is.
+ * Standing is handed in (`standing.ts`), never read from a pack here, so this
+ * module stays pure over the index.
  *
  * Structural edges are followed in both directions — an amending act is needed
  * whether you start from the amended text or the amendment. `references` is
@@ -22,6 +33,15 @@
 
 import type { CorpusEdge, CorpusIndex, EdgeKind } from './types';
 import { sha256Hex } from './hash';
+import { MissingStandingError, type StandingMap } from './standing';
+
+/**
+ * Whether expansion consults standing. Behavioural rather than a version
+ * label: `computeClosure` reads it, so a policy cannot claim the standing-aware
+ * traversal without performing it, and `pipelineVersion` hashes it, so the
+ * claim is part of every identity.
+ */
+export type ExpansionRule = 'unconditional' | 'served_sources_in_force';
 
 export interface ClosurePolicy {
   /** How many `references` hops from the entry documents are permitted. */
@@ -30,10 +50,15 @@ export interface ClosurePolicy {
   structuralKinds: readonly EdgeKind[];
   /** Kinds that cost a hop and are followed forwards only. */
   referenceKinds: readonly EdgeKind[];
+  /** Which documents an expansion step may reach. */
+  expansion: ExpansionRule;
 }
 
 /**
- * Kinds that lead to the same law in its currently governing form. Declared
+ * Kinds that lead to the same law in another form — its amendment, its
+ * consolidation, its definitions. Not necessarily its *currently governing*
+ * form: an adopted-not-effective amending act is a future form, which is why
+ * expansion along these kinds is gated on standing rather than free. Declared
  * here, with the traversal policy that gives them their meaning, and nowhere
  * else.
  */
@@ -44,10 +69,25 @@ export const STRUCTURAL_EDGE_KINDS: readonly EdgeKind[] = [
   'definesTermsFor',
 ];
 
+/**
+ * The pre-standing policy, retained as a value so the discriminator can be
+ * proved behavioural: under it every neighbour is reached whatever its
+ * standing. **Not for production use** — `CLOSURE_POLICY_V1` is the default
+ * everywhere a closure is built for a role.
+ */
 export const CLOSURE_POLICY_V0: ClosurePolicy = {
   referenceDepth: 1,
   structuralKinds: STRUCTURAL_EDGE_KINDS,
   referenceKinds: ['references'],
+  expansion: 'unconditional',
+};
+
+/** The governing policy: expansion reaches only documents whose every served source is in force. */
+export const CLOSURE_POLICY_V1: ClosurePolicy = {
+  referenceDepth: 1,
+  structuralKinds: STRUCTURAL_EDGE_KINDS,
+  referenceKinds: ['references'],
+  expansion: 'served_sources_in_force',
 };
 
 /**
@@ -92,16 +132,43 @@ function allEdges(index: CorpusIndex): CorpusEdge[] {
  * Breadth-first over the edge graph, tracking reference depth per document and
  * always keeping the shortest one, so a document reached cheaply can still
  * expand structurally even if it was first seen down an expensive path.
+ *
+ * `standing` is **required**, and precedes the defaulted `policy` on purpose:
+ * an optional map would let a caller omit it and compute a different digest
+ * for the same closure, and every call site lacking it fails to compile
+ * instead. It carries only the pack-derived half; authenticity and the
+ * non-operative sections are read off the document itself, so a caller cannot
+ * hand in a copy that disagrees with the index the hash describes.
+ *
+ * **Absence fails closed, per closure member.** A neighbour whose standing is
+ * unknown is simply not eligible for expansion; a document that *is* in the
+ * closure — an entry, or reached under `unconditional` — and is served by a
+ * source with no declared standing is refused with `MissingStandingError`,
+ * because the hash below would otherwise have to describe it, and the roles
+ * would be shown it without being told what it is.
  */
 export function computeClosure(
   index: CorpusIndex,
   entryDocIds: string[],
-  policy: ClosurePolicy = CLOSURE_POLICY_V0,
+  standing: StandingMap,
+  policy: ClosurePolicy = CLOSURE_POLICY_V1,
 ): Closure {
   const structural = new Set<EdgeKind>(policy.structuralKinds);
   const reference = new Set<EdgeKind>(policy.referenceKinds);
   const edges = allEdges(index);
   const byId = new Map(index.documents.map((d) => [d.docId, d]));
+
+  // R-b: eligible only if *every* served source is in force. The quantifier is
+  // exactly that — a document serving no source is vacuously eligible here and
+  // is refused later by closure citability (`no served source`), which owns
+  // that question; a document the map does not know is not eligible. Under
+  // `unconditional` the question is not asked, which is what makes the
+  // discriminator behavioural rather than a label.
+  const eligible = (docId: string): boolean => {
+    if (policy.expansion === 'unconditional') return true;
+    const sources = standing.get(docId);
+    return sources !== undefined && sources.every((s) => s.temporalStanding === 'in_force');
+  };
 
   const bestDepth = new Map<string, number>();
   const queue: Array<{ docId: string; depth: number }> = [];
@@ -138,6 +205,10 @@ export function computeClosure(
       }
 
       if (next === null) continue;
+      // Not enqueued at all: an ineligible document neither joins the closure
+      // nor expands further. Checked on both branches, because a `references`
+      // edge into future law is the same exposure as a structural one.
+      if (!eligible(next)) continue;
       if ((bestDepth.get(next) ?? Infinity) <= nextDepth) continue;
       bestDepth.set(next, nextDepth);
       queue.push({ docId: next, depth: nextDepth });
@@ -151,8 +222,26 @@ export function computeClosure(
     .filter((e) => inClosure.has(e.from) && inClosure.has(e.to))
     .sort((a, b) => (a.edgeId < b.edgeId ? -1 : a.edgeId > b.edgeId ? 1 : 0));
 
+  // Fail closed before hashing: every closure member must carry a standing
+  // for every source it serves. Reported all at once, naming the source.
+  const missing: { docId: string; sourceId: string }[] = [];
+  for (const id of docIds) {
+    const sources = standing.get(id);
+    const doc = byId.get(id);
+    if (doc === undefined) continue; // reported below
+    if (sources === undefined) {
+      for (const sourceId of doc.serves) missing.push({ docId: id, sourceId });
+      continue;
+    }
+    for (const s of sources) if (s.temporalStanding === null) missing.push({ docId: id, sourceId: s.sourceId });
+  }
+  if (missing.length > 0) throw new MissingStandingError(missing);
+
   // Canonical serialisation. Every field that changes what the reader was
-  // entitled to know, and nothing that does not.
+  // entitled to know, and nothing that does not: the text, what kind of
+  // artefact it is, which of its sections are declared non-operative, and the
+  // standing of every source it serves. A role that is told all four is shown a
+  // different surface from one that is told only the first, so the hash moves.
   //
   // Fields are JSON-encoded rather than delimiter-joined. `provenance.source`
   // is free text and `human` provenance is an expected input, so a tab or
@@ -170,7 +259,17 @@ export function computeClosure(
     if (doc === undefined) {
       throw new Error(`Closure reached ${id}, which the index does not hold: closure is inconsistent`);
     }
-    lines.push(JSON.stringify(['doc', id, doc.sha256Normalized]));
+    const sources = (standing.get(id) ?? []).map((s) => [s.sourceId, s.temporalStanding]);
+    lines.push(
+      JSON.stringify([
+        'doc',
+        id,
+        doc.sha256Normalized,
+        doc.artefactAuthenticity,
+        doc.nonOperativeSections,
+        sources,
+      ]),
+    );
   }
   for (const e of included) {
     lines.push(

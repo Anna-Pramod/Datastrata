@@ -84,6 +84,7 @@ import {
   stubRunner,
   fixtureRegister,
 } from './pipeline-fixtures';
+import { fixtureSourceUniverse } from './pipeline-fixtures';
 
 // ---------------------------------------------------------------------------
 // The oracle: the evidence surface, read off the schema
@@ -218,7 +219,7 @@ async function assembled(): Promise<VerificationResult> {
     requirementId: REQUIREMENT.id,
     requirement: REQUIREMENT,
     renderContext,
-    closure: EntitledClosure.forSources(corpus, fixtureRegister(), REQUIREMENT.sources),
+    closure: EntitledClosure.forSources(corpus, fixtureRegister(), fixtureSourceUniverse(), REQUIREMENT.sources),
     corpus,
     prompts,
     config: SINGLE_PROSECUTOR,

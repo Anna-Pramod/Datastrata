@@ -1,5 +1,5 @@
 {
-  "updated": "2026-08-28",
+  "updated": "2026-09-05",
   "documents": [
     {
       "docId": "DOC-32013L0034",
@@ -16,6 +16,8 @@
       "sha256Normalized": "8822d68adb0e5ab7f35b68edfa13e858d04a91b7a6a9b1fd1c7ec7c410423a32",
       "normalizerVersion": "1.0.2",
       "contentSelector": "#text",
+      "artefactAuthenticity": "official_consolidation",
+      "nonOperativeSections": [],
       "edges": [
         {
           "edgeId": "EDGE-32013L0034-amendedBy-32026L0470",
@@ -45,6 +47,8 @@
       "sha256Normalized": "c9c9780f6b2ac7520a00e598c6e2e2d36d65654715704a99c4960a6dbdb06a70",
       "normalizerVersion": "1.0.2",
       "contentSelector": "#text",
+      "artefactAuthenticity": "official_consolidation",
+      "nonOperativeSections": [],
       "edges": []
     },
     {
@@ -62,6 +66,8 @@
       "sha256Normalized": "e120ea16ec6133934782742aebc4f0e5814e4a3358c074762ea6393662111858",
       "normalizerVersion": "1.0.2",
       "contentSelector": "#text",
+      "artefactAuthenticity": "official_consolidation",
+      "nonOperativeSections": [],
       "edges": []
     },
     {
@@ -79,6 +85,8 @@
       "sha256Normalized": "c228f7b17cb674c78ba21000c813d60f81d52201a207367747c91fa68b990cf6",
       "normalizerVersion": "1.0.2",
       "contentSelector": "#text",
+      "artefactAuthenticity": "authentic_publication",
+      "nonOperativeSections": [],
       "edges": []
     }
   ]

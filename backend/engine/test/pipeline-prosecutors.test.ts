@@ -76,13 +76,14 @@ import {
   stubRunner,
   fixtureRegister,
 } from './pipeline-fixtures';
+import { fixtureSourceUniverse } from './pipeline-fixtures';
 
 const corpus = fixtureAuthorisedCorpus();
 const prompts = loadPromptSet();
 const ctxRender = fixtureRenderContext();
 
 function fixtureClosure(): EntitledClosure {
-  return EntitledClosure.forSources(corpus, fixtureRegister(), ['SRC-100']);
+  return EntitledClosure.forSources(corpus, fixtureRegister(), fixtureSourceUniverse(), ['SRC-100']);
 }
 
 /** Two atoms under one `all`, so the address vocabulary has groups in it. */
@@ -312,7 +313,9 @@ describe('each prosecutor is blind to the others', () => {
     // were sent.
     expect(rendered[1]).not.toContain('C-0');
     expect(rendered[2]).not.toContain('C-0');
-    expect(rendered[2]).not.toContain('C-1');
+    // Word-bounded: the closure's standing block now renders source values
+    // and the fixture's `SRC-100` would otherwise match as a substring.
+    expect(rendered[2]).not.toMatch(/\bC-1\b/);
     // Positive control (failure mode #7): the messages are not empty, and each
     // *does* carry the material a prosecutor is entitled to — so "C-0 is
     // absent" is a statement about peer output rather than about a blank page.
@@ -773,7 +776,7 @@ describe('the prosecutor count and the lens set are configuration', () => {
 describe('both configured inputs reach pipelineVersion, one at a time', () => {
   const closure = fixtureClosure();
   const identity = (config: RoleConfig) =>
-    pipelineVersionFor({ prompts, config, closure, resultSchemaVersion: '1.2.0' });
+    pipelineVersionFor({ prompts, config, closure, resultSchemaVersion: '1.3.0' });
   const before = identity(DEFAULT_ROLE_CONFIG);
 
   it('varying neither leaves it byte-identical', () => {

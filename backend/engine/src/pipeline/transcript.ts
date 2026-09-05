@@ -95,7 +95,7 @@ import { recordedRequest, requestSha256 } from './request-identity';
  * under `1.0.0` — B2 records its first transcripts here — so this is a contract
  * correction rather than a migration.
  *
- * Unrelated to `resultSchemaVersion`, which stays `1.2.0`. A transcript is
+ * Unrelated to `resultSchemaVersion`, which moves on its own. A transcript is
  * execution evidence for tests and never a regulatory record, so its shape is
  * not a thing any signature pins.
  */

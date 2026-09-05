@@ -293,9 +293,21 @@ export const FIELD_ROLES: Record<string, FieldRole[]> = {
   'ledger.signing.conditionSha256': ['freshness', 'audit'],
   'ledger.signing.renderedConditionSha256': ['freshness', 'audit'],
   'ledger.signing.rendererVersion': ['audit'],
+  // The closure renderer's grammar, the exact analogue of `rendererVersion`:
+  // same kind of value, same table, same role. Rendered on the review sheet,
+  // which does not make it `display` — it decides nothing.
+  'ledger.signing.closureRendererVersion': ['audit'],
   'ledger.signing.corpusClosureSha256': ['freshness', 'audit'],
   'ledger.signing.corpus[]': ['freshness', 'audit'],
   'ledger.signing.corpus[].docId': ['integrity', 'audit'],
+  // Standing enters `corpusClosureSha256`, so these decide — identity-bearing
+  // like `docId`, and roled the same. Not `freshness`: the digest they enter
+  // is what `deriveStaleness` compares, and `stale_closure` names the effect.
+  'ledger.signing.corpus[].artefactAuthenticity': ['integrity', 'audit'],
+  'ledger.signing.corpus[].nonOperativeSections[]': ['integrity', 'audit'],
+  'ledger.signing.corpus[].sources[]': ['integrity', 'audit'],
+  'ledger.signing.corpus[].sources[].sourceId': ['integrity', 'audit'],
+  'ledger.signing.corpus[].sources[].temporalStanding': ['integrity', 'audit'],
   'ledger.signing.corpus[].sha256Normalized': ['freshness', 'audit'],
   'ledger.signing.corpus[].sha256Raw': ['freshness', 'audit'],
   'ledger.signing.corpus[].normalizerVersion': ['freshness', 'audit'],
@@ -369,6 +381,9 @@ export const FIELD_ROLES: Record<string, FieldRole[]> = {
   // English unchanged must not invalidate anything. `CurrentState` carries no
   // `rendererVersion` for the same reason.
   'result.rendererVersion': ['audit'],
+  // The closure renderer's grammar: a digest (`pipelineVersion`) proves *that*
+  // something changed; this names *what*. Matches `result.rendererVersion`.
+  'result.closureRendererVersion': ['audit'],
   // The three encoding pins the record copies from the candidate. On the
   // ledger side these are compared against the world and carry `freshness`;
   // here they are the values the signing entry is built *from*, so their job
@@ -390,6 +405,13 @@ export const FIELD_ROLES: Record<string, FieldRole[]> = {
   // `assertResultConsistency` treats that as a hard failure rather than a
   // judgement call.
   'result.corpus[].docId': ['integrity', 'audit'],
+  // Identity-bearing after standing entered the closure hash; same reasoning
+  // as on the ledger side.
+  'result.corpus[].artefactAuthenticity': ['integrity', 'audit'],
+  'result.corpus[].nonOperativeSections[]': ['integrity', 'audit'],
+  'result.corpus[].sources[]': ['integrity', 'audit'],
+  'result.corpus[].sources[].sourceId': ['integrity', 'audit'],
+  'result.corpus[].sources[].temporalStanding': ['integrity', 'audit'],
   // Checked against every quote's `sha256Normalized` before signing, so the
   // record rests on the text it froze. Not `freshness` — nothing in
   // `deriveStaleness` reads the *result's* copy of a pin; it reads the

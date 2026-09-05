@@ -85,6 +85,10 @@ import { factLabel, factUnit, renderValue } from './vocabulary';
  * Minor for a grammar that gained or reshaped a template; patch for a fix to
  * an existing one. 1.1.0 added `in_catalogue`'s miss-reason clause and changed
  * `in_set` to the `is one of: ` form that keeps it distinct from `eq`.
+ *
+ * **This versions the condition renderer only.** The model-facing closure
+ * text has its own grammar and its own constant, `CLOSURE_RENDERER_VERSION`
+ * in `src/pipeline/entitlement.ts`; the two do not compete for one surface.
  */
 export const RENDERER_VERSION = '1.1.0';
 

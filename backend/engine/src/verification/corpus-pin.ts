@@ -46,7 +46,7 @@
  * **A plain `.strict()` `ZodObject`, permanently.** `.refine()`,
  * `.superRefine()`, `.transform()` and `z.preprocess()` all wrap the schema in
  * a `ZodEffects`, which the field-accounting walker refuses rather than
- * treating as a leaf — and a wrapper here would hide all five fields from
+ * treating as a leaf — and a wrapper here would hide every field from
  * *both* roots at once, which is exactly twice the hole `accounting.ts` exists
  * to close. Any rule that reads two pins at once belongs in
  * `assertResultConsistency` or `verifyLedgerIntegrity`, as every other
@@ -56,8 +56,21 @@
  */
 
 import { z } from 'zod';
+import { artefactAuthenticitySchema } from '../corpus/schema';
+import { temporalStandingSchema } from '../knowledge/schema';
 
-/** A pinned corpus document, as the closure held it when the pin was taken. */
+/**
+ * A pinned corpus document, as the closure held it when the pin was taken.
+ *
+ * The three standing fields are here because they are in the closure hash:
+ * the same recorded closure identity must not be able to render different
+ * standing, authenticity or operative-status text, and a pin that could not
+ * describe those would leave a verifier unable to say what the signature was
+ * taken over. They are identity-bearing, like `docId`, and are classified
+ * `['integrity','audit']` on both roots. Freshness deliberately does not
+ * compare them field by field — `corpusClosureSha256` already moves when they
+ * do, and `stale_closure` is the reason that names it.
+ */
 export const corpusPinSchema = z
   .object({
     docId: z.string(),
@@ -65,6 +78,9 @@ export const corpusPinSchema = z
     sha256Raw: z.string(),
     sha256Normalized: z.string(),
     normalizerVersion: z.string(),
+    artefactAuthenticity: artefactAuthenticitySchema,
+    nonOperativeSections: z.array(z.string()),
+    sources: z.array(z.object({ sourceId: z.string(), temporalStanding: temporalStandingSchema }).strict()),
   })
   .strict();
 

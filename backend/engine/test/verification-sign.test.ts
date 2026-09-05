@@ -101,6 +101,8 @@ beforeEach(() => {
       sha256Normalized: sha256Hex(normalized),
       normalizerVersion: NORMALIZER_VERSION,
       contentSelector: null,
+      artefactAuthenticity: 'official_consolidation',
+      nonOperativeSections: [],
       edges:
         d.id === 'DOC-A'
           ? [{ edgeId: 'E1', kind: 'amendedBy', from: 'DOC-A', to: 'DOC-B', provenance: prov }]
@@ -156,6 +158,9 @@ function currentPins(): CorpusPin[] {
       sha256Raw: d.sha256Raw,
       sha256Normalized: d.sha256Normalized,
       normalizerVersion: d.normalizerVersion,
+      artefactAuthenticity: d.artefactAuthenticity,
+      nonOperativeSections: [...d.nonOperativeSections],
+      sources: [{ sourceId: 'SRC-001', temporalStanding: 'in_force' }],
     };
   });
 }
@@ -194,9 +199,10 @@ function result(overrides: Record<string, unknown> = {}): VerificationResult {
     packId: 'testpack',
     requirementId: 'REQ-001',
     requirementVersion: 1,
-    resultSchemaVersion: '1.2.0',
+    resultSchemaVersion: '1.3.0',
     pipelineVersion: 'pipeline-1.0.0',
     rendererVersion: 'renderer-1.1.0',
+    closureRendererVersion: 'closure-renderer-1.0.0',
     requirementInputSha256: requirementInputSha256(req),
     conditionSha256: candidateConditionSha256(req),
     renderedConditionSha256: RENDERED,
@@ -453,6 +459,7 @@ describe('existing-signature staleness', () => {
       conditionSha256: HASH('c'),
       renderedConditionSha256: RENDERED,
       rendererVersion: 'renderer-1.1.0',
+      closureRendererVersion: 'closure-renderer-1.0.0',
       corpusClosureSha256: CLOSURE,
       corpus: currentPins(),
       resultSha256: HASH('1'),
@@ -1073,6 +1080,7 @@ describe('integrity failure', () => {
       conditionSha256: HASH('c'),
       renderedConditionSha256: RENDERED,
       rendererVersion: 'renderer-1.1.0',
+      closureRendererVersion: 'closure-renderer-1.0.0',
       corpusClosureSha256: CLOSURE,
       corpus: currentPins(),
       resultSha256: HASH('1'),
@@ -1112,6 +1120,9 @@ describe('integrity failure', () => {
           sha256Raw: HASH('2'),
           sha256Normalized: HASH('3'),
           normalizerVersion: NORMALIZER_VERSION,
+          artefactAuthenticity: 'official_consolidation',
+          nonOperativeSections: [],
+          sources: [{ sourceId: 'SRC-001', temporalStanding: 'in_force' }],
         },
       ],
     });

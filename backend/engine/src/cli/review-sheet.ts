@@ -503,11 +503,13 @@ function gatherRequirement(input: GatherOneInput): SheetRequirement {
 
   let closureDocIds: string[] = [];
   let closureSha256: string | null = null;
+  let closurePinInput: EntitledClosure['pinInput'] | null = null;
   let closureProblem: string | null = null;
   try {
-    const closure = EntitledClosure.forSources(corpus, sourceRegister, sourceIdsOf(requirement));
+    const closure = EntitledClosure.forSources(corpus, sourceRegister, pack, sourceIdsOf(requirement));
     closureDocIds = [...closure.docIds];
     closureSha256 = closure.sha256;
+    closurePinInput = closure.pinInput;
   } catch (error) {
     closureProblem =
       error instanceof ClosureEntryNotFoundError
@@ -544,7 +546,7 @@ function gatherRequirement(input: GatherOneInput): SheetRequirement {
         `the verification result pinned by governing entry ${signature.entryId} is absent, so staleness — and therefore status — cannot be derived`,
       );
       status = null;
-    } else if (closureSha256 === null) {
+    } else if (closureSha256 === null || closurePinInput === null) {
       integrityProblems.push(
         `${closureProblem ?? 'the entitled closure cannot be computed'}, so staleness — and therefore status — cannot be derived`,
       );
@@ -559,7 +561,7 @@ function gatherRequirement(input: GatherOneInput): SheetRequirement {
       const current: CurrentState = currentStateOf({
         requirement,
         renderContext: renderCtx,
-        closure: { sha256: closureSha256, docIds: closureDocIds },
+        closure: closurePinInput,
         corpus,
         result,
       });
@@ -1009,6 +1011,7 @@ function renderSignOff(requirement: SheetRequirement): string {
     row('conditionSha256', `<code>${esc(signature.conditionSha256)}</code>`),
     row('renderedConditionSha256', `<code>${esc(signature.renderedConditionSha256)}</code>`),
     row('rendererVersion', esc(signature.rendererVersion)),
+    row('closureRendererVersion', esc(signature.closureRendererVersion)),
     row('corpusClosureSha256', `<code>${esc(signature.corpusClosureSha256)}</code>`),
     row('resultSha256', `<code>${esc(signature.resultSha256)}</code>`),
     row('pipelineVersion', `<code>${esc(signature.pipelineVersion)}</code>`),
@@ -1017,14 +1020,22 @@ function renderSignOff(requirement: SheetRequirement): string {
       signature.note === undefined ? '<span class="none">none</span>' : esc(signature.note),
     ),
     '</tbody></table>',
-    '<table class="pins"><caption>Documents this signature pins</caption><thead><tr><th>docId</th><th>version</th><th>sha256Normalized</th><th>normalizer</th></tr></thead><tbody>',
+    '<table class="pins"><caption>Documents this signature pins</caption><thead><tr><th>docId</th><th>version</th><th>sha256Normalized</th><th>normalizer</th><th>authenticity</th><th>standing</th><th>nonOperative</th></tr></thead><tbody>',
   );
   if (signature.corpus.length === 0) {
-    lines.push('<tr><td colspan="4" class="none">none — this signature pins no corpus document</td></tr>');
+    lines.push('<tr><td colspan="7" class="none">none — this signature pins no corpus document</td></tr>');
   }
   for (const pin of signature.corpus) {
+    // One entry per served source, ids preserved and sorted: the multi-source
+    // case is exactly where a verifier needs to know *which* source is not yet
+    // effective, so nothing here collapses the list.
+    const standing = [...pin.sources]
+      .sort((a, b) => (a.sourceId < b.sourceId ? -1 : a.sourceId > b.sourceId ? 1 : 0))
+      .map((s) => `${esc(s.sourceId)} ${esc(s.temporalStanding)}`)
+      .join('; ');
+    const nonOperative = pin.nonOperativeSections.length === 0 ? '—' : pin.nonOperativeSections.map(esc).join('; ');
     lines.push(
-      `<tr><td><code>${esc(pin.docId)}</code></td><td>${esc(pin.versionLabel)}</td><td><code>${esc(pin.sha256Normalized)}</code></td><td>${esc(pin.normalizerVersion)}</td></tr>`,
+      `<tr><td><code>${esc(pin.docId)}</code></td><td>${esc(pin.versionLabel)}</td><td><code>${esc(pin.sha256Normalized)}</code></td><td>${esc(pin.normalizerVersion)}</td><td>${esc(pin.artefactAuthenticity)}</td><td>${standing}</td><td>${nonOperative}</td></tr>`,
     );
   }
   lines.push('</tbody></table>');

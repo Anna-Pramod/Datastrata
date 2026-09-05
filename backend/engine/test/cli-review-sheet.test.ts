@@ -73,6 +73,8 @@ import {
   type SheetPaths,
 } from '../src/cli/review-sheet';
 import { dispatch } from '../src/cli/verify';
+import { pinnedStandingFor, standingMapFor } from '../src/corpus/standing';
+import { csrdPack } from './helpers';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const engineRoot = join(here, '..');
@@ -141,7 +143,7 @@ function requirementOf(id: string): Requirement {
 /** The closure of a requirement's sources, as the corpus holds it now. */
 function closureOf(id: string): { sha256: string; pins: SigningEntry['corpus'] } {
   const requirement = requirementOf(id);
-  const closure = computeClosure(corpus.index, docsForSources(corpus.index, requirement.sources));
+  const closure = computeClosure(corpus.index, docsForSources(corpus.index, requirement.sources), standingMapFor(corpus.index, csrdPack()));
   return {
     sha256: closure.sha256,
     pins: closure.docIds.map((docId) => {
@@ -152,6 +154,9 @@ function closureOf(id: string): { sha256: string; pins: SigningEntry['corpus'] }
         sha256Raw: d.sha256Raw,
         sha256Normalized: d.sha256Normalized,
         normalizerVersion: d.normalizerVersion,
+        artefactAuthenticity: d.artefactAuthenticity,
+        nonOperativeSections: [...d.nonOperativeSections],
+        sources: pinnedStandingFor(standingMapFor(corpus.index, csrdPack()), docId),
       };
     }),
   };
@@ -177,9 +182,10 @@ function makeResult(id: string, overrides: Record<string, unknown> = {}): Verifi
     packId: PACK_ID,
     requirementId: id,
     requirementVersion: requirement.version,
-    resultSchemaVersion: '1.2.0',
+    resultSchemaVersion: '1.3.0',
     pipelineVersion: PIPELINE,
     rendererVersion: RENDERER_VERSION,
+    closureRendererVersion: 'closure-renderer-1.0.0',
     requirementInputSha256: requirementInputSha256(requirement),
     conditionSha256: candidateConditionSha256(requirement),
     renderedConditionSha256: candidateRenderedConditionSha256(requirement, renderCtx),
@@ -285,6 +291,7 @@ function makeEntry(id: string, overrides: Record<string, unknown> = {}): Signing
     conditionSha256: candidateConditionSha256(requirement),
     renderedConditionSha256: candidateRenderedConditionSha256(requirement, renderCtx),
     rendererVersion: RENDERER_VERSION,
+    closureRendererVersion: 'closure-renderer-1.0.0',
     corpusClosureSha256: sha256,
     corpus: pins,
     resultSha256: resultSha256(makeResult(id)),
@@ -1145,3 +1152,80 @@ function escapeForTest(text: string): string {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
+
+// ---------------------------------------------------------------------------
+// Standing reaching the human — B11a–B11d
+// ---------------------------------------------------------------------------
+
+/**
+ * "Document standing, reaching verification" is not satisfied by a field a
+ * verifier cannot see. Four surfaces carry it on the sheet — the artefact's
+ * authenticity, the per-source standing with its ids preserved, the declared
+ * non-operative sections, and the closure renderer's grammar — and each is
+ * asserted on its own, with a counterexample in the same output, so a sheet
+ * that printed one of them unconditionally could not pass.
+ */
+describe('the pins table and signoff table carry standing', () => {
+  const ID = 'CSRD-S-001';
+
+  it('B11a — authenticity renders each pinned artefact’s own value, and two documents in one signature differ', () => {
+    writeResult(ID, makeResult(ID));
+    writeLedger([makeEntry(ID)]);
+    const section = sectionFor(sheetHtml(), ID);
+    expect(section).toContain('<th>authenticity</th>');
+    // The consolidated host Directive and the as-published amending Directive
+    // sit in the same closure: one consolidation, one authentic publication.
+    expect(section).toMatch(/DOC-32013L0034<\/code><\/td>.*?<td>official_consolidation<\/td>/s);
+    expect(section).toMatch(/DOC-32026L0470<\/code><\/td>.*?<td>authentic_publication<\/td>/s);
+  });
+
+  it('B11b — standing renders one entry per served source with its SRC-NNN preserved and sorted, proved on a multi-source pin', () => {
+    const { pins } = closureOf(ID);
+    const multi = { ...pins[0]!, sources: [
+      { sourceId: 'SRC-008', temporalStanding: 'adopted_not_effective' as const },
+      { sourceId: 'SRC-001', temporalStanding: 'in_force' as const },
+    ] };
+    writeResult(ID, makeResult(ID));
+    writeLedger([makeEntry(ID, { corpus: [multi, ...pins.slice(1)] })]);
+    const section = sectionFor(sheetHtml(), ID);
+    // Sorted by id, ids kept, one entry each — never collapsed to one word.
+    expect(section).toContain('<td>SRC-001 in_force; SRC-008 adopted_not_effective</td>');
+    // The single-source sibling in the same table renders exactly one entry.
+    expect(section).toContain('<td>SRC-004 in_force</td>');
+  });
+
+  it('B11c — nonOperative renders the declared headings in authored order, and — for the canonical []', () => {
+    const { pins } = closureOf(ID);
+    const declared = { ...pins[0]!, nonOperativeSections: ['EXPLANATORY MEMORANDUM', 'ANNEX III'] };
+    writeResult(ID, makeResult(ID));
+    writeLedger([makeEntry(ID, { corpus: [declared, ...pins.slice(1)] })]);
+    const section = sectionFor(sheetHtml(), ID);
+    expect(section).toContain('<td>EXPLANATORY MEMORANDUM; ANNEX III</td>');
+    expect(section).toContain('<td>—</td>');
+    expect(section).toContain('<th>nonOperative</th>');
+  });
+
+  it('B11d — closureRendererVersion appears in the signature-metadata table with the entry’s value', () => {
+    writeResult(ID, makeResult(ID));
+    writeLedger([makeEntry(ID, { closureRendererVersion: 'closure-renderer-9.9.9' })]);
+    const section = sectionFor(sheetHtml(), ID);
+    expect(section).toContain('<tr><td>closureRendererVersion</td><td>closure-renderer-9.9.9</td></tr>');
+    // Beside, not instead of, the condition renderer's version.
+    expect(section).toContain('<tr><td>rendererVersion</td><td>1.1.0</td></tr>');
+    // And the empty-state row spans the widened table.
+    expect(section).not.toContain('colspan="4"');
+  });
+});
+
+describe('the widened pins table', () => {
+  it('spans all seven columns in its empty state, so a signature pinning nothing is not a malformed row', () => {
+    const ID = 'CSRD-S-001';
+    writeResult(ID, makeResult(ID));
+    writeLedger([makeEntry(ID, { corpus: [] })]);
+    const section = sectionFor(sheetHtml(), ID);
+    expect(section).toContain('<tr><td colspan="7" class="none">none — this signature pins no corpus document</td></tr>');
+    // The sibling with pins renders no empty-state row at all.
+    writeLedger([makeEntry(ID)]);
+    expect(sectionFor(sheetHtml(), ID)).not.toContain('pins no corpus document');
+  });
+});

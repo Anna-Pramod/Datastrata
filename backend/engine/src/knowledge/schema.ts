@@ -90,16 +90,49 @@ export const showWhenSchema: z.ZodType<QuestionShowWhen> = z.lazy(() =>
     .strict(),
 ) as z.ZodType<QuestionShowWhen>;
 
-export const sourceRecordSchema = z.object({
-  id: z.string(),
-  title: z.string(),
-  legalType: z.string(),
-  statusAtSnapshot: z.string(),
-  usedFor: z.string(),
-  keyProvisions: z.string().optional(),
-  url: z.string().url(),
-  monitor: z.string().optional(),
-});
+/**
+ * An instrument's temporal legal standing, as at the pack's `legalSnapshot`.
+ *
+ * Declared per *source* because standing is a property of the instrument, not
+ * of any artefact that serves it: one act may be served by a pre-publication
+ * text today and by its Official Journal expression later, and both carry the
+ * same standing until the act enters into force. The vocabulary matches the
+ * requirement-side `legalStatus` today; the two are declared separately so
+ * that either can grow a value the other has no use for.
+ *
+ * Optional on a source and **fail-closed at the closure boundary**: a
+ * non-instrument — guidance, a hub, a tracker — has no temporal standing, and
+ * forcing one on it would be a fabricated legal claim. A source with none can
+ * be registered and watched, but a document serving it cannot enter an
+ * entitled closure (`corpus/standing.ts`).
+ */
+export const temporalStandingSchema = z.enum(['in_force', 'adopted_not_effective', 'proposed', 'superseded']);
+
+/**
+ * `.strict()`, deliberately. zod strips unknown keys by default, so a source
+ * still carrying the retired free-text `statusAtSnapshot` would parse clean and
+ * silently lose it; a misspelt `temporalStanding` would parse clean and read as
+ * *absent*, which fails closed but for the wrong reason. Refusing unknown keys
+ * makes both a load error that names the key.
+ *
+ * `statusNote` is free text with **no machine meaning**: nothing reads it to
+ * decide anything, and it must not restate standing in words a reader might
+ * take as authoritative. It exists so authored notes about non-instrument
+ * sources — guidance that predates an amendment, say — are not lost.
+ */
+export const sourceRecordSchema = z
+  .object({
+    id: z.string(),
+    title: z.string(),
+    legalType: z.string(),
+    temporalStanding: temporalStandingSchema.optional(),
+    statusNote: z.string().optional(),
+    usedFor: z.string(),
+    keyProvisions: z.string().optional(),
+    url: z.string().url(),
+    monitor: z.string().optional(),
+  })
+  .strict();
 
 export const factTypeSchema = z.object({
   id: z.string(),
@@ -210,6 +243,15 @@ export const questionSchema = z.object({
 
 export const catalogueSchema = z.object({ entries: z.record(z.boolean()), missReason: reasonSchema, note: z.string().optional() });
 
+/**
+ * `status` is **watch progress**, free text, and not a second authority for an
+ * instrument's temporal standing. Two items happen to spell their progress
+ * with a standing value (`adopted_not_effective`) beside others that do not
+ * (`in_progress`, `in_development`); where a value is drawn from the standing
+ * vocabulary it must agree with the listed instruments' `temporalStanding`,
+ * which the pack's own tests assert. The authoritative standing lives on the
+ * source record.
+ */
 export const changeWatchItemSchema = z.object({
   id: z.string(),
   title: z.string(),

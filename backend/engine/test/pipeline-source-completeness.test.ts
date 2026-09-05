@@ -53,6 +53,7 @@ import { verificationResultSchema, type VerificationResult } from '../src/verifi
 import { installNetworkTrap, type NetworkTrap } from './helpers';
 import { installRealRegister, installSyntheticRegister } from './world-register';
 import { AUDIT_EXPECTED_SOURCES, AUDIT_EXPECTED_CITATION_COUNT, AUDIT_EXPECTED_UNIVERSE } from './audit-expected-provenance';
+import { csrdPack } from './helpers';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const engineRoot = join(here, '..');
@@ -224,7 +225,7 @@ function buildSyntheticWorld(root: string): void {
   });
   write('requirements.json', SYN_REQUIREMENTS);
   write('sources.json', [SOURCE_A, SOURCE_B].map((id) => ({
-    id, title: `Probe source ${id}`, legalType: 'probe', statusAtSnapshot: 'in_force',
+    id, title: `Probe source ${id}`, legalType: 'probe', temporalStanding: 'in_force',
     usedFor: 'Source-completeness fixture', url: `https://example.invalid/${id}`,
   })));
   write('fact-types.json', [{
@@ -356,15 +357,11 @@ function capabilityFor(
   // is evidence they were never entitled to and the pipeline refuses the run —
   // correctly. Selecting from the requirement's own closure makes the stub
   // honest for every requirement rather than accidentally right for some.
-  const entitledDocIds = EntitledClosure.forSources(
-    authoriseCorpus(corpus, parseSourceRegister(
+  const entitledDocIds = EntitledClosure.forSources(authoriseCorpus(corpus, parseSourceRegister(
       JSON.parse(readFileSync(join(world, 'monitoring', 'source-register.json'), 'utf8')),
-    ), pack),
-    parseSourceRegister(
+    ), pack), parseSourceRegister(
       JSON.parse(readFileSync(join(world, 'monitoring', 'source-register.json'), 'utf8')),
-    ),
-    requirement.sources,
-  ).docIds;
+    ), pack, requirement.sources).docIds;
 
   const quote = () => {
     const docId = entitledDocIds[0] ?? corpus.index.documents[0]!.docId;
@@ -439,7 +436,7 @@ function closureShaFor(world: string, requirementId: string, packId: string = PA
   const register = parseSourceRegister(
     JSON.parse(readFileSync(join(world, 'monitoring', 'source-register.json'), 'utf8')),
   );
-  return EntitledClosure.forSources(authoriseCorpus(corpus, register, pack), register, requirement.sources).sha256;
+  return EntitledClosure.forSources(authoriseCorpus(corpus, register, pack), register, pack, requirement.sources).sha256;
 }
 
 // ---------------------------------------------------------------------------
@@ -481,8 +478,8 @@ describe('a cited source nothing serves halts the run, whatever the closure hold
     // on its own (evidence standard, mode 4).
     expect(result.corpus.map((entry) => entry.docId)).toContain('DOC-32013L0034');
 
-    // Schema-valid 1.2.0, and all four judgment containers canonically empty.
-    expect(result.resultSchemaVersion).toBe('1.2.0');
+    // Schema-valid 1.3.0, and all four judgment containers canonically empty.
+    expect(result.resultSchemaVersion).toBe('1.3.0');
     expect(result.reading.elements).toEqual([]);
     expect(result.coverage.cells).toEqual([]);
     expect(result.challenges).toEqual([]);

@@ -38,6 +38,8 @@ function input(over: Partial<IngestInput> = {}): IngestInput {
     versionLabel: 'consolidated 18 Mar 2026',
     retrievedOn: '2026-08-20',
     rawBytes: bytes(RAW),
+    artefactAuthenticity: 'official_consolidation',
+    nonOperativeSections: [],
     edges: [],
     ...over,
   };
@@ -307,7 +309,7 @@ describe('main (CLI, network mocked)', () => {
         '--version-label',
         'v1',
         '--retrieved-on',
-        '2026-08-20',
+        '2026-08-20', '--authenticity', 'official_consolidation',
         '--corpus-dir',
         dir,
         ...withAuthority(),
@@ -348,7 +350,7 @@ describe('main (CLI, network mocked)', () => {
         'Test instrument',
         '--version-label',
         '--retrieved-on',
-        '2026-08-20',
+        '2026-08-20', '--authenticity', 'official_consolidation',
         '--corpus-dir',
         dir,
         ...withAuthority(),
@@ -378,7 +380,7 @@ describe('main (CLI, network mocked)', () => {
       '--version-label',
       'v1',
       '--retrieved-on',
-      '2026-08-20',
+      '2026-08-20', '--authenticity', 'official_consolidation',
       '--corpus-dir',
       dir,
       ...withAuthority(),
@@ -409,7 +411,7 @@ describe('main (CLI, network mocked)', () => {
       '--version-label',
       'v1',
       '--retrieved-on',
-      '2026-08-20',
+      '2026-08-20', '--authenticity', 'official_consolidation',
       '--corpus-dir',
       dir,
       ...withAuthority(),
@@ -497,7 +499,7 @@ describe('ingest refuses a document the source has not authorised', () => {
     main([
       '--url', url, '--doc-id', 'DOC-PROBE', '--slug', 'probe',
       '--serves', serves, '--title', 'Probe', '--version-label', 'v1',
-      '--retrieved-on', '2026-08-27', '--corpus-dir', dir,
+      '--retrieved-on', '2026-08-27', '--authenticity', 'official_consolidation', '--corpus-dir', dir,
       '--pack-dir', packDir, '--register-dir', registerDir,
     ]);
 
@@ -670,7 +672,7 @@ describe('ingest validates the whole candidate corpus, with authority it obtaine
         // authorised on its own. Only the candidate as a whole is not.
         '--url', 'https://eur-lex.europa.eu/eli/dir/2013/34/2021-01-01',
         '--doc-id', 'DOC-NEW', '--slug', 'new', '--serves', 'SRC-001',
-        '--title', 'New', '--version-label', 'v1', '--retrieved-on', '2026-08-27',
+        '--title', 'New', '--version-label', 'v1', '--retrieved-on', '2026-08-27', '--authenticity', 'official_consolidation',
         '--corpus-dir', dir, '--pack-dir', packDir, '--register-dir', registerDir,
       ]),
     ).rejects.toThrow(/exit 1/);
@@ -707,7 +709,7 @@ describe('ingest validates the whole candidate corpus, with authority it obtaine
       main([
         '--url', 'https://eur-lex.europa.eu/eli/dir/2013/34/2022-01-01',
         '--doc-id', 'DOC-NEW', '--slug', 'new', '--serves', 'SRC-001',
-        '--title', 'New', '--version-label', 'v1', '--retrieved-on', '2026-08-27',
+        '--title', 'New', '--version-label', 'v1', '--retrieved-on', '2026-08-27', '--authenticity', 'official_consolidation',
         '--corpus-dir', dir, '--pack-dir', packDir, '--register-dir', registerDir,
       ]),
     ).rejects.toThrow(/exit 1/);

@@ -16,6 +16,7 @@ import { csrdPack } from './helpers';
 import { normalize, NORMALIZER_VERSION } from '../src/corpus/normalize';
 import { sha256Hex } from '../src/corpus/hash';
 import { CorpusDocumentNotFoundError, loadCorpus } from '../src/corpus/store';
+import { standingMapFor } from '../src/corpus/standing';
 
 let dir = '';
 
@@ -53,6 +54,8 @@ function writeCorpus(
       sha256Normalized: sha256Hex(normalized),
       normalizerVersion: NORMALIZER_VERSION,
       contentSelector: d.selector,
+      artefactAuthenticity: 'official_consolidation',
+      nonOperativeSections: [],
       edges: [] as unknown[],
     };
   });
@@ -93,6 +96,8 @@ function writeByteCorpus(rawBytes: Buffer): void {
         sha256Normalized: sha256Hex(normalized),
         normalizerVersion: NORMALIZER_VERSION,
         contentSelector: null,
+        artefactAuthenticity: 'official_consolidation',
+        nonOperativeSections: [],
         edges: [],
       },
     ],
@@ -251,7 +256,7 @@ describe('the real corpus', () => {
 
   it('resolves a closure over those entries that carries the amendment edge', () => {
     const { index } = loadCorpus(corpusDir);
-    const closure = computeClosure(index, docsForSources(index, ['SRC-001', 'SRC-004']));
+    const closure = computeClosure(index, docsForSources(index, ['SRC-001', 'SRC-004']), standingMapFor(index, csrdPack()));
     expect(closure.docIds).toEqual(['DOC-32013L0034', 'DOC-32026L0470']);
     expect(closure.edgeIds).toEqual(['EDGE-32013L0034-amendedBy-32026L0470']);
     expect(closure.sha256).toMatch(/^[0-9a-f]{64}$/);

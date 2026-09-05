@@ -48,6 +48,7 @@ import { docsForSources, computeClosure } from '../src/corpus/closure';
 import { EntitledClosure } from '../src/pipeline/entitlement';
 import type { CorpusIndex } from '../src/corpus/types';
 import { csrdPack } from './helpers';
+import { standingMapFor } from '../src/corpus/standing';
 
 const engineRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const corpusDir = join(engineRoot, 'corpus');
@@ -196,7 +197,7 @@ describe('the SRC-005 artefact is what the index says it is', () => {
     // and edges are declared rather than inferred (§14 rule 3).
     expect(entry().edges).toEqual([]);
     const { index } = loadCorpus(corpusDir);
-    expect(computeClosure(index, [DOC]).docIds).toEqual([DOC]);
+    expect(computeClosure(index, [DOC], standingMapFor(index, csrdPack())).docIds).toEqual([DOC]);
   });
 });
 
@@ -275,7 +276,7 @@ describe('the SRC-005 artefact earns its source, and may become evidence', () =>
     expect(verdict).toEqual({ citable: true, tier: 'legal_record' });
 
     const corpus = authoriseCorpus(loadCorpus(corpusDir), realRegister(), csrdPack());
-    const closure = EntitledClosure.forSources(corpus, realRegister(), ['SRC-005']);
+    const closure = EntitledClosure.forSources(corpus, realRegister(), csrdPack(), ['SRC-005']);
     expect(closure.docIds).toEqual([DOC]);
   });
 });
@@ -297,7 +298,7 @@ describe('closing one gap is not becoming readable — CSRD-S-012', () => {
     // would let "one gap disappeared" read as "the requirement can now be
     // verified", which is false for every requirement with a second gap.
     const corpus = authoriseCorpus(loadCorpus(corpusDir), realRegister(), csrdPack());
-    const closure = EntitledClosure.forSources(corpus, realRegister(), s012.sources);
+    const closure = EntitledClosure.forSources(corpus, realRegister(), csrdPack(), s012.sources);
     expect(closure.corpusServes('SRC-005')).toBe(true);
     expect(closure.corpusServes('SRC-007')).toBe(false);
     expect(closure.docIds).toEqual([DOC]);
@@ -313,7 +314,7 @@ describe('closing one gap is not becoming readable — CSRD-S-012', () => {
     const corpus = authoriseCorpus(loadCorpus(corpusDir), realRegister(), csrdPack());
     for (const requirement of pack.requirements) {
       if (requirement.id === 'CSRD-S-012') continue;
-      const docIds = EntitledClosure.forSources(corpus, realRegister(), requirement.sources).docIds;
+      const docIds = EntitledClosure.forSources(corpus, realRegister(), csrdPack(), requirement.sources).docIds;
       expect(docIds, requirement.id).not.toContain(DOC);
     }
   });

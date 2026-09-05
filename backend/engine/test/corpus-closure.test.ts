@@ -16,6 +16,7 @@ import {
   STRUCTURAL_EDGE_KINDS,
 } from '../src/corpus/closure';
 import type { CorpusDocument, CorpusEdge, CorpusIndex } from '../src/corpus/types';
+import { standingMapFor, type StandingMap } from '../src/corpus/standing';
 
 let seq = 0;
 
@@ -34,6 +35,8 @@ function doc(docId: string, edges: CorpusEdge[] = [], serves: string[] = []): Co
     sha256Normalized: 'b'.repeat(64),
     normalizerVersion: '1.0.0',
     contentSelector: null,
+    artefactAuthenticity: 'official_consolidation',
+    nonOperativeSections: [],
     edges,
   };
 }
@@ -57,6 +60,17 @@ function edge(
 const index = (documents: CorpusDocument[]): CorpusIndex =>
   parseCorpusIndex({ updated: '2026-08-20', documents });
 
+/**
+ * Every source any document here serves, declared in force. These tests are
+ * about traversal mechanics and hash coverage, not standing, so the standing
+ * map is the one under which every neighbour is eligible — the standing-aware
+ * cases live in `corpus-standing.test.ts`.
+ */
+function inForceStanding(idx: CorpusIndex): StandingMap {
+  const ids = [...new Set(idx.documents.flatMap((d) => d.serves))];
+  return standingMapFor(idx, { sources: ids.map((id) => ({ id, temporalStanding: 'in_force' as const })) } as never);
+}
+
 describe('docsForSources', () => {
   it('maps SRC ids to the documents that serve them', () => {
     const idx = index([doc('DOC-A', [], ['SRC-001']), doc('DOC-B', [], ['SRC-004'])]);
@@ -77,7 +91,7 @@ describe('docsForSources', () => {
 describe('computeClosure', () => {
   it('includes the entry document', () => {
     const idx = index([doc('DOC-A')]);
-    expect(computeClosure(idx, ['DOC-A']).docIds).toEqual(['DOC-A']);
+    expect(computeClosure(idx, ['DOC-A'], inForceStanding(idx)).docIds).toEqual(['DOC-A']);
   });
 
   it('rejects an entry document the corpus does not hold', () => {
@@ -85,8 +99,8 @@ describe('computeClosure', () => {
     // digest, so a signature could pin an entitlement over a document that
     // does not exist. Spec 4.2 keeps that as a distinct corpus_gap signal.
     const idx = index([doc('DOC-A')]);
-    expect(() => computeClosure(idx, ['DOC-A', 'DOC-GHOST'])).toThrow(ClosureEntryNotFoundError);
-    expect(() => computeClosure(idx, ['DOC-GHOST'])).toThrow(/DOC-GHOST/);
+    expect(() => computeClosure(idx, ['DOC-A', 'DOC-GHOST'], inForceStanding(idx))).toThrow(ClosureEntryNotFoundError);
+    expect(() => computeClosure(idx, ['DOC-GHOST'], inForceStanding(idx))).toThrow(/DOC-GHOST/);
   });
 
   it('follows structural edges to fixpoint', () => {
@@ -95,17 +109,17 @@ describe('computeClosure', () => {
       doc('DOC-B', [edge('E2', 'amendedBy', 'DOC-B', 'DOC-C')]),
       doc('DOC-C'),
     ]);
-    expect(computeClosure(idx, ['DOC-A']).docIds).toEqual(['DOC-A', 'DOC-B', 'DOC-C']);
+    expect(computeClosure(idx, ['DOC-A'], inForceStanding(idx)).docIds).toEqual(['DOC-A', 'DOC-B', 'DOC-C']);
   });
 
   it('follows structural edges in reverse, because an amending act is needed from either end', () => {
     const idx = index([doc('DOC-A'), doc('DOC-B', [edge('E1', 'amends', 'DOC-B', 'DOC-A')])]);
-    expect(computeClosure(idx, ['DOC-A']).docIds).toEqual(['DOC-A', 'DOC-B']);
+    expect(computeClosure(idx, ['DOC-A'], inForceStanding(idx)).docIds).toEqual(['DOC-A', 'DOC-B']);
   });
 
   it('follows a references edge to depth 1', () => {
     const idx = index([doc('DOC-A', [edge('E1', 'references', 'DOC-A', 'DOC-B')]), doc('DOC-B')]);
-    expect(computeClosure(idx, ['DOC-A']).docIds).toEqual(['DOC-A', 'DOC-B']);
+    expect(computeClosure(idx, ['DOC-A'], inForceStanding(idx)).docIds).toEqual(['DOC-A', 'DOC-B']);
   });
 
   it('does not follow a references edge to depth 2', () => {
@@ -114,13 +128,13 @@ describe('computeClosure', () => {
       doc('DOC-B', [edge('E2', 'references', 'DOC-B', 'DOC-C')]),
       doc('DOC-C'),
     ]);
-    expect(computeClosure(idx, ['DOC-A']).docIds).toEqual(['DOC-A', 'DOC-B']);
+    expect(computeClosure(idx, ['DOC-A'], inForceStanding(idx)).docIds).toEqual(['DOC-A', 'DOC-B']);
   });
 
   it('does not follow references backwards', () => {
     // Every document that cites an instrument is not part of reading it.
     const idx = index([doc('DOC-A'), doc('DOC-B', [edge('E1', 'references', 'DOC-B', 'DOC-A')])]);
-    expect(computeClosure(idx, ['DOC-A']).docIds).toEqual(['DOC-A']);
+    expect(computeClosure(idx, ['DOC-A'], inForceStanding(idx)).docIds).toEqual(['DOC-A']);
   });
 
   it('includes the amended form of a document reached at reference depth 1', () => {
@@ -131,7 +145,7 @@ describe('computeClosure', () => {
       doc('DOC-Y', [edge('E2', 'amendedBy', 'DOC-Y', 'DOC-Y-PRIME')]),
       doc('DOC-Y-PRIME'),
     ]);
-    expect(computeClosure(idx, ['DOC-A']).docIds).toEqual(['DOC-A', 'DOC-Y', 'DOC-Y-PRIME']);
+    expect(computeClosure(idx, ['DOC-A'], inForceStanding(idx)).docIds).toEqual(['DOC-A', 'DOC-Y', 'DOC-Y-PRIME']);
   });
 
   it('reaches a document by its shortest path, not its first', () => {
@@ -145,7 +159,7 @@ describe('computeClosure', () => {
       doc('DOC-C', [edge('E4', 'amendedBy', 'DOC-C', 'DOC-D')]),
       doc('DOC-D'),
     ]);
-    expect(computeClosure(idx, ['DOC-A']).docIds).toEqual(['DOC-A', 'DOC-B', 'DOC-C', 'DOC-D']);
+    expect(computeClosure(idx, ['DOC-A'], inForceStanding(idx)).docIds).toEqual(['DOC-A', 'DOC-B', 'DOC-C', 'DOC-D']);
   });
 
   it('re-expands a document when a later, shorter path reaches it', () => {
@@ -176,7 +190,7 @@ describe('computeClosure', () => {
       doc('DOC-E'),
     ]);
     const deeper = { ...CLOSURE_POLICY_V0, referenceDepth: 2 };
-    expect(computeClosure(idx, ['DOC-A'], deeper).docIds).toEqual([
+    expect(computeClosure(idx, ['DOC-A'], inForceStanding(idx), deeper).docIds).toEqual([
       'DOC-A',
       'DOC-B',
       'DOC-C',
@@ -197,7 +211,7 @@ describe('computeClosure', () => {
       doc('DOC-A', [edge('E1', 'amendedBy', 'DOC-A', 'DOC-B', 'x')]),
       doc('DOC-B'),
     ]);
-    expect(computeClosure(a, ['DOC-A']).sha256).not.toBe(computeClosure(b, ['DOC-A']).sha256);
+    expect(computeClosure(a, ['DOC-A'], inForceStanding(a)).sha256).not.toBe(computeClosure(b, ['DOC-A'], inForceStanding(b)).sha256);
   });
 
   it('lists edges whose endpoints are both inside the closure', () => {
@@ -206,26 +220,26 @@ describe('computeClosure', () => {
       doc('DOC-B'),
       doc('DOC-OUT', [edge('E2', 'references', 'DOC-OUT', 'DOC-A')]),
     ]);
-    expect(computeClosure(idx, ['DOC-A']).edgeIds).toEqual(['E1']);
+    expect(computeClosure(idx, ['DOC-A'], inForceStanding(idx)).edgeIds).toEqual(['E1']);
   });
 });
 
 describe('closure hash', () => {
   it('is stable across runs', () => {
     const idx = index([doc('DOC-A', [edge('E1', 'amendedBy', 'DOC-A', 'DOC-B')]), doc('DOC-B')]);
-    expect(computeClosure(idx, ['DOC-A']).sha256).toBe(computeClosure(idx, ['DOC-A']).sha256);
+    expect(computeClosure(idx, ['DOC-A'], inForceStanding(idx)).sha256).toBe(computeClosure(idx, ['DOC-A'], inForceStanding(idx)).sha256);
   });
 
   it('is unchanged by ingesting an unrelated document', () => {
     const base = index([doc('DOC-A'), doc('DOC-B')]);
     const grown = index([doc('DOC-A'), doc('DOC-B'), doc('DOC-UNRELATED')]);
-    expect(computeClosure(grown, ['DOC-A']).sha256).toBe(computeClosure(base, ['DOC-A']).sha256);
+    expect(computeClosure(grown, ['DOC-A'], inForceStanding(grown)).sha256).toBe(computeClosure(base, ['DOC-A'], inForceStanding(base)).sha256);
   });
 
   it('changes when an amendedBy edge is added to an entry document', () => {
     const before = index([doc('DOC-A'), doc('DOC-B')]);
     const after = index([doc('DOC-A', [edge('E1', 'amendedBy', 'DOC-A', 'DOC-B')]), doc('DOC-B')]);
-    expect(computeClosure(after, ['DOC-A']).sha256).not.toBe(computeClosure(before, ['DOC-A']).sha256);
+    expect(computeClosure(after, ['DOC-A'], inForceStanding(after)).sha256).not.toBe(computeClosure(before, ['DOC-A'], inForceStanding(before)).sha256);
   });
 
   it('changes when a document inside the closure changes text', () => {
@@ -233,13 +247,13 @@ describe('closure hash', () => {
     const movedDoc = doc('DOC-B');
     movedDoc.sha256Normalized = 'c'.repeat(64);
     const after = index([doc('DOC-A', [edge('E1', 'amendedBy', 'DOC-A', 'DOC-B')]), movedDoc]);
-    expect(computeClosure(after, ['DOC-A']).sha256).not.toBe(computeClosure(before, ['DOC-A']).sha256);
+    expect(computeClosure(after, ['DOC-A'], inForceStanding(after)).sha256).not.toBe(computeClosure(before, ['DOC-A'], inForceStanding(before)).sha256);
   });
 
   it('changes when an edge is retyped with every document byte-identical', () => {
     const before = index([doc('DOC-A', [edge('E1', 'amendedBy', 'DOC-A', 'DOC-B')]), doc('DOC-B')]);
     const after = index([doc('DOC-A', [edge('E1', 'references', 'DOC-A', 'DOC-B')]), doc('DOC-B')]);
-    expect(computeClosure(after, ['DOC-A']).sha256).not.toBe(computeClosure(before, ['DOC-A']).sha256);
+    expect(computeClosure(after, ['DOC-A'], inForceStanding(after)).sha256).not.toBe(computeClosure(before, ['DOC-A'], inForceStanding(before)).sha256);
   });
 
   it('changes when edge provenance is rewritten with every document byte-identical', () => {
@@ -253,7 +267,7 @@ describe('closure hash', () => {
       doc('DOC-A', [edge('E1', 'amendedBy', 'DOC-A', 'DOC-B', 'someone said so')]),
       doc('DOC-B'),
     ]);
-    expect(computeClosure(after, ['DOC-A']).sha256).not.toBe(computeClosure(before, ['DOC-A']).sha256);
+    expect(computeClosure(after, ['DOC-A'], inForceStanding(after)).sha256).not.toBe(computeClosure(before, ['DOC-A'], inForceStanding(before)).sha256);
   });
 
   it('is unchanged by contentSelector, since it is how the text was derived and sha256Normalized already covers that', () => {
@@ -261,7 +275,7 @@ describe('closure hash', () => {
     const reselected = doc('DOC-A', [edge('E1', 'amendedBy', 'DOC-A', 'DOC-B')]);
     reselected.contentSelector = '#text';
     const after = index([reselected, doc('DOC-B')]);
-    expect(computeClosure(after, ['DOC-A']).sha256).toBe(computeClosure(before, ['DOC-A']).sha256);
+    expect(computeClosure(after, ['DOC-A'], inForceStanding(after)).sha256).toBe(computeClosure(before, ['DOC-A'], inForceStanding(before)).sha256);
   });
 });
 
@@ -287,6 +301,6 @@ describe('closure policy', () => {
       doc('DOC-C'),
     ]);
     const deeper = { ...CLOSURE_POLICY_V0, referenceDepth: 2 };
-    expect(computeClosure(idx, ['DOC-A'], deeper).docIds).toEqual(['DOC-A', 'DOC-B', 'DOC-C']);
+    expect(computeClosure(idx, ['DOC-A'], inForceStanding(idx), deeper).docIds).toEqual(['DOC-A', 'DOC-B', 'DOC-C']);
   });
 });

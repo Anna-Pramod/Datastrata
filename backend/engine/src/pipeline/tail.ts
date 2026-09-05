@@ -41,7 +41,7 @@
  * Pure.
  */
 
-import { producePins, type CurrentCorpusSource, type VerificationPins } from '../verification/current-state';
+import { type PinInput, producePins, type CurrentCorpusSource, type VerificationPins } from '../verification/current-state';
 import type { AuthoredRequirement } from '../types';
 import type { RenderContext } from '../verification/render';
 import type { PipelineGap } from './gaps';
@@ -72,11 +72,13 @@ export interface TailInput {
   requirement: AuthoredRequirement;
   renderContext: RenderContext;
   /** The entitled closure, as `EntitledClosure.pinInput` hands it over. */
-  closure: { sha256: string; docIds: readonly string[] };
+  closure: PinInput['closure'];
   corpus: CurrentCorpusSource;
   /** Derived by `identity.ts`. Never chosen, and never supplied by a role. */
   pipelineVersion: string;
   rendererVersion: string;
+  /** From `CLOSURE_RENDERER_VERSION`, via the orchestrator; the record names it. */
+  closureRendererVersion: string;
   resultSchemaVersion: string;
   roleOutputs: PipelineRoleOutputs;
   /**
@@ -100,6 +102,7 @@ export interface TailOutcome {
   requirementId: string;
   pipelineVersion: string;
   rendererVersion: string;
+  closureRendererVersion: string;
   resultSchemaVersion: string;
   /** Computed here, from the world. Never read off a role output. */
   pins: VerificationPins;
@@ -135,6 +138,7 @@ export function runDeterministicTail(input: TailInput): TailOutcome {
     requirementId: input.requirementId,
     pipelineVersion: input.pipelineVersion,
     rendererVersion: input.rendererVersion,
+    closureRendererVersion: input.closureRendererVersion,
     resultSchemaVersion: input.resultSchemaVersion,
     pins,
     gaps,

@@ -16,6 +16,8 @@
 
 import { parseCorpusIndex } from '../src/corpus/schema';
 import { authoriseCorpus, type AuthorisedCorpus } from '../src/corpus/authority';
+import { pinnedStandingFor, standingMapFor, type StandingMap } from '../src/corpus/standing';
+import type { PinnedSourceStanding } from '../src/pipeline/entitlement';
 import type { SourceRegister } from '../src/monitoring/types';
 import type { KnowledgePack } from '../src/types';
 import { requirementSchema } from '../src/knowledge/schema';
@@ -57,6 +59,8 @@ function doc(docId: string, edges: CorpusEdge[] = [], serves: string[] = []): Co
     sha256Normalized: sha256Hex(text),
     normalizerVersion: '1.0.0',
     contentSelector: null,
+    artefactAuthenticity: 'official_consolidation',
+    nonOperativeSections: [],
     edges,
   };
 }
@@ -103,7 +107,7 @@ function edge(edgeId: string, kind: CorpusEdge['kind'], from: string, to: string
  *
  * **It runs the real machinery.** This is a different `index.json`, not a
  * different code path: `docsForSources`, `computeClosure` and
- * `CLOSURE_POLICY_V0` are the production ones. A hand-rolled stand-in would
+ * `CLOSURE_POLICY_V1` are the production ones. A hand-rolled stand-in would
  * make these tests prove things about test code.
  *
  * DOC-D changes no existing closure hash: the SRC-100 closure is still
@@ -408,11 +412,43 @@ const FIXTURE_AUTHORISED_ORIGINS = [
   },
 ];
 
-/** A pack carrying exactly the sources the fixture corpus claims. */
-function fixtureSourceUniverse(): KnowledgePack {
+/**
+ * A pack carrying exactly the sources the fixture corpus claims, each with a
+ * temporal standing: since B-E2 a served source without one is refused at
+ * closure construction, so a fixture world that omitted them would model a
+ * state no production closure can be built over. All in force, so every
+ * existing traversal expectation in this world is unchanged.
+ */
+export function fixtureSourceUniverse(): KnowledgePack {
   return {
-    sources: [{ id: 'SRC-100' }, { id: 'SRC-999' }, { id: 'SRC-101' }, { id: 'SRC-102' }],
+    sources: [
+      { id: 'SRC-100', temporalStanding: 'in_force' },
+      { id: 'SRC-999', temporalStanding: 'in_force' },
+      { id: 'SRC-101', temporalStanding: 'in_force' },
+      { id: 'SRC-102', temporalStanding: 'in_force' },
+    ],
   } as unknown as KnowledgePack;
+}
+
+/**
+ * A raw `Closure` in the shape `producePins` takes, with the standing of every
+ * member's served sources — what `EntitledClosure.pinInput` hands over, for the
+ * tests that compute closures directly.
+ */
+export function pinInputFor(
+  closure: { sha256: string; docIds: readonly string[] },
+  standing: StandingMap = fixtureStanding(),
+): { sha256: string; docIds: readonly string[]; sourcesStanding: ReadonlyMap<string, readonly PinnedSourceStanding[]> } {
+  return {
+    sha256: closure.sha256,
+    docIds: closure.docIds,
+    sourcesStanding: new Map(closure.docIds.map((docId) => [docId, pinnedStandingFor(standing, docId)])),
+  };
+}
+
+/** The standing map `computeClosure` needs over the fixture index, derived the production way. */
+export function fixtureStanding(index: CorpusIndex = fixtureIndex()): StandingMap {
+  return standingMapFor(index, fixtureSourceUniverse());
 }
 
 /** A register declaring the fixture origins, and nothing else. */

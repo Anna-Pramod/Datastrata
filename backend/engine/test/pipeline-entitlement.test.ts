@@ -11,29 +11,31 @@
 
 import { describe, expect, it } from 'vitest';
 import {
-  CLOSURE_POLICY_V0,
+  CLOSURE_POLICY_V1,
   ClosureEntryNotFoundError,
   computeClosure,
   docsForSources,
 } from '../src/corpus/closure';
 import { EntitledClosure, OutsideEntitlementError } from '../src/pipeline/entitlement';
 import { docText, fixtureAuthorisedCorpus, fixtureIndex, fixtureRegister } from './pipeline-fixtures';
+import { fixtureSourceUniverse } from './pipeline-fixtures';
+import { fixtureStanding, pinInputFor } from './pipeline-fixtures';
 
 const corpus = fixtureAuthorisedCorpus();
 
-function closure(policy = CLOSURE_POLICY_V0): EntitledClosure {
-  return EntitledClosure.forSources(corpus, fixtureRegister(), ['SRC-100'], policy);
+function closure(policy = CLOSURE_POLICY_V1): EntitledClosure {
+  return EntitledClosure.forSources(corpus, fixtureRegister(), fixtureSourceUniverse(), ['SRC-100'], policy);
 }
 
 describe('EntitledClosure', () => {
   it('is exactly computeClosure’s answer, not a second traversal', () => {
     const index = fixtureIndex();
-    const direct = computeClosure(index, docsForSources(index, ['SRC-100']), CLOSURE_POLICY_V0);
+    const direct = computeClosure(index, docsForSources(index, ['SRC-100']), fixtureStanding(), CLOSURE_POLICY_V1);
     const entitled = closure();
     expect(entitled.docIds).toEqual(direct.docIds);
     expect(entitled.edgeIds).toEqual(direct.edgeIds);
     expect(entitled.sha256).toBe(direct.sha256);
-    expect(entitled.pinInput).toEqual({ sha256: direct.sha256, docIds: direct.docIds });
+    expect(entitled.pinInput).toEqual(pinInputFor(direct));
   });
 
   it('follows a structural edge for free and a reference for a hop', () => {
@@ -68,7 +70,7 @@ describe('EntitledClosure', () => {
   });
 
   it('narrows when the traversal policy narrows, and the hash moves with it', () => {
-    const shallow = closure({ ...CLOSURE_POLICY_V0, referenceDepth: 0 });
+    const shallow = closure({ ...CLOSURE_POLICY_V1, referenceDepth: 0 });
     expect(shallow.docIds).toEqual(['DOC-A', 'DOC-B']);
     expect(shallow.sha256).not.toBe(closure().sha256);
     expect(() => shallow.text('DOC-C')).toThrow(OutsideEntitlementError);
@@ -77,13 +79,13 @@ describe('EntitledClosure', () => {
   });
 
   it('lets an absent entry document escape as a corpus_gap rather than closing over it', () => {
-    expect(() => EntitledClosure.forSources(corpus, fixtureRegister(), ['SRC-100'], CLOSURE_POLICY_V0)).not.toThrow();
+    expect(() => EntitledClosure.forSources(corpus, fixtureRegister(), fixtureSourceUniverse(), ['SRC-100'], CLOSURE_POLICY_V1)).not.toThrow();
     const emptyCorpus = fixtureAuthorisedCorpus();
     // `SRC-404` maps to no document, so the closure is empty rather than
     // erroneous; the throw belongs to an entry the index cannot resolve.
-    expect(EntitledClosure.forSources(emptyCorpus, fixtureRegister(), ['SRC-404']).docIds).toEqual([]);
+    expect(EntitledClosure.forSources(emptyCorpus, fixtureRegister(), fixtureSourceUniverse(), ['SRC-404']).docIds).toEqual([]);
     expect(() =>
-      computeClosure(fixtureIndex(), ['DOC-NOT-INGESTED'], CLOSURE_POLICY_V0),
+      computeClosure(fixtureIndex(), ['DOC-NOT-INGESTED'], fixtureStanding(), CLOSURE_POLICY_V1),
     ).toThrow(ClosureEntryNotFoundError);
   });
 });

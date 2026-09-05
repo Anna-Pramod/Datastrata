@@ -128,7 +128,7 @@ describe('the fixture addresses this condition', () => {
 // ---------------------------------------------------------------------------
 
 describe('one Complete VerificationResult, from the actual role outputs', () => {
-  it('parses under schema 1.2.0 and is the run’s own values', async () => {
+  it('parses under schema 1.3.0 and is the run’s own values', async () => {
     const run = await runPipeline();
     const assembled = assembleVerificationResult({
       run,
@@ -142,7 +142,7 @@ describe('one Complete VerificationResult, from the actual role outputs', () => 
     // record this test inspects is one the current schema accepted.
     const parsed = parseVerificationResult(assembled, REGISTERS);
     expect(parsed).toEqual(assembled);
-    expect(parsed.resultSchemaVersion).toBe('1.2.0');
+    expect(parsed.resultSchemaVersion).toBe('1.3.0');
 
     // Complete: every judgment container carries something and no gap does.
     expect(parsed.gaps).toEqual([]);
@@ -189,14 +189,18 @@ describe('one Complete VerificationResult, from the actual role outputs', () => 
     });
     expect(assembled.corpus).toEqual(run.tail.pins.corpus);
     expect(assembled.corpus).toEqual(shared.corpus);
-    // Every pin is five fields wide, including the label `producePins` is the
-    // only producer of — the join Task 5's blocking precondition was about.
+    // Every pin is eight fields wide — the five identity and text fields
+    // including the label `producePins` is the only producer of, plus the
+    // three standing fields the closure hash covers since B-E2.
     for (const pin of assembled.corpus) {
       expect(Object.keys(pin).sort()).toEqual([
+        'artefactAuthenticity',
         'docId',
+        'nonOperativeSections',
         'normalizerVersion',
         'sha256Normalized',
         'sha256Raw',
+        'sources',
         'versionLabel',
       ]);
       expect(pin.versionLabel.length).toBeGreaterThan(0);

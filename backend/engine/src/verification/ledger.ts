@@ -122,6 +122,10 @@ export const signingEntrySchema = z
     conditionSha256: z.string(),
     renderedConditionSha256: z.string(),
     rendererVersion: z.string(),
+    // Copied from the result at signing, exactly as `pipelineVersion` is: the
+    // closure renderer runs only inside the roles, so the grammar a signature
+    // names is the one the *run* used, not one a signer supplies.
+    closureRendererVersion: z.string(),
     corpusClosureSha256: z.string(),
     corpus: z.array(corpusPinSchema),
     resultSha256: z.string(),

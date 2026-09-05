@@ -219,8 +219,15 @@ export function buildCsrdFreshnessResolver(root: string): FreshnessResolver {
    * validated against the pack in the same call, which is the invariant that
    * matters — the register deciding authority is the one checked against a pack.
    */
-  const authorised = (): { corpus: LoadedCorpus & AuthorisedCorpus; register: SourceRegister } => {
-    if (corpus !== undefined && register !== undefined) return { corpus, register };
+  let standingPack: Pick<KnowledgePack, 'sources'> | undefined;
+  const authorised = (): {
+    corpus: LoadedCorpus & AuthorisedCorpus;
+    register: SourceRegister;
+    pack: Pick<KnowledgePack, 'sources'>;
+  } => {
+    if (corpus !== undefined && register !== undefined && standingPack !== undefined) {
+      return { corpus, register, pack: standingPack };
+    }
     const verificationDir = verificationDirOf(root);
     const { pack, sourceRegister } = loadPackContext(packDirOf(root), {
       versionRegistryDir: join(verificationDir, 'requirement-versions'),
@@ -231,16 +238,19 @@ export function buildCsrdFreshnessResolver(root: string): FreshnessResolver {
     // handing back only the corpus would leave the caller to find a register
     // of its own, which is the second-parse hazard T5.3 closed at ingest.
     register = sourceRegister;
+    // The same pack the register was checked against is what standing is
+    // derived from — one context, not a second load.
+    standingPack = pack;
     corpus = authoriseCorpus(loadCorpus(corpusDir), sourceRegister, pack);
-    return { corpus, register };
+    return { corpus, register, pack };
   };
 
   return ({ packId, requirement, entry, renderContext }): CheckedFreshness => {
-    const { corpus: loaded, register: loadedRegister } = authorised();
+    const { corpus: loaded, register: loadedRegister, pack: loadedPack } = authorised();
 
     let closure;
     try {
-      closure = EntitledClosure.forSources(loaded, loadedRegister, sourceIdsOf(requirement));
+      closure = EntitledClosure.forSources(loaded, loadedRegister, loadedPack, sourceIdsOf(requirement));
     } catch (error) {
       integrityFailure(
         'unresolved_gap',
@@ -263,7 +273,7 @@ export function buildCsrdFreshnessResolver(root: string): FreshnessResolver {
     const current = currentStateOf({
       requirement,
       renderContext,
-      closure: { sha256: closure.sha256, docIds: closure.docIds },
+      closure: closure.pinInput,
       corpus: loaded,
       result: readPinnedResult(root, packId, requirement.id),
     });
@@ -415,12 +425,14 @@ export function traceSeries(): { acts: ActMark[]; pending: PendingMark[] } {
   const acts: ActMark[] = [];
   const pending: PendingMark[] = [];
 
+  // Read from the structured standing the pack authors once, never from free
+  // text: a regex over a note would be a second, undeclared derivation of the
+  // one fact the pack is the single owner of.
   for (const s of pack.sources) {
-    const inForce = /^in force/i.test(s.statusAtSnapshot);
     const m = OJ_NUMBER.exec(s.title);
-    if (inForce && m) {
+    if (s.temporalStanding === 'in_force' && m) {
       acts.push({ id: s.id, year: Number(m[1]), ref: `${m[1]}/${m[2]}`, name: actName(s.title), title: s.title });
-    } else if (/adopted/i.test(s.statusAtSnapshot) && /not in force|pending/i.test(s.statusAtSnapshot)) {
+    } else if (s.temporalStanding === 'adopted_not_effective') {
       pending.push({ id: s.id, title: actName(s.title) || s.title, note: 'no OJ number yet' });
     }
   }

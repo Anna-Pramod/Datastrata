@@ -73,10 +73,27 @@ export const REQUIREMENT_ID = 'CSRD-S-001';
  * `sources`), and `runId` with them. `packId`, `requirementId`,
  * `renderedConditionSha256` and `corpusClosureSha256` did not move — measured in
  * `pipeline-replay.test.ts`, not assumed.
+ *
+ * `run-v1-e77e9d0d…` is the provenance-era generation. It was retired on
+ * 2026-09-05 by B-E2, which — unlike the provenance migration — **did** move
+ * `corpusClosureSha256`: temporal standing, artefact authenticity and the
+ * declared non-operative sections entered the closure's canonical line, so
+ * every closure digest in the repository moved. `pipelineVersion` moved with
+ * it (scheme `v3`: the closure policy's `expansion` rule and
+ * `closureRendererVersion` are hashed), and `runId` follows from both.
+ * `packId`, `requirementId`, `requirementInputSha256` and
+ * `renderedConditionSha256` did not move — again measured, not assumed.
  */
 export const SUPERSEDED_RUN_IDS: readonly string[] = [
   'run-v1-764e571e7fb566ba75cc2ff126ac1d7b18cb59a887b033eef9f97c2f1f215d54',
+  'run-v1-e77e9d0d4f4ce72d5543f6e21d99074051ad3d8d10ba4c661d2f73f0656574df',
 ];
+
+/** The retired identities by generation, so a test selects a recording by what it is and never by position. */
+export const RETIRED = {
+  preD1a: 'run-v1-764e571e7fb566ba75cc2ff126ac1d7b18cb59a887b033eef9f97c2f1f215d54',
+  provenanceEra: 'run-v1-e77e9d0d4f4ce72d5543f6e21d99074051ad3d8d10ba4c661d2f73f0656574df',
+} as const;
 
 export const DOC_HOST = 'DOC-32013L0034';
 export const DOC_AMENDING = 'DOC-32026L0470';

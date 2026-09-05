@@ -16,7 +16,7 @@
  * tail.
  *
  * **The second half of this file is about the two widths.** A pinned corpus
- * document is *recorded* five fields wide and *compared* four fields wide, and
+ * document is *recorded* at its full record width and *compared* four fields wide, and
  * the producer emits the wider shape so that `pinsForFreshness` can narrow it
  * rather than every record-shaped caller widening it. Two obligations follow,
  * and each is tested against something this module did not author:
@@ -63,17 +63,18 @@ import {
   stubProsecutorOutput,
   stubReaderOutput,
 } from './pipeline-fixtures';
+import { fixtureStanding, pinInputFor } from './pipeline-fixtures';
 
 const corpus = fixtureCorpus();
 const index = fixtureIndex();
-const closure = computeClosure(index, docsForSources(index, ['SRC-100']));
+const closure = pinInputFor(computeClosure(index, docsForSources(index, ['SRC-100']), fixtureStanding()));
 const requirement = fixtureRequirement();
 const renderContext = fixtureRenderContext();
 
 const pinInput = {
   requirement,
   renderContext,
-  closure: { sha256: closure.sha256, docIds: closure.docIds },
+  closure: { sha256: closure.sha256, docIds: closure.docIds, sourcesStanding: closure.sourcesStanding },
   corpus,
 };
 
@@ -126,7 +127,7 @@ describe('producePins', () => {
 
     // The closure hash comes from the closure and from nowhere else.
     expect(
-      producePins({ ...pinInput, closure: { sha256: 'a'.repeat(64), docIds: closure.docIds } })
+      producePins({ ...pinInput, closure: { sha256: 'a'.repeat(64), docIds: closure.docIds, sourcesStanding: closure.sourcesStanding } })
         .corpusClosureSha256,
     ).toBe('a'.repeat(64));
   });
@@ -166,9 +167,10 @@ function resultOverPins(pins = producePins(pinInput)): Record<string, unknown> {
     packId: 'testpack',
     requirementId: 'TEST-R-001',
     requirementVersion: 1,
-    resultSchemaVersion: '1.2.0',
+    resultSchemaVersion: '1.3.0',
     pipelineVersion: 'pipeline-v1-unpromoted',
     rendererVersion: 'renderer-1.1.0',
+    closureRendererVersion: 'closure-renderer-1.0.0',
     ...pins,
     reading: { elements: [] },
     coverage: { cells: [] },
@@ -185,7 +187,7 @@ describe('the record width and the freshness width', () => {
     // field list restated here. A restated list agrees with whatever the test
     // author believed on the day, including after the schema has moved.
     const parsed = parseVerificationResult(resultOverPins(pins));
-    expect(parsed.resultSchemaVersion).toBe('1.2.0');
+    expect(parsed.resultSchemaVersion).toBe('1.3.0');
     expect(parsed.corpus).toEqual(pins.corpus);
   });
 
@@ -211,6 +213,7 @@ describe('the record width and the freshness width', () => {
       requirementSha256: 'f'.repeat(64),
       ...pins,
       rendererVersion: 'renderer-1.1.0',
+      closureRendererVersion: 'closure-renderer-1.0.0',
       resultSha256: 'e'.repeat(64),
       pipelineVersion: 'pipeline-v1-unpromoted',
       by: 'fixture',
@@ -225,7 +228,7 @@ describe('the record width and the freshness width', () => {
     // against an object that is provably the same object.
   });
 
-  it('the freshness projection drops versionLabel and nothing else', () => {
+  it('the freshness projection drops versionLabel and the three standing fields, and nothing else', () => {
     const pins = producePins(pinInput);
     const narrowed = pinsForFreshness(pins);
 
@@ -247,8 +250,14 @@ describe('the record width and the freshness width', () => {
     const { corpus: producedCorpus, ...producedHashes } = pins;
     const { corpus: narrowedCorpus, ...narrowedHashes } = narrowed;
     expect(narrowedHashes).toEqual(producedHashes);
+    // Standing is dropped from the freshness width on purpose: it enters
+    // `corpusClosureSha256`, which freshness *does* compare, so `stale_closure`
+    // is the reason that names a standing change. Comparing the fields again
+    // here would be a second derivation of one fact.
     expect(narrowedCorpus).toEqual(
-      producedCorpus.map(({ versionLabel: _dropped, ...rest }) => rest),
+      producedCorpus.map(
+        ({ versionLabel: _label, artefactAuthenticity: _auth, nonOperativeSections: _sections, sources: _sources, ...rest }) => rest,
+      ),
     );
   });
 
@@ -264,7 +273,7 @@ describe('the record width and the freshness width', () => {
 /**
  * One pin contract, two artefacts.
  *
- * `result.ts` and `ledger.ts` each used to define this five-field object for
+ * `result.ts` and `ledger.ts` each used to define this pin object for
  * themselves, byte-identically, and the sign gate compared a result's pins
  * against an entry's pins field by field on the strength of that coincidence.
  * `src/verification/corpus-pin.ts` is now the single definition — a module
@@ -282,7 +291,7 @@ describe('one corpus-pin contract, two artefacts', () => {
     const inTheLedger = (ledgerShape['corpus'] as z.ZodArray<z.ZodTypeAny>)._def.type;
 
     // `toBe`, never `toEqual`. Two separately-written definitions of the same
-    // five fields satisfy `toEqual` — that is precisely the arrangement this
+    // every field satisfies `toEqual` — that is precisely the arrangement this
     // replaced — and only reference identity makes divergence unwritable.
     expect(inTheRecord).toBe(corpusPinSchema);
     expect(inTheLedger).toBe(corpusPinSchema);
@@ -292,7 +301,7 @@ describe('one corpus-pin contract, two artefacts', () => {
   it('and the shared object is still a plain strict ZodObject', () => {
     // The walker in `accounting.ts` descends into this node from **both**
     // roots. Wrapping it in a `ZodEffects` for some cross-pin rule would hide
-    // all five fields from two artefacts at once, so the constraint the two
+    // every field from two artefacts at once, so the constraint the two
     // module headers state is asserted here against the one object they share.
     expect(corpusPinSchema._def.typeName).toBe('ZodObject');
     expect(corpusPinSchema._def.unknownKeys).toBe('strict');
@@ -315,6 +324,7 @@ describe('a re-labelled document is still fresh', () => {
       conditionSha256: pins.conditionSha256,
       renderedConditionSha256: pins.renderedConditionSha256,
       rendererVersion: 'renderer-1.1.0',
+      closureRendererVersion: 'closure-renderer-1.0.0',
       corpusClosureSha256: pins.corpusClosureSha256,
       corpus: pins.corpus.map((pin) => ({ ...pin, ...over })),
       resultSha256: resultSha256(minimalResult()),
@@ -365,9 +375,10 @@ function minimalResult(): Parameters<typeof currentStateOf>[0]['result'] {
     packId: 'testpack',
     requirementId: 'TEST-R-001',
     requirementVersion: 1,
-    resultSchemaVersion: '1.2.0',
+    resultSchemaVersion: '1.3.0',
     pipelineVersion: 'pipeline-v1-unpromoted',
     rendererVersion: 'renderer-1.1.0',
+    closureRendererVersion: 'closure-renderer-1.0.0',
     requirementInputSha256: 'a'.repeat(64),
     conditionSha256: 'b'.repeat(64),
     renderedConditionSha256: 'c'.repeat(64),
@@ -451,11 +462,12 @@ describe('the deterministic tail', () => {
       requirementId: 'TEST-R-001',
       requirement,
       renderContext,
-      closure: { sha256: closure.sha256, docIds: closure.docIds },
+      closure: { sha256: closure.sha256, docIds: closure.docIds, sourcesStanding: closure.sourcesStanding },
       corpus,
       pipelineVersion: 'pipeline-v1-unpromoted',
       rendererVersion: 'renderer-1.1.0',
-      resultSchemaVersion: '1.2.0',
+      closureRendererVersion: 'closure-renderer-1.0.0',
+      resultSchemaVersion: '1.3.0',
       roleOutputs: {
         reading: stubReaderOutput(),
         prosecutions: [stubProsecutorOutput('stub_lens')],

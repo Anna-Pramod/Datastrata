@@ -31,6 +31,8 @@ import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { computeClosure, docsForSources, loadCorpus, loadPack } from '@datastrata/engine';
+import { pinnedStandingFor, standingMapFor } from '../../../backend/engine/src/corpus/standing';
+import { CLOSURE_RENDERER_VERSION } from '../../../backend/engine/src/pipeline/entitlement';
 import type { KnowledgePack, LoadedCorpus, VerificationResult } from '@datastrata/engine';
 import {
   requirementInputSha256,
@@ -92,14 +94,16 @@ function resultFor(
   requirement: KnowledgePack['requirements'][number],
   corpus: LoadedCorpus,
   closure: { sha256: string; docIds: readonly string[] },
+  standing: ReturnType<typeof standingMapFor>,
 ): VerificationResult {
   return {
     packId: pack.id,
     requirementId: requirement.id,
     requirementVersion: requirement.version,
-    resultSchemaVersion: '1.2.0',
+    resultSchemaVersion: '1.3.0',
     pipelineVersion: 'fixture-pipeline-0.1.0',
     rendererVersion: 'fixture-renderer-0.1.0',
+    closureRendererVersion: CLOSURE_RENDERER_VERSION,
     requirementInputSha256: requirementInputSha256(requirement),
     conditionSha256: candidateConditionSha256(requirement),
     renderedConditionSha256: candidateRenderedConditionSha256(requirement, {
@@ -115,6 +119,9 @@ function resultFor(
         sha256Raw: document.sha256Raw,
         sha256Normalized: document.sha256Normalized,
         normalizerVersion: document.normalizerVersion,
+        artefactAuthenticity: document.artefactAuthenticity,
+        nonOperativeSections: [...document.nonOperativeSections],
+        sources: pinnedStandingFor(standing, docId),
       };
     }),
     reading: { elements: [] },
@@ -172,8 +179,9 @@ export function installVerificationState(
     const requirement = pack.requirements.find((r) => r.id === requirementId);
     if (requirement === undefined) throw new Error(`fixture: pack carries no requirement ${requirementId}`);
 
-    const closure = computeClosure(corpus.index, docsForSources(corpus.index, requirement.sources));
-    const result = resultFor(pack, requirement, corpus, closure);
+    const standing = standingMapFor(corpus.index, pack);
+    const closure = computeClosure(corpus.index, docsForSources(corpus.index, requirement.sources), standing);
+    const result = resultFor(pack, requirement, corpus, closure, standing);
 
     if (options.omitResults !== true) {
       const path = join(verificationDir, PACK_ID, requirementId, 'verification-result.json');
@@ -192,6 +200,7 @@ export function installVerificationState(
       conditionSha256: candidateConditionSha256(requirement),
       renderedConditionSha256: candidateRenderedConditionSha256(requirement, renderContext),
       rendererVersion: 'fixture-renderer-0.1.0',
+      closureRendererVersion: result.closureRendererVersion,
       corpusClosureSha256: closure.sha256,
       corpus: closure.docIds.map((docId) => {
         const document = corpus.document(docId);
@@ -204,6 +213,9 @@ export function installVerificationState(
               ? HASH_THAT_RAW_BYTES_CANNOT_REPRODUCE
               : document.sha256Normalized,
           normalizerVersion: options.pinNormalizerVersion ?? document.normalizerVersion,
+          artefactAuthenticity: document.artefactAuthenticity,
+          nonOperativeSections: [...document.nonOperativeSections],
+          sources: pinnedStandingFor(standing, docId),
         };
       }),
       resultSha256: options.driftResult === true ? HASH_THAT_IS_NOT_THE_RESULT : resultSha256(result),

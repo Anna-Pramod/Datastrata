@@ -44,6 +44,8 @@ function doc(over: Partial<CorpusDocument> = {}): CorpusDocument {
     sha256Normalized: 'b'.repeat(64),
     normalizerVersion: '1.0.0',
     contentSelector: null,
+    artefactAuthenticity: 'official_consolidation',
+    nonOperativeSections: [],
     edges: [],
     ...over,
   };

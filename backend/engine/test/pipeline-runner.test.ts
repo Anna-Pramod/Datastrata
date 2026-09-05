@@ -49,6 +49,7 @@ import {
 // and does not intercept.
 import { installNetworkTrap } from './helpers';
 import { SYNTHETIC_ADAPTER_V1 } from './synthetic-adapters';
+import { fixtureSourceUniverse } from './pipeline-fixtures';
 
 const TRAP_ENDPOINT = 'https://network-trap.invalid/v1/messages';
 
@@ -60,7 +61,7 @@ function runInput(runner: Parameters<typeof runVerificationPipeline>[0]['runner'
     requirementId: 'TEST-R-001',
     requirement: fixtureRequirement(),
     renderContext: fixtureRenderContext(),
-    closure: EntitledClosure.forSources(corpus, fixtureRegister(), ['SRC-100']),
+    closure: EntitledClosure.forSources(corpus, fixtureRegister(), fixtureSourceUniverse(), ['SRC-100']),
     corpus,
     prompts: loadPromptSet(),
     config: DEFAULT_ROLE_CONFIG,

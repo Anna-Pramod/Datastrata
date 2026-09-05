@@ -15,8 +15,8 @@
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import type { CorpusDocument, CorpusEdge, CorpusIndex } from '../corpus/types';
-import { parseCorpusIndex, verifyCorpusIntegrity } from '../corpus/schema';
+import type { ArtefactAuthenticity, CorpusDocument, CorpusEdge, CorpusIndex } from '../corpus/types';
+import { artefactAuthenticitySchema, parseCorpusIndex, verifyCorpusIntegrity } from '../corpus/schema';
 import { assertCorpusAuthority } from '../corpus/authority';
 import { loadPackContext } from '../knowledge/loader';
 import { normalize, NORMALIZER_VERSION } from '../corpus/normalize';
@@ -41,6 +41,14 @@ export interface IngestInput {
   rawBytes: Uint8Array;
   /** `#id` region to scope extraction to. Omitted means the whole document. */
   contentSelector?: string;
+  /**
+   * Stated by the ingesting human, never inferred from the URL or the
+   * selector: whether this is the authentic publication, an official
+   * consolidation, or an official text published ahead of the Journal.
+   */
+  artefactAuthenticity: ArtefactAuthenticity;
+  /** Declared non-operative headings, in artefact order; `[]` when none. */
+  nonOperativeSections: string[];
   edges: CorpusEdge[];
 }
 
@@ -76,6 +84,8 @@ export function buildDocumentEntry(input: IngestInput): {
     sha256Normalized: sha256Hex(normalizedText),
     normalizerVersion: NORMALIZER_VERSION,
     contentSelector: input.contentSelector ?? null,
+    artefactAuthenticity: input.artefactAuthenticity,
+    nonOperativeSections: input.nonOperativeSections,
     edges: input.edges,
   };
 
@@ -128,8 +138,18 @@ function usage(): never {
       'Usage:',
       '  npm run ingest -- --url <url> --doc-id <DOC-...> --slug <stem> \\',
       '    --serves SRC-001[,SRC-004] --title "<title>" --version-label "<label>" \\',
-      '    --retrieved-on YYYY-MM-DD --pack-dir <dir> [--corpus-dir <dir>] \\',
+      '    --retrieved-on YYYY-MM-DD --pack-dir <dir> \\',
+      '    --authenticity authentic_publication|official_consolidation|official_pre_publication_text \\',
+      '    [--non-operative-section "<heading>"]... [--corpus-dir <dir>] \\',
       '    [--register-dir <dir>] [--edges <edges.json>] [--content-selector "#id"]',
+      '',
+      '--authenticity is required and has no default: an artefact whose kind nobody',
+      'stated must not be ingested, and inferring it from the URL or the selector',
+      'would be the free-text inference the standing design removes.',
+      '',
+      '--non-operative-section may be repeated, once per heading, in the order the',
+      'sections appear in the artefact. Each heading must be non-empty and already',
+      'trimmed, and no heading may repeat. Absent means the document declares none.',
       '',
       '--pack-dir names the pack whose source register governs this ingestion.',
       'A document may only be written for a source that has authorised the origin',
@@ -153,7 +173,7 @@ function usage(): never {
  * A value that looks like another flag means this flag was given without one.
  * `--version-label --retrieved-on 2026-08-20` would otherwise write
  * `versionLabel: "--retrieved-on"` into index.json — and versionLabel is one of
- * the five fields a signature pins (spec 4.2), with no downstream pattern to
+ * the fields a signature pins (spec 4.2), with no downstream pattern to
  * catch it the way `--doc-id` has. Treating it as missing sends it to usage().
  */
 function arg(argv: string[], name: string): string | undefined {
@@ -162,6 +182,25 @@ function arg(argv: string[], name: string): string | undefined {
   const value = argv[i + 1];
   if (value === undefined || value.startsWith('--')) return undefined;
   return value;
+}
+
+/**
+ * Every occurrence of a repeatable flag, in order. `arg` is `indexOf`-based
+ * and returns only the first; a heading can contain a comma, so a comma-joined
+ * single flag was not an option the way it is for `--serves`.
+ */
+function args(argv: string[], name: string): string[] {
+  const values: string[] = [];
+  argv.forEach((token, i) => {
+    if (token !== `--${name}`) return;
+    const value = argv[i + 1];
+    if (value === undefined || value.startsWith('--')) {
+      values.push(''); // recorded as empty so the preflight refuses it by name
+      return;
+    }
+    values.push(value);
+  });
+  return values;
 }
 
 export async function main(argv: string[]): Promise<void> {
@@ -177,8 +216,37 @@ export async function main(argv: string[]): Promise<void> {
   const registerDir = arg(argv, 'register-dir') ?? (packDir ? join(packDir, '..', '..', 'monitoring') : undefined);
   const edgesPath = arg(argv, 'edges');
   const contentSelector = arg(argv, 'content-selector');
+  const authenticityFlag = arg(argv, 'authenticity');
+  const nonOperativeSections = args(argv, 'non-operative-section');
 
-  if (!url || !docId || !slug || !serves || !title || !versionLabel || !retrievedOn) usage();
+  if (!url || !docId || !slug || !serves || !title || !versionLabel || !retrievedOn || !authenticityFlag) usage();
+
+  // Preflight, before any fetch and beside the origin-authority preflight
+  // below: the same rules the corpus schema enforces, applied at the boundary
+  // so a refusal happens before bytes land.
+  const authenticityParsed = artefactAuthenticitySchema.safeParse(authenticityFlag);
+  if (!authenticityParsed.success) {
+    console.error(
+      `--authenticity ${authenticityFlag}: not a recognised artefact authenticity; permitted values are ${artefactAuthenticitySchema.options.join(', ')}`,
+    );
+    console.error('Nothing was written.');
+    process.exit(1);
+  }
+  const artefactAuthenticity: ArtefactAuthenticity = authenticityParsed.data;
+  const sectionProblems: string[] = [];
+  const seenSections = new Set<string>();
+  nonOperativeSections.forEach((heading, i) => {
+    if (heading.length === 0 || heading !== heading.trim()) {
+      sectionProblems.push(`--non-operative-section #${i + 1}: a heading must be non-empty and already trimmed`);
+    }
+    if (seenSections.has(heading)) sectionProblems.push(`--non-operative-section #${i + 1}: "${heading}" is repeated`);
+    seenSections.add(heading);
+  });
+  if (sectionProblems.length > 0) {
+    for (const problem of sectionProblems) console.error(problem);
+    console.error('Nothing was written.');
+    process.exit(1);
+  }
   // Required, not defaulted. Ingestion writes corpus state that later becomes
   // model-visible evidence, and the authority governing it is not something to
   // guess at: without a pack there is no source universe and no register, so
@@ -206,6 +274,8 @@ export async function main(argv: string[]): Promise<void> {
       retrievedOn,
       rawBytes: outcome.bytes,
       contentSelector,
+      artefactAuthenticity,
+      nonOperativeSections,
       edges,
     });
   } catch (err) {
@@ -286,6 +356,8 @@ export async function main(argv: string[]): Promise<void> {
   console.log(`  raw        ${entry.rawPath}  ${entry.sha256Raw.slice(0, 12)}\u2026`);
   console.log(`  normalized ${entry.normalizedPath}  ${entry.sha256Normalized.slice(0, 12)}\u2026`);
   console.log(`  selector   ${entry.contentSelector ?? '(none: whole document)'}`);
+  console.log(`  authenticity ${entry.artefactAuthenticity}`);
+  console.log(`  non-operative ${entry.nonOperativeSections.length === 0 ? '(none declared)' : entry.nonOperativeSections.join('; ')}`);
   console.log(`  edges      ${entry.edges.length}`);
   if (entry.edges.length === 0) {
     console.log('  No edges recorded. Ingest does not infer them \u2014 supply them with --edges.');

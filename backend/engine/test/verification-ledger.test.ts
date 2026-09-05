@@ -54,6 +54,7 @@ function unsignedSigning(overrides: Record<string, unknown> = {}): Record<string
     conditionSha256: HASH('c'),
     renderedConditionSha256: HASH('d'),
     rendererVersion: 'renderer-1.0.0',
+    closureRendererVersion: 'closure-renderer-1.0.0',
     corpusClosureSha256: HASH('e'),
     corpus: [
       {
@@ -62,6 +63,9 @@ function unsignedSigning(overrides: Record<string, unknown> = {}): Record<string
         sha256Raw: HASH('f'),
         sha256Normalized: HASH('0'),
         normalizerVersion: 'normalize-1.0.0',
+        artefactAuthenticity: 'official_consolidation',
+        nonOperativeSections: [],
+        sources: [{ sourceId: 'SRC-001', temporalStanding: 'in_force' }],
       },
     ],
     resultSha256: HASH('1'),

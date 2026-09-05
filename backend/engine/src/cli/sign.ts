@@ -340,7 +340,7 @@ export function readWorld(paths: VerifyPaths, packId: string, requirementId: str
 
   let closure;
   try {
-    closure = EntitledClosure.forSources(corpus, sourceRegister, sourceIdsOf(requirement));
+    closure = EntitledClosure.forSources(corpus, sourceRegister, pack, sourceIdsOf(requirement));
   } catch (error) {
     if (error instanceof ClosureEntryNotFoundError) {
       // Factory §4.2 files this as a `corpus_gap`, answered by ingesting the
@@ -381,7 +381,7 @@ export function readWorld(paths: VerifyPaths, packId: string, requirementId: str
     pins: producePins({
       requirement,
       renderContext: renderCtx,
-      closure: { sha256: closure.sha256, docIds: closure.docIds },
+      closure: closure.pinInput,
       corpus,
     }),
   };
@@ -567,6 +567,9 @@ function currentWorldState(world: CurrentWorld, result: VerificationResult): Cur
     closure: {
       sha256: world.pins.corpusClosureSha256,
       docIds: world.pins.corpus.map((pin) => pin.docId),
+      // Projected off the pins the real closure already produced — the same
+      // object `readWorld` derived from the pack — not derived a second time.
+      sourcesStanding: new Map(world.pins.corpus.map((pin) => [pin.docId, pin.sources])),
     },
     corpus: world.corpus,
     result,

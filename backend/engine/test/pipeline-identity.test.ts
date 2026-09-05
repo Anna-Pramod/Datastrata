@@ -40,6 +40,7 @@ import { CLOSURE_POLICY_V0 } from '../src/corpus/closure';
 import { sha256Hex } from '../src/corpus/hash';
 import { isPromoted, type PromotionRecord } from '../src/verification/promotions';
 import { verificationResultSchema } from '../src/verification/result';
+import { CLOSURE_RENDERER_VERSION } from '../src/pipeline/entitlement';
 
 const prompts = loadPromptSet();
 
@@ -64,6 +65,7 @@ function baseline(): PipelineIdentityInput {
       order: DEFAULT_ROLE_CONFIG.order,
     },
     resultSchemaVersion: RESULT_SCHEMA_VERSION,
+    closureRendererVersion: CLOSURE_RENDERER_VERSION,
     providerAdapter: DEFAULT_ROLE_CONFIG.providerAdapter,
     closurePolicy: CLOSURE_POLICY_V0,
   };

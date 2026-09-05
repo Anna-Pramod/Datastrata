@@ -51,6 +51,7 @@ function signing(): SigningEntry {
     conditionSha256: HASH('c'),
     renderedConditionSha256: HASH('d'),
     rendererVersion: 'renderer-1.0.0',
+    closureRendererVersion: 'closure-renderer-1.0.0',
     corpusClosureSha256: HASH('e'),
     corpus: [
       {
@@ -59,6 +60,9 @@ function signing(): SigningEntry {
         sha256Raw: HASH('f'),
         sha256Normalized: HASH('0'),
         normalizerVersion: 'normalize-1.0.0',
+        artefactAuthenticity: 'official_consolidation',
+        nonOperativeSections: [],
+        sources: [{ sourceId: 'SRC-001', temporalStanding: 'in_force' }],
       },
       {
         docId: 'DOC-2',
@@ -66,6 +70,9 @@ function signing(): SigningEntry {
         sha256Raw: HASH('2'),
         sha256Normalized: HASH('3'),
         normalizerVersion: 'normalize-1.0.0',
+        artefactAuthenticity: 'official_consolidation',
+        nonOperativeSections: [],
+        sources: [{ sourceId: 'SRC-001', temporalStanding: 'in_force' }],
       },
     ],
     resultSha256: HASH('1'),

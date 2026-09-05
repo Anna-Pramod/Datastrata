@@ -72,6 +72,8 @@ import {
   SYNTHETIC_ADAPTER_V1,
   SYNTHETIC_ADAPTER_V2,
 } from './synthetic-adapters';
+import { fixtureSourceUniverse } from './pipeline-fixtures';
+import { CLOSURE_RENDERER_VERSION } from '../src/pipeline/entitlement';
 
 /**
  * The identity a fully-specified input hashes to, pinned.
@@ -83,8 +85,17 @@ import {
  * re-deriving this constant to make a red test green is the repair that retires
  * the test. It is a golden, and it is reviewed as one.
  */
+/**
+ * Re-derived at B-E2 (2026-09-05), deliberately. The previous value,
+ * `pipeline-v2-869e7385634f69f8720d8ae386253b39a69b531fb68df466ea19de4d22d984ea`,
+ * was taken under scheme `v2`; `v3` hashes the closure policy's `expansion`
+ * rule and `closureRendererVersion` as well, so every identity moved and no
+ * promotion record existed to invalidate. The fixed-function property this
+ * golden protects is unchanged: the same declared inputs yield this string and
+ * nothing about deployment enters it.
+ */
 const GOLDEN_IDENTITY =
-  'pipeline-v2-869e7385634f69f8720d8ae386253b39a69b531fb68df466ea19de4d22d984ea';
+  'pipeline-v3-1d566c9903cb90711e3e52750460759d4c87a5900765d4349c61eca37e285b7c';
 
 const prompts = loadPromptSet();
 const corpus = fixtureAuthorisedCorpus();
@@ -99,7 +110,7 @@ function pipelineInput() {
     requirementId: 'TEST-R-001',
     requirement: fixtureRequirement(),
     renderContext: fixtureRenderContext(),
-    closure: EntitledClosure.forSources(corpus, fixtureRegister(), ['SRC-100']),
+    closure: EntitledClosure.forSources(corpus, fixtureRegister(), fixtureSourceUniverse(), ['SRC-100']),
     corpus,
     prompts,
   };
@@ -115,6 +126,7 @@ function baseline(): PipelineIdentityInput {
       order: DEFAULT_ROLE_CONFIG.order,
     },
     resultSchemaVersion: RESULT_SCHEMA_VERSION,
+    closureRendererVersion: CLOSURE_RENDERER_VERSION,
     providerAdapter: SYNTHETIC_ADAPTER_V1.identity,
     closurePolicy: CLOSURE_POLICY_V0,
   };
@@ -250,7 +262,8 @@ describe('deployment configuration is not verification semantics', () => {
         promptSha256: { reader: 'r'.repeat(64), prosecutor: 'p'.repeat(64), adjudicator: 'a'.repeat(64) },
         models: { reader: 'm-r', prosecutor: 'm-p', adjudicator: 'm-a' },
         roleConfig: { prosecutorCount: 2, lenses: ['l1', 'l2'], order: ['reader', 'prosecutor', 'adjudicator'] },
-        resultSchemaVersion: '1.2.0',
+        resultSchemaVersion: '1.3.0',
+        closureRendererVersion: '1.0.0',
         providerAdapter: { id: 'test-provider', version: '1' },
         closurePolicy: CLOSURE_POLICY_V0,
       }),
@@ -296,7 +309,7 @@ describe('deployment configuration is not verification semantics', () => {
       pipelineVersionFor({
         prompts,
         config: { ...SINGLE_PROSECUTOR, providerAdapter: { id: ' test-provider ', version: '1' } },
-        closure: EntitledClosure.forSources(corpus, fixtureRegister(), ['SRC-100']),
+        closure: EntitledClosure.forSources(corpus, fixtureRegister(), fixtureSourceUniverse(), ['SRC-100']),
       }),
     ).toThrow(InvalidProviderAdapterIdentityError);
     // Control: the same call with a clean identity produces one.
@@ -304,7 +317,7 @@ describe('deployment configuration is not verification semantics', () => {
       pipelineVersionFor({
         prompts,
         config: { ...SINGLE_PROSECUTOR, providerAdapter: SYNTHETIC_ADAPTER_V1.identity },
-        closure: EntitledClosure.forSources(corpus, fixtureRegister(), ['SRC-100']),
+        closure: EntitledClosure.forSources(corpus, fixtureRegister(), fixtureSourceUniverse(), ['SRC-100']),
       }),
     ).toMatch(new RegExp(`^pipeline-${PIPELINE_IDENTITY_SCHEME}-[0-9a-f]{64}$`));
   });

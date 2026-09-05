@@ -16,6 +16,40 @@ import { CONTENT_SELECTOR_PATTERN } from './normalize';
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'must be an ISO date (YYYY-MM-DD)');
 const docId = z.string().regex(/^DOC-[A-Za-z0-9._-]+$/, 'document id must be DOC-*');
 const sha256 = z.string().regex(/^[0-9a-f]{64}$/, 'must be a lowercase hex sha-256');
+/** The three kinds of artefact a role may be shown; see `types.ts`. */
+export const artefactAuthenticitySchema = z.enum([
+  'authentic_publication',
+  'official_consolidation',
+  'official_pre_publication_text',
+]);
+
+/**
+ * Declared non-operative headings, canonical by construction: required (so
+ * `undefined`, `null` and `[]` cannot mean one thing and hash three ways),
+ * entries already trimmed and non-empty (never silently normalised), no
+ * duplicates (never silently de-duplicated), authored order significant. Any
+ * other spelling of the same intent is refused rather than repaired, because
+ * two authorings that differ in the file must not agree in the hash.
+ */
+const nonOperativeSections = z.array(z.string()).superRefine((sections, ctx) => {
+  const seen = new Set<string>();
+  sections.forEach((heading, i) => {
+    if (heading.length === 0 || heading !== heading.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `nonOperativeSections[${i}]: a heading must be non-empty and already trimmed`,
+      });
+    }
+    if (seen.has(heading)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `nonOperativeSections[${i}]: "${heading}" is declared more than once`,
+      });
+    }
+    seen.add(heading);
+  });
+});
+
 /** null means extraction ran over the whole raw document, not a selected region. */
 const contentSelector = z
   .string()
@@ -54,6 +88,8 @@ const corpusDocument = z
     sha256Normalized: sha256,
     normalizerVersion: z.string().min(1),
     contentSelector,
+    artefactAuthenticity: artefactAuthenticitySchema,
+    nonOperativeSections,
     edges: z.array(corpusEdge),
   })
   .strict()

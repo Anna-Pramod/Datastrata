@@ -48,7 +48,7 @@
  */
 
 import {
-  CLOSURE_POLICY_V0,
+  CLOSURE_POLICY_V1,
   computeClosure,
   docsForSources,
   type Closure,
@@ -56,8 +56,23 @@ import {
 } from '../corpus/closure';
 import type { CorpusDocument, CorpusIndex } from '../corpus/types';
 import type { AuthorisedCorpus } from '../corpus/authority';
+import { pinnedStandingFor, standingMapFor, type DocumentStanding } from '../corpus/standing';
+import type { KnowledgePack, TemporalStanding } from '../types';
 import type { SourceRegister, SourceTier } from '../monitoring/types';
 import { sourceCitability } from '../monitoring/register';
+
+/**
+ * The version of the grammar `renderEntitledClosure` emits.
+ *
+ * `RENDERER_VERSION` in `src/verification/render.ts` covers the *condition*
+ * renderer only; nothing versioned the model-facing closure text until this
+ * constant. It inherits that constant's rule — any change to emitted text
+ * obliges a bump, however cosmetic — and it is hashed into `pipelineVersion`
+ * through `PipelineIdentityInput`, so an exported-but-unhashed label is not
+ * what this is. `1.0.0`: the first grammar that states standing, authenticity
+ * and the operative-status clause beside each document.
+ */
+export const CLOSURE_RENDERER_VERSION = '1.0.0';
 
 /**
  * The corpus reduced to what entitlement needs of it.
@@ -74,7 +89,7 @@ export interface EntitlementSource {
   normalizedText(docId: string): string;
 }
 
-/** A document as a role sees it: its identity, its pins and its words. */
+/** A document as a role sees it: its identity, its pins, its standing and its words. */
 export interface EntitledDocument {
   docId: string;
   title: string;
@@ -82,8 +97,13 @@ export interface EntitledDocument {
   sha256Raw: string;
   sha256Normalized: string;
   normalizerVersion: string;
+  /** Assembled at entitlement from the artefact and the pack; never stored pre-combined. */
+  standing: DocumentStanding;
   text: string;
 }
+
+/** One served source's standing, as it enters a pin. Never `null` past closure construction. */
+export type PinnedSourceStanding = { readonly sourceId: string; readonly temporalStanding: TemporalStanding };
 
 /**
  * A role reached for a document outside its entitlement.
@@ -122,9 +142,70 @@ export function renderEntitledClosure(closure: EntitledClosure): string {
     .documents()
     .map(
       (document) =>
-        `## ${document.docId} — ${document.title} (${document.versionLabel})\n\n${document.text}`,
+        `## ${document.docId} — ${document.title} (${document.versionLabel})\n\n${renderStanding(document.standing)}\n\n${document.text}`,
     )
     .join('\n\n');
+}
+
+/**
+ * The standing block beside every document, and the operative-status clause.
+ *
+ * A projection over the declared facts, and it asserts only what they support:
+ *
+ *  - the artefact's kind and every served source's standing are stated for
+ *    every document, in force or not — the strongest human-readable warning
+ *    below must not be gated on an unrelated field. Standings are listed in
+ *    source-id order but the ids themselves are not printed, because the
+ *    reader must stay blind to source identities;
+ *  - a document that declares non-operative sections names them, and says in
+ *    the same breath that nothing is thereby claimed about the sections it
+ *    does not name. It does not call the declared material "explanatory": the
+ *    field carries opaque headings, and characterising them would be an
+ *    overclaim one step to the left;
+ *  - the closing sentence depends only on the served sources' standing: none
+ *    when all are in force, the adopted-not-effective sentence when all are,
+ *    the differing-standing sentence when they differ, and a plain
+ *    not-current-law sentence for a uniform proposed or superseded standing.
+ *
+ * Any change to this text obliges a `CLOSURE_RENDERER_VERSION` bump.
+ */
+export function renderStanding(standing: DocumentStanding): string {
+  const lines: string[] = [];
+  lines.push(`Artefact authenticity: ${standing.artefactAuthenticity}.`);
+  // One entry per served source, in source-id order, **without the ids**: the
+  // reader is blind to source identities by design (`reader.ts`), and the
+  // roles need to know that a document's legal material is not current law,
+  // not which register row says so. The ids are preserved where a human reads
+  // them — the pin, the ledger and the review sheet.
+  lines.push(
+    `Temporal standing of served sources: ${standing.sources.map((s) => s.temporalStanding).join('; ')}.`,
+  );
+  if (standing.nonOperativeSections.length > 0) {
+    const named = standing.nonOperativeSections.join('; ');
+    lines.push(
+      `Material under ${named} is not an operative provision of this document. This says nothing about any section not named here: it must not be read as a statement that the rest of the document is operative.`,
+    );
+  }
+  const clause = operativeStatusClause(standing.sources.map((s) => s.temporalStanding));
+  if (clause !== null) lines.push(clause);
+  return lines.join('\n');
+}
+
+/** The closing sentence, from standing alone. Exported so its four forms can be asserted directly. */
+export function operativeStatusClause(standings: readonly TemporalStanding[]): string | null {
+  const distinct = [...new Set(standings)];
+  if (distinct.length === 0 || (distinct.length === 1 && distinct[0] === 'in_force')) return null;
+  if (distinct.length === 1 && distinct[0] === 'adopted_not_effective') {
+    return 'The adopted legal material in this document is not current law.';
+  }
+  if (distinct.length > 1) {
+    const others = distinct.filter((s) => s !== 'in_force' && s !== 'adopted_not_effective');
+    return (
+      'This artefact serves sources of differing legal standing. It must not be treated as current law for any source shown as adopted-not-effective.' +
+      (others.length === 0 ? '' : ` Nor for any source shown as ${others.join(' or ')}.`)
+    );
+  }
+  return `The legal material in this document is shown as ${distinct[0]}; it is not current law.`;
 }
 
 /**
@@ -266,15 +347,19 @@ export class EntitledClosure {
    */
   readonly #source: EntitlementSource;
   readonly #closure: Closure;
+  /** Per closure member, one entry per served source. Derived once, from the pack. */
+  readonly #standing: ReadonlyMap<string, readonly PinnedSourceStanding[]>;
 
   private constructor(
     source: EntitlementSource,
     readonly policy: ClosurePolicy,
     readonly entryDocIds: readonly string[],
     closure: Closure,
+    standing: ReadonlyMap<string, readonly PinnedSourceStanding[]>,
   ) {
     this.#source = source;
     this.#closure = closure;
+    this.#standing = standing;
   }
 
   /**
@@ -282,20 +367,36 @@ export class EntitledClosure {
    *
    * `sources[]` is an entry point, not a fence at the closure's edge (§3.1): the
    * documents it names seed the traversal, and the traversal decides the rest.
+   *
+   * **Takes the pack, not a standing map.** Standing is the same kind of input
+   * from the same kind of authority as the register it sits beside, and it is
+   * derived here — once — from the pack's own source records. A caller handed
+   * the derivation could pass a map that disagrees with the pack, which is the
+   * second-source-of-truth failure the single-owner rule exists to prevent.
+   * `computeClosure` refuses any closure member whose served source carries no
+   * standing (`MissingStandingError`); that refusal is allowed to escape for
+   * the same reason `ClosureEntryNotFoundError` is.
    */
   static forSources(
     source: AuthorisedCorpus,
     register: SourceRegister,
+    pack: Pick<KnowledgePack, 'sources'>,
     sourceIds: readonly string[],
-    policy: ClosurePolicy = CLOSURE_POLICY_V0,
+    policy: ClosurePolicy = CLOSURE_POLICY_V1,
   ): EntitledClosure {
     const entryDocIds = docsForSources(source.index, [...sourceIds]);
-    const closure = computeClosure(source.index, entryDocIds, policy);
+    const standing = standingMapFor(source.index, pack);
+    const closure = computeClosure(source.index, entryDocIds, standing, policy);
     // After expansion, before the closure can be handed to anything. Origin
     // authority admitted these documents to the *corpus*; this decides which of
     // them may become *evidence*, and the two are not the same permission.
     assertClosureCitability(source.index, closure, register);
-    return new EntitledClosure(source, policy, entryDocIds, closure);
+    // Only closure members, and only non-null: `computeClosure` has refused
+    // every member that would have carried a null, so the narrowing is a fact
+    // it established rather than an assumption made here.
+    const members = new Map<string, readonly PinnedSourceStanding[]>();
+    for (const docId of closure.docIds) members.set(docId, pinnedStandingFor(standing, docId));
+    return new EntitledClosure(source, policy, entryDocIds, closure, members);
   }
 
   /** Sorted. Every document a role may open. */
@@ -313,9 +414,40 @@ export class EntitledClosure {
     return this.#closure.sha256;
   }
 
-  /** The shape `producePins` and `currentStateOf` take. */
-  get pinInput(): { sha256: string; docIds: readonly string[] } {
-    return { sha256: this.#closure.sha256, docIds: this.#closure.docIds };
+  /**
+   * The shape `producePins` and `currentStateOf` take.
+   *
+   * Carries the pack-derived standing per member beside the ids, so a pin can
+   * record it without the pin producer reaching for a pack of its own. The
+   * artefact-side facts are not here: the producer reads those off the corpus
+   * document, the same object the closure hash was computed over.
+   */
+  get pinInput(): {
+    sha256: string;
+    docIds: readonly string[];
+    sourcesStanding: ReadonlyMap<string, readonly PinnedSourceStanding[]>;
+  } {
+    return { sha256: this.#closure.sha256, docIds: this.#closure.docIds, sourcesStanding: this.#standing };
+  }
+
+  /** The standing projection for one entitled document; refuses outside the closure like `document()`. */
+  standingOf(docId: string): DocumentStanding {
+    if (!this.entitled(docId)) throw new OutsideEntitlementError(docId, this.#closure.sha256);
+    const document = this.#source.document(docId);
+    return {
+      artefactAuthenticity: document.artefactAuthenticity,
+      nonOperativeSections: document.nonOperativeSections,
+      sources: this.#sourcesStandingOf(docId),
+    };
+  }
+
+  /** Never `[]` by default: a member without an entry is a construction bug, and is refused rather than shown standing-less. */
+  #sourcesStandingOf(docId: string): readonly PinnedSourceStanding[] {
+    const sources = this.#standing.get(docId);
+    if (sources === undefined) {
+      throw new Error(`${docId} is entitled but carries no standing — forSources must derive one for every member`);
+    }
+    return sources;
   }
 
   entitled(docId: string): boolean {
@@ -371,6 +503,7 @@ export class EntitledClosure {
       sha256Raw: document.sha256Raw,
       sha256Normalized: document.sha256Normalized,
       normalizerVersion: document.normalizerVersion,
+      standing: this.standingOf(docId),
       text: this.#source.normalizedText(docId),
     };
   }

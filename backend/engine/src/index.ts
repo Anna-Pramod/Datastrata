@@ -13,14 +13,17 @@ export { loadCorpus, CorpusDocumentNotFoundError } from './corpus/store';
 export { parseCorpusIndex, verifyCorpusIntegrity, verifyCorpusServesCoverage, CorpusIntegrityError } from './corpus/schema';
 export { EntitledClosure, ClosureCitabilityError, type ClosureCitabilityFailure } from './pipeline/entitlement';
 export { authoriseCorpus, assertCorpusAuthority, CorpusAuthorityError, type AuthorisedCorpus, type CorpusCapability } from './corpus/authority';
-export { computeClosure, docsForSources, CLOSURE_POLICY_V0, STRUCTURAL_EDGE_KINDS, ClosureEntryNotFoundError } from './corpus/closure';
+export { computeClosure, docsForSources, CLOSURE_POLICY_V0, CLOSURE_POLICY_V1, STRUCTURAL_EDGE_KINDS, ClosureEntryNotFoundError } from './corpus/closure';
+export { standingMapFor, pinnedStandingFor, MissingStandingError } from './corpus/standing';
+export type { DocumentStanding, SourceStanding, StandingMap } from './corpus/standing';
+export { CLOSURE_RENDERER_VERSION, renderEntitledClosure } from './pipeline/entitlement';
 export { checkEvidenceSet } from './corpus/evidence';
 export { normalize, normalizeWhitespace, extractText, selectContent, NORMALIZER_VERSION, CONTENT_SELECTOR_PATTERN } from './corpus/normalize';
 export { sha256Hex } from './corpus/hash';
 export type { LoadedCorpus } from './corpus/store';
-export type { Closure, ClosurePolicy } from './corpus/closure';
+export type { Closure, ClosurePolicy, ExpansionRule } from './corpus/closure';
 export type { AbsenceEvidence, AmendmentChainEvidence, CrossReferenceEvidence, EvidenceCheckResult, EvidenceItem, QuoteEvidence } from './corpus/evidence';
-export type { CorpusDocument, CorpusEdge, CorpusIndex, EdgeKind, EdgeProvenance, EdgeProvenanceType } from './corpus/types';
+export type { ArtefactAuthenticity, CorpusDocument, CorpusEdge, CorpusIndex, EdgeKind, EdgeProvenance, EdgeProvenanceType } from './corpus/types';
 
 // ---------------------------------------------------------------------------
 // The freshness seam

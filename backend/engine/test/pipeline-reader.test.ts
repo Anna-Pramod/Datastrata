@@ -27,7 +27,7 @@
 import { describe, expect, it } from 'vitest';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CLOSURE_POLICY_V0, computeClosure, docsForSources } from '../src/corpus/closure';
+import { CLOSURE_POLICY_V1, computeClosure, docsForSources } from '../src/corpus/closure';
 import { readFileSync } from 'node:fs';
 import { authoriseCorpus } from '../src/corpus/authority';
 import { parseSourceRegister } from '../src/monitoring/register';
@@ -76,13 +76,15 @@ import {
   stubRunner,
   UNSERVED_SOURCE_IDS,
 } from './pipeline-fixtures';
+import { fixtureSourceUniverse } from './pipeline-fixtures';
+import { fixtureStanding } from './pipeline-fixtures';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const prompts = loadPromptSet();
 const corpus = fixtureAuthorisedCorpus();
 
 function fixtureClosure(sourceIds: readonly string[] = ['SRC-100']): EntitledClosure {
-  return EntitledClosure.forSources(corpus, fixtureRegister(), sourceIds);
+  return EntitledClosure.forSources(corpus, fixtureRegister(), fixtureSourceUniverse(), sourceIds);
 }
 
 /** A reader input over the fixture closure, projected the only supported way. */
@@ -271,10 +273,10 @@ describe('a document request is answered by the entitlement, not by the corpus',
     const closure = fixtureClosure();
 
     expect(closure.docIds).not.toContain('DOC-D');
-    expect(closure.sha256).toBe(computeClosure(index, entries, CLOSURE_POLICY_V0).sha256);
+    expect(closure.sha256).toBe(computeClosure(index, entries, fixtureStanding(), CLOSURE_POLICY_V1).sha256);
 
     // Had DOC-D been entitled, the pinned digest would be a different number.
-    const wider = computeClosure(index, [...entries, 'DOC-D'], CLOSURE_POLICY_V0);
+    const wider = computeClosure(index, [...entries, 'DOC-D'], fixtureStanding(), CLOSURE_POLICY_V1);
     expect(wider.docIds).toContain('DOC-D');
     expect(wider.sha256).not.toBe(closure.sha256);
   });
@@ -696,9 +698,10 @@ function resultOver(overrides: Partial<VerificationResult>): VerificationResult 
     packId: 'testpack',
     requirementId: 'REQ-001',
     requirementVersion: 1,
-    resultSchemaVersion: '1.2.0',
+    resultSchemaVersion: '1.3.0',
     pipelineVersion: 'pipeline-1.0.0',
     rendererVersion: 'renderer-1.1.0',
+    closureRendererVersion: 'closure-renderer-1.0.0',
     requirementInputSha256: 'a'.repeat(64),
     conditionSha256: 'b'.repeat(64),
     renderedConditionSha256: 'c'.repeat(64),
@@ -851,7 +854,7 @@ describe('an empty closure never travels alone', () => {
     // Derived rather than transcribed: if `computeClosure` ever stopped
     // returning this value, the rule above would be guarding a number nothing
     // produces.
-    expect(computeClosure(fixtureIndex(), []).sha256).toBe(EMPTY_CLOSURE_SHA256);
+    expect(computeClosure(fixtureIndex(), [], fixtureStanding()).sha256).toBe(EMPTY_CLOSURE_SHA256);
   });
 });
 
@@ -879,7 +882,7 @@ describe('a requirement whose evidence is only partly served (the real corpus)',
     // than asserted from a list, so the number is a reading of what the corpus
     // holds today and moves when the corpus does.
     const empty = pack.requirements.filter(
-      (entry) => EntitledClosure.forSources(realCorpus, realRegister, entry.sources).docIds.length === 0,
+      (entry) => EntitledClosure.forSources(realCorpus, realRegister, csrdPack(), entry.sources).docIds.length === 0,
     );
     // **None, and the movement is T9.** T6 took CSRD-S-012 out of this set by
     // serving SRC-005; T9 took the last two out by serving SRC-002, which was
@@ -897,7 +900,7 @@ describe('a requirement whose evidence is only partly served (the real corpus)',
     // so the set above is not
     // read as the pack's halt list.
     const eleven = pack.requirements.find((entry) => entry.id === 'CSRD-S-011')!;
-    expect(EntitledClosure.forSources(realCorpus, realRegister, eleven.sources).docIds.length).toBeGreaterThan(0);
+    expect(EntitledClosure.forSources(realCorpus, realRegister, csrdPack(), eleven.sources).docIds.length).toBeGreaterThan(0);
   });
 
   it('gaps on its one unserved source over a closure that is not empty', async () => {
@@ -910,7 +913,7 @@ describe('a requirement whose evidence is only partly served (the real corpus)',
     if (requirement === undefined) throw new Error('unreachable');
     expect(requirement.sources).toEqual(['SRC-005', 'SRC-007']);
 
-    const closure = EntitledClosure.forSources(realCorpus, realRegister, requirement.sources);
+    const closure = EntitledClosure.forSources(realCorpus, realRegister, csrdPack(), requirement.sources);
     const runner = stubRunner(() => JSON.stringify(wholeReading()));
     const outcome = await runBlindReader({
       input: readerInputFor({ packId: pack.id, requirement, closure }),
@@ -945,7 +948,7 @@ describe('a requirement whose evidence is only partly served (the real corpus)',
       input: readerInputFor({
         packId: pack.id,
         requirement,
-        closure: EntitledClosure.forSources(realCorpus, realRegister, requirement.sources),
+        closure: EntitledClosure.forSources(realCorpus, realRegister, csrdPack(), requirement.sources),
       }),
       sourceIds: requirement.sources,
       prompt: prompts.reader,
@@ -955,9 +958,7 @@ describe('a requirement whose evidence is only partly served (the real corpus)',
     const gaps = outcome.gaps;
     // The closure's own digest, not the empty constant: since T6 this
     // requirement halts over a closure that holds a document.
-    const liveClosureSha = EntitledClosure.forSources(
-      realCorpus, realRegister, requirement.sources,
-    ).sha256;
+    const liveClosureSha = EntitledClosure.forSources(realCorpus, realRegister, csrdPack(), requirement.sources).sha256;
     const accompanied = resultOver({
       requirementId: requirement.id,
       corpusClosureSha256: liveClosureSha,
@@ -996,7 +997,7 @@ describe('a requirement whose evidence is only partly served (the real corpus)',
       requirementId: requirement.id,
       requirement,
       renderContext: { factTypes: pack.factTypes, catalogues: pack.catalogues },
-      closure: EntitledClosure.forSources(realCorpus, realRegister, requirement.sources),
+      closure: EntitledClosure.forSources(realCorpus, realRegister, csrdPack(), requirement.sources),
       corpus: realCorpus,
       prompts,
       config: DEFAULT_ROLE_CONFIG,
@@ -1036,7 +1037,7 @@ describe('a requirement whose evidence is only partly served (the real corpus)',
     // that file — or ingesting the missing material — would have broken this
     // control for a reason with nothing to do with what it tests.
     const closureFor = (entry: (typeof pack.requirements)[number]) =>
-      EntitledClosure.forSources(realCorpus, realRegister, entry.sources);
+      EntitledClosure.forSources(realCorpus, realRegister, csrdPack(), entry.sources);
     const served = pack.requirements.find(
       (entry) =>
         entry.id !== requirement.id &&
@@ -1058,7 +1059,7 @@ describe('a requirement whose evidence is only partly served (the real corpus)',
       requirementId: served.id,
       requirement: served,
       renderContext: { factTypes: pack.factTypes, catalogues: pack.catalogues },
-      closure: EntitledClosure.forSources(realCorpus, realRegister, served.sources),
+      closure: EntitledClosure.forSources(realCorpus, realRegister, csrdPack(), served.sources),
       corpus: realCorpus,
       prompts,
       config: DEFAULT_ROLE_CONFIG,
@@ -1085,7 +1086,7 @@ describe('a requirement whose evidence is only partly served (the real corpus)',
 
     const closureOf = (id: string) => {
       const entry = pack.requirements.find((r) => r.id === id)!;
-      return EntitledClosure.forSources(realCorpus, realRegister, entry.sources);
+      return EntitledClosure.forSources(realCorpus, realRegister, csrdPack(), entry.sources);
     };
     expect(closureOf('CSRD-S-012').entitled('DOC-32023R2772')).toBe(true);
     expect(closureOf('CSRD-S-001').entitled('DOC-32023R2772')).toBe(false);

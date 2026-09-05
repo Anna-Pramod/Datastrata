@@ -38,6 +38,18 @@ export interface CorpusEdge {
   provenance: EdgeProvenance;
 }
 
+/**
+ * What kind of artefact this is — a property of the artefact, orthogonal to the
+ * standing of the instrument it serves. An official consolidation of law in
+ * force, an authentic Official Journal publication, and an official text
+ * published ahead of the Journal are three different things a reader must be
+ * told apart; none of them says whether the law is in force.
+ */
+export type ArtefactAuthenticity =
+  | 'authentic_publication'
+  | 'official_consolidation'
+  | 'official_pre_publication_text';
+
 export interface CorpusDocument {
   docId: string;
   /** SRC-### records in a knowledge pack this document is the text behind. */
@@ -63,6 +75,14 @@ export interface CorpusDocument {
    * sha256Normalized.
    */
   contentSelector: string | null;
+  artefactAuthenticity: ArtefactAuthenticity;
+  /**
+   * Headings of the sections that are **not** operative provision, in the
+   * order they appear in the artefact. Required, `[]` when none are declared:
+   * one intended list has exactly one expression, so the closure hash cannot
+   * carry three spellings of "none". Says nothing about sections not named.
+   */
+  nonOperativeSections: string[];
   edges: CorpusEdge[];
 }
 

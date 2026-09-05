@@ -58,6 +58,7 @@ import {
   stubRunner,
   fixtureRegister,
 } from './pipeline-fixtures';
+import { fixtureSourceUniverse } from './pipeline-fixtures';
 
 /**
  * The shared fixture corpus, authorised.
@@ -109,7 +110,7 @@ export function subject(overrides: Partial<Requirement> = {}): Requirement {
 export const REQUIREMENT = subject();
 
 export function closureForRun(): EntitledClosure {
-  return EntitledClosure.forSources(corpus, fixtureRegister(), sourceIdsOf(REQUIREMENT));
+  return EntitledClosure.forSources(corpus, fixtureRegister(), fixtureSourceUniverse(), sourceIdsOf(REQUIREMENT));
 }
 
 export const CLOSURE = closureForRun();
@@ -272,7 +273,7 @@ export function runPipeline(overrides: RunOverrides = {}) {
     requirementId: requirement.id,
     requirement,
     renderContext,
-    closure: EntitledClosure.forSources(corpus, fixtureRegister(), sourceIdsOf(requirement)),
+    closure: EntitledClosure.forSources(corpus, fixtureRegister(), fixtureSourceUniverse(), sourceIdsOf(requirement)),
     corpus,
     prompts,
     config: SINGLE_PROSECUTOR,

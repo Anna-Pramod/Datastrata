@@ -85,6 +85,8 @@ beforeEach(() => {
       sha256Normalized: sha256Hex(normalized),
       normalizerVersion: NORMALIZER_VERSION,
       contentSelector: null,
+      artefactAuthenticity: 'official_consolidation',
+      nonOperativeSections: [],
       // E1/E2 chain A -> B -> C. E3 is the references edge a cross_reference
       // needs. E4 hangs off DOC-C so a chain can be built out of two edges
       // that share no endpoint.

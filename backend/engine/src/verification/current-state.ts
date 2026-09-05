@@ -22,16 +22,18 @@
  * still happens in `deriveStaleness` and `resolveNormalizerChanged`.
  *
  * **One producer, one traversal, two widths.** A pinned corpus document is
- * recorded five fields wide — a signature and a verification result both carry
- * `versionLabel` — and compared four fields wide, because a publisher's label is
- * display and comparing it would make a re-labelled but byte-identical document
- * look like drift. Those are two different obligations over one walk of the
+ * recorded at its full record width — identity, the label, both hashes, the
+ * normalizer, and since B-E2 its authenticity, declared non-operative sections
+ * and per-source standing — and compared four fields wide, because a
+ * publisher's label is display and comparing it would make a re-labelled but
+ * byte-identical document look like drift, and because standing is compared
+ * through `corpusClosureSha256` rather than field by field. Those are two different obligations over one walk of the
  * closure, and the walk had already been written twice: `producePins` did it
  * without the label, and `src/cli/sign.ts` did it again with one. So the
  * producer emits the **wider** shape and `pinsForFreshness` projects it onto the
  * narrower, rather than each caller widening a narrow one for itself:
  *
- *     producePins  ──▶  VerificationPins        (docId, versionLabel, 3 hashes)
+ *     producePins  ──▶  VerificationPins        (the full record-width pin)
  *                         │                       what a record and a ledger pin
  *                         ├──▶ pinsForFreshness ──▶ CurrentState  (docId, 3 hashes)
  *                         │                          what deriveStaleness compares
@@ -45,7 +47,8 @@
  * caller already holds. Nothing here opens a file.
  */
 
-import type { AuthoredRequirement } from '../types';
+import type { AuthoredRequirement, TemporalStanding } from '../types';
+import type { ArtefactAuthenticity } from '../corpus/types';
 import { requirementInputSha256 } from './canonical';
 import type { RenderContext } from './render';
 import { resultSha256, type VerificationResult } from './result';
@@ -75,6 +78,9 @@ export interface CurrentCorpusSource {
     sha256Raw: string;
     sha256Normalized: string;
     normalizerVersion: string;
+    /** The artefact's own two standing facts, read off the same document the closure hashed. */
+    artefactAuthenticity: ArtefactAuthenticity;
+    nonOperativeSections: readonly string[];
   };
 }
 
@@ -93,8 +99,18 @@ export interface PinInput {
   requirement: AuthoredRequirement;
   /** `{ factTypes, catalogues }` — what the rendered condition is rendered with. */
   renderContext: RenderContext;
-  /** The entitled closure as it stands now. */
-  closure: { sha256: string; docIds: readonly string[] };
+  /**
+   * The entitled closure as it stands now, with the pack-derived standing of
+   * every member's served sources — `EntitledClosure.pinInput` hands exactly
+   * this over. A caller assembling it by hand must supply standing for every
+   * id it lists; the producer refuses a member it has no standing for rather
+   * than pinning a document with an empty source list.
+   */
+  closure: {
+    sha256: string;
+    docIds: readonly string[];
+    sourcesStanding: ReadonlyMap<string, readonly { sourceId: string; temporalStanding: TemporalStanding }[]>;
+  };
   /** The corpus the closure's documents are read out of. */
   corpus: CurrentCorpusSource;
 }
@@ -115,7 +131,7 @@ export interface CurrentStateInput extends PinInput {
  * requirement, the render context and the closure alone, which is exactly the
  * set a producer of results needs before it has one.
  *
- * `corpus` is `CorpusPin[]`, the five-field pin `corpus-pin.ts` defines once and
+ * `corpus` is `CorpusPin[]`, the record-width pin `corpus-pin.ts` defines once and
  * both the record and the ledger require, and **not**
  * `CurrentCorpusDocument[]`. This is
  * the richer of the two shapes, so the freshness record is derived from it by
@@ -163,12 +179,19 @@ export function producePins(input: PinInput): VerificationPins {
     corpusClosureSha256: closure.sha256,
     corpus: closure.docIds.map((docId) => {
       const document = corpus.document(docId);
+      const sources = closure.sourcesStanding.get(docId);
+      if (sources === undefined) {
+        throw new Error(`${docId} is in the closure but carries no standing: a pin cannot describe what the roles were told about it`);
+      }
       return {
         docId,
         versionLabel: document.versionLabel,
         sha256Raw: document.sha256Raw,
         sha256Normalized: document.sha256Normalized,
         normalizerVersion: document.normalizerVersion,
+        artefactAuthenticity: document.artefactAuthenticity,
+        nonOperativeSections: [...document.nonOperativeSections],
+        sources: sources.map((s) => ({ sourceId: s.sourceId, temporalStanding: s.temporalStanding })),
       };
     }),
   };

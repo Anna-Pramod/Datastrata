@@ -296,11 +296,17 @@ export interface ProvenanceEntry {
  */
 export type AuthoredRequirement = Omit<Requirement, 'derivedStatus' | 'statusReasons' | 'sources'>;
 
+/** An instrument's temporal legal standing at the pack's legal snapshot. */
+export type TemporalStanding = 'in_force' | 'adopted_not_effective' | 'proposed' | 'superseded';
+
 export interface SourceRecord {
   id: string;
   title: string;
   legalType: string;
-  statusAtSnapshot: string;
+  /** Absent on non-instruments; never defaulted. See `knowledge/schema.ts`. */
+  temporalStanding?: TemporalStanding;
+  /** Free text with no machine meaning. */
+  statusNote?: string;
   usedFor: string;
   keyProvisions?: string;
   url: string;

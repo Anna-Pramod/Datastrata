@@ -47,6 +47,7 @@ import { docsForSources, computeClosure } from '../src/corpus/closure';
 import { EntitledClosure } from '../src/pipeline/entitlement';
 import type { CorpusIndex } from '../src/corpus/types';
 import { csrdPack } from './helpers';
+import { standingMapFor } from '../src/corpus/standing';
 
 const engineRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const corpusDir = join(engineRoot, 'corpus');
@@ -117,7 +118,7 @@ describe('the SRC-002 artefact is what the index says it is', () => {
 
   it('introduces no structural edge, so it pulls nothing into another closure', () => {
     expect(entry().edges).toEqual([]);
-    expect(computeClosure(loadCorpus(corpusDir).index, [DOC]).docIds).toEqual([DOC]);
+    expect(computeClosure(loadCorpus(corpusDir).index, [DOC], standingMapFor(loadCorpus(corpusDir).index, csrdPack())).docIds).toEqual([DOC]);
   });
 });
 
@@ -285,7 +286,7 @@ describe('the SRC-002 artefact earns its source, and may become evidence', () =>
       tier: 'legal_record',
     });
     const corpus = authoriseCorpus(loadCorpus(corpusDir), realRegister(), csrdPack());
-    expect(EntitledClosure.forSources(corpus, realRegister(), ['SRC-002']).docIds).toEqual([DOC]);
+    expect(EntitledClosure.forSources(corpus, realRegister(), csrdPack(), ['SRC-002']).docIds).toEqual([DOC]);
   });
 });
 
@@ -307,7 +308,7 @@ describe('the affected population — S-003 and S-004, and nothing else', () => 
     const corpus = authoriseCorpus(loadCorpus(corpusDir), realRegister(), csrdPack());
     for (const id of ['CSRD-S-003', 'CSRD-S-004']) {
       const requirement = pack.requirements.find((r) => r.id === id)!;
-      const closure = EntitledClosure.forSources(corpus, realRegister(), requirement.sources);
+      const closure = EntitledClosure.forSources(corpus, realRegister(), csrdPack(), requirement.sources);
       expect(closure.docIds, id).toEqual([DOC]);
       expect(closure.corpusServes('SRC-002'), id).toBe(true);
     }
@@ -330,7 +331,7 @@ describe('the affected population — S-003 and S-004, and nothing else', () => 
     for (const requirement of pack.requirements) {
       if (requirement.sources.includes('SRC-002')) continue;
       expect(
-        EntitledClosure.forSources(corpus, realRegister(), requirement.sources).docIds,
+        EntitledClosure.forSources(corpus, realRegister(), csrdPack(), requirement.sources).docIds,
         requirement.id,
       ).not.toContain(DOC);
     }
