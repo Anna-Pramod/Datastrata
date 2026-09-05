@@ -51,11 +51,17 @@
  * found the public checker's date carrying the same UTC-versus-local split as an
  * accident rather than a decision; here it is the decision.)
  *
- * **`--skip-suite` exists and is not a convenience.** A signature over a red
- * build attests to nothing, so the suite runs by default and its result feeds
- * the gate. The flag is for the one case where running it here is impossible —
- * an outer harness that is *already* the test run — and it says so in its own
- * name rather than quietly defaulting to trust.
+ * **The suite result is obtained, never asserted.** A signature over a red
+ * build attests to nothing, so every `sign` obtains the suite result through
+ * the `suiteGreen` function `dispatch` is handed, and the process edge hands
+ * it `suiteIsGreen`, which runs the suite. There is no flag, environment
+ * variable or harness detection that substitutes `true`: a `--skip-suite`
+ * once did exactly that, and it could establish only that a skip was chosen,
+ * never that the suite passed. It is retired and rejected as a usage error, so
+ * an old command cannot keep a meaning it no longer has. Tests of `dispatch`
+ * inject a check at the same parameter, which is what stops the suite from
+ * recursing into itself; nothing in production reads that parameter from
+ * anywhere but `suiteIsGreen`.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -74,7 +80,7 @@ const engineRoot = join(here, '..', '..');
 const USAGE = [
   'Usage:',
   '  npm run verify -- run    <packId> <requirementId>',
-  '  npm run verify -- sign   <packId> <requirementId> --by "<name>" [--kind verified|ratified] [--on YYYY-MM-DD] [--note "<text>"] [--skip-suite]',
+  '  npm run verify -- sign   <packId> <requirementId> --by "<name>" [--kind verified|ratified] [--on YYYY-MM-DD] [--note "<text>"]',
   '  npm run verify -- revoke <packId> <requirementId> --revokes <entryId> --by "<name>" --reason "<text>" [--on YYYY-MM-DD]',
   '  npm run verify -- sheet  <packId> [--out <path>] [--golden <path>]',
   '',
@@ -129,11 +135,19 @@ function today(): string {
 }
 
 /**
- * Runs the suite and reports whether it is green.
+ * Runs the engine suite and reports whether it is green.
+ *
+ * Precisely: `npm test` in `backend/engine`, which is `vitest run` over this
+ * workspace's tests, with its output shown. That is the whole of what
+ * `testSuiteGreen` attests. It does not run the frontend workspace's tests,
+ * `tsc --noEmit` or the standalone-artifact gate; those are the repository's
+ * root gates, and a signer who wants them green runs them. A non-zero exit and
+ * a failure to spawn are both red — there is no path on which the suite did
+ * not run and the answer is still `true`.
  *
  * Never called from `runSign` itself: a `runSign` that shelled out to `npm test`
  * could not be called from inside `npm test`, which is where every test of it
- * runs.
+ * runs. Tests inject their own check at `dispatch`'s parameter instead.
  */
 function suiteIsGreen(): boolean {
   try {
@@ -158,6 +172,20 @@ export async function dispatch(
 ): Promise<CliOutcome> {
   const { positional, flags } = parseFlags(argv);
   const [command, packId, requirementId] = positional;
+
+  // Retired, and refused by name on every command rather than ignored: the
+  // flag used to mean "treat the suite as green without running it", and an
+  // old script carrying it must fail here, not sign under a meaning nobody
+  // intended. See the file header.
+  if (flags['skip-suite'] !== undefined) {
+    return {
+      exitCode: EXIT_USAGE,
+      lines: [
+        '--skip-suite has been retired: the suite result is obtained on every sign and cannot be asserted from the command line.',
+        ...USAGE,
+      ],
+    };
+  }
 
   if (command !== 'run' && command !== 'sign' && command !== 'revoke' && command !== 'sheet') {
     return {
@@ -230,7 +258,7 @@ export async function dispatch(
       kind,
       on,
       ...(note === null ? {} : { note }),
-      testSuiteGreen: flags['skip-suite'] === true ? true : suiteGreen(),
+      testSuiteGreen: suiteGreen(),
     },
     paths,
   );

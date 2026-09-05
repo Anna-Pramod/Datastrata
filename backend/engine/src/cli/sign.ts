@@ -148,10 +148,12 @@ export interface SignArgs {
   on: string;
   note?: string;
   /**
-   * Whether `npm test` is green. A signature over a red build attests to
-   * nothing, so the gate refuses without it. Running the suite is the entry
-   * point's job, never this function's: a `runSign` that shelled out to
-   * `npm test` could not be called from inside `npm test`.
+   * Whether the engine suite is green — `npm test` in `backend/engine`, as the
+   * entry point observed it. A signature over a red build attests to nothing,
+   * so the gate refuses without it. Running the suite is the entry point's
+   * job, never this function's: a `runSign` that shelled out to `npm test`
+   * could not be called from inside `npm test`. The entry point obtains the
+   * value by running the suite; nothing asserts it from the command line.
    */
   testSuiteGreen: boolean;
 }

@@ -910,21 +910,42 @@ describe('the CLI resolves normalizer_changed against the retained raw bytes', (
 // ---------------------------------------------------------------------------
 
 describe('dispatch', () => {
-  const green = (): boolean => true;
+  /** A green suite check that records whether the dispatcher consulted it. */
+  function greenCheck(): { check: () => boolean; calls: () => number } {
+    let n = 0;
+    return {
+      check: () => {
+        n += 1;
+        return true;
+      },
+      calls: () => n,
+    };
+  }
+  const SIGN = ['sign', PACK_ID, REQ_ID, '--by', 'A. Reviewer', '--on', '2026-08-21'];
 
-  it('signs through the documented command line', async () => {
-    const outcome = await dispatch(
-      ['sign', PACK_ID, REQ_ID, '--by', 'A. Reviewer', '--on', '2026-08-21', '--skip-suite'],
-      paths,
-      green,
-    );
+  it('signs through the documented command line, obtaining the suite result from the injected check', async () => {
+    const green = greenCheck();
+    const outcome = await dispatch(SIGN, paths, green.check);
     expect(outcome.exitCode).toBe(EXIT_OK);
-    expect(readLedger()).toHaveLength(1);
+    expect(green.calls()).toBe(1);
+    const ledger = readLedger();
+    expect(ledger).toHaveLength(1);
+    expect(ledger[0]?.kind).toBe('verified');
   });
 
-  it('revokes through the documented command line', async () => {
-    await dispatch(['sign', PACK_ID, REQ_ID, '--by', 'A. Reviewer', '--on', '2026-08-21', '--skip-suite'], paths, green);
+  it('signs a ratified signature the same way', async () => {
+    const green = greenCheck();
+    const outcome = await dispatch([...SIGN, '--kind', 'ratified'], paths, green.check);
+    expect(outcome.exitCode).toBe(EXIT_OK);
+    expect(green.calls()).toBe(1);
+    expect(readLedger()[0]?.kind).toBe('ratified');
+  });
+
+  it('revokes through the documented command line, without consulting the suite', async () => {
+    const green = greenCheck();
+    await dispatch(SIGN, paths, green.check);
     const signed = readLedger()[0];
+    const consultedBySigning = green.calls();
     const outcome = await dispatch(
       [
         'revoke',
@@ -940,60 +961,89 @@ describe('dispatch', () => {
         '2026-08-22',
       ],
       paths,
-      green,
+      green.check,
     );
     expect(outcome.exitCode).toBe(EXIT_OK);
     expect(readLedger()[1]?.kind).toBe('revoked');
+    // Withdrawing a signature is not attested by the suite; only making one is.
+    expect(green.calls()).toBe(consultedBySigning);
+  });
+
+  for (const kind of ['verified', 'ratified'] as const) {
+    it(`reads the suite result rather than assuming it, and refuses a ${kind} signature over a red one with the ledger bytes unchanged`, async () => {
+      // A prior green signature, so "unchanged" compares real bytes rather than emptiness.
+      expect((await dispatch(SIGN, paths, () => true)).exitCode).toBe(EXIT_OK);
+      const before = readFileSync(ledgerPath());
+      let consulted = 0;
+      const red = (): boolean => {
+        consulted += 1;
+        return false;
+      };
+      const outcome = await dispatch([...SIGN, '--kind', kind, '--on', '2026-08-22'], paths, red);
+      expect(outcome.exitCode).toBe(EXIT_REFUSED);
+      expect(outcome.lines.join('\n')).toContain('red_suite');
+      expect(consulted).toBe(1);
+      expect(readFileSync(ledgerPath()).equals(before)).toBe(true);
+    });
+  }
+
+  it('rejects the retired --skip-suite flag as a usage error, appending nothing and consulting nothing', async () => {
+    // The flag once made `testSuiteGreen` true without running anything. An old
+    // command carrying it must fail loudly rather than sign, and must not be
+    // read as "the suite passed" by any route.
+    const green = greenCheck();
+    const before = readFileSync(ledgerPath());
+    const outcome = await dispatch([...SIGN, '--skip-suite'], paths, green.check);
+    expect(outcome.exitCode).toBe(EXIT_USAGE);
+    expect(outcome.lines.join('\n')).toContain('--skip-suite');
+    expect(green.calls()).toBe(0);
+    expect(readFileSync(ledgerPath()).equals(before)).toBe(true);
+    // In any position and on any command, so the word cannot linger in a script.
+    expect((await dispatch(['sign', PACK_ID, REQ_ID, '--skip-suite', '--by', 'A. Reviewer'], paths, green.check)).exitCode).toBe(EXIT_USAGE);
+    expect(
+      (await dispatch(['revoke', PACK_ID, REQ_ID, '--revokes', 'x', '--by', 'A. Reviewer', '--reason', 'r', '--skip-suite'], paths, green.check))
+        .exitCode,
+    ).toBe(EXIT_USAGE);
+    expect(green.calls()).toBe(0);
+    expect(readFileSync(ledgerPath()).equals(before)).toBe(true);
+  });
+
+  it('no longer advertises --skip-suite in its usage text', async () => {
+    const outcome = await dispatch(['singh'], paths, () => true);
+    expect(outcome.exitCode).toBe(EXIT_USAGE);
+    expect(outcome.lines.join('\n')).toContain('Usage:');
+    expect(outcome.lines.join('\n')).not.toContain('skip-suite');
   });
 
   it('is a usage error, never a refusal, for an unknown subcommand', async () => {
     // A typo must not read as "you may not sign this yet": one is a fact about
     // the invocation, the other about the repository.
-    const outcome = await dispatch(['singh', PACK_ID, REQ_ID, '--by', 'A. Reviewer'], paths, green);
+    const outcome = await dispatch(['singh', PACK_ID, REQ_ID, '--by', 'A. Reviewer'], paths, () => true);
     expect(outcome.exitCode).toBe(EXIT_USAGE);
     expect(outcome.lines.join('\n')).toContain('singh');
   });
 
   it('is a usage error when --by is missing', async () => {
-    expect((await dispatch(['sign', PACK_ID, REQ_ID, '--skip-suite'], paths, green)).exitCode).toBe(
-      EXIT_USAGE,
-    );
+    expect((await dispatch(['sign', PACK_ID, REQ_ID], paths, () => true)).exitCode).toBe(EXIT_USAGE);
   });
 
   it('is a usage error when a revocation names no target or no reason', async () => {
     expect(
-      (await dispatch(['revoke', PACK_ID, REQ_ID, '--by', 'A. Reviewer'], paths, green)).exitCode,
+      (await dispatch(['revoke', PACK_ID, REQ_ID, '--by', 'A. Reviewer'], paths, () => true)).exitCode,
     ).toBe(EXIT_USAGE);
   });
 
   it('is a usage error for a kind that is not one of the two levels', async () => {
     expect(
-      (
-        await dispatch(
-          ['sign', PACK_ID, REQ_ID, '--by', 'A. Reviewer', '--kind', 'probably', '--skip-suite'],
-          paths,
-          green,
-        )
-      ).exitCode,
+      (await dispatch([...SIGN, '--kind', 'probably'], paths, () => true)).exitCode,
     ).toBe(EXIT_USAGE);
   });
 
-  it('reads the suite result rather than assuming it, and refuses over a red one', async () => {
-    const outcome = await dispatch(
-      ['sign', PACK_ID, REQ_ID, '--by', 'A. Reviewer', '--on', '2026-08-21'],
-      paths,
-      () => false,
-    );
-    expect(outcome.exitCode).toBe(EXIT_REFUSED);
-    expect(outcome.lines.join('\n')).toContain('red_suite');
-    expect(readFileSync(ledgerPath(), 'utf8')).toBe('');
-  });
-
   it('parses value flags and bare switches in one pass', () => {
-    const { positional, flags } = parseFlags(['sign', 'p', 'r', '--by', 'A. N.', '--skip-suite']);
+    const { positional, flags } = parseFlags(['sign', 'p', 'r', '--by', 'A. N.', '--dry-run']);
     expect(positional).toEqual(['sign', 'p', 'r']);
     expect(flags['by']).toBe('A. N.');
-    expect(flags['skip-suite']).toBe(true);
+    expect(flags['dry-run']).toBe(true);
   });
 });
 
