@@ -31,6 +31,8 @@
  * temp directory, so no test can leave a signature or an artifact behind.
  */
 
+import { evidenceSetsOf } from '../src/verification/evidence-sets';
+import { quotesOf, resolveEvidenceUse } from '../src/verification/evidence-use';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   cpSync,
@@ -100,8 +102,11 @@ const OBLIGED = 'CSRD-S-014';
 
 const DOC_A = 'DOC-32013L0034';
 const DOC_B = 'DOC-32026L0470';
-const QUOTE_A = 'DIRECTIVE 2013/34/EU OF THE EUROPEAN PARLIAMENT AND OF THE COUNCIL';
-const QUOTE_B = 'DIRECTIVE (EU) 2026/470 OF THE EUROPEAN PARLIAMENT AND OF THE COUNCIL';
+// Sentences the two documents carry exactly once, each inside a declared
+// operative range, so the fixture's signing entries can record where their
+// support lies (B-EVID-SPAN) and read fresh rather than `stale_ranges`.
+const QUOTE_A = 'The information referred to in the first subparagraph shall be clearly identifiable within the consolidated management report';
+const QUOTE_B = 'For the purposes of the third, fourth and fifth subparagraphs, the following definitions apply';
 
 /**
  * The adjudicators' quotes, and the point of them is that they appear **in no
@@ -119,8 +124,8 @@ const QUOTE_B = 'DIRECTIVE (EU) 2026/470 OF THE EUROPEAN PARLIAMENT AND OF THE C
  * rendered, and `adjudicationQuotesAreUniqueToTheirArray` below fails if a
  * later edit ever reuses one elsewhere and quietly destroys that premise.
  */
-const ADJUDICATION_ONLY_C1 = 'applies from the financial year beginning on 1 January 2024';
-const ADJUDICATION_ONLY_C2 = 'the balance sheet date is nowhere defined in this Directive';
+const ADJUDICATION_ONLY_C1 = 'For the purposes of this Directive, the following definitions shall apply:';
+const ADJUDICATION_ONLY_C2 = 'Protected undertakings have the right to decline to provide information exceeding the information specified in the voluntary standards';
 
 /** The exact sentence factory §4.6 obliges until B3 exists. */
 const NO_METRICS = 'no benchmark metrics — pipeline promotion records carry none until B3';
@@ -298,6 +303,13 @@ function makeEntry(id: string, overrides: Record<string, unknown> = {}): Signing
     pipelineVersion: PIPELINE,
     by: 'A. Reviewer',
     on: '2026-08-21',
+    // Every set of the fixture result designated support and resolved over the
+    // real declarations — the record a signature would actually carry.
+    evidenceUse: resolveEvidenceUse({
+      result: makeResult(id),
+      designation: { resultSha256: resultSha256(makeResult(id)), sets: evidenceSetsOf(makeResult(id)).map((set) => ({ set: set.recordPath, use: 'support' as const, items: quotesOf(set.items).map((q) => ({ item: q.path, use: 'support' as const })) })) },
+      corpus,
+    }).records,
     ...overrides,
   } as unknown as SigningEntry);
 }
@@ -1006,6 +1018,187 @@ describe('benchmark metrics', () => {
 // ---------------------------------------------------------------------------
 // The sign-off block
 // ---------------------------------------------------------------------------
+
+describe('support relied upon — the signature\'s evidence use, shown where the signer can inspect it', () => {
+  const pageOf = (html: string, id: string): string => {
+    const start = html.indexOf(`id="req-${id}"`);
+    expect(start).toBeGreaterThan(-1);
+    const next = html.indexOf('<section class="requirement"', start + 1);
+    return html.slice(start, next === -1 ? undefined : next);
+  };
+
+  it('shows, for a fresh signature, each supporting occurrence with its document, range, line and an excerpt of the stored text', () => {
+    const page = pageOf(sheetHtml(), FRESH);
+    const at = page.indexOf('<h3>Support relied upon</h3>');
+    expect(at).toBeGreaterThan(-1);
+    const section = page.slice(at, page.indexOf('<h3>', at + 10));
+    expect(section).toContain('reading element R1');
+    expect(section).toContain('support');
+    expect(section).toContain(`<code>${DOC_A}</code>`);
+    expect(section).toContain('range <code>art-29a</code>');
+    expect(section).toContain('line 2311');
+    // The excerpt is the stored text around the occurrence, so the signer sees context, not only the quote.
+    expect(section).toContain(escapeForTest(QUOTE_A.slice(0, 60)));
+    expect(section).toContain(`<code>${DOC_B}</code>`);
+    expect(section).toContain('range <code>art-2-pt-5</code>');
+  });
+
+  it('shows a contextual set with its stated reason, and no occurrence', () => {
+    const entry = makeEntry(FRESH);
+    const contextual = {
+      ...entry,
+      evidenceUse: (entry.evidenceUse ?? []).map((record) =>
+        record.set === 'challenges[0] (C1).evidence'
+          ? { set: record.set, use: 'context' as const, reason: 'Quotes the amending point to show what the challenge is about.', occurrences: [], contextual: [] }
+          : record,
+      ),
+    };
+    writeLedger([sealed(contextual)]);
+    const section = pageOf(sheetHtml(), FRESH);
+    expect(section).toContain('context');
+    expect(section).toContain('Quotes the amending point to show what the challenge is about.');
+  });
+
+  it('says so when the governing signature carries no evidence-use record, which is why it reads stale_ranges', () => {
+    const { evidenceUse: _omitted, ...legacy } = makeEntry(FRESH);
+    writeLedger([sealed(legacy)]);
+    const page = pageOf(sheetHtml(), FRESH);
+    expect(page).toContain('no evidence-use record');
+    expect(page).toContain('stale_ranges');
+  });
+});
+
+describe('evidence use, pending — the designation reviewed before any signature exists', () => {
+  const UNSIGNED = 'CSRD-S-005';
+  const designationPath = (id: string) => join(verificationDir, PACK_ID, id, 'evidence-use.json');
+  const pageOf = (html: string, id: string): string => {
+    const start = html.indexOf(`id="req-${id}"`);
+    expect(start).toBeGreaterThan(-1);
+    const next = html.indexOf('<section class="requirement"', start + 1);
+    return html.slice(start, next === -1 ? undefined : next);
+  };
+  const pendingSection = (page: string): string => {
+    const at = page.indexOf('<h3>Evidence use, pending</h3>');
+    expect(at).toBeGreaterThan(-1);
+    return page.slice(at, page.indexOf('<h3>', at + 10));
+  };
+
+  it('shows the selected occurrences with surrounding text, and the contextual reasons, for an unsigned requirement', () => {
+    const result = makeResult(UNSIGNED, {
+      challenges: [{ id: 'C1', lens: 'miscitation', statement: 'The title line is cited as operative.', verdict: 'CONFIRMED',
+        evidence: [{ kind: 'quote', docId: DOC_A, sha256Normalized: corpus.document(DOC_A).sha256Normalized, text: 'DIRECTIVE 2013/34/EU OF THE EUROPEAN PARLIAMENT AND OF THE COUNCIL' }],
+        resolution: 'x', adjudicationEvidence: [{ kind: 'quote', docId: DOC_A, sha256Normalized: corpus.document(DOC_A).sha256Normalized, text: ADJUDICATION_ONLY_C1 }] }],
+      openQuestions: [],
+    });
+    writeResult(UNSIGNED, result);
+    const sets = evidenceSetsOf(result).map((set) =>
+      set.recordPath === 'challenges[0] (C1).evidence'
+        ? { set: set.recordPath, use: 'context' as const, reason: 'The prosecutor quotes the title line to show the miscitation.' }
+        : { set: set.recordPath, use: 'support' as const, items: quotesOf(set.items).map((q) => ({ item: q.path, use: 'support' as const })) },
+    );
+    writeFileSync(designationPath(UNSIGNED), JSON.stringify({ resultSha256: resultSha256(result), sets }, null, 2), 'utf8');
+    const section = pendingSection(pageOf(sheetHtml(), UNSIGNED));
+    expect(section).toContain('not signed');
+    expect(section).toContain('reading element R1');
+    expect(section).toContain('range <code>art-29a</code>');
+    expect(section).toContain('line 2311');
+    expect(section).toContain('offset');
+    expect(section).toContain(escapeForTest(QUOTE_A.slice(0, 60)));
+    expect(section).toContain('The prosecutor quotes the title line to show the miscitation.');
+    expect(section).not.toContain('unresolved');
+  });
+
+  it('shows an unresolved choice with every candidate by offset, and a leftover quote by name, before signing', () => {
+    const a = corpus.document(DOC_A);
+    const result = makeResult(UNSIGNED, {
+      reading: { elements: [{ id: 'R1', statement: 'The thresholds.', evidence: [
+        { kind: 'quote', docId: DOC_A, sha256Normalized: a.sha256Normalized, text: 'net turnover of EUR 450 000 000 and an average number of 1 000 employees' },
+        { kind: 'quote', docId: DOC_A, sha256Normalized: a.sha256Normalized, text: 'DIRECTIVE 2013/34/EU OF THE EUROPEAN PARLIAMENT AND OF THE COUNCIL' },
+      ] }] },
+      challenges: [],
+      openQuestions: [],
+    });
+    writeResult(UNSIGNED, result);
+    writeFileSync(designationPath(UNSIGNED), JSON.stringify({ resultSha256: resultSha256(result), sets: [
+      { set: 'reading.elements[0] (R1).evidence', use: 'support', items: [{ item: 'evidence[0]', use: 'support' }] },
+    ] }, null, 2), 'utf8');
+    const section = pendingSection(pageOf(sheetHtml(), UNSIGNED));
+    expect(section).toContain('unresolved');
+    expect(section).toContain('evidence[1] is not designated');
+    // Once the leftover is designated, the ambiguity is what remains, with both candidates and their offsets.
+    writeFileSync(designationPath(UNSIGNED), JSON.stringify({ resultSha256: resultSha256(result), sets: [
+      { set: 'reading.elements[0] (R1).evidence', use: 'support', items: [{ item: 'evidence[0]', use: 'support' }, { item: 'evidence[1]', use: 'context', reason: 'title line' }] },
+    ] }, null, 2), 'utf8');
+    const ambiguous = pendingSection(pageOf(sheetHtml(), UNSIGNED));
+    expect(ambiguous).toContain('unresolved');
+    expect(ambiguous).toContain('range <code>art-1</code>');
+    expect(ambiguous).toContain('offset 4170');
+    expect(ambiguous).toContain('range <code>art-29a</code>');
+    expect(ambiguous).toContain('offset 116298');
+    // Each candidate is shown with its surrounding text, so the choice can be made from the page.
+    expect(ambiguous).toContain('⟦');
+  });
+
+  it('says when no designation has been written, and when the one written is bound to another result', () => {
+    writeResult(UNSIGNED, makeResult(UNSIGNED));
+    expect(pendingSection(pageOf(sheetHtml(), UNSIGNED))).toContain('no evidence-use designation');
+    writeFileSync(designationPath(UNSIGNED), JSON.stringify({ resultSha256: 'f'.repeat(64), sets: [] }), 'utf8');
+    expect(pendingSection(pageOf(sheetHtml(), UNSIGNED))).toContain('bound to result');
+  });
+});
+
+describe('support relied upon — historical entries are shown truthfully', () => {
+  const pageOf = (html: string, id: string): string => {
+    const start = html.indexOf(`id="req-${id}"`);
+    expect(start).toBeGreaterThan(-1);
+    const next = html.indexOf('<section class="requirement"', start + 1);
+    return html.slice(start, next === -1 ? undefined : next);
+  };
+  const supportSection = (page: string): string => {
+    const at = page.indexOf('<h3>Support relied upon</h3>');
+    expect(at).toBeGreaterThan(-1);
+    return page.slice(at, page.indexOf('<h3>', at + 10));
+  };
+
+  it('never slices the current text at a historical offset once the pinned hash differs; shows the pinned quotation instead', () => {
+    const moved = 'c'.repeat(64);
+    const entry = makeEntry(FRESH);
+    const historical = sealed({
+      ...entry,
+      corpus: entry.corpus.map((pin) => (pin.docId === DOC_A ? { ...pin, sha256Normalized: moved } : pin)),
+      evidenceUse: (entry.evidenceUse ?? []).map((record) => ({
+        ...record,
+        occurrences: record.occurrences.map((o) => (o.docId === DOC_A ? { ...o, sha256Normalized: moved, offset: 7 } : o)),
+      })),
+    });
+    writeLedger([historical]);
+    const section = supportSection(pageOf(sheetHtml(), FRESH));
+    // The current document is not the one signed: no excerpt is cut from it at the old offset.
+    expect(section).toContain('cannot be reconstructed from the current document');
+    expect(section).toContain('pinned quotation');
+    expect(section).toContain(escapeForTest(QUOTE_A.slice(0, 60)));
+    // The occurrence in DOC_B, whose hash still matches, keeps its verified excerpt.
+    expect(section).toContain(`<code>${DOC_B}</code>`);
+    expect(section).toContain('⟦');
+    // And the DOC_A occurrence's stale offset is not rendered as an excerpt: the text at offset 7 is the consolidation header.
+    expect(section).not.toContain('⟦02013L0034');
+  });
+
+  it('states that the pinned quotation is unavailable when the signed result itself is gone', () => {
+    const moved = 'c'.repeat(64);
+    const entry = makeEntry(FRESH);
+    const historical = sealed({
+      ...entry,
+      corpus: entry.corpus.map((pin) => (pin.docId === DOC_A ? { ...pin, sha256Normalized: moved } : pin)),
+      evidenceUse: (entry.evidenceUse ?? []).map((record) => ({ ...record, occurrences: record.occurrences.map((o) => (o.docId === DOC_A ? { ...o, sha256Normalized: moved } : o)) })),
+    });
+    writeLedger([historical]);
+    rmSync(join(verificationDir, PACK_ID, FRESH, 'verification-result.json'));
+    const section = supportSection(pageOf(sheetHtml(), FRESH));
+    expect(section).toContain('cannot be reconstructed from the current document');
+    expect(section).toContain('the signed result is absent');
+  });
+});
 
 describe('the sign-off block', () => {
   it('carries who signed, when, at which level, and everything the entry pins', () => {

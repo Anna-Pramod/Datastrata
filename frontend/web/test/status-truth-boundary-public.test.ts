@@ -80,10 +80,16 @@ function pristineWorld(): CurrentState {
     renderedConditionSha256: HASH('d'),
     corpusClosureSha256: HASH('e'),
     resultSha256: HASH('1'),
+    evidenceSets: [],
     corpus: [
-      { docId: 'DOC-1', sha256Raw: HASH('f'), sha256Normalized: HASH('0'), normalizerVersion: 'normalize-1.0.0' },
+      { docId: 'DOC-1', sha256Raw: HASH('f'), sha256Normalized: HASH('0'), normalizerVersion: 'normalize-1.0.0', operativeRanges: [] },
     ],
   };
+}
+
+function pinWithoutRanges<T extends { operativeRanges?: unknown }>(doc: T): Omit<T, 'operativeRanges'> {
+  const { operativeRanges: _ranges, ...rest } = doc;
+  return rest;
 }
 
 function signing(requirementId: string, world: CurrentState): SigningEntry {
@@ -102,11 +108,15 @@ function signing(requirementId: string, world: CurrentState): SigningEntry {
     rendererVersion: 'renderer-1.0.0',
     closureRendererVersion: 'closure-renderer-1.0.0',
     corpusClosureSha256: world.corpusClosureSha256,
-    corpus: [{ ...pinnedDoc, versionLabel: '2026-01-01', artefactAuthenticity: 'official_consolidation' as const, nonOperativeSections: [], sources: [{ sourceId: 'SRC-001', temporalStanding: 'in_force' as const }] }],
+    // The ledger pin carries no declarations: `operativeRanges` is freshness width, not record width.
+    corpus: [{ ...pinWithoutRanges(pinnedDoc), versionLabel: '2026-01-01', artefactAuthenticity: 'official_consolidation' as const, nonOperativeSections: [], sources: [{ sourceId: 'SRC-001', temporalStanding: 'in_force' as const }] }],
     resultSha256: world.resultSha256,
     pipelineVersion: 'pipeline-0.1.0',
     by: 'A. Reviewer',
     on: '2026-08-21',
+    // Explicit and empty: this world has no evidence set to designate, and an
+    // entry without any designation reads as `stale_ranges` by design.
+    evidenceUse: [],
   };
   return signingEntrySchema.parse({ ...fields, entryId: entryId(fields as unknown as UnsignedLedgerEntry) });
 }

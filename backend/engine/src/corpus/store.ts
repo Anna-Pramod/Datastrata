@@ -13,6 +13,7 @@ import { isAbsolute, join } from 'node:path';
 import type { CorpusDocument, CorpusIndex } from './types';
 import { CorpusIntegrityError, parseCorpusIndex, verifyCorpusIntegrity } from './schema';
 import { normalize, NORMALIZER_VERSION } from './normalize';
+import { resolveRanges } from './ranges';
 import { sha256Hex } from './hash';
 
 export class CorpusDocumentNotFoundError extends Error {
@@ -120,6 +121,18 @@ export function loadCorpus(corpusDir: string): LoadedCorpus {
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         problems.push(`${d.docId}: ${d.rawPath} does not reproduce ${d.normalizedPath} under normalizer ${NORMALIZER_VERSION} (${message})`);
+      }
+    }
+
+    // Declared operative-provision ranges must resolve against the text they
+    // name, here and not later: an index whose declarations do not resolve is
+    // unusable, not silently range-less, because a range that fails to resolve
+    // at signing time would read as "no support" for a document its author
+    // believed was covered.
+    if (norm !== null) {
+      const ranges = resolveRanges(norm, d.operativeRanges ?? []);
+      if (!ranges.ok) {
+        for (const problem of ranges.problems) problems.push(`${d.docId}: ${problem}`);
       }
     }
 

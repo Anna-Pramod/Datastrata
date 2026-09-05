@@ -195,7 +195,7 @@ describe('the record width and the freshness width', () => {
     // The counterexample in the same shape. Without it, "the record accepts the
     // producer's pins" would pass equally against a schema that required
     // nothing at all.
-    const narrowed = pinsForFreshness(producePins(pinInput));
+    const narrowed = pinsForFreshness(producePins(pinInput), pinInput.corpus);
     expect(() => parseVerificationResult(resultOverPins(narrowed as never))).toThrow(
       /versionLabel/,
     );
@@ -230,7 +230,7 @@ describe('the record width and the freshness width', () => {
 
   it('the freshness projection drops versionLabel and the three standing fields, and nothing else', () => {
     const pins = producePins(pinInput);
-    const narrowed = pinsForFreshness(pins);
+    const narrowed = pinsForFreshness(pins, pinInput.corpus);
 
     // Teeth. `{ ...pin }` and `const { versionLabel, ...rest } = pin` both keep
     // the key set open, and both would pass a test that only checked the four
@@ -240,6 +240,7 @@ describe('the record width and the freshness width', () => {
       expect(Object.keys(document).sort()).toEqual([
         'docId',
         'normalizerVersion',
+        'operativeRanges',
         'sha256Normalized',
         'sha256Raw',
       ]);
@@ -254,9 +255,12 @@ describe('the record width and the freshness width', () => {
     // `corpusClosureSha256`, which freshness *does* compare, so `stale_closure`
     // is the reason that names a standing change. Comparing the fields again
     // here would be a second derivation of one fact.
+    // B-EVID-SPAN adds one field the record does not carry: the document's
+    // current declared ranges, read off the corpus for `stale_ranges`. The
+    // fixture corpus declares none, so the projection carries `[]`.
     expect(narrowedCorpus).toEqual(
       producedCorpus.map(
-        ({ versionLabel: _label, artefactAuthenticity: _auth, nonOperativeSections: _sections, sources: _sources, ...rest }) => rest,
+        ({ versionLabel: _label, artefactAuthenticity: _auth, nonOperativeSections: _sections, sources: _sources, ...rest }) => ({ ...rest, operativeRanges: [] }),
       ),
     );
   });
@@ -331,6 +335,9 @@ describe('a re-labelled document is still fresh', () => {
       pipelineVersion: 'pipeline-v1-unpromoted',
       by: 'fixture',
       on: '2026-08-21',
+      // Explicit and empty: the minimal result carries no evidence set, and an
+      // entry with no designation at all reads as `stale_ranges` by design.
+      evidenceUse: [],
     };
   }
 
@@ -415,6 +422,8 @@ const FRESHNESS_FIELDS = [
   'corpusClosureSha256',
   'corpus',
   'resultSha256',
+  // B-EVID-SPAN: the current result's evidence-set paths, for designation completeness.
+  'evidenceSets',
 ] as const;
 
 describe('currentStateOf', () => {
@@ -429,7 +438,7 @@ describe('currentStateOf', () => {
 
     // The values still come from the producer: naming the fields must not turn
     // this into a shape test that any record of the right shape would pass.
-    const projected = pinsForFreshness(producePins(pinInput));
+    const projected = pinsForFreshness(producePins(pinInput), pinInput.corpus);
     for (const key of Object.keys(projected) as Array<keyof typeof projected>) {
       expect(state[key]).toEqual(projected[key]);
     }

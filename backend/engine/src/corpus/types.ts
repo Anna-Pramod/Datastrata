@@ -11,6 +11,9 @@
  * `references` is the only kind that costs traversal depth; the rest lead to
  * the same law in the form that currently governs it. See closure.ts.
  */
+import type { OperativeRange } from './ranges';
+
+export type { OperativeRange } from './ranges';
 export type EdgeKind = 'amends' | 'amendedBy' | 'consolidates' | 'references' | 'definesTermsFor';
 
 /**
@@ -83,8 +86,19 @@ export interface CorpusDocument {
    * carry three spellings of "none". Says nothing about sections not named.
    */
   nonOperativeSections: string[];
+  /**
+   * The operative-provision ranges a signature may locate its support inside,
+   * authored against this document's stored normalized text (`ranges.ts`).
+   * Optional and absent by default, and absence means **none**: unlike
+   * `nonOperativeSections` this field never enters a closure hash — it is not
+   * shown to any role — so three spellings of "none" cannot hash three ways,
+   * and an undeclared document simply cannot supply support. A declaration is
+   * added only where a signature needs it, with its justification.
+   */
+  operativeRanges?: OperativeRange[];
   edges: CorpusEdge[];
 }
+
 
 export interface CorpusIndex {
   /** ISO date the index was last edited. */

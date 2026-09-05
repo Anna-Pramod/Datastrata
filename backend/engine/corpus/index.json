@@ -18,6 +18,56 @@
       "contentSelector": "#text",
       "artefactAuthenticity": "official_consolidation",
       "nonOperativeSections": [],
+      "operativeRanges": [
+        {
+          "id": "art-1",
+          "start": [
+            "Article 1",
+            "Scope"
+          ],
+          "end": [
+            "Article 2",
+            "Definitions"
+          ],
+          "justification": "Article 1 is the scope provision of the Directive: it states which undertakings, by legal form under Annexes I and II, the Directive applies to. Operative text; declared for CSRD-S-002, whose condition tests legal form and Member State."
+        },
+        {
+          "id": "art-2",
+          "start": [
+            "Article 2",
+            "Definitions"
+          ],
+          "end": [
+            "Article 3",
+            "Categories of undertakings and groups"
+          ],
+          "justification": "Article 2 defines the terms the operative provisions use, including parent undertaking and group. Operative text; declared for CSRD-S-002, whose condition tests parent-undertaking status."
+        },
+        {
+          "id": "art-3",
+          "start": [
+            "Article 3",
+            "Categories of undertakings and groups"
+          ],
+          "end": [
+            "Article 4",
+            "General provisions"
+          ],
+          "justification": "Article 3 sets the size categories and the consolidated-basis rules the sustainability provisions rely on. Operative text; declared for CSRD-S-002."
+        },
+        {
+          "id": "art-29a",
+          "start": [
+            "Article 29a",
+            "Consolidated sustainability reporting"
+          ],
+          "end": [
+            "CHAPTER 6a",
+            "SUSTAINABILITY REPORTING STANDARDS"
+          ],
+          "justification": "Article 29a is the provision CSRD-S-002 cites (locator Article 29a(1)): the consolidated sustainability reporting obligation and its thresholds. The range ends at the CHAPTER 6a heading so that heading stays outside it."
+        }
+      ],
       "edges": [
         {
           "edgeId": "EDGE-32013L0034-amendedBy-32026L0470",
@@ -87,6 +137,20 @@
       "contentSelector": "#text",
       "artefactAuthenticity": "authentic_publication",
       "nonOperativeSections": [],
+      "operativeRanges": [
+        {
+          "id": "art-2-pt-5",
+          "start": [
+            "(5)",
+            "Article 29a is amended as follows:"
+          ],
+          "end": [
+            "(6)",
+            "Article 29b is amended as follows:"
+          ],
+          "justification": "Point (5) of Article 2 of the Omnibus is the amending instruction for Article 29a of Directive 2013/34/EU, whose replacement text is what the consolidation now carries. Operative text of the amending act; declared for CSRD-S-002."
+        }
+      ],
       "edges": []
     }
   ]

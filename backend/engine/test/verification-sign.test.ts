@@ -44,8 +44,10 @@ import {
   requirementSha256,
 } from '../src/verification/canonical';
 import { entryId, type SigningEntry } from '../src/verification/ledger';
+import { evidenceSetsOf } from '../src/verification/evidence-sets';
+import { quotesOf, resolveEvidenceUse, verifyEvidenceUse, type ResolvedEvidenceUse } from '../src/verification/evidence-use';
 import { deriveStaleness, type CurrentState } from '../src/verification/staleness';
-import { resultSha256, type VerificationResult } from '../src/verification/result';
+import { resultSha256, verificationResultSchema, type VerificationResult } from '../src/verification/result';
 import type { PromotionRecord } from '../src/verification/promotions';
 import type { VersionRegistry } from '../src/verification/registry';
 import type { Requirement } from '../src/types';
@@ -64,10 +66,20 @@ import {
 
 const HASH = (c: string): string => c.repeat(64);
 
+// Paragraphs, so the normalized text has the artefacts' shape — a heading, a
+// blank line, a title, a blank line, the body — and a two-line anchor can
+// declare the operative range each quote below must lie inside (B-EVID-SPAN).
 const TEXT_A =
-  'Article 19a\nUndertakings which, on their balance sheet dates, exceed a net turnover of EUR 450 000 000 shall report sustainability information.';
+  '<p>Article 19a</p><p>Sustainability reporting</p><p>Undertakings which, on their balance sheet dates, exceed a net turnover of EUR 450 000 000 shall report sustainability information. The reporting period is the financial year.</p><p>Article 20</p><p>Corporate governance statement</p><p>The statement. The reporting period is the financial year.</p><p>Article 21</p><p>Final provisions</p><p>End.</p>';
 const TEXT_B =
-  'Directive (EU) 2026/470\nArticle 1(4)(a) substitutes the opening words of Article 19a(1).';
+  '<p>Directive (EU) 2026/470</p><p>Article 1</p><p>Amendments</p><p>Article 1(4)(a) substitutes the opening words of Article 19a(1).</p><p>Article 2</p><p>Entry into force</p><p>This Directive enters into force.</p>';
+const RANGES: Record<string, unknown[]> = {
+  'DOC-A': [
+    { id: 'art-19a', start: ['Article 19a', 'Sustainability reporting'], end: ['Article 20', 'Corporate governance statement'], justification: 'fixture' },
+    { id: 'art-20', start: ['Article 20', 'Corporate governance statement'], end: ['Article 21', 'Final provisions'], justification: 'fixture' },
+  ],
+  'DOC-B': [{ id: 'art-1', start: ['Article 1', 'Amendments'], end: ['Article 2', 'Entry into force'], justification: 'fixture' }],
+};
 
 const prov = { type: 'celex_metadata', source: 'CELEX', recordedOn: '2026-08-20' } as const;
 
@@ -103,6 +115,7 @@ beforeEach(() => {
       contentSelector: null,
       artefactAuthenticity: 'official_consolidation',
       nonOperativeSections: [],
+      operativeRanges: RANGES[d.id],
       edges:
         d.id === 'DOC-A'
           ? [{ edgeId: 'E1', kind: 'amendedBy', from: 'DOC-A', to: 'DOC-B', provenance: prov }]
@@ -276,8 +289,27 @@ function signatureInput(overrides: Partial<SignatureInput> = {}): SignatureInput
     corpus: currentPins(),
     by: 'A. Reviewer',
     on: '2026-08-21',
+    // Resolved for the result this candidate is over, so a test that hands in
+    // another result gets records for that result's sets and nothing stale.
+    evidenceUse: resolvedFor(overrides.result ?? result()).records,
     ...overrides,
   };
+}
+
+/**
+ * Every set of `r` designated support, bound to `r`'s hash, resolved over the
+ * fixture corpus. The fixture quotes all lie inside the declared ranges, so a
+ * clean result resolves cleanly and the gate's other refusals stay isolated.
+ */
+function resolvedFor(r: VerificationResult): ResolvedEvidenceUse {
+  // A structurally invalid result has no hash to bind a designation to; the
+  // gate refuses it as `invalid_result` before evidence use is consulted.
+  if (!verificationResultSchema.safeParse(r).success) return { records: [], problems: [] };
+  return resolveEvidenceUse({
+    result: r,
+    designation: { resultSha256: resultSha256(r), sets: evidenceSetsOf(r).map((set) => ({ set: set.recordPath, use: 'support' as const, items: quotesOf(set.items).map((q) => ({ item: q.path, use: 'support' as const })) })) },
+    corpus,
+  });
 }
 
 function registryFor(req: Requirement = requirement()): VersionRegistry {
@@ -305,6 +337,7 @@ function checks(overrides: Partial<SignabilityInput> = {}): SignabilityInput {
     promotions: PROMOTIONS,
     existing: null,
     testSuiteGreen: true,
+    evidenceUse: resolvedFor(overrides.result ?? result()),
     ...overrides,
   };
 }
@@ -479,7 +512,8 @@ describe('existing-signature staleness', () => {
       renderedConditionSha256: candidate.entry.renderedConditionSha256,
       corpusClosureSha256: candidate.entry.corpusClosureSha256,
       resultSha256: candidate.entry.resultSha256,
-      corpus: currentPins(),
+      evidenceSets: evidenceSetsOf(result()).map((set) => set.recordPath),
+      corpus: currentPins().map((pin) => ({ ...pin, operativeRanges: corpus.document(pin.docId).operativeRanges ?? [] })),
     };
   }
 
@@ -574,6 +608,95 @@ describe('candidate consistency', () => {
 // ---------------------------------------------------------------------------
 // The refusal set — factory §4.5, verbatim
 // ---------------------------------------------------------------------------
+
+describe('the candidate agrees with the reviewed resolution — agreement, apart from validity', () => {
+  /**
+   * "The reporting period is the financial year." lies inside Article 19a and
+   * inside Article 20 of the fixture, so two resolutions of one designation
+   * are each valid: one selects the Article 19a occurrence, the other the
+   * Article 20 one. A gate that only verified the candidate's records would
+   * accept whichever copy it was handed; the reviewed selection is the one the
+   * resolution carries, and the candidate must agree with it exactly.
+   */
+  const PHRASE = 'The reporting period is the financial year.';
+  const R1 = 'reading.elements[0] (R1).evidence';
+  const ambiguous = (): VerificationResult => {
+    const a = corpus.document('DOC-A');
+    return result({
+      reading: { elements: [{ id: 'R1', statement: 'The period.', evidence: [
+        { kind: 'quote', docId: 'DOC-A', sha256Normalized: a.sha256Normalized, text: PHRASE },
+        { kind: 'quote', docId: 'DOC-A', sha256Normalized: a.sha256Normalized, text: 'a net turnover of EUR 450 000 000' },
+      ] }] },
+    });
+  };
+  const offsets = () => {
+    const text = corpus.normalizedText('DOC-A');
+    const first = text.indexOf(PHRASE);
+    const second = text.indexOf(PHRASE, first + 1);
+    if (first === -1 || second === -1) throw new Error('fixture: the phrase must occur twice');
+    return { first, second };
+  };
+  /** One reviewed resolution: a selection for the ambiguous quote, and a contextual reason for the other. */
+  const resolution = (r: VerificationResult, rangeId: string, offset: number, reason: string): ResolvedEvidenceUse =>
+    resolveEvidenceUse({
+      result: r,
+      designation: {
+        resultSha256: resultSha256(r),
+        sets: [
+          ...evidenceSetsOf(r).filter((set) => set.recordPath !== R1).map((set) => ({ set: set.recordPath, use: 'support' as const, items: quotesOf(set.items).map((q) => ({ item: q.path, use: 'support' as const })) })),
+          { set: R1, use: 'support' as const, items: [
+            { item: 'evidence[0]', use: 'support' as const, selection: { docId: 'DOC-A', rangeId, offset } },
+            { item: 'evidence[1]', use: 'context' as const, reason },
+          ] },
+        ],
+      },
+      corpus,
+    });
+
+  it('both resolutions are individually valid, and the matching candidate passes every gate', () => {
+    const r = ambiguous();
+    const { first, second } = offsets();
+    const reviewed = resolution(r, 'art-19a', first, 'The threshold sentence, cited for orientation.');
+    const substituted = resolution(r, 'art-20', second, 'The threshold sentence, cited for orientation.');
+    expect(reviewed.problems).toEqual([]);
+    expect(substituted.problems).toEqual([]);
+    expect(verifyEvidenceUse(reviewed.records, r, corpus)).toEqual([]);
+    expect(verifyEvidenceUse(substituted.records, r, corpus)).toEqual([]);
+    const candidate = buildSignature(signatureInput({ result: r, evidenceUse: reviewed.records }));
+    expect(() => assertSignable(candidate, checks({ result: r, evidenceUse: reviewed }))).not.toThrow();
+  });
+
+  it('a candidate carrying the other valid resolution is refused as candidate_inconsistent, and for nothing else', () => {
+    const r = ambiguous();
+    const { first, second } = offsets();
+    const reviewed = resolution(r, 'art-19a', first, 'The threshold sentence, cited for orientation.');
+    const substituted = resolution(r, 'art-20', second, 'The threshold sentence, cited for orientation.');
+    const candidate = buildSignature(signatureInput({ result: r, evidenceUse: substituted.records }));
+    expect(refusalCodes(candidate, checks({ result: r, evidenceUse: reviewed }))).toEqual(['candidate_inconsistent']);
+    expect(refusalDetail(candidate, checks({ result: r, evidenceUse: reviewed }))).toContain('evidenceUse');
+  });
+
+  it('a contextual reason that differs is a disagreement too — the comparison is not over offsets alone', () => {
+    const r = ambiguous();
+    const { first } = offsets();
+    const reviewed = resolution(r, 'art-19a', first, 'The threshold sentence, cited for orientation.');
+    const reworded = resolution(r, 'art-19a', first, 'A different reason for the same quote.');
+    expect(reworded.records.map((x) => x.occurrences)).toEqual(reviewed.records.map((x) => x.occurrences));
+    const candidate = buildSignature(signatureInput({ result: r, evidenceUse: reworded.records }));
+    expect(refusalCodes(candidate, checks({ result: r, evidenceUse: reviewed }))).toEqual(['candidate_inconsistent']);
+  });
+
+  it('agreement does not replace verification: an invalid record carried by both copies is still refused on its own terms', () => {
+    const r = ambiguous();
+    const { first } = offsets();
+    const reviewed = resolution(r, 'art-19a', first, 'The threshold sentence, cited for orientation.');
+    const shifted = reviewed.records.map((record) => ({ ...record, occurrences: record.occurrences.map((o) => ({ ...o, offset: o.offset + 1 })) }));
+    const candidate = buildSignature(signatureInput({ result: r, evidenceUse: shifted }));
+    const both: ResolvedEvidenceUse = { records: shifted, problems: [] };
+    expect(refusalCodes(candidate, checks({ result: r, evidenceUse: both }))).toEqual(['unsupported_proposition']);
+    expect(refusalDetail(candidate, checks({ result: r, evidenceUse: both }))).toContain('is not an occurrence of');
+  });
+});
 
 describe('the nine refusals', () => {
   it('refuses any MISMATCH verdict', () => {

@@ -113,6 +113,7 @@ import {
   type StalenessReason,
 } from '../verification/staleness';
 import { deriveStatus, toStatusInput } from '../verification/status';
+import { evidenceUseDesignationSchema, resolveEvidenceUse, type EvidenceUseDesignation } from '../verification/evidence-use';
 import { sourceIdsOf } from '../knowledge/provenance';
 import {
   EXIT_FORENSICS_REQUIRED,
@@ -182,6 +183,10 @@ export const promotionsPath = (paths: VerifyPaths): string =>
   join(paths.verificationDir, 'promotions.jsonl');
 
 /** Factory §4.2: `verification/<packId>/<requirementId>/verification-result.json`. */
+/** The reviewer's evidence-use designation, beside the result it is bound to. */
+export const evidenceUsePath = (paths: VerifyPaths, packId: string, requirementId: string): string =>
+  join(paths.verificationDir, packId, requirementId, 'evidence-use.json');
+
 export const resultPath = (paths: VerifyPaths, packId: string, requirementId: string): string =>
   join(paths.verificationDir, packId, requirementId, 'verification-result.json');
 
@@ -506,6 +511,35 @@ function readResultOrRefuse(
 // ---------------------------------------------------------------------------
 
 /**
+ * The reviewer's designation, or `null` when none has been written.
+ *
+ * Absent is a state the gate names (`undesignated_evidence`), so it is
+ * returned rather than refused here. Malformed is different: a file that
+ * exists and cannot be read as a designation is refused at once, naming the
+ * path, so a typo cannot read as "nothing designated".
+ */
+function readEvidenceUseOrRefuse(paths: VerifyPaths, packId: string, requirementId: string): EvidenceUseDesignation | null {
+  const path = evidenceUsePath(paths, packId, requirementId);
+  const raw = readIfPresent(path);
+  if (raw === null) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new CliFailure(EXIT_REFUSED, ['REFUSED — the evidence-use designation cannot be read.', `  - undesignated_evidence: ${path} is not valid JSON — ${detail}`]);
+  }
+  const structural = evidenceUseDesignationSchema.safeParse(parsed);
+  if (!structural.success) {
+    throw new CliFailure(EXIT_REFUSED, [
+      'REFUSED — the evidence-use designation does not satisfy its schema.',
+      ...structural.error.issues.map((issue) => `  - undesignated_evidence: ${path}: ${issue.path.join('.') || '<root>'}: ${issue.message}`),
+    ]);
+  }
+  return structural.data;
+}
+
+/**
  * Renormalises each pinned document whose `normalizerVersion` has moved, and
  * returns the hash of the result.
  *
@@ -748,6 +782,11 @@ export function runSign(args: SignArgs, paths: VerifyPaths, hooks: WriteHooks = 
     const promotions = readPromotionsOrFail(paths);
     const registry = readRegistryOrFail(paths, args.packId);
     const result = readResultOrRefuse(paths, args.packId, args.requirementId);
+    const designation = readEvidenceUseOrRefuse(paths, args.packId, args.requirementId);
+    // Resolved before the candidate exists, over the same result and corpus
+    // the gate will re-verify against; the records enter the entry, and the
+    // problems enter the refusal list with their candidates.
+    const evidenceUse = resolveEvidenceUse({ result, designation, corpus: world.corpus });
 
     const lines: string[] = [];
 
@@ -787,6 +826,7 @@ export function runSign(args: SignArgs, paths: VerifyPaths, hooks: WriteHooks = 
       by: args.by,
       on: args.on,
       ...(args.note === undefined ? {} : { note: args.note }),
+      evidenceUse: evidenceUse.records,
     });
 
     try {
@@ -807,6 +847,7 @@ export function runSign(args: SignArgs, paths: VerifyPaths, hooks: WriteHooks = 
                 resultPresent: existsSync(resultPath(paths, args.packId, args.requirementId)),
               },
         testSuiteGreen: args.testSuiteGreen,
+        evidenceUse,
       });
     } catch (error) {
       if (error instanceof IntegrityFailureError) {
@@ -834,6 +875,21 @@ export function runSign(args: SignArgs, paths: VerifyPaths, hooks: WriteHooks = 
 
     if (candidate.advisories.length > 0) {
       lines.push(`Advisory, not blocking: ${candidate.advisories.join(', ')}`);
+    }
+
+    // Where the support lies, set by set, so the signer sees what the entry
+    // will record before it is written.
+    for (const record of candidate.entry.evidenceUse ?? []) {
+      if (record.use === 'context') {
+        lines.push(`  context  ${record.set} — ${record.reason ?? ''}`);
+        continue;
+      }
+      for (const occurrence of record.occurrences) {
+        lines.push(`  support  ${record.set} ← ${occurrence.item} in ${occurrence.docId} range ${occurrence.range.id} at line ${occurrence.line} (offset ${occurrence.offset})`);
+      }
+      for (const item of record.contextual) {
+        lines.push(`  context  ${record.set} ${item.item} — ${item.reason}`);
+      }
     }
 
     appendFileSync(ledgerPath(paths), `${canonicalJson(candidate.entry)}\n`, 'utf8');

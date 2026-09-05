@@ -94,6 +94,9 @@ function signing(kind: 'verified' | 'ratified'): SigningEntry {
     pipelineVersion: 'pipeline-1.0.0',
     by: 'A. Reviewer',
     on: '2026-08-20',
+    // An explicit, empty designation: this fixture's world has no evidence set
+    // to designate, and an entry with no record at all reads as `stale_ranges`.
+    evidenceUse: [],
   };
   return signingEntrySchema.parse({
     ...fields,

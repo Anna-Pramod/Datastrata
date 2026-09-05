@@ -77,6 +77,8 @@ import type {
 } from '../types';
 import { currentStateOf } from '../verification/current-state';
 import { evidenceSetsOf } from '../verification/evidence-sets';
+import { evidenceUseDesignationSchema, quotesOf, resolveEvidenceUse } from '../verification/evidence-use';
+import { searchable } from '../corpus/evidence';
 import type { EvidenceItem } from '../corpus/evidence';
 import {
   governingEntry,
@@ -91,7 +93,7 @@ import {
 } from '../verification/promotions';
 import { RENDERER_VERSION, renderRequirement, type RenderContext } from '../verification/render';
 import { VersionIntegrityError } from '../verification/registry';
-import { verificationResultSchema, type VerificationResult } from '../verification/result';
+import { verificationResultSchema, type VerificationResult, resultSha256 } from '../verification/result';
 import { candidateRenderedConditionSha256 } from '../verification/sign';
 import { BLOCKING, type CurrentState, type StalenessReason } from '../verification/staleness';
 import { deriveStatus, toStatusInput, type RequirementStatus } from '../verification/status';
@@ -114,16 +116,24 @@ import {
 const NO_BENCHMARK_METRICS =
   'no benchmark metrics — pipeline promotion records carry none until B3';
 
-/** Every staleness reason, in a fixed order, so the header table has stable rows. */
-const ALL_STALENESS_REASONS: readonly StalenessReason[] = [
-  'source_reissued',
-  'stale_source_text',
-  'stale_encoding',
-  'stale_render',
-  'stale_closure',
-  'stale_result',
-  'normalizer_changed',
-];
+/**
+ * Every staleness reason, in a fixed order, so the header table has stable rows.
+ *
+ * Derived from a record keyed by the reason type rather than written as a
+ * bare list: a reason added to `StalenessReason` without a row here fails to
+ * compile, so the header cannot quietly stop naming a reason at zero.
+ */
+const STALENESS_ROWS: Record<StalenessReason, true> = {
+  source_reissued: true,
+  stale_source_text: true,
+  stale_encoding: true,
+  stale_render: true,
+  stale_closure: true,
+  stale_result: true,
+  normalizer_changed: true,
+  stale_ranges: true,
+};
+const ALL_STALENESS_REASONS: readonly StalenessReason[] = Object.keys(STALENESS_ROWS) as StalenessReason[];
 
 // ---------------------------------------------------------------------------
 // Paths
@@ -173,6 +183,62 @@ export interface SheetEvidenceSet {
   items: SheetEvidence[];
 }
 
+/**
+ * One occurrence a signature relied upon, resolved against the corpus so the
+ * signer can read the text around it rather than only the quote (B-EVID-SPAN).
+ */
+export interface SheetSupportOccurrence {
+  item: string;
+  docId: string;
+  rangeId: string;
+  line: number;
+  offset: number;
+  /**
+   * The stored text around the occurrence, on one line — only when the
+   * document's current normalized hash is the one the occurrence pinned and
+   * the text at the offset is the quote. Otherwise `null`: current text cut
+   * at a historical offset is not the signed quotation.
+   */
+  excerpt: string | null;
+  /** The quotation as the signed result carries it, when that result is present and matches the entry. */
+  pinnedQuote: string | null;
+  /** What could not be shown, and why. */
+  note: string | null;
+}
+
+/** One unresolved choice in a pending designation: the refusal the gate would give, with its candidates. */
+export interface SheetUnresolved {
+  set: string;
+  label: string;
+  code: string;
+  detail: string;
+  candidates: Array<{ item: string; docId: string; rangeId: string; offset: number; line: number; excerpt: string }>;
+}
+
+/**
+ * The designation beside the result, resolved as `verify sign` would resolve
+ * it, before any signature exists (B-EVID-SPAN). The sheet writes nothing.
+ */
+export interface SheetPending {
+  state: 'no_result' | 'absent' | 'malformed' | 'resolved';
+  problem: string | null;
+  records: SheetSupportSet[];
+  unresolved: SheetUnresolved[];
+}
+
+/** One evidence set's designation, as the governing signature recorded it. */
+export interface SheetSupportSet {
+  /** The record path the entry names: `reading.elements[0] (R1).evidence`. */
+  set: string;
+  /** The set's reviewer-facing heading when the result still carries it; else the path. */
+  label: string;
+  use: 'support' | 'context';
+  reason: string | null;
+  occurrences: SheetSupportOccurrence[];
+  /** Quotes in a support set the reviewer designated contextual, with their reasons. */
+  contextual: Array<{ item: string; reason: string }>;
+}
+
 /** The pipeline bound to this requirement's signature, and what promoted it. */
 export interface SheetBenchmark {
   pipelineVersion: string | null;
@@ -196,6 +262,14 @@ export interface SheetRequirement {
   governing: LedgerEntry | null;
   signature: SigningEntry | null;
   revocation: RevocationEntry | null;
+  /**
+   * The governing signature's evidence-use record, resolved for reading.
+   * `null` when there is no governing signature, or when it carries no record —
+   * the pre-policy case, which is what `stale_ranges` names.
+   */
+  support: SheetSupportSet[] | null;
+  /** The designation beside the result, resolved for review before signing. */
+  pending: SheetPending;
   /** `renderRequirement`'s output — the exact English a signature hashes. */
   renderedCondition: string;
   renderedConditionSha256: string;
@@ -604,6 +678,27 @@ function gatherRequirement(input: GatherOneInput): SheetRequirement {
           items: set.items.map((item) => describeEvidence(item, corpus)),
         }));
 
+  // The signed result is the one the entry pins only when its hash says so;
+  // a result rewritten since signing carries nobody's signed quotations.
+  const signedResult = signature !== null && result !== null && resultSha256(result) === signature.resultSha256 ? result : null;
+  const support: SheetSupportSet[] | null =
+    signature === null || signature.evidenceUse === undefined
+      ? null
+      : signature.evidenceUse.map((record) => {
+          const set = signedResult === null ? undefined : evidenceSetsOf(signedResult).find((candidate) => candidate.recordPath === record.set);
+          const quotes = set === undefined ? new Map<string, string>() : new Map(quotesOf(set.items).map((q) => [q.path, q.quote.text]));
+          return {
+            set: record.set,
+            label: set?.heading ?? record.set,
+            use: record.use,
+            reason: record.reason ?? null,
+            occurrences: record.occurrences.map((occurrence) => historicalOccurrence(corpus, occurrence, quotes.get(occurrence.item) ?? null, signedResult !== null)),
+            contextual: record.contextual.map((item) => ({ item: item.item, reason: item.reason })),
+          };
+        });
+
+  const pending = pendingEvidenceUse(paths, packId, requirement.id, result, corpus);
+
   const facts = factsReferencedBy(requirement).map((factType) => ({
     factType,
     label: factLabel(factType, pack.factTypes),
@@ -640,6 +735,8 @@ function gatherRequirement(input: GatherOneInput): SheetRequirement {
     result,
     resultProblem,
     evidence,
+    support,
+    pending,
     facts,
     obligations,
     goldenProfiles: input.goldenProfiles,
@@ -881,6 +978,215 @@ function renderEvidence(requirement: SheetRequirement): string {
   return lines.join('\n');
 }
 
+/**
+ * The stored text around one occurrence, roughly a line each side, joined onto
+ * one line. Read from the corpus as it stands now, so a signer inspecting a
+ * `stale_ranges` or `stale_source_text` signature sees today's text; the
+ * offsets themselves are the entry's and are not re-derived here.
+ */
+function excerptAround(corpus: LoadedCorpus, docId: string, offset: number, length: number): string {
+  let text: string;
+  try {
+    text = corpus.normalizedText(docId);
+  } catch {
+    return `${docId} is absent from the corpus`;
+  }
+  const before = text.slice(Math.max(0, offset - 160), offset).replace(/\s+/g, ' ').trimStart();
+  const quoted = text.slice(offset, offset + length).replace(/\s+/g, ' ');
+  const after = text.slice(offset + length, offset + length + 160).replace(/\s+/g, ' ').trimEnd();
+  return `…${before}⟦${quoted}⟧${after}…`;
+}
+
+/**
+ * One signed occurrence, shown only as far as it can be verified today.
+ *
+ * The excerpt is cut from the current text only when the document's current
+ * hash is the one the occurrence pinned *and* the text at the offset is the
+ * signed quotation; the offset alone proves nothing once the text has moved.
+ * Otherwise the quotation is shown from the signed result when that result is
+ * present and matches the entry, and the reader is told what could not be
+ * reconstructed rather than shown unrelated words.
+ */
+function historicalOccurrence(
+  corpus: LoadedCorpus,
+  occurrence: NonNullable<SigningEntry['evidenceUse']>[number]['occurrences'][number],
+  pinnedQuote: string | null,
+  signedResultPresent: boolean,
+): SheetSupportOccurrence {
+  const base = { item: occurrence.item, docId: occurrence.docId, rangeId: occurrence.range.id, line: occurrence.line, offset: occurrence.offset };
+  let current: { sha256Normalized: string } | null = null;
+  let text: string | null = null;
+  try {
+    current = corpus.document(occurrence.docId);
+    text = corpus.normalizedText(occurrence.docId);
+  } catch {
+    return { ...base, excerpt: null, pinnedQuote, note: `${occurrence.docId} is absent from the corpus; the historical excerpt cannot be reconstructed` };
+  }
+  if (current.sha256Normalized !== occurrence.sha256Normalized) {
+    return {
+      ...base,
+      excerpt: null,
+      pinnedQuote,
+      note: `the document's text has moved since signing (pinned ${occurrence.sha256Normalized.slice(0, 12)}…, now ${current.sha256Normalized.slice(0, 12)}…), so the historical excerpt cannot be reconstructed from the current document${pinnedQuote === null ? (signedResultPresent ? '; the signed result carries no such quote' : '; the signed result is absent, so the pinned quotation is unavailable too') : ''}`,
+    };
+  }
+  const slice = text!.slice(occurrence.offset, occurrence.offset + occurrence.length);
+  if (pinnedQuote !== null && searchable(slice) !== searchable(pinnedQuote)) {
+    return { ...base, excerpt: null, pinnedQuote, note: 'the text at the recorded offset is not the signed quotation; the historical excerpt cannot be reconstructed from the current document' };
+  }
+  return { ...base, excerpt: excerptAround(corpus, occurrence.docId, occurrence.offset, occurrence.length), pinnedQuote, note: null };
+}
+
+/**
+ * The designation beside the result, resolved exactly as `verify sign` would
+ * resolve it, so a reviewer inspects the occurrences, the contextual reasons
+ * and every unresolved choice before anything is written.
+ */
+function pendingEvidenceUse(paths: SheetPaths, packId: string, requirementId: string, result: VerificationResult | null, corpus: LoadedCorpus): SheetPending {
+  const none = (state: SheetPending['state'], problem: string | null): SheetPending => ({ state, problem, records: [], unresolved: [] });
+  if (result === null) return none('no_result', null);
+  const path = resolve(paths.verificationDir, packId, requirementId, 'evidence-use.json');
+  const raw = readIfPresent(path);
+  if (raw === null) return none('absent', `no evidence-use designation at ${path}`);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    return none('malformed', `${path} is not valid JSON — ${error instanceof Error ? error.message : String(error)}`);
+  }
+  const structural = evidenceUseDesignationSchema.safeParse(parsed);
+  if (!structural.success) {
+    return none('malformed', `${path}: ${structural.error.issues.map((issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`).join('; ')}`);
+  }
+  const resolved = resolveEvidenceUse({ result, designation: structural.data, corpus });
+  const sets = evidenceSetsOf(result);
+  const labelOf = (set: string): string => sets.find((candidate) => candidate.recordPath === set)?.heading ?? set;
+  return {
+    state: 'resolved',
+    problem: null,
+    records: resolved.records.map((record) => ({
+      set: record.set,
+      label: labelOf(record.set),
+      use: record.use,
+      reason: record.reason ?? null,
+      occurrences: record.occurrences.map((occurrence) => ({
+        item: occurrence.item,
+        docId: occurrence.docId,
+        rangeId: occurrence.range.id,
+        line: occurrence.line,
+        offset: occurrence.offset,
+        excerpt: excerptAround(corpus, occurrence.docId, occurrence.offset, occurrence.length),
+        pinnedQuote: null,
+        note: null,
+      })),
+      contextual: record.contextual.map((item) => ({ item: item.item, reason: item.reason })),
+    })),
+    unresolved: resolved.problems.map((problem) => ({
+      set: problem.set,
+      label: labelOf(problem.set),
+      code: problem.code,
+      detail: problem.detail,
+      candidates: (problem.candidates ?? []).map((candidate) => ({
+        item: candidate.item,
+        docId: candidate.docId,
+        rangeId: candidate.range.id,
+        offset: candidate.offset,
+        line: candidate.line,
+        excerpt: excerptAround(corpus, candidate.docId, candidate.offset, candidate.length),
+      })),
+    })),
+  };
+}
+
+/** One set's designation as HTML, shared by the signed and the pending views. */
+function renderSupportSet(set: SheetSupportSet): string[] {
+  const lines: string[] = [];
+  if (set.use === 'context') {
+    lines.push(`<p class="evidence-set"><span class="k">context</span> ${esc(set.label)} <code>${esc(set.set)}</code> — ${esc(set.reason ?? '')}</p>`);
+    return lines;
+  }
+  lines.push(`<p class="evidence-set"><span class="k">support</span> ${esc(set.label)} <code>${esc(set.set)}</code></p>`);
+  lines.push('<ul class="support">');
+  for (const occurrence of set.occurrences) {
+    const where = `${esc(occurrence.item)} in <code>${esc(occurrence.docId)}</code>, range <code>${esc(occurrence.rangeId)}</code>, line ${occurrence.line}, offset ${occurrence.offset}`;
+    if (occurrence.excerpt !== null) {
+      lines.push(`<li>${where}<pre>${esc(occurrence.excerpt)}</pre></li>`);
+    } else {
+      lines.push(
+        `<li>${where}<p class="integrity">${esc(occurrence.note ?? 'the historical excerpt cannot be reconstructed from the current document')}</p>${occurrence.pinnedQuote === null ? '' : `<p>pinned quotation, from the signed result:</p><pre>${esc(occurrence.pinnedQuote)}</pre>`}</li>`,
+      );
+    }
+  }
+  for (const item of set.contextual) {
+    lines.push(`<li><span class="k">context</span> ${esc(item.item)} — ${esc(item.reason)}</li>`);
+  }
+  lines.push('</ul>');
+  return lines;
+}
+
+/**
+ * The designation beside the result, before signing.
+ *
+ * What `verify sign` would record, and what it would refuse, from the file
+ * the reviewer has written — shown here so the selection is inspected with
+ * the surrounding text in view before a signature exists, not after.
+ */
+function renderPending(requirement: SheetRequirement): string {
+  const lines = ['<h3>Evidence use, pending</h3>'];
+  const { pending } = requirement;
+  if (pending.state === 'no_result') {
+    lines.push(`<p class="none">${esc(requirement.resultProblem ?? 'no result to designate over')}</p>`);
+    return lines.join('\n');
+  }
+  lines.push('<p class="none">not signed — what <code>verify sign</code> would record from the designation beside the result, and what it would refuse</p>');
+  if (pending.state !== 'resolved') {
+    lines.push(`<p class="integrity">${esc(pending.problem ?? '')}</p>`);
+    return lines.join('\n');
+  }
+  for (const set of pending.records) lines.push(...renderSupportSet(set));
+  for (const problem of pending.unresolved) {
+    lines.push(`<p class="evidence-set"><span class="k">unresolved</span> ${esc(problem.label)} <code>${esc(problem.set)}</code> — <code>${esc(problem.code)}</code>: ${esc(problem.detail)}</p>`);
+    if (problem.candidates.length > 0) {
+      lines.push('<ul class="support">');
+      for (const candidate of problem.candidates) {
+        lines.push(`<li>candidate: ${esc(candidate.item)} in <code>${esc(candidate.docId)}</code>, range <code>${esc(candidate.rangeId)}</code>, line ${candidate.line}, offset ${candidate.offset}<pre>${esc(candidate.excerpt)}</pre></li>`);
+      }
+      lines.push('</ul>');
+    }
+  }
+  if (pending.records.length === 0 && pending.unresolved.length === 0) {
+    lines.push('<p class="none">the result carries no evidence set</p>');
+  }
+  return lines.join('\n');
+}
+
+/**
+ * What the governing signature relied upon, set by set (B-EVID-SPAN).
+ *
+ * Rendered from the entry's record and not recomputed, because the page shows
+ * what was *signed*; recomputing would show what a signature made today would
+ * record, which is a different fact. Whether the located words support the
+ * proposition is the signer's judgement, and the excerpt is there so it can
+ * be made with the surrounding text in view.
+ */
+function renderSupport(requirement: SheetRequirement): string {
+  const lines = ['<h3>Support relied upon</h3>'];
+  if (requirement.signature === null) {
+    lines.push('<p class="none">none — no governing signature</p>');
+    return lines.join('\n');
+  }
+  if (requirement.support === null) {
+    lines.push('<p class="integrity">the governing signature carries no evidence-use record: it predates the support policy and reads <code>stale_ranges</code> until re-signed</p>');
+    return lines.join('\n');
+  }
+  if (requirement.support.length === 0) {
+    lines.push('<p class="none">none — the signed result carries no evidence set</p>');
+    return lines.join('\n');
+  }
+  for (const set of requirement.support) lines.push(...renderSupportSet(set));
+  return lines.join('\n');
+}
+
 function renderOpenQuestions(requirement: SheetRequirement): string {
   const lines = ['<h3>Open questions</h3>'];
   if (requirement.result === null) {
@@ -1056,6 +1362,8 @@ function renderRequirementSection(requirement: SheetRequirement): string {
     renderChallenges(requirement),
     renderClosure(requirement),
     renderEvidence(requirement),
+    renderPending(requirement),
+    renderSupport(requirement),
     renderOpenQuestions(requirement),
     renderFacts(requirement),
     renderObligations(requirement),

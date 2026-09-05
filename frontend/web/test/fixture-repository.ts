@@ -222,6 +222,9 @@ export function installVerificationState(
       pipelineVersion: 'fixture-pipeline-0.1.0',
       by: 'A. Reviewer',
       on: '2026-08-21',
+      // B-EVID-SPAN: explicit and empty — the fixture result carries no
+      // evidence set, and an entry without any designation reads `stale_ranges`.
+      evidenceUse: [],
     };
 
     entries.push({ ...fields, entryId: entryId(fields as unknown as UnsignedLedgerEntry) });

@@ -88,6 +88,11 @@ const RATIFIED_ID = 'CSRD-S-003';
  * B2. `CurrentState` is its type because that is exactly what it is: the *now*
  * side of the comparison, which the stages move and the ledger does not.
  */
+function pinWithoutRanges<T extends { operativeRanges?: unknown }>(doc: T): Omit<T, 'operativeRanges'> {
+  const { operativeRanges: _ranges, ...rest } = doc;
+  return rest;
+}
+
 function pristineWorld(): CurrentState {
   return {
     requirementInputSha256: HASH('b'),
@@ -95,12 +100,14 @@ function pristineWorld(): CurrentState {
     renderedConditionSha256: HASH('d'),
     corpusClosureSha256: HASH('e'),
     resultSha256: HASH('1'),
+    evidenceSets: [],
     corpus: [
       {
         docId: 'DOC-1',
         sha256Raw: HASH('f'),
         sha256Normalized: HASH('0'),
         normalizerVersion: 'normalize-1.0.0',
+        operativeRanges: [],
       },
     ],
   };
@@ -123,8 +130,12 @@ function signing(requirementId: string, kind: 'verified' | 'ratified', world: Cu
     rendererVersion: 'renderer-1.0.0',
     closureRendererVersion: 'closure-renderer-1.0.0',
     corpusClosureSha256: world.corpusClosureSha256,
-    corpus: [{ ...pinnedDoc, versionLabel: '2026-01-01', artefactAuthenticity: 'official_consolidation' as const, nonOperativeSections: [], sources: [{ sourceId: 'SRC-001', temporalStanding: 'in_force' as const }] }],
+    // The ledger pin carries no declarations: `operativeRanges` is freshness width, not record width.
+    corpus: [{ ...pinWithoutRanges(pinnedDoc), versionLabel: '2026-01-01', artefactAuthenticity: 'official_consolidation' as const, nonOperativeSections: [], sources: [{ sourceId: 'SRC-001', temporalStanding: 'in_force' as const }] }],
     resultSha256: world.resultSha256,
+    // Explicit and empty: this world has no evidence set to designate, and an
+    // entry without any designation reads as `stale_ranges` by design.
+    evidenceUse: [],
     pipelineVersion: 'pipeline-0.1.0',
     by: 'A. Reviewer',
     on: '2026-08-21',

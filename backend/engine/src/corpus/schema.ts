@@ -74,6 +74,23 @@ const corpusEdge = z
   })
   .strict();
 
+/** One anchor line: non-empty, already trimmed, and a single line. */
+const anchorLine = z.string().min(1).regex(/^\S(.*\S)?$/, 'an anchor line must be non-empty, already trimmed and contain no newline');
+
+/**
+ * A declared operative-provision range: two two-line anchors and a
+ * justification. Whether the anchors resolve is the loader's question, asked
+ * against the stored text (`ranges.ts`); the schema can only see their shape.
+ */
+const operativeRange = z
+  .object({
+    id: z.string().min(1),
+    start: z.tuple([anchorLine, anchorLine]),
+    end: z.tuple([anchorLine, anchorLine]),
+    justification: z.string().min(1),
+  })
+  .strict();
+
 const corpusDocument = z
   .object({
     docId,
@@ -90,6 +107,7 @@ const corpusDocument = z
     contentSelector,
     artefactAuthenticity: artefactAuthenticitySchema,
     nonOperativeSections,
+    operativeRanges: z.array(operativeRange).optional(),
     edges: z.array(corpusEdge),
   })
   .strict()

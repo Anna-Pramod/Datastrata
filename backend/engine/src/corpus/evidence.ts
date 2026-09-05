@@ -130,7 +130,7 @@ export interface EvidenceCheckResult {
  * are already-extracted text, and re-running extraction over it would decode
  * entities a second time and shift the haystack out from under the quote.
  */
-function searchable(text: string): string {
+export function searchable(text: string): string {
   return normalizeWhitespace(text).toLowerCase();
 }
 

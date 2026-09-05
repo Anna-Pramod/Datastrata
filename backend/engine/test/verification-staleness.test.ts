@@ -79,6 +79,19 @@ function signing(): SigningEntry {
     pipelineVersion: 'pipeline-1.0.0',
     by: 'A. Reviewer',
     on: '2026-08-20',
+    // B-EVID-SPAN: the support this signature relied upon, one occurrence
+    // inside DOC-1's declared range `r1`. Freshness asks whether that exact
+    // range is still declared, so the fixture declares it below.
+    evidenceUse: [
+      {
+        set: 'reading.elements[0] (R1).evidence',
+        use: 'support',
+        occurrences: [
+          { item: 'evidence[0]', docId: 'DOC-1', sha256Normalized: HASH('0'), range: { id: 'r1', start: ['Article 1', 'Scope'], end: ['Article 2', 'Definitions'] }, offset: 40, length: 12, line: 7 },
+        ],
+        contextual: [],
+      },
+    ],
   };
   return signingEntrySchema.parse({
     ...fields,
@@ -96,14 +109,20 @@ function fresh(): CurrentState {
     renderedConditionSha256: ENTRY.renderedConditionSha256,
     corpusClosureSha256: ENTRY.corpusClosureSha256,
     resultSha256: ENTRY.resultSha256,
+    // The one set the fixture result carries, which the entry designates.
+    evidenceSets: ['reading.elements[0] (R1).evidence'],
     corpus: ENTRY.corpus.map((pin) => ({
       docId: pin.docId,
       sha256Raw: pin.sha256Raw,
       sha256Normalized: pin.sha256Normalized,
       normalizerVersion: pin.normalizerVersion,
+      operativeRanges: pin.docId === 'DOC-1' ? [R1_RANGE] : [],
     })),
   };
 }
+
+/** The range the fixture signature relied upon, exactly as DOC-1 declares it now. */
+const R1_RANGE = { id: 'r1', start: ['Article 1', 'Scope'], end: ['Article 2', 'Definitions'], justification: 'fixture' };
 
 /** `fresh()` with the named document's fields replaced. */
 function withDoc(
@@ -248,6 +267,7 @@ describe('deriveStaleness', () => {
         renderedConditionSha256: HASH('7'),
         corpusClosureSha256: HASH('6'),
         resultSha256: HASH('5'),
+        evidenceSets: [],
       };
       current = withDoc(current, 'DOC-1', { normalizerVersion: 'normalize-2.0.0' });
       current = withDoc(current, 'DOC-2', {
@@ -286,6 +306,7 @@ describe('deriveStaleness', () => {
         renderedConditionSha256: HASH('7'),
         corpusClosureSha256: HASH('6'),
         resultSha256: HASH('5'),
+        evidenceSets: [],
         corpus: fresh().corpus,
       };
       current = withDoc(current, 'DOC-1', { normalizerVersion: 'normalize-2.0.0' });
@@ -317,12 +338,60 @@ describe('deriveStaleness', () => {
   });
 });
 
+describe('stale_ranges — the support relied upon must remain currently authorised', () => {
+  it('is absent while the exact range is still declared, whatever else is declared beside it', () => {
+    expect(deriveStaleness(ENTRY, fresh())).toEqual([]);
+    // An unrelated range added does not invalidate a still-valid selection.
+    const widened = withDoc(fresh(), 'DOC-1', { operativeRanges: [R1_RANGE, { id: 'r2', start: ['Article 2', 'Definitions'], end: ['Article 3', 'Categories'], justification: 'x' }] });
+    expect(deriveStaleness(ENTRY, widened)).toEqual([]);
+  });
+
+  it('fires, and blocks, when the declaration is withdrawn although the text and its hashes are unchanged', () => {
+    const withdrawn = withDoc(fresh(), 'DOC-1', { operativeRanges: [] });
+    expect(deriveStaleness(ENTRY, withdrawn)).toEqual(['stale_ranges']);
+    expect(blocks(['stale_ranges'])).toBe(true);
+    expect(BLOCKING.has('stale_ranges')).toBe(true);
+  });
+
+  it('fires when the range keeps its id but no longer names the same span', () => {
+    const moved = withDoc(fresh(), 'DOC-1', { operativeRanges: [{ ...R1_RANGE, end: ['Article 3', 'Categories'] }] });
+    expect(deriveStaleness(ENTRY, moved)).toEqual(['stale_ranges']);
+  });
+
+  it('fires for a signature that carries no support record at all: an entry from before the policy never satisfies it', () => {
+    const { evidenceUse: _omitted, ...rest } = ENTRY;
+    const legacy = signingEntrySchema.parse({ ...rest, entryId: entryId(rest as unknown as UnsignedLedgerEntry) });
+    expect(legacy.evidenceUse).toBeUndefined();
+    expect(deriveStaleness(legacy, fresh())).toEqual(['stale_ranges']);
+  });
+
+  it('is never reported for a contextual record, which relies on no range', () => {
+    const contextual = signingEntrySchema.parse({
+      ...ENTRY,
+      evidenceUse: [{ set: 'challenges[0] (C1).evidence', use: 'context', reason: 'quotes a header to show a miscitation', occurrences: [], contextual: [] }],
+      entryId: entryId({ ...ENTRY, evidenceUse: [{ set: 'challenges[0] (C1).evidence', use: 'context', reason: 'quotes a header to show a miscitation', occurrences: [], contextual: [] }] } as unknown as UnsignedLedgerEntry),
+    });
+    const current = { ...withDoc(fresh(), 'DOC-1', { operativeRanges: [] }), evidenceSets: ['challenges[0] (C1).evidence'] };
+    expect(deriveStaleness(contextual, current)).toEqual([]);
+  });
+});
+
+describe('stale_ranges — completeness against the current result', () => {
+  it('fires when the current result carries an evidence set the entry never designated', () => {
+    const grown = { ...fresh(), evidenceSets: [...fresh().evidenceSets, 'challenges[0] (C1).evidence'] };
+    expect(deriveStaleness(ENTRY, grown)).toEqual(['stale_ranges']);
+    // and not when every current set is designated, whatever else the entry recorded
+    expect(deriveStaleness(ENTRY, { ...fresh(), evidenceSets: [] })).toEqual([]);
+  });
+});
+
 describe('BLOCKING and blocks', () => {
   it('holds every reason except source_reissued', () => {
     expect([...BLOCKING].sort()).toEqual([
       'normalizer_changed',
       'stale_closure',
       'stale_encoding',
+      'stale_ranges',
       'stale_render',
       'stale_result',
       'stale_source_text',

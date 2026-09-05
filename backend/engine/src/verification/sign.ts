@@ -65,12 +65,14 @@ import type { LoadedCorpus } from '../corpus/store';
 import type { AuthoredRequirement, Requirement } from '../types';
 import { renderRequirement, type RenderContext } from './render';
 import {
+  canonicalJson,
   conditionSha256,
   logicalPayloadSha256,
   requirementInputSha256,
   requirementSha256,
 } from './canonical';
 import { evidenceSetsOf } from './evidence-sets';
+import { verifyEvidenceUse, type EvidenceUseRecord, type ResolvedEvidenceUse } from './evidence-use';
 import { entryId, type SigningEntry } from './ledger';
 import type { CorpusPin } from './corpus-pin';
 import { isPromoted, type PromotionRecord } from './promotions';
@@ -85,7 +87,11 @@ import {
 import type { StalenessReason } from './staleness';
 
 /**
- * The nine ways signing is refused, from factory spec §4.5 as corrected.
+ * The eleven ways signing is refused: factory spec §4.5's nine as corrected,
+ * plus B-EVID-SPAN's two — `undesignated_evidence` when an evidence set has no
+ * explicit designation, or the designation is bound to another result, and
+ * `unsupported_proposition` when a positive legal proposition has no selected
+ * occurrence lying wholly inside a declared operative range.
  *
  * `integrity_failure` is a member although §4.4 files it as a separate
  * category: it is *surfaced* here alongside the others so a signer sees
@@ -101,7 +107,9 @@ export type RefusalCode =
   | 'candidate_inconsistent'
   | 'integrity_failure'
   | 'red_suite'
-  | 'unpromoted_pipeline';
+  | 'unpromoted_pipeline'
+  | 'undesignated_evidence'
+  | 'unsupported_proposition';
 
 /** One reason signing was refused, in the signer's terms. */
 export interface Refusal {
@@ -185,6 +193,14 @@ export interface SignatureInput {
   by: string;
   on: string;
   note?: string;
+  /**
+   * What each evidence set was designated as and, for support, the occurrences
+   * relied upon — resolved by `resolveEvidenceUse` from the reviewer's
+   * designation, over the same result and corpus, before the candidate is
+   * built. The gate re-verifies the records it finds in the candidate rather
+   * than trusting that resolution.
+   */
+  evidenceUse: readonly EvidenceUseRecord[];
 }
 
 /**
@@ -245,6 +261,14 @@ export interface SignabilityInput {
   existing: ExistingSignature | null;
   /** Whether `npm test` is green. Running it is the CLI's job. */
   testSuiteGreen: boolean;
+  /**
+   * The resolution the candidate's `evidenceUse` was built from: its problems
+   * are refusals, each carrying the candidates a reviewer can select among.
+   * When it resolved cleanly, the candidate's records are re-verified against
+   * the result and the corpus independently, so a record is refused on what
+   * it claims and not accepted for how it was produced.
+   */
+  evidenceUse: ResolvedEvidenceUse;
 }
 
 /**
@@ -369,6 +393,7 @@ export function buildSignature(input: SignatureInput): SignatureCandidate {
     by: input.by,
     on: input.on,
     ...(input.note === undefined ? {} : { note: input.note }),
+    evidenceUse: input.evidenceUse.map((record) => ({ ...record, occurrences: record.occurrences.map((o) => ({ ...o, range: { ...o.range, start: [...o.range.start], end: [...o.range.end] } })) })),
   };
 
   return deepFreeze({
@@ -483,9 +508,50 @@ export function assertSignable(candidate: SignatureCandidate, checks: Signabilit
     // gate went on iterating the surface it had been written against. A
     // fabricated adjudication would have signed clean. The completeness guard
     // over `evidenceSetsOf` is what now makes that class of miss loud.
+    const evidenceFailed = new Set<string>();
     for (const set of evidenceSetsOf(result)) {
       const checked = checkEvidenceSet(set.items, checks.corpus);
-      if (!checked.ok) refuse('evidence_failed', `${set.label}: ${checked.problems.join('; ')}`);
+      if (!checked.ok) {
+        evidenceFailed.add(set.recordPath);
+        refuse('evidence_failed', `${set.label}: ${checked.problems.join('; ')}`);
+      }
+    }
+
+    // ── evidence use (B-EVID-SPAN) ────────────────────────────────────────
+    //
+    // Existence, checked above, is not support. Every set must be designated
+    // explicitly, every positive legal proposition must have a selected
+    // occurrence wholly inside a currently declared operative range, and the
+    // selection is bound to this exact result. The resolver's problems are
+    // reported first, with candidates, because they are what a reviewer acts
+    // on; when it resolved cleanly the candidate's own records are re-verified
+    // from scratch, so an entry is refused on what it claims. What either
+    // establishes is completeness, provenance and containment — not that the
+    // located words support the proposition, which is the reviewer's.
+    //
+    // A set whose evidence failed to re-find is refused above and not judged
+    // again here: its support cannot be assessed until its quotes exist, and a
+    // second refusal for the same set would be the first one restated.
+    const judged = checks.evidenceUse.problems.filter((problem) => !evidenceFailed.has(problem.set));
+    for (const problem of judged) refuse(problem.code, problem.detail);
+    if (judged.length === 0 && evidenceFailed.size === 0) {
+      const undesignated = entry.evidenceUse === undefined;
+      if (undesignated) refuse('undesignated_evidence', 'the candidate carries no evidence-use record');
+      for (const problem of verifyEvidenceUse(entry.evidenceUse ?? [], result, checks.corpus)) {
+        refuse('unsupported_proposition', problem);
+      }
+      // Agreement, apart from validity. Two resolutions of one designation
+      // can each be valid — a phrase inside two declared ranges yields one
+      // per selection — and a candidate carrying the *other* one would pass
+      // every check above. What is signed must be the reviewed resolution:
+      // every occurrence, every contextual classification and every reason,
+      // compared whole, in the same canonical form the entry is hashed in.
+      if (!undesignated && canonicalJson(entry.evidenceUse) !== canonicalJson(checks.evidenceUse.records)) {
+        refuse(
+          'candidate_inconsistent',
+          'evidenceUse: the candidate\'s evidence-use records are not the reviewed resolution — a signature records the occurrences and classifications the reviewer selected, not another set that would also verify',
+        );
+      }
     }
   }
 

@@ -83,7 +83,11 @@ import {
   EXIT_REFUSED,
   EXIT_USAGE,
 } from '../src/cli/exit-codes';
-import { runSign, verifyAfterWrite, type VerifyPaths } from '../src/cli/sign';
+import { resolvedStaleness, runSign, verifyAfterWrite, type VerifyPaths } from '../src/cli/sign';
+import { currentStateOf } from '../src/verification/current-state';
+import { resolveEvidenceUse, type EvidenceUseDesignation } from '../src/verification/evidence-use';
+import { evidenceSetsOf } from '../src/verification/evidence-sets';
+import { deriveStatus, toStatusInput } from '../src/verification/status';
 import { runRevoke } from '../src/cli/revoke';
 import { dispatch, parseFlags } from '../src/cli/verify';
 import { pinnedStandingFor, standingMapFor } from '../src/corpus/standing';
@@ -101,8 +105,15 @@ const PIPELINE = 'pipeline-1.0.0';
 
 const DOC_A = 'DOC-32013L0034';
 const DOC_B = 'DOC-32026L0470';
-const QUOTE_A = 'DIRECTIVE 2013/34/EU OF THE EUROPEAN PARLIAMENT AND OF THE COUNCIL';
-const QUOTE_B = 'DIRECTIVE (EU) 2026/470 OF THE EUROPEAN PARLIAMENT AND OF THE COUNCIL';
+// In-range sentences the two documents really carry, each occurring exactly
+// once inside a declared operative range, so a support set resolves to one
+// candidate without a reviewer's selection. The title lines they replaced are
+// kept under HEADER_* for the tests that need a quote that exists but lies in
+// no range (B-EVID-SPAN).
+const QUOTE_A = 'The information referred to in the first subparagraph shall be clearly identifiable within the consolidated management report';
+const QUOTE_B = 'For the purposes of the third, fourth and fifth subparagraphs, the following definitions apply';
+const HEADER_A = 'DIRECTIVE 2013/34/EU OF THE EUROPEAN PARLIAMENT AND OF THE COUNCIL';
+const THRESHOLD = 'net turnover of EUR 450 000 000 and an average number of 1 000 employees';
 
 let pack: KnowledgePack;
 let corpus: LoadedCorpus;
@@ -199,9 +210,32 @@ const resultPath = (): string =>
 const ledgerPath = (): string => join(dir, 'signatures.jsonl');
 const promotionsPath = (): string => join(dir, 'promotions.jsonl');
 
+const evidenceUsePath = (): string => join(dir, PACK_ID, REQ_ID, 'evidence-use.json');
+
 function writeResult(result: VerificationResult | unknown): void {
   mkdirSync(join(dir, PACK_ID, REQ_ID), { recursive: true });
   writeFileSync(resultPath(), JSON.stringify(result, null, 2), 'utf8');
+}
+
+/**
+ * The reviewer's designation for `result`, bound to its hash: every set support
+ * unless named contextual. Written beside the result, where the CLI reads it.
+ */
+type DesignatedSet = EvidenceUseDesignation['sets'][number];
+
+function writeEvidenceUse(result: VerificationResult, sets: DesignatedSet[] = defaultDesignation()): void {
+  mkdirSync(join(dir, PACK_ID, REQ_ID), { recursive: true });
+  writeFileSync(evidenceUsePath(), JSON.stringify({ resultSha256: resultSha256(result), sets }, null, 2), 'utf8');
+}
+
+/** A support set naming its one quote as the supporter, with an optional selection by offset. */
+function supportSet(set: string, selection?: { docId: string; rangeId: string; offset: number }): DesignatedSet {
+  return { set, use: 'support', items: [{ item: 'evidence[0]', use: 'support', ...(selection === undefined ? {} : { selection }) }] };
+}
+
+/** The three sets `makeResult()` carries, each one quote, all support. */
+function defaultDesignation(): DesignatedSet[] {
+  return [supportSet('reading.elements[0] (R1).evidence'), supportSet('challenges[0] (C1).evidence'), supportSet('challenges[0] (C1).adjudicationEvidence')];
 }
 
 function readLedger(): LedgerEntry[] {
@@ -248,6 +282,7 @@ function rivalEntry(by = 'B. Other'): SigningEntry {
     pipelineVersion: PIPELINE,
     by,
     on: '2026-08-21',
+    evidenceUse: resolveEvidenceUse({ result: makeResult(), designation: { resultSha256: resultSha256(makeResult()), sets: defaultDesignation() }, corpus }).records,
   });
 }
 
@@ -275,6 +310,7 @@ beforeEach(() => {
   cpSync(join(REGISTRY_DIR, `${PACK_ID}.json`), join(dir, 'requirement-versions', `${PACK_ID}.json`));
 
   writeResult(makeResult());
+  writeEvidenceUse(makeResult());
   writeFileSync(ledgerPath(), '', 'utf8');
   writeFileSync(
     promotionsPath(),
@@ -786,12 +822,16 @@ describe('resolveNormalizerChanged', () => {
       renderedConditionSha256: entry.renderedConditionSha256,
       corpusClosureSha256: entry.corpusClosureSha256,
       resultSha256: entry.resultSha256,
+      // The world still declares what the entry relied upon, so the only
+      // reason in question below is the normalizer's.
+      evidenceSets: evidenceSetsOf(makeResult()).map((set) => set.recordPath),
       corpus: [
         {
           docId: DOC_A,
           sha256Raw: now.sha256Raw,
           sha256Normalized: now.sha256Normalized,
           normalizerVersion: now.normalizerVersion,
+          operativeRanges: now.operativeRanges ?? [],
         },
       ],
     };
@@ -902,6 +942,246 @@ describe('the CLI resolves normalizer_changed against the retained raw bytes', (
     const doc = corpus.document(DOC_A);
     const again = sha256Hex(normalize(corpus.rawText(DOC_A), doc.contentSelector ?? undefined));
     expect(again).toBe(doc.sha256Normalized);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Evidence use — B-EVID-SPAN at the gate
+// ---------------------------------------------------------------------------
+
+/**
+ * The fixture world is otherwise signable — a promotion record exists, the
+ * suite is reported green, every quote re-finds — so each refusal below is the
+ * one the test names and nothing else. Every `REFUSED` assertion also checks
+ * that no other code appears, which is what keeps `unpromoted_pipeline` or
+ * `evidence_failed` from concealing the defect under test.
+ */
+describe('evidence use at the gate', () => {
+  const only = (outcome: { lines: string[] }, code: string) => {
+    const codes = outcome.lines.filter((l) => l.startsWith('  - ')).map((l) => l.slice(4).split(':')[0]);
+    expect(codes, outcome.lines.join('\n')).toEqual([code]);
+  };
+
+  for (const kind of ['verified', 'ratified'] as const) {
+    it(`records the designation and the occurrences relied upon in a ${kind} entry, and the entry re-verifies`, () => {
+      const outcome = runSign(signArgs({ kind }), paths);
+      expect(outcome.exitCode, outcome.lines.join('\n')).toBe(EXIT_OK);
+      const [entry] = readLedger() as SigningEntry[];
+      expect(entry?.kind).toBe(kind);
+      expect(entry?.evidenceUse?.map((r) => [r.set, r.use, r.occurrences.length])).toEqual([
+        ['reading.elements[0] (R1).evidence', 'support', 1],
+        ['challenges[0] (C1).evidence', 'support', 1],
+        ['challenges[0] (C1).adjudicationEvidence', 'support', 1],
+      ]);
+      const occ = entry!.evidenceUse![0]!.occurrences[0]!;
+      expect(occ).toMatchObject({ item: 'evidence[0]', docId: DOC_A, sha256Normalized: corpus.document(DOC_A).sha256Normalized, line: 2311 });
+      expect(occ.range).toEqual({ id: 'art-29a', start: ['Article 29a', 'Consolidated sustainability reporting'], end: ['CHAPTER 6a', 'SUSTAINABILITY REPORTING STANDARDS'] });
+      expect(corpus.normalizedText(DOC_A).slice(occ.offset, occ.offset + occ.length)).toBe(QUOTE_A);
+      expect(entry!.evidenceUse![1]!.occurrences[0]).toMatchObject({ docId: DOC_B, range: { id: 'art-2-pt-5' } });
+      // The output tells the signer where the support lies.
+      expect(outcome.lines.join('\n')).toContain('art-29a at line 2311');
+    });
+  }
+
+  it('refuses, with the ledger untouched, when no designation exists for the result', () => {
+    rmSync(evidenceUsePath());
+    const outcome = runSign(signArgs(), paths);
+    expect(outcome.exitCode).toBe(EXIT_REFUSED);
+    only(outcome, 'undesignated_evidence');
+    expect(outcome.lines.join('\n')).toContain('no evidence-use designation');
+    expect(readFileSync(ledgerPath(), 'utf8')).toBe('');
+  });
+
+  it('refuses a designation bound to a different result, naming both hashes', () => {
+    const other = makeResult({ reading: { elements: [{ id: 'R1', statement: 'A different statement.', evidence: [{ kind: 'quote', docId: DOC_A, sha256Normalized: corpus.document(DOC_A).sha256Normalized, text: QUOTE_A }] }] } });
+    writeEvidenceUse(other);
+    const outcome = runSign(signArgs(), paths);
+    expect(outcome.exitCode).toBe(EXIT_REFUSED);
+    only(outcome, 'undesignated_evidence');
+    expect(outcome.lines.join('\n')).toContain(resultSha256(other).slice(0, 12));
+    expect(outcome.lines.join('\n')).toContain(resultSha256(makeResult()).slice(0, 12));
+    expect(readFileSync(ledgerPath(), 'utf8')).toBe('');
+  });
+
+  it('refuses header-only support: a quote that exists in the document but lies in no declared range', () => {
+    const result = makeResult({ reading: { elements: [{ id: 'R1', statement: 'The title.', evidence: [{ kind: 'quote', docId: DOC_A, sha256Normalized: corpus.document(DOC_A).sha256Normalized, text: HEADER_A }] }] } });
+    writeResult(result);
+    writeEvidenceUse(result);
+    const outcome = runSign(signArgs(), paths);
+    expect(outcome.exitCode).toBe(EXIT_REFUSED);
+    only(outcome, 'unsupported_proposition');
+    expect(outcome.lines.join('\n')).toContain('none wholly inside a declared range');
+    expect(readFileSync(ledgerPath(), 'utf8')).toBe('');
+  });
+
+  it('refuses the threshold sentence as ambiguous over the actual declarations, listing both candidates, until the reviewer selects', () => {
+    const result = makeResult({ reading: { elements: [{ id: 'R1', statement: 'The thresholds.', evidence: [{ kind: 'quote', docId: DOC_A, sha256Normalized: corpus.document(DOC_A).sha256Normalized, text: THRESHOLD }] }] } });
+    writeResult(result);
+    writeEvidenceUse(result);
+    const ambiguous = runSign(signArgs(), paths);
+    expect(ambiguous.exitCode).toBe(EXIT_REFUSED);
+    only(ambiguous, 'unsupported_proposition');
+    const text = ambiguous.lines.join('\n');
+    expect(text).toContain('range art-1 at line 169 (offset 4170');
+    expect(text).toContain('range art-29a at line 2309 (offset 116298');
+    expect(text).toContain('selected by its stored offset');
+    expect(readFileSync(ledgerPath(), 'utf8')).toBe('');
+    // The reviewer selects Article 29a by offset; the entry records that occurrence and no other.
+    writeEvidenceUse(result, [
+      supportSet('reading.elements[0] (R1).evidence', { docId: DOC_A, rangeId: 'art-29a', offset: 116298 }),
+      supportSet('challenges[0] (C1).evidence'),
+      supportSet('challenges[0] (C1).adjudicationEvidence'),
+    ]);
+    const chosen = runSign(signArgs(), paths);
+    expect(chosen.exitCode, chosen.lines.join('\n')).toBe(EXIT_OK);
+    const [entry] = readLedger() as SigningEntry[];
+    expect(entry?.evidenceUse?.[0]?.occurrences.map((o) => [o.range.id, o.offset, o.line])).toEqual([['art-29a', 116298, 2309]]);
+  });
+
+  it('signs over a contextual challenge that quotes the header, records it as context with its reason, and never as support', () => {
+    const result = makeResult({
+      challenges: [
+        {
+          id: 'C1',
+          lens: 'miscitation',
+          statement: 'The reading cites the title line as if it were operative.',
+          verdict: 'CONFIRMED',
+          evidence: [{ kind: 'quote', docId: DOC_A, sha256Normalized: corpus.document(DOC_A).sha256Normalized, text: HEADER_A }],
+          resolution: 'The title line is not operative; the operative text is Article 29a.',
+          adjudicationEvidence: [{ kind: 'quote', docId: DOC_A, sha256Normalized: corpus.document(DOC_A).sha256Normalized, text: QUOTE_A }],
+        },
+      ],
+    });
+    writeResult(result);
+    // Designated support, the header quote lies in no range: refused as unsupported.
+    writeEvidenceUse(result);
+    const unsupported = runSign(signArgs(), paths);
+    expect(unsupported.exitCode).toBe(EXIT_REFUSED);
+    only(unsupported, 'unsupported_proposition');
+    // Left undesignated, nothing infers that a challenge is contextual: refused as undesignated.
+    writeEvidenceUse(result, [supportSet('reading.elements[0] (R1).evidence'), supportSet('challenges[0] (C1).adjudicationEvidence')]);
+    const inferred = runSign(signArgs(), paths);
+    expect(inferred.exitCode).toBe(EXIT_REFUSED);
+    only(inferred, 'undesignated_evidence');
+    expect(inferred.lines.join('\n')).toContain('challenge C1 is not designated');
+    expect(readFileSync(ledgerPath(), 'utf8')).toBe('');
+    writeEvidenceUse(result, [
+      supportSet('reading.elements[0] (R1).evidence'),
+      { set: 'challenges[0] (C1).evidence', use: 'context', reason: 'Quotes the consolidation title line to show the miscitation the challenge is about.' },
+      supportSet('challenges[0] (C1).adjudicationEvidence'),
+    ]);
+    const outcome = runSign(signArgs(), paths);
+    expect(outcome.exitCode, outcome.lines.join('\n')).toBe(EXIT_OK);
+    const [entry] = readLedger() as SigningEntry[];
+    expect(entry?.evidenceUse?.[1]).toMatchObject({ set: 'challenges[0] (C1).evidence', use: 'context', occurrences: [], contextual: [] });
+    expect(entry?.evidenceUse?.[1]?.reason).toContain('miscitation');
+    // The header quote is still verified as evidence: misspell it and the sign is refused for that.
+    const misquoted = makeResult({ challenges: [{ ...result.challenges[0]!, evidence: [{ kind: 'quote', docId: DOC_A, sha256Normalized: corpus.document(DOC_A).sha256Normalized, text: 'DIRECTIVE 2013/34/EU OF THE EUROPEAN PARLIAMENT AND OF THE COUNCILS' }] }] });
+    writeResult(misquoted);
+    writeEvidenceUse(misquoted, [
+      supportSet('reading.elements[0] (R1).evidence'),
+      { set: 'challenges[0] (C1).evidence', use: 'context', reason: 'as above' },
+      supportSet('challenges[0] (C1).adjudicationEvidence'),
+    ]);
+    const refused = runSign(signArgs({ on: '2026-08-22' }), paths);
+    expect(refused.exitCode).toBe(EXIT_REFUSED);
+    only(refused, 'evidence_failed');
+  });
+
+  it('a mixed reading element: the header quote must be designated contextual by the reviewer, never left over, and the entry records both halves', () => {
+    const a = corpus.document(DOC_A);
+    const result = makeResult({ reading: { elements: [{ id: 'R1', statement: 'The consolidated obligation.', evidence: [
+      { kind: 'quote', docId: DOC_A, sha256Normalized: a.sha256Normalized, text: HEADER_A },
+      { kind: 'quote', docId: DOC_A, sha256Normalized: a.sha256Normalized, text: QUOTE_A },
+    ] }] } });
+    writeResult(result);
+    // Naming only the operative quote leaves the header undesignated: refused, and nothing is written.
+    writeEvidenceUse(result, [
+      { set: 'reading.elements[0] (R1).evidence', use: 'support', items: [{ item: 'evidence[1]', use: 'support' }] },
+      supportSet('challenges[0] (C1).evidence'),
+      supportSet('challenges[0] (C1).adjudicationEvidence'),
+    ]);
+    const leftover = runSign(signArgs(), paths);
+    expect(leftover.exitCode).toBe(EXIT_REFUSED);
+    only(leftover, 'undesignated_evidence');
+    expect(leftover.lines.join('\n')).toContain('evidence[0] is not designated');
+    expect(readFileSync(ledgerPath(), 'utf8')).toBe('');
+    // Naming both as supporters: the header has no eligible occurrence and is not quietly demoted.
+    writeEvidenceUse(result, [
+      { set: 'reading.elements[0] (R1).evidence', use: 'support', items: [{ item: 'evidence[0]', use: 'support' }, { item: 'evidence[1]', use: 'support' }] },
+      supportSet('challenges[0] (C1).evidence'),
+      supportSet('challenges[0] (C1).adjudicationEvidence'),
+    ]);
+    const unsupported = runSign(signArgs(), paths);
+    expect(unsupported.exitCode).toBe(EXIT_REFUSED);
+    only(unsupported, 'unsupported_proposition');
+    expect(unsupported.lines.join('\n')).toContain('no occurrence of evidence[0]');
+    // The reviewer designates the header contextual with a reason: signs, and the entry carries the partition.
+    writeEvidenceUse(result, [
+      { set: 'reading.elements[0] (R1).evidence', use: 'support', items: [
+        { item: 'evidence[0]', use: 'context', reason: 'The title line identifies the instrument; the operative text is Article 29a.' },
+        { item: 'evidence[1]', use: 'support' },
+      ] },
+      supportSet('challenges[0] (C1).evidence'),
+      supportSet('challenges[0] (C1).adjudicationEvidence'),
+    ]);
+    const outcome = runSign(signArgs(), paths);
+    expect(outcome.exitCode, outcome.lines.join('\n')).toBe(EXIT_OK);
+    const [entry] = readLedger() as SigningEntry[];
+    expect(entry?.evidenceUse?.[0]?.occurrences.map((o) => o.item)).toEqual(['evidence[1]']);
+    expect(entry?.evidenceUse?.[0]?.contextual).toEqual([{ item: 'evidence[0]', reason: 'The title line identifies the instrument; the operative text is Article 29a.' }]);
+    expect(outcome.lines.join('\n')).toContain('context  reading.elements[0] (R1).evidence evidence[0]');
+  });
+
+  it('refuses a set declared twice as contradictory, with the ledger untouched', () => {
+    writeEvidenceUse(makeResult(), [...defaultDesignation(), { set: 'challenges[0] (C1).evidence', use: 'context', reason: 'r' }]);
+    const outcome = runSign(signArgs(), paths);
+    expect(outcome.exitCode).toBe(EXIT_REFUSED);
+    only(outcome, 'undesignated_evidence');
+    expect(outcome.lines.join('\n')).toContain('designated more than once');
+    expect(readFileSync(ledgerPath(), 'utf8')).toBe('');
+  });
+
+  it('goes stale_ranges when the range relied upon is withdrawn, with every document hash unchanged, and stays fresh when an unrelated range is added', () => {
+    expect(runSign(signArgs(), paths).exitCode).toBe(EXIT_OK);
+    const [entry] = readLedger() as SigningEntry[];
+    const declared = (docId: string, ranges: unknown[]) => ({
+      ...corpus,
+      document: (id: string) => (id === docId ? { ...corpus.document(id), operativeRanges: ranges as never } : corpus.document(id)),
+    });
+    const stateOver = (c: typeof corpus) =>
+      currentStateOf({
+        requirement,
+        renderContext: renderCtx,
+        closure: { sha256: closureSha256, docIds: closureDocIds, sourcesStanding: new Map(currentPins().map((pin) => [pin.docId, pin.sources])) },
+        corpus: c,
+        result: makeResult(),
+      });
+    expect(resolvedStaleness(entry!, stateOver(corpus), corpus)).toEqual([]);
+    const withdrawn = declared(DOC_A, (corpus.document(DOC_A).operativeRanges ?? []).filter((r) => r.id !== 'art-29a'));
+    const stale = resolvedStaleness(entry!, stateOver(withdrawn), corpus);
+    expect(stale).toEqual(['stale_ranges']);
+    expect(deriveStatus(toStatusInput(entry!, { checked: true, reasons: stale })).derivedStatus).toBe('draft');
+    // Hashes are untouched by a declaration: the only reason is the withdrawal.
+    expect(stateOver(withdrawn).corpus.map((d) => d.sha256Normalized)).toEqual(stateOver(corpus).corpus.map((d) => d.sha256Normalized));
+    const widened = declared(DOC_A, [...(corpus.document(DOC_A).operativeRanges ?? []), { id: 'art-19a', start: ['Article 19a', 'Sustainability reporting'], end: ['Article 19b', 'Sustainability reporting standards'], justification: 'x' }]);
+    expect(resolvedStaleness(entry!, stateOver(widened), corpus)).toEqual([]);
+  });
+
+  it('a pre-policy entry without a support record reads as stale_ranges, never as verified', () => {
+    const { evidenceUse: _omitted, ...rest } = rivalEntry('A. Reviewer');
+    const legacy = sealed(rest as SigningEntry);
+    writeFileSync(ledgerPath(), `${JSON.stringify(legacy)}\n`, 'utf8');
+    const state = currentStateOf({
+      requirement,
+      renderContext: renderCtx,
+      closure: { sha256: closureSha256, docIds: closureDocIds, sourcesStanding: new Map(currentPins().map((pin) => [pin.docId, pin.sources])) },
+      corpus,
+      result: makeResult(),
+    });
+    const stale = resolvedStaleness(legacy, state, corpus);
+    expect(stale).toEqual(['stale_ranges']);
+    expect(deriveStatus(toStatusInput(legacy, { checked: true, reasons: stale })).derivedStatus).toBe('draft');
   });
 });
 

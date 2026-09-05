@@ -68,7 +68,8 @@ export type StalenessReason =
   | 'stale_render'
   | 'stale_closure'
   | 'stale_result'
-  | 'normalizer_changed';
+  | 'normalizer_changed'
+  | 'stale_ranges';
 
 /**
  * A corpus document as it stands now. The shape deliberately omits
@@ -80,6 +81,21 @@ export interface CurrentCorpusDocument {
   sha256Raw: string;
   sha256Normalized: string;
   normalizerVersion: string;
+  /**
+   * The operative-provision ranges the document declares *now*. A signature
+   * records the range each supporting occurrence lay inside, anchors and all;
+   * `stale_ranges` is the answer to "is that exact range still authorised?",
+   * which the text hash cannot give — withdrawing a declaration leaves the
+   * text, its hashes and the anchor positions all unchanged.
+   */
+  operativeRanges: readonly DeclaredRange[];
+}
+
+/** A declaration as freshness compares it: id and anchors. Justification is display. */
+export interface DeclaredRange {
+  id: string;
+  start: readonly string[];
+  end: readonly string[];
 }
 
 /**
@@ -97,6 +113,14 @@ export interface CurrentState {
   corpusClosureSha256: string;
   resultSha256: string;
   corpus: CurrentCorpusDocument[];
+  /**
+   * The record paths of every evidence set the current result carries. A
+   * signature's designation must cover each of them, or an entry written as
+   * `evidenceUse: []` over a result full of propositions would read fresh: the
+   * gate verifies completeness at signing, and this is what keeps it verified
+   * afterwards without handing freshness the result itself.
+   */
+  evidenceSets: readonly string[];
 }
 
 /**
@@ -114,6 +138,7 @@ export const BLOCKING: ReadonlySet<StalenessReason> = new Set<StalenessReason>([
   'stale_closure',
   'stale_result',
   'normalizer_changed',
+  'stale_ranges',
 ]);
 
 /** Whether any reason in the set withholds `verified`. */
@@ -186,6 +211,34 @@ export function deriveStaleness(entry: SigningEntry, current: CurrentState): Sta
     if (found === undefined) continue;
     const reason = documentReason(pinned, found);
     if (reason !== null) reasons.add(reason);
+  }
+
+  // B-EVID-SPAN. A signature without a support record predates the policy and
+  // never satisfies it — there is no eligibility to be current. With one,
+  // every supporting occurrence's range must still be declared with the same
+  // anchors on the same document; the text hash above already covers the
+  // words, so anchors plus hash mean the same span. A contextual record
+  // relies on no range and contributes nothing here. An unrelated range
+  // added beside the one relied upon changes nothing.
+  if (entry.evidenceUse === undefined) {
+    reasons.add('stale_ranges');
+  } else {
+    const designated = new Set(entry.evidenceUse.map((record) => record.set));
+    if (current.evidenceSets.some((set) => !designated.has(set))) reasons.add('stale_ranges');
+    for (const record of entry.evidenceUse) {
+      if (record.use !== 'support') continue;
+      for (const occurrence of record.occurrences) {
+        const found = now.get(occurrence.docId);
+        if (found === undefined) continue;
+        const still = found.operativeRanges.some(
+          (range) =>
+            range.id === occurrence.range.id &&
+            range.start.join('\n') === occurrence.range.start.join('\n') &&
+            range.end.join('\n') === occurrence.range.end.join('\n'),
+        );
+        if (!still) reasons.add('stale_ranges');
+      }
+    }
   }
 
   return [...reasons].sort();

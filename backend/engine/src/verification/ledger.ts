@@ -55,6 +55,7 @@ import { z } from 'zod';
 import { sha256Hex } from '../corpus/hash';
 import { canonicalJson } from './canonical';
 import { corpusPinSchema } from './corpus-pin';
+import { evidenceUseRecordSchema } from './evidence-use';
 
 /**
  * The one definition of "carries an authority value", shared by the schemas
@@ -138,6 +139,13 @@ export const signingEntrySchema = z
     // authority: an entry carrying no note claims nothing, whereas an entry
     // carrying no `by` claims a judgement with no one behind it.
     note: z.string().optional(),
+    // B-EVID-SPAN: what each evidence set was designated as, and for support,
+    // the occurrences the signature relied upon — item, document, hash, the
+    // range with its anchors, and the exact position. Optional in the schema
+    // so a ledger written before the policy still *reads*; it never *counts*:
+    // `deriveStaleness` reports `stale_ranges` for a signing entry without it,
+    // and the gate writes it on every new signature.
+    evidenceUse: z.array(evidenceUseRecordSchema).optional(),
   })
   .strict();
 

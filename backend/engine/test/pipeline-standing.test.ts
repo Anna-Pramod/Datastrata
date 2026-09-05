@@ -168,6 +168,7 @@ describe('the record names the closure grammar, and the signature copies it', ()
         kind: 'verified',
         packId: 'testpack',
         packVersion: '0.1.0',
+        evidenceUse: [],
         requirement: REQUIREMENT,
         result: r,
         renderedConditionSha256: r.renderedConditionSha256,

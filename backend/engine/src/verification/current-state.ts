@@ -48,10 +48,11 @@
  */
 
 import type { AuthoredRequirement, TemporalStanding } from '../types';
-import type { ArtefactAuthenticity } from '../corpus/types';
+import type { ArtefactAuthenticity, OperativeRange } from '../corpus/types';
 import { requirementInputSha256 } from './canonical';
 import type { RenderContext } from './render';
 import { resultSha256, type VerificationResult } from './result';
+import { evidenceSetsOf } from './evidence-sets';
 import {
   candidateConditionSha256,
   candidateRenderedConditionSha256,
@@ -81,6 +82,8 @@ export interface CurrentCorpusSource {
     /** The artefact's own two standing facts, read off the same document the closure hashed. */
     artefactAuthenticity: ArtefactAuthenticity;
     nonOperativeSections: readonly string[];
+    /** Declared operative ranges, for `stale_ranges`; absent means none declared. */
+    operativeRanges?: readonly OperativeRange[];
   };
 }
 
@@ -144,7 +147,7 @@ export interface CurrentStateInput extends PinInput {
  * The scalar pins are `Omit`-ed from `CurrentState` rather than restated, so a
  * hash added to one cannot go missing from the other.
  */
-export interface VerificationPins extends Omit<CurrentState, 'resultSha256' | 'corpus'> {
+export interface VerificationPins extends Omit<CurrentState, 'resultSha256' | 'corpus' | 'evidenceSets'> {
   corpus: CorpusPin[];
 }
 
@@ -220,12 +223,18 @@ export function producePins(input: PinInput): VerificationPins {
  * the record freshness is measured over honest to its type; it is not what
  * stops a label from moving a status.
  */
-function forFreshness(pin: CorpusPin): CurrentCorpusDocument {
+function forFreshness(pin: CorpusPin, corpus: CurrentCorpusSource): CurrentCorpusDocument {
   return {
     docId: pin.docId,
     sha256Raw: pin.sha256Raw,
     sha256Normalized: pin.sha256Normalized,
     normalizerVersion: pin.normalizerVersion,
+    // Not a pin field: declarations are not model-facing and enter no closure
+    // hash, so the record does not carry them. Freshness still needs the
+    // current declarations, and reads them off the same corpus the pins were
+    // taken from — a second read of a document already visited, not a second
+    // walk of the closure.
+    operativeRanges: (corpus.document(pin.docId).operativeRanges ?? []).map((range) => ({ id: range.id, start: range.start, end: range.end })),
   };
 }
 
@@ -252,13 +261,13 @@ function forFreshness(pin: CorpusPin): CurrentCorpusDocument {
  * diagnosis and deliberately never compared — stays out without anyone having to
  * remember why.
  */
-export function pinsForFreshness(pins: VerificationPins): Omit<CurrentState, 'resultSha256'> {
+export function pinsForFreshness(pins: VerificationPins, corpus: CurrentCorpusSource): Omit<CurrentState, 'resultSha256' | 'evidenceSets'> {
   return {
     requirementInputSha256: pins.requirementInputSha256,
     conditionSha256: pins.conditionSha256,
     renderedConditionSha256: pins.renderedConditionSha256,
     corpusClosureSha256: pins.corpusClosureSha256,
-    corpus: pins.corpus.map(forFreshness),
+    corpus: pins.corpus.map((pin) => forFreshness(pin, corpus)),
   };
 }
 
@@ -268,5 +277,9 @@ export function pinsForFreshness(pins: VerificationPins): Omit<CurrentState, 're
  * that can only be taken once the result it covers exists.
  */
 export function currentStateOf(input: CurrentStateInput): CurrentState {
-  return { ...pinsForFreshness(producePins(input)), resultSha256: resultSha256(input.result) };
+  return {
+    ...pinsForFreshness(producePins(input), input.corpus),
+    resultSha256: resultSha256(input.result),
+    evidenceSets: evidenceSetsOf(input.result).map((set) => set.recordPath),
+  };
 }

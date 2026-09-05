@@ -318,6 +318,30 @@ export const FIELD_ROLES: Record<string, FieldRole[]> = {
   'ledger.signing.by': ['display', 'audit'],
   'ledger.signing.on': ['display', 'audit'],
   'ledger.signing.note': ['audit'],
+  // B-EVID-SPAN. The designation decides signability (every set designated,
+  // every proposition supported); the occurrences are what freshness asks to be
+  // still authorised (`stale_ranges` compares range id and anchors) and what an
+  // auditor re-verifies (item, document, hash, position).
+  'ledger.signing.evidenceUse[]': ['signability', 'audit'],
+  'ledger.signing.evidenceUse[].set': ['integrity', 'audit'],
+  'ledger.signing.evidenceUse[].use': ['signability', 'audit'],
+  'ledger.signing.evidenceUse[].reason': ['audit'],
+  'ledger.signing.evidenceUse[].occurrences[]': ['signability', 'audit'],
+  'ledger.signing.evidenceUse[].occurrences[].item': ['integrity', 'audit'],
+  'ledger.signing.evidenceUse[].occurrences[].docId': ['integrity', 'audit'],
+  'ledger.signing.evidenceUse[].occurrences[].sha256Normalized': ['integrity', 'audit'],
+  'ledger.signing.evidenceUse[].occurrences[].range.id': ['freshness', 'audit'],
+  'ledger.signing.evidenceUse[].occurrences[].range.start[]': ['freshness', 'audit'],
+  'ledger.signing.evidenceUse[].occurrences[].range.end[]': ['freshness', 'audit'],
+  'ledger.signing.evidenceUse[].occurrences[].offset': ['integrity', 'audit'],
+  'ledger.signing.evidenceUse[].occurrences[].length': ['integrity', 'audit'],
+  'ledger.signing.evidenceUse[].occurrences[].line': ['display', 'audit'],
+  // The quotes of a support set the reviewer designated contextual, with
+  // their reasons: part of the partition the gate verifies (every quote named
+  // exactly once), so signability; audit because the reason is the reviewer's.
+  'ledger.signing.evidenceUse[].contextual[]': ['signability', 'audit'],
+  'ledger.signing.evidenceUse[].contextual[].item': ['integrity', 'audit'],
+  'ledger.signing.evidenceUse[].contextual[].reason': ['audit'],
 
   // ── ledger, revocation variant ─────────────────────────────────────────
   // Verbatim from the plan.
