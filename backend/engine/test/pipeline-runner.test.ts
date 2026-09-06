@@ -117,7 +117,7 @@ describe('the runner guard', () => {
     const trap = installNetworkTrap();
     try {
       const outcome = await runVerificationPipeline(runInput(placeholderRunner()));
-      expect(outcome.transcript.roles).toHaveLength(5);
+      expect(outcome.transcript.roles).toHaveLength(2 + DEFAULT_ROLE_CONFIG.prosecutorCount);
       expect(trap.calls).toEqual([]);
     } finally {
       trap.restore();
@@ -232,13 +232,18 @@ function sourceFiles(dir: string): string[] {
 }
 
 describe('static boundaries', () => {
-  it('nothing under src/ imports the live runner except itself', () => {
+  it('the live runner is imported only by the production wiring under src/cli, never by the pipeline', () => {
+    // Since B-ADAPTER an import is not the guarantee: `live-wiring.ts` imports
+    // the runner to construct it from the environment. What holds is that no
+    // pipeline module reaches it — orchestration takes an injected runner —
+    // and that the only path to the network is the runner's default transport,
+    // which every offline test replaces or traps (`live-wiring.test.ts`).
     const importers = sourceFiles('src').filter(
       (path) =>
         !path.endsWith(join('pipeline', 'live-runner.ts')) &&
         /from\s+'[^']*live-runner'/.test(code(path)),
     );
-    expect(importers).toEqual([]);
+    expect(importers).toEqual([join('src', 'cli', 'live-wiring.ts')]);
     // Positive control: the pattern does match a real import, so an empty
     // result is a statement about the codebase rather than about the regex.
     expect(/from\s+'[^']*live-runner'/.test("import { x } from './live-runner';")).toBe(true);

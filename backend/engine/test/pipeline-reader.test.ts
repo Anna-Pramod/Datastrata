@@ -658,7 +658,7 @@ describe('a reader that halts on a document stops the pipeline exactly once', ()
     });
     expect(outcome.halted).toBe(false);
     expect(outcome.tail.gaps).toEqual([]);
-    expect(outcome.transcript.roles).toHaveLength(5);
+    expect(outcome.transcript.roles).toHaveLength(2 + DEFAULT_ROLE_CONFIG.prosecutorCount);
     expect(outcome.executions.adjudicator).not.toBeNull();
   });
 });
@@ -1006,9 +1006,9 @@ describe('a requirement whose evidence is only partly served (the real corpus)',
 
     expect(outcome.halted).toBe(true);
     // No agent ran at all: no reader, and therefore no prosecutor and no
-    // adjudicator either. `prosecutorCount` is 3, so the zero below is a halt
+    // adjudicator either. `prosecutorCount` is 7, so the zero below is a halt
     // rather than a configuration that asks for nobody.
-    expect(DEFAULT_ROLE_CONFIG.prosecutorCount).toBe(3);
+    expect(DEFAULT_ROLE_CONFIG.prosecutorCount).toBe(7);
     expect(runner.requests).toEqual([]);
     expect(outcome.executions.reader).toBeNull();
     expect(outcome.executions.prosecutors).toEqual([]);
@@ -1067,7 +1067,7 @@ describe('a requirement whose evidence is only partly served (the real corpus)',
     });
     expect(whole.halted).toBe(false);
     expect(whole.tail.gaps).toEqual([]);
-    expect(liveRunner.requests).toHaveLength(5);
+    expect(liveRunner.requests).toHaveLength(2 + DEFAULT_ROLE_CONFIG.prosecutorCount);
     expect(whole.executions.adjudicator).not.toBeNull();
   });
 

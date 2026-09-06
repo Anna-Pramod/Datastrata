@@ -46,6 +46,8 @@ import { qualifiedChallengeId } from '../src/pipeline/prosecutors';
 import type { RoleRequest } from '../src/pipeline/roles';
 import { TRANSCRIPT_ROOT } from '../src/pipeline/transcript';
 import type { AgentRunner, RoleResponse } from '../src/pipeline/runner';
+import type { ProviderTransport } from '../src/pipeline/live-runner';
+import type { ProviderHttpRequest } from '../src/pipeline/provider-adapter';
 import { lensFromRequest } from './pipeline-fixtures';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -93,11 +95,22 @@ export const REQUIREMENT_ID = 'CSRD-S-001';
  * with it. Nothing else did — the closure hash covers stored text, not its
  * rendering — and that partition is measured in `pipeline-replay.test.ts`
  * like the two before it.
+ *
+ * `run-v1-14b51960…` is the prompt-era generation, retired on 2026-09-06 by
+ * B-ADAPTER: the role configuration moved to seven prosecutors, one per
+ * declared lens, and selected the concrete adapter `anthropic-messages@1`,
+ * both `pipelineVersion` inputs, so `runId` moved with it. The prompts, the
+ * closure and every other binding field did not. The recording that replaced
+ * it was made through the adapter path over a canned transport, so it has the
+ * shape a genuine recording will have; it is still synthetic, and a genuine
+ * recording will be filed beside it under its own identity rather than in
+ * place of it.
  */
 export const SUPERSEDED_RUN_IDS: readonly string[] = [
   'run-v1-764e571e7fb566ba75cc2ff126ac1d7b18cb59a887b033eef9f97c2f1f215d54',
   'run-v1-e77e9d0d4f4ce72d5543f6e21d99074051ad3d8d10ba4c661d2f73f0656574df',
   'run-v1-a6743df7d36b87e9495aadc1094b3894ee74fb976b41f884cda28ab5215b7688',
+  'run-v1-14b519609731346ac45f71e02845814a6729876e6d614953ee6830ed47d59652',
 ];
 
 /** The retired identities by generation, so a test selects a recording by what it is and never by position. */
@@ -105,6 +118,7 @@ export const RETIRED = {
   preD1a: 'run-v1-764e571e7fb566ba75cc2ff126ac1d7b18cb59a887b033eef9f97c2f1f215d54',
   provenanceEra: 'run-v1-e77e9d0d4f4ce72d5543f6e21d99074051ad3d8d10ba4c661d2f73f0656574df',
   standingEra: 'run-v1-a6743df7d36b87e9495aadc1094b3894ee74fb976b41f884cda28ab5215b7688',
+  promptEra: 'run-v1-14b519609731346ac45f71e02845814a6729876e6d614953ee6830ed47d59652',
 } as const;
 
 export const DOC_HOST = 'DOC-32013L0034';
@@ -220,6 +234,36 @@ export function adjudication(verdictForFirst: 'CONFIRMED' | 'MISMATCH' = 'CONFIR
     })),
     gaps: [],
   };
+}
+
+/**
+ * A canned Anthropic Messages transport: answers each role request with the
+ * synthetic role output wrapped in a `type: "message"` envelope, exactly as the
+ * adapter expects to project it. It reads the role from the system prompt's
+ * heading and the lens from the user turn, so it stands wherever the real
+ * transport would — no network, no credential, no model.
+ */
+export function cannedAnthropicTransport(overrides: SyntheticResponses = {}): ProviderTransport & { calls: ProviderHttpRequest[] } {
+  const calls: ProviderHttpRequest[] = [];
+  const transport = ((request: ProviderHttpRequest) => {
+    calls.push(request);
+    const body = JSON.parse(request.body) as { system: string; messages: Array<{ content: string }> };
+    const heading = /^# Role: (.+)$/m.exec(body.system)?.[1] ?? '';
+    const role = heading.includes('reader') ? 'reader' : heading.includes('prosecutor') ? 'prosecutor' : heading.includes('adjudicator') ? 'adjudicator' : null;
+    if (role === null) throw new Error(`canned transport: no role heading in the system prompt (${heading})`);
+    const lens = /^# Lens\n\n(.+)$/m.exec(body.messages[0]?.content ?? '')?.[1];
+    const output =
+      role === 'reader' ? (overrides.reading ?? reading())
+      : role === 'prosecutor' ? prosecution(lens ?? (() => { throw new Error('canned transport: prosecutor request carries no lens'); })())
+      : (overrides.adjudication ?? adjudication());
+    return Promise.resolve({
+      status: 200,
+      headers: { 'request-id': `req_canned_${calls.length}` },
+      body: JSON.stringify({ id: `msg_canned_${calls.length}`, type: 'message', role: 'assistant', model: 'claude-opus-5', content: [{ type: 'text', text: JSON.stringify(output) }], stop_reason: 'end_turn', stop_sequence: null, usage: { input_tokens: 0, output_tokens: 0 } }),
+    });
+  }) as unknown as ProviderTransport & { calls: ProviderHttpRequest[] };
+  transport.calls = calls;
+  return transport;
 }
 
 export interface SyntheticResponses {

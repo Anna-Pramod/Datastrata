@@ -22,5 +22,9 @@ export default defineConfig({
   test: {
     include: ['test/**/*.test.ts'],
     exclude: ['**/node_modules/**', 'test/**/*.agents.test.ts'],
+    // The suite-wide offline guard, in place before any test module loads.
+    // Absent from `vitest.agents.config.ts` on purpose: that suite is the one
+    // allowed to reach a provider, behind its own gates.
+    setupFiles: ['test/setup/offline-guard.ts'],
   },
 });

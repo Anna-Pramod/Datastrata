@@ -15,10 +15,28 @@
  * ```text
  * dispatch(['run', csrd, CSRD-S-001])   the same entry point verify.ts uses
  *   -> readWorld over the real pack and the real corpus, read-only
- *   -> runVerificationPipeline over the synthetic capability
+ *   -> runVerificationPipeline over a LIVE runner speaking anthropic-messages@1
+ *        -> adapter.buildRequest        <- the real request the provider would receive
+ *        -> canned transport            <- answers from the synthetic outputs, no network
+ *        -> adapter.projectResponse     <- the real projection of a message envelope
  *   -> capabilities.record(transcript)  <- the recording, as orchestration built it
  *   -> writeVerificationResult          <- into a temporary directory, discarded
  * ```
+ *
+ * Since B-ADAPTER the recording is made through the ordinary adapter path:
+ * the live runner, the concrete adapter's request and projection, and the
+ * transport seam — with the transport replaced by a canned one that wraps the
+ * synthetic role outputs in `type: "message"` envelopes. The suite's network
+ * trap is installed for the whole recording, so if anything reached for the
+ * real transport the script would fail rather than spend. The capability
+ * token is set in this process for the duration, because the runner checks it
+ * on every call; a token in a script that also installs the trap and injects
+ * the transport authorises nothing beyond the fake.
+ *
+ * **It is still a synthetic recording, not a genuine provider run.** No model
+ * was contacted. What is genuine is the path: the request the adapter built
+ * and the projection it made are the ones a live run would make, so replay
+ * binds to a recording shaped exactly as a real one will be.
  *
  * The recording is therefore the one orchestration assembles on a real run, with
  * the real prompt files, the real closure and the real derived `runId`. Nothing
@@ -55,12 +73,15 @@ import { EXIT_OK } from '../src/cli/exit-codes';
 import { dispatch } from '../src/cli/verify';
 import type { VerifyPaths } from '../src/cli/sign';
 import { writeRunTranscript, type RunTranscript } from '../src/pipeline/transcript';
+import { ANTHROPIC_MESSAGES_ADAPTER } from '../src/pipeline/anthropic-messages';
+import { LiveAgentRunner, LIVE_AGENTS_ENV, LIVE_AGENTS_TOKEN } from '../src/pipeline/live-runner';
+import { installNetworkTrap } from './helpers';
 import {
+  cannedAnthropicTransport,
   engineRoot,
   FIXTURE_TRANSCRIPT_ROOT,
   PACK_ID,
   REQUIREMENT_ID,
-  syntheticCapability,
 } from './replay-fixtures';
 
 async function main(): Promise<void> {
@@ -82,18 +103,37 @@ async function main(): Promise<void> {
     };
 
     let recorded: RunTranscript | null = null;
-    const outcome = await dispatch(
-      ['run', PACK_ID, REQUIREMENT_ID],
-      paths,
-      () => true,
-      undefined,
-      {
-        runner: syntheticCapability(),
-        record: (transcript) => {
-          recorded = transcript;
+    // The trap first, then the token: nothing in this process can reach the
+    // network, and only then is the runner allowed to run at all.
+    const trap = installNetworkTrap();
+    process.env[LIVE_AGENTS_ENV] = LIVE_AGENTS_TOKEN;
+    const transport = cannedAnthropicTransport();
+    let outcome;
+    try {
+      outcome = await dispatch(
+        ['run', PACK_ID, REQUIREMENT_ID],
+        paths,
+        () => true,
+        undefined,
+        {
+          runner: new LiveAgentRunner({
+            endpoint: 'https://recording.invalid/v1/messages',
+            apiKey: 'no-credential-a-canned-transport-reads-nothing',
+            adapter: ANTHROPIC_MESSAGES_ADAPTER,
+            transport,
+          }),
+          record: (transcript) => {
+            recorded = transcript;
+          },
         },
-      },
-    );
+      );
+    } finally {
+      delete process.env[LIVE_AGENTS_ENV];
+      trap.restore();
+    }
+    if (trap.calls.length > 0) {
+      throw new Error(`the recording reached for the network: ${trap.calls.join(', ')}`);
+    }
 
     if (outcome.exitCode !== EXIT_OK) {
       throw new Error(
@@ -137,7 +177,7 @@ async function main(): Promise<void> {
         'and this same path, and replacing this file is a decision rather than a fix: it retires',
         'the recorded outputs as evidence.',
         '',
-        '## Four generations live here',
+        '## Five generations live here',
         '',
         'A recording is bound to a run identity, so it stops binding when the question moves.',
         'When that happens the old recording is **retired, not deleted**: it is evidence of an',
@@ -151,7 +191,8 @@ async function main(): Promise<void> {
         '| pre-D1(a) | `run-v1-764e571e…` | retired 2026-08-27 |',
         '| provenance-era | `run-v1-e77e9d0d…` | retired 2026-09-05 |',
         '| standing-era | `run-v1-a6743df7…` | retired 2026-09-05 |',
-        `| prompt-era | \`${transcript.runId.slice(0, 20)}…\` | current |`,
+        '| prompt-era | `run-v1-14b51960…` | retired 2026-09-06 |',
+        `| adapter-era | \`${transcript.runId.slice(0, 20)}…\` | current |`,
         '',
         'The D1(a) provenance migration retired the first. It moved `pipelineVersion` — the',
         'reader prompt changed when locators replaced source identities in `ReaderInput` — and',
@@ -177,6 +218,17 @@ async function main(): Promise<void> {
         'partitions are measured in `pipeline-replay.test.ts` between the retired recordings',
         'themselves, not asserted from a plan.',
         '',
+        'B-ADAPTER retired the fourth. The role configuration moved to seven prosecutors, one',
+        'per declared lens, and selected the concrete adapter `anthropic-messages@1`; both are',
+        '`pipelineVersion` inputs, so `runId` moved with it. The prompts, the closure renderer',
+        'and every other binding field did **not** move. This recording was made through the',
+        'adapter path — the live runner, the adapter\'s real request and projection — over a',
+        '**canned transport** with the suite\'s network trap installed, so it has the shape a',
+        'genuine recording will have. It is still synthetic: no model was contacted, and the',
+        'nine exchanges (one reader, seven prosecutors, one adjudicator) carry the synthetic',
+        'outputs. A genuine recording, when one is authorised and made, is filed beside these',
+        'under its own identity; none of them is deleted for it.',
+        '',
         '`SUPERSEDED_RUN_IDS` in `test/replay-fixtures.ts` is the list of retired identities.',
         'Adding a generation means appending to it, never overwriting a file.',
         '',
@@ -187,7 +239,7 @@ async function main(): Promise<void> {
     );
     process.stdout.write(
       [
-        `Recorded ${transcript.roles.length} role exchange(s)`,
+        `Recorded ${transcript.roles.length} role exchange(s) through ${ANTHROPIC_MESSAGES_ADAPTER.identity.id}@${ANTHROPIC_MESSAGES_ADAPTER.identity.version} over a canned transport (${transport.calls.length} canned answers, network trap unfired)`,
         `  runId           ${transcript.runId}`,
         `  pipelineVersion ${transcript.pipelineVersion}`,
         `  wrote           ${path}`,

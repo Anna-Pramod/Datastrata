@@ -27,10 +27,8 @@
  */
 
 import type { RoleName } from './roles';
-import {
-  UNSELECTED_PROVIDER_ADAPTER,
-  type ProviderAdapterIdentity,
-} from './provider-adapter';
+import type { ProviderAdapterIdentity } from './provider-adapter';
+import { ANTHROPIC_MESSAGES_IDENTITY } from './anthropic-messages';
 
 /**
  * The lenses of spec §3.2, in order.
@@ -87,7 +85,10 @@ export interface RoleConfig {
  * may be signed is answered by `verification/promotions.jsonl`, which is B3's.
  */
 export const DEFAULT_ROLE_CONFIG: RoleConfig = {
-  prosecutorCount: 3,
+  // Seven, one per declared lens: the milestone configuration. Three ran only
+  // the first three lenses and left four — superseded or miscited provision
+  // among them — never reaching a prosecutor request (B-ADAPTER).
+  prosecutorCount: 7,
   lenses: DEFAULT_LENSES,
   order: ['reader', 'prosecutor', 'adjudicator'],
   models: {
@@ -106,7 +107,12 @@ export const DEFAULT_ROLE_CONFIG: RoleConfig = {
    * prevent. Selecting a provider is a deliberate configuration change, and it
    * moves `pipelineVersion`.
    */
-  providerAdapter: UNSELECTED_PROVIDER_ADAPTER,
+  // The concrete adapter production executes (`anthropic-messages@1`,
+  // `anthropic-messages.ts`). Selecting it moves `pipelineVersion`: a pipeline
+  // that can reach a model is not the pipeline that never could. Replay
+  // capabilities are exempt from the adapter check and still bind, because
+  // they execute no protocol.
+  providerAdapter: ANTHROPIC_MESSAGES_IDENTITY,
 };
 
 /** The lens prosecutor `index` works, wrapping when there are fewer lenses. */

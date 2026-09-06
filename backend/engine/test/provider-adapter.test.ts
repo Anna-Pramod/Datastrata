@@ -368,9 +368,13 @@ describe('adapter identities', () => {
     }
   });
 
-  it('the default configuration selects no provider, and says so', () => {
-    expect(DEFAULT_ROLE_CONFIG.providerAdapter).toEqual(UNSELECTED_PROVIDER_ADAPTER);
-    expect(isProviderAdapterSelected(DEFAULT_ROLE_CONFIG.providerAdapter)).toBe(false);
+  it('the default configuration selects the Anthropic Messages adapter, and an unselected identity still says so', () => {
+    // B-ADAPTER: the default is the concrete adapter production executes. The
+    // unselected identity remains the declaration a configuration makes when
+    // no provider may be reached, and it still reads as unselected.
+    expect(DEFAULT_ROLE_CONFIG.providerAdapter).toEqual({ id: 'anthropic-messages', version: '1' });
+    expect(isProviderAdapterSelected(DEFAULT_ROLE_CONFIG.providerAdapter)).toBe(true);
+    expect(isProviderAdapterSelected(UNSELECTED_PROVIDER_ADAPTER)).toBe(false);
     expect(isProviderAdapterSelected(SYNTHETIC_ADAPTER_V1.identity)).toBe(true);
   });
 

@@ -27,11 +27,12 @@
  * separated out before the arguments the two writing commands share.
  *
  * **`run` never contacts a model on its own initiative.** The execution
- * capability is a parameter of `dispatch`, and the process edge below supplies
- * nothing: a run reaching a judgment role with no capability is refused by name
- * with nothing contacted. There is no environment variable, no credential and
- * no endpoint in this path, and B2 authorises no live execution; Task 5e
- * supplies replay through that same parameter.
+ * capability is a parameter of `dispatch`, and the process edge below asks
+ * `live-wiring.ts` what the environment authorises: a live runner through the
+ * configured adapter only when the capability token, the endpoint and the
+ * credential are all present, and otherwise nothing, so a run reaching a
+ * judgment role is refused by name with nothing contacted. A credential alone
+ * is not permission to spend.
  *
  * **`dispatch` is `async` because one subcommand is.** Every branch is awaited
  * rather than only the asynchronous one, so the return type is a single
@@ -72,7 +73,9 @@ import { runRevoke } from './revoke';
 import { runRun, type RunCapabilities } from './run';
 import { runSheet } from './review-sheet';
 import { runSign, type VerifyPaths } from './sign';
-import { EXIT_USAGE, type CliOutcome } from './exit-codes';
+import { EXIT_REFUSED, EXIT_USAGE, type CliOutcome } from './exit-codes';
+import { liveCapabilityFrom, liveWiringRefusal } from './live-wiring';
+import { DEFAULT_ROLE_CONFIG } from '../pipeline/config';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const engineRoot = join(here, '..', '..');
@@ -163,12 +166,22 @@ function stringFlag(flags: Record<string, string | true>, name: string): string 
   return typeof value === 'string' ? value : null;
 }
 
+/**
+ * The run command's execution capability, or a thunk that produces it.
+ *
+ * A thunk, so that resolving the live capability from the environment happens
+ * only when a `run` is actually dispatched: the sheet, sign and revoke
+ * commands never ask what the environment authorises, and a token set beside
+ * a missing endpoint cannot stop them.
+ */
+export type RunCapabilitySource = RunCapabilities | (() => RunCapabilities);
+
 export async function dispatch(
   argv: string[],
   paths: VerifyPaths,
   suiteGreen: () => boolean,
   sheetDefaults?: SheetDefaults,
-  capabilities?: RunCapabilities,
+  capabilities?: RunCapabilitySource,
 ): Promise<CliOutcome> {
   const { positional, flags } = parseFlags(argv);
   const [command, packId, requirementId] = positional;
@@ -223,7 +236,21 @@ export async function dispatch(
   // `run` writes a record of what a pipeline did, so it takes no signer's name.
   // Split before the `--by` check below for the same reason `sheet` is.
   if (command === 'run') {
-    return runRun({ packId, requirementId }, paths, capabilities ?? {});
+    // Resolved here and nowhere earlier. A live prerequisite that is missing
+    // is the ordinary named refusal, not an exception escaping the process
+    // edge: the operator reads which variable to set, and exits refused.
+    let resolved: RunCapabilities;
+    try {
+      resolved = typeof capabilities === 'function' ? capabilities() : (capabilities ?? {});
+    } catch (error) {
+      const refusal = liveWiringRefusal(error);
+      if (refusal === null) throw error;
+      return {
+        exitCode: EXIT_REFUSED,
+        lines: ['REFUSED — the live capability is not configured, so no model can be reached.', `  - live_capability: ${refusal}`],
+      };
+    }
+    return runRun({ packId, requirementId }, paths, resolved);
   }
 
   const by = stringFlag(flags, 'by');
@@ -264,27 +291,51 @@ export async function dispatch(
   );
 }
 
-/* c8 ignore start — the process edge: argv in, lines out, exit code out. */
-if (process.argv[1] !== undefined && process.argv[1].endsWith('verify.ts')) {
-  const argv = process.argv.slice(2);
+/** Where a CLI invocation reads and writes. The process edge uses the engine's own; tests point at a scratch root. */
+export interface CliRoots {
+  engineRoot: string;
+  verificationDir: string;
+  outPath: string;
+}
+
+/**
+ * The whole CLI as a function of its arguments and environment — what the
+ * process edge calls, and what tests call to exercise the production routing
+ * without a process. The live capability is passed as a thunk and resolved
+ * only by a `run`; every other command never consults the environment.
+ */
+export async function runCli(
+  argv: string[],
+  env: NodeJS.ProcessEnv,
+  roots: CliRoots = { engineRoot, verificationDir: join(engineRoot, 'verification'), outPath: join(engineRoot, 'review-sheet.html') },
+  suiteGreen: () => boolean = suiteIsGreen,
+): Promise<CliOutcome> {
   const { positional } = parseFlags(argv);
   const paths: VerifyPaths = {
-    packDir: join(engineRoot, 'knowledge', positional[1] ?? ''),
-    corpusDir: join(engineRoot, 'corpus'),
-    verificationDir: join(engineRoot, 'verification'),
+    packDir: join(roots.engineRoot, 'knowledge', positional[1] ?? ''),
+    corpusDir: join(roots.engineRoot, 'corpus'),
+    verificationDir: roots.verificationDir,
   };
-  const outcome = await dispatch(
+  return dispatch(
     argv,
     paths,
-    suiteIsGreen,
+    suiteGreen,
     {
-      outPath: join(engineRoot, 'review-sheet.html'),
-      goldenProfilesPath: join(engineRoot, 'test', 'golden-profiles.test.ts'),
+      outPath: roots.outPath,
+      goldenProfilesPath: join(roots.engineRoot, 'test', 'golden-profiles.test.ts'),
     },
-    // No execution capability, and no way to configure one from here. See the
-    // file header: `run` refuses by name rather than reaching for a model.
-    { runner: null },
+    // The execution capability the environment authorises — a live runner
+    // through the configured adapter only when the token, the endpoint and
+    // the credential are all present — or none, in which case `run` refuses by
+    // name rather than reaching for a model. See `live-wiring.ts`. A thunk:
+    // resolved by `run` alone.
+    () => liveCapabilityFrom({ env, config: DEFAULT_ROLE_CONFIG }),
   );
+}
+
+/* c8 ignore start — the process edge: argv in, lines out, exit code out. */
+if (process.argv[1] !== undefined && process.argv[1].endsWith('verify.ts')) {
+  const outcome = await runCli(process.argv.slice(2), process.env);
   for (const line of outcome.lines) console.log(line);
   process.exit(outcome.exitCode);
 }

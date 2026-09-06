@@ -76,13 +76,7 @@ describe('a run, recorded and replayed', () => {
   it('round-trips through disk and reproduces the run', async () => {
     const live = await runVerificationPipeline(runInput(placeholderRunner((index) => lensFor(DEFAULT_ROLE_CONFIG, index))));
     expect(live.transcript.roles).toHaveLength(1 + DEFAULT_ROLE_CONFIG.prosecutorCount + 1);
-    expect(live.transcript.roles.map((role) => `${role.role}:${role.index}`)).toEqual([
-      'reader:0',
-      'prosecutor:0',
-      'prosecutor:1',
-      'prosecutor:2',
-      'adjudicator:0',
-    ]);
+    expect(live.transcript.roles.map((role) => `${role.role}:${role.index}`)).toEqual(['reader:0', ...DEFAULT_ROLE_CONFIG.lenses.map((_, i) => `prosecutor:${i}`), 'adjudicator:0']);
 
     const root = mkdtempSync(join(tmpdir(), 'datastrata-transcripts-'));
     const path = writeRunTranscript(root, live.transcript);
@@ -109,7 +103,7 @@ describe('a run, recorded and replayed', () => {
   it('a recording that does not cover a role fails loudly rather than substituting one', async () => {
     const live = await runVerificationPipeline(runInput(placeholderRunner()));
     // Missing the adjudicator: the replay runner itself refuses.
-    const noAdjudicator = { ...live.transcript, roles: live.transcript.roles.slice(0, 4) };
+    const noAdjudicator = { ...live.transcript, roles: live.transcript.roles.slice(0, 1 + DEFAULT_ROLE_CONFIG.prosecutorCount) };
     await expect(
       runVerificationPipeline(runInput(replayRunner(noAdjudicator))),
     ).rejects.toBeInstanceOf(TranscriptReplayError);

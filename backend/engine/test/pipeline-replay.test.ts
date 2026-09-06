@@ -96,7 +96,7 @@ import {
 } from '../src/pipeline/replay';
 import { recordedRequest, requestSha256 } from '../src/pipeline/request-identity';
 import { RoleOutputError } from '../src/pipeline/roles';
-import { ProviderAdapterNotSelectedError } from '../src/pipeline/provider-adapter';
+import { UnverifiedProviderAdapterError } from '../src/pipeline/provider-adapter';
 import {
   parseRunTranscript,
   serialiseTranscript,
@@ -368,7 +368,8 @@ describe('the committed replay fixture', () => {
     expect(digestOf(RETIRED.preD1a)).toBe('91ad7485be3572062b9af245127eab5ee6fd4ba574baeb9475a4876586e167c9');
     expect(digestOf(RETIRED.provenanceEra)).toBe('84e3d2ca67f22717f738e3ffb04fd40c2c7436a2cf2193d6b111fde701435b60');
     expect(digestOf(RETIRED.standingEra)).toBe('534ffe431d4cc380fc1e441b70f79cda45c65ed23572e223a11ace80a6e5f888');
-    expect(SUPERSEDED_RUN_IDS).toEqual([RETIRED.preD1a, RETIRED.provenanceEra, RETIRED.standingEra]);
+    expect(digestOf(RETIRED.promptEra)).toBe('0d71e28a897aeba1f9e2d2818a24e44b740eeaa753ec266fff202e9188e3a8d7');
+    expect(SUPERSEDED_RUN_IDS).toEqual([RETIRED.preD1a, RETIRED.provenanceEra, RETIRED.standingEra, RETIRED.promptEra]);
   });
 
   it('records one exchange per configured execution, each bound', () => {
@@ -1491,11 +1492,14 @@ describe('projected content is ordinary content', () => {
     expect(trap.calls).toEqual([]);
   });
 
-  it('a live capability cannot run at all under a configuration that selected no provider', async () => {
+  it('a live capability that declares no protocol cannot run at all under the production configuration', async () => {
     // The rule that displaced the test above, proved through the same
-    // production path: `verify run` uses `DEFAULT_ROLE_CONFIG`, which declares
-    // no provider, so a capability announcing itself live is refused before any
-    // role executes — and before any request could be made.
+    // production path. Since B-ADAPTER `DEFAULT_ROLE_CONFIG` selects the
+    // concrete adapter, so the refusal a protocol-less live capability meets is
+    // "unverified": it announces itself live and declares no adapter, and it
+    // is refused before any role executes — and before any request could be
+    // made. The unselected-configuration refusal keeps its own coverage in
+    // `provider-adapter.test.ts` and `live-wiring.test.ts`.
     let asked = 0;
     const error = await dispatch(
       ['run', PACK_ID, REQUIREMENT_ID],
@@ -1512,7 +1516,7 @@ describe('projected content is ordinary content', () => {
         },
       },
     ).catch((thrown: unknown) => thrown);
-    expect(error).toBeInstanceOf(ProviderAdapterNotSelectedError);
+    expect(error).toBeInstanceOf(UnverifiedProviderAdapterError);
     expect(asked).toBe(0);
     expect(existsSync(resultPath(pathsFor(verificationDir), PACK_ID, REQUIREMENT_ID))).toBe(false);
     expect(trap.calls).toEqual([]);
@@ -1831,14 +1835,45 @@ describe('the binding B-E2 moved', () => {
  */
 describe('the binding B-PROMPT moved', () => {
   const standingEra = () => supersededById(RETIRED.standingEra);
+  const promptEra = () => supersededById(RETIRED.promptEra);
 
   it('P6 — moves exactly pipelineVersion and runId', () => {
-    const differences = bindingDifferences(committed(), standingEra());
+    const differences = bindingDifferences(promptEra(), standingEra());
     expect(differences.map((d) => d.field).sort()).toEqual(['pipelineVersion', 'runId']);
   });
 
   it('leaves the closure and every other binding field untouched', () => {
     const before = standingEra();
+    const now = promptEra();
+    for (const field of ['packId', 'requirementId', 'requirementInputSha256', 'renderedConditionSha256', 'corpusClosureSha256'] as const) {
+      expect(now[field], field).toBe(before[field]);
+    }
+    expect(now.pipelineVersion).not.toBe(before.pipelineVersion);
+    expect(now.runId).not.toBe(before.runId);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// B-ADAPTER's effect on run identity
+// ---------------------------------------------------------------------------
+
+/**
+ * What B-ADAPTER did to the binding, measured between the prompt-era recording
+ * and the adapter-era one: the role configuration (seven prosecutors) and the
+ * selected adapter identity are both `pipelineVersion` inputs, so it moved and
+ * `runId` with it; no prompt, closure or requirement input did. The number of
+ * identity moves is measured, not imposed.
+ */
+describe('the binding B-ADAPTER moved', () => {
+  const promptEra = () => supersededById(RETIRED.promptEra);
+
+  it('A6 — moves exactly pipelineVersion and runId', () => {
+    const differences = bindingDifferences(committed(), promptEra());
+    expect(differences.map((d) => d.field).sort()).toEqual(['pipelineVersion', 'runId']);
+  });
+
+  it('leaves the closure and every other binding field untouched', () => {
+    const before = promptEra();
     const now = committed();
     for (const field of ['packId', 'requirementId', 'requirementInputSha256', 'renderedConditionSha256', 'corpusClosureSha256'] as const) {
       expect(now[field], field).toBe(before[field]);
@@ -1847,8 +1882,16 @@ describe('the binding B-PROMPT moved', () => {
     expect(now.runId).not.toBe(before.runId);
   });
 
-  it('the live pipeline binds to the prompt-era recording and to nothing retired', async () => {
-    // Positive control for all three partitions: the current recording really
+  it('records nine exchanges — one reader, seven prosecutors in lens order, one adjudicator — through the adapter path', () => {
+    const now = committed();
+    expect(now.roles.map((r) => `${r.role}:${r.index}`)).toEqual(['reader:0', ...DEFAULT_ROLE_CONFIG.lenses.map((_, i) => `prosecutor:${i}`), 'adjudicator:0']);
+    expect(now.roles.filter((r) => r.role === 'prosecutor').map((r) => r.lens)).toEqual([...DEFAULT_ROLE_CONFIG.lenses]);
+    // The prompt-era recording ran three prosecutors under the unselected adapter; this is the measured difference in shape.
+    expect(promptEra().roles).toHaveLength(5);
+  });
+
+  it('the live pipeline binds to the adapter-era recording and to nothing retired', async () => {
+    // Positive control for all four partitions: the current recording really
     // is the one the production path selects today.
     const outcome = await verifyRun(verificationDir, REQUIREMENT_ID, FIXTURE_TRANSCRIPT_ROOT);
     expect(outcome.exitCode).toBe(EXIT_OK);
