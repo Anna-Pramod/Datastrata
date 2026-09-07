@@ -15,8 +15,13 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { inspect } from 'node:util';
 import {
+  AttemptBudgetExhaustedError,
+  ExecutionCancelledError,
   fetchTransport,
+  InputAdmissionError,
+  InvalidBudgetError,
   LiveAgentRunner,
+  ObservationFailedError,
   LIVE_AGENTS_ENV,
   LIVE_AGENTS_TOKEN,
   MAX_RETRY_AFTER_MS,
@@ -25,6 +30,7 @@ import {
   ProviderTimeoutError,
   RETRYABLE_STATUSES,
   TransportFailure,
+  type AttemptRecord,
   type ProviderHttpResponse,
   type ProviderTransport,
 } from '../src/pipeline/live-runner';
@@ -49,10 +55,10 @@ function roleRequest(): RoleRequest {
   };
 }
 
-const ok = (text = JSON.stringify(stubReaderOutput()), stop = 'end_turn'): ProviderHttpResponse => ({
+const ok = (text = JSON.stringify(stubReaderOutput()), stop = 'end_turn', usage?: Record<string, unknown>): ProviderHttpResponse => ({
   status: 200,
   headers: { 'request-id': 'req_ok' },
-  body: JSON.stringify({ type: 'message', content: [{ type: 'text', text }], stop_reason: stop }),
+  body: JSON.stringify({ type: 'message', content: [{ type: 'text', text }], stop_reason: stop, ...(usage === undefined ? {} : { usage }) }),
 });
 const failure = (status: number, type: string, headers: Record<string, string> = {}): ProviderHttpResponse => ({
   status,
@@ -80,7 +86,11 @@ function scripted(answers: Array<ProviderHttpResponse | Error | 'hang'>) {
 
 function runner(transport: ProviderTransport, over: Partial<ConstructorParameters<typeof LiveAgentRunner>[0]> = {}) {
   const slept: number[] = [];
+  const records: AttemptRecord[] = [];
   const instance = new LiveAgentRunner({
+    observe: (record) => {
+      records.push(record);
+    },
     endpoint: ENDPOINT,
     apiKey: KEY,
     adapter: ANTHROPIC_MESSAGES_ADAPTER,
@@ -94,7 +104,7 @@ function runner(transport: ProviderTransport, over: Partial<ConstructorParameter
     },
     ...over,
   });
-  return { instance, slept };
+  return { instance, slept, records };
 }
 
 /**
@@ -363,5 +373,282 @@ describe('what is not retried', () => {
     const { instance } = runner(transport);
     await expect(instance.run(roleRequest())).rejects.toThrow(/DATASTRATA_VERIFICATION_AGENTS/);
     expect(calls).toHaveLength(0);
+  });
+});
+
+describe('per-attempt observability: every HTTP attempt leaves a record, before any error is thrown', () => {
+  const RECORD_KEYS = ['attempt', 'delayMs', 'detail', 'index', 'outcome', 'possiblyBilled', 'requestId', 'role', 'runAttempt', 'sent', 'status', 'usage'];
+
+  it('O1 — a completed attempt records role, attempt, status, request id, usage and outcome; usage is read from the envelope', async () => {
+    process.env[LIVE_AGENTS_ENV] = LIVE_AGENTS_TOKEN;
+    const { instance, records } = runner(scripted([ok(undefined, 'end_turn', { input_tokens: 1234, output_tokens: 56, cache_read_input_tokens: 7 })]).transport);
+    await instance.run(roleRequest());
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({ role: 'reader', index: 0, attempt: 1, runAttempt: 1, sent: true, status: 200, requestId: 'req_ok', outcome: 'completed', possiblyBilled: false, delayMs: null });
+    expect(records[0]!.usage).toEqual({ inputTokens: 1234, outputTokens: 56, cacheCreationInputTokens: null, cacheReadInputTokens: 7 });
+    expect(Object.keys(records[0]!).sort()).toEqual(RECORD_KEYS);
+    expect(instance.ledger).toMatchObject({ attemptsUsed: 1, knownInputTokens: 1234, knownOutputTokens: 56, unknownUsageAttempts: 0, possiblyBilledAttempts: 0 });
+  });
+
+  it('O2 — an envelope with no usage records usage as unknown, never as zero, and the attempt as possibly billed', async () => {
+    process.env[LIVE_AGENTS_ENV] = LIVE_AGENTS_TOKEN;
+    const { instance, records } = runner(scripted([ok()]).transport);
+    await instance.run(roleRequest());
+    expect(records[0]!.usage).toBeNull();
+    expect(records[0]!.outcome).toBe('completed');
+    expect(records[0]!.possiblyBilled).toBe(true);
+    expect(instance.ledger).toMatchObject({ knownInputTokens: 0, knownOutputTokens: 0, unknownUsageAttempts: 1, possiblyBilledAttempts: 1 });
+  });
+
+  it('O3 — a completed request whose projection is refused still leaves its record, with usage, the refusal named, and no credential anywhere in it', async () => {
+    process.env[LIVE_AGENTS_ENV] = LIVE_AGENTS_TOKEN;
+    const refused: ProviderHttpResponse = {
+      status: 200,
+      headers: { 'request-id': 'req_refusal' },
+      body: JSON.stringify({ type: 'message', content: [{ type: 'text', text: '{}' }], stop_reason: 'refusal', stop_details: { type: 'refusal', category: 'x', explanation: `declined ${KEY}` }, usage: { input_tokens: 9, output_tokens: 2 } }),
+    };
+    const { instance, records } = runner(scripted([refused]).transport);
+    await expect(instance.run(roleRequest())).rejects.toThrow(/refused/);
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({ status: 200, requestId: 'req_refusal', outcome: 'projection_refused', possiblyBilled: false });
+    expect(records[0]!.usage).toEqual({ inputTokens: 9, outputTokens: 2, cacheCreationInputTokens: null, cacheReadInputTokens: null });
+    expect(records[0]!.detail).toContain('ProviderRefusalError');
+    expect(JSON.stringify(records)).not.toContain(KEY);
+  });
+
+  it('O4 — a retried invocation records each attempt separately, with the delay the runner scheduled', async () => {
+    process.env[LIVE_AGENTS_ENV] = LIVE_AGENTS_TOKEN;
+    const { instance, records } = runner(scripted([failure(429, 'rate_limit_error', { 'retry-after': '2' }), ok()]).transport);
+    await instance.run(roleRequest());
+    expect(records.map((r) => [r.attempt, r.runAttempt, r.status, r.outcome, r.delayMs, r.requestId])).toEqual([
+      [1, 1, 429, 'retry_scheduled', 2000, 'req_429'],
+      [2, 2, 200, 'completed', null, 'req_ok'],
+    ]);
+    expect(records[0]!.detail).toContain('rate_limit_error');
+    expect(instance.attempts).toBe(2);
+  });
+
+  it('O5 — a timeout and an ambiguous transport failure are recorded as possibly billed, with no status, and the credential redacted', async () => {
+    process.env[LIVE_AGENTS_ENV] = LIVE_AGENTS_TOKEN;
+    const hung = runner(scripted(['hang']).transport, { timeoutMs: 20 });
+    await expect(hung.instance.run(roleRequest())).rejects.toBeInstanceOf(ProviderTimeoutError);
+    expect(hung.records[0]).toMatchObject({ sent: true, status: null, requestId: null, usage: null, outcome: 'timeout', possiblyBilled: true });
+    const broken = runner(scripted([new TypeError(`socket ${KEY}`)]).transport);
+    await expect(broken.instance.run(roleRequest())).rejects.toBeInstanceOf(ProviderAmbiguousFailureError);
+    expect(broken.records[0]).toMatchObject({ sent: true, status: null, outcome: 'ambiguous', possiblyBilled: true });
+    expect(broken.records[0]!.detail).toContain('[redacted]');
+    expect(JSON.stringify(broken.records)).not.toContain(KEY);
+    // A vouched pre-submission failure is the one transport failure that is not possibly billed.
+    const early = runner(scripted([new TransportFailure('before_send', 'refused'), ok()]).transport);
+    await early.instance.run(roleRequest());
+    expect(early.records.map((r) => [r.outcome, r.possiblyBilled])).toEqual([['retry_scheduled', false], ['completed', true]]);
+  });
+});
+
+describe('budget controls: admission before send, and a retry-inclusive attempt budget across the whole runner', () => {
+  it('B1 — a request body larger than the admitted input size is refused before the transport is called, and recorded as not sent', async () => {
+    process.env[LIVE_AGENTS_ENV] = LIVE_AGENTS_TOKEN;
+    const { transport, calls } = scripted([ok()]);
+    const { instance, records } = runner(transport, { budget: { maxRunAttempts: 5, maxInputBytesPerAttempt: 10 } });
+    const error = await instance.run(roleRequest()).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(InputAdmissionError);
+    expect((error as Error).message).toMatch(/reader\[0\].*bytes.*admitted/);
+    expect(calls).toHaveLength(0);
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({ sent: false, outcome: 'not_sent', status: null, usage: null, possiblyBilled: false });
+    expect(instance.ledger).toMatchObject({ attemptsUsed: 0, maxInputBytesPerAttempt: 10 });
+    // Positive control: the same body is admitted under a larger limit.
+    const admitted = runner(scripted([ok()]).transport, { budget: { maxRunAttempts: 5, maxInputBytesPerAttempt: 1_000_000 } });
+    await expect(admitted.instance.run(roleRequest())).resolves.toBeTruthy();
+    expect(admitted.instance.ledger.largestInputBytes).toBeGreaterThan(10);
+  });
+
+  it('B2 — the attempt budget counts every HTTP attempt across invocations, and an exhausted budget refuses before sending', async () => {
+    process.env[LIVE_AGENTS_ENV] = LIVE_AGENTS_TOKEN;
+    const { transport, calls } = scripted([ok(), failure(500, 'api_error'), failure(500, 'api_error'), ok()]);
+    const { instance, records } = runner(transport, { budget: { maxRunAttempts: 3, maxInputBytesPerAttempt: 1_000_000 } });
+    await expect(instance.run(roleRequest())).resolves.toBeTruthy();
+    const error = await instance.run({ ...roleRequest(), role: 'prosecutor', index: 2, lens: 'missing_criterion' }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(AttemptBudgetExhaustedError);
+    expect((error as Error).message).toMatch(/prosecutor\[2\].*3 of 3/);
+    expect(calls).toHaveLength(3);
+    expect(instance.ledger).toMatchObject({ maxRunAttempts: 3, attemptsUsed: 3, attemptsRemaining: 0 });
+    expect(records.map((r) => [r.role, r.runAttempt, r.sent, r.outcome])).toEqual([
+      ['reader', 1, true, 'completed'],
+      ['prosecutor', 2, true, 'retry_scheduled'],
+      ['prosecutor', 3, true, 'retry_scheduled'],
+      ['prosecutor', 3, false, 'not_sent'],
+    ]);
+  });
+
+  it('B3 — an ambiguous attempt consumes budget exactly like a completed one: it may have been billed', async () => {
+    process.env[LIVE_AGENTS_ENV] = LIVE_AGENTS_TOKEN;
+    const { transport, calls } = scripted([new TypeError('fetch failed'), ok(), ok()]);
+    const { instance } = runner(transport, { budget: { maxRunAttempts: 2, maxInputBytesPerAttempt: 1_000_000 } });
+    await expect(instance.run(roleRequest())).rejects.toBeInstanceOf(ProviderAmbiguousFailureError);
+    expect(instance.ledger).toMatchObject({ attemptsUsed: 1, possiblyBilledAttempts: 1, unknownUsageAttempts: 1 });
+    await expect(instance.run(roleRequest())).resolves.toBeTruthy();
+    await expect(instance.run(roleRequest())).rejects.toBeInstanceOf(AttemptBudgetExhaustedError);
+    expect(calls).toHaveLength(2);
+  });
+
+  it('B4 — without a budget the runner admits any size and bounds attempts per invocation only', async () => {
+    process.env[LIVE_AGENTS_ENV] = LIVE_AGENTS_TOKEN;
+    const { instance } = runner(scripted([ok(), ok(), ok(), ok()]).transport);
+    for (let i = 0; i < 4; i += 1) await instance.run(roleRequest());
+    expect(instance.ledger.maxRunAttempts).toBeNull();
+    expect(instance.ledger.attemptsUsed).toBe(4);
+  });
+});
+
+describe('budget values are validated as finite positive safe integers before anything is sent', () => {
+  it('V1 — an explicitly supplied runner budget with an unsafe, infinite, fractional, zero or negative value is refused by name at construction; the safe-integer boundary is accepted', async () => {
+    process.env[LIVE_AGENTS_ENV] = LIVE_AGENTS_TOKEN;
+    const bad: Array<[string, number]> = [
+      ['maxRunAttempts', 0], ['maxRunAttempts', -1], ['maxRunAttempts', 1.5], ['maxRunAttempts', Number.NaN], ['maxRunAttempts', Number.POSITIVE_INFINITY],
+      ['maxRunAttempts', Number.MAX_SAFE_INTEGER + 1], ['maxRunAttempts', 1e20],
+      ['maxInputBytesPerAttempt', 0], ['maxInputBytesPerAttempt', Number.POSITIVE_INFINITY], ['maxInputBytesPerAttempt', Number.MAX_SAFE_INTEGER + 2],
+    ];
+    for (const [field, value] of bad) {
+      const { transport, calls } = scripted([ok()]);
+      const budget = { maxRunAttempts: 3, maxInputBytesPerAttempt: 1_000_000, [field]: value };
+      expect(() => runner(transport, { budget }), `${field}=${value}`).toThrow(InvalidBudgetError);
+      expect(() => runner(transport, { budget }), `${field}=${value}`).toThrow(new RegExp(`${field}.*safe integer`));
+      expect(calls, `${field}=${value}`).toHaveLength(0);
+    }
+    // Positive control: the largest safe integer is a valid budget, and an ordinary one runs.
+    const boundary = runner(scripted([ok()]).transport, { budget: { maxRunAttempts: Number.MAX_SAFE_INTEGER, maxInputBytesPerAttempt: Number.MAX_SAFE_INTEGER } });
+    await expect(boundary.instance.run(roleRequest())).resolves.toBeTruthy();
+    expect(boundary.instance.ledger.maxRunAttempts).toBe(Number.MAX_SAFE_INTEGER);
+  });
+});
+
+describe('an observer that fails is not a projection that failed', () => {
+  it('S1 — an observer throwing after a metered success is reported as an observation failure; usage is booked once, no second record is attempted, and the runner sends nothing further', async () => {
+    process.env[LIVE_AGENTS_ENV] = LIVE_AGENTS_TOKEN;
+    const seen: AttemptRecord[] = [];
+    const { transport, calls } = scripted([ok(undefined, 'end_turn', { input_tokens: 100, output_tokens: 7 }), ok()]);
+    const instance = new LiveAgentRunner({
+      endpoint: ENDPOINT, apiKey: KEY, adapter: ANTHROPIC_MESSAGES_ADAPTER, transport, timeoutMs: 50, sleep: () => Promise.resolve(),
+      observe: (record) => { seen.push(record); throw new Error(`disk full while writing ${KEY}`); },
+    });
+    const error = await instance.run(roleRequest()).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ObservationFailedError);
+    expect((error as Error).message).toMatch(/observer.*disk full/);
+    expect((error as Error).message).not.toContain(KEY);
+    expect((error as Error).name).not.toBe('ProviderRefusalError');
+    // The one HTTP attempt was completed and metered exactly once.
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({ outcome: 'completed', status: 200 });
+    expect(instance.ledger).toMatchObject({ attemptsUsed: 1, knownInputTokens: 100, knownOutputTokens: 7, unknownUsageAttempts: 0 });
+    // Halted: the next invocation refuses before sending, with the same classification.
+    const again = await instance.run(roleRequest()).catch((e: unknown) => e);
+    expect(again).toBeInstanceOf(ObservationFailedError);
+    expect(calls).toHaveLength(1);
+    expect(instance.ledger.attemptsUsed).toBe(1);
+  });
+
+  it('S2 — positive control: a projection refusal with a working observer keeps its own classification and its single record', async () => {
+    process.env[LIVE_AGENTS_ENV] = LIVE_AGENTS_TOKEN;
+    const { instance, records } = runner(scripted([ok('{}', 'max_tokens', { input_tokens: 5, output_tokens: 16000 })]).transport);
+    await expect(instance.run(roleRequest())).rejects.toBeInstanceOf(ProviderOutputTruncatedError);
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({ outcome: 'projection_refused', possiblyBilled: false });
+    expect(instance.ledger).toMatchObject({ attemptsUsed: 1, knownOutputTokens: 16000 });
+  });
+});
+
+describe('an execution can be cancelled, and cancellation stops every further send', () => {
+  it('X1 — a signal aborted in flight cancels the attempt: recorded as cancelled and possibly billed, refused by name, and no later invocation sends', async () => {
+    process.env[LIVE_AGENTS_ENV] = LIVE_AGENTS_TOKEN;
+    const controller = new AbortController();
+    const { transport, calls } = scripted(['hang', ok()]);
+    const { instance, records } = runner(transport, { timeoutMs: 10_000, signal: controller.signal });
+    const pending = instance.run(roleRequest());
+    setTimeout(() => controller.abort('test deadline'), 30);
+    const error = await pending.catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ExecutionCancelledError);
+    expect((error as Error).name).not.toBe('ProviderTimeoutError');
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({ sent: true, outcome: 'cancelled', possiblyBilled: true, status: null });
+    const again = await instance.run(roleRequest()).catch((e: unknown) => e);
+    expect(again).toBeInstanceOf(ExecutionCancelledError);
+    expect(records[1]).toMatchObject({ sent: false, outcome: 'cancelled', possiblyBilled: false });
+    expect(calls).toHaveLength(1);
+  });
+
+  it('X2 — a signal aborted during a scheduled wait ends the wait at once, through the production sleep, and the retry is never sent', async () => {
+    process.env[LIVE_AGENTS_ENV] = LIVE_AGENTS_TOKEN;
+    const controller = new AbortController();
+    const { transport, calls } = scripted([failure(429, 'rate_limit_error', { 'retry-after': '30' }), ok()]);
+    // No injected sleep: the runner's own abortable wait is what is under test.
+    const { instance, records } = runner(transport, { sleep: undefined, signal: controller.signal });
+    const started = Date.now();
+    const pending = instance.run(roleRequest());
+    setTimeout(() => controller.abort('test deadline'), 50);
+    const error = await pending.catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ExecutionCancelledError);
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(calls).toHaveLength(1);
+    expect(records.map((r) => [r.sent, r.outcome, r.delayMs])).toEqual([[true, 'retry_scheduled', 30_000], [false, 'cancelled', null]]);
+  });
+
+  it('X3 — positive control: without a signal the same script completes through the production sleep after its short wait', async () => {
+    process.env[LIVE_AGENTS_ENV] = LIVE_AGENTS_TOKEN;
+    const { transport, calls } = scripted([failure(503, 'api_error', { 'retry-after': '1' }), ok()]);
+    const { instance } = runner(transport, { sleep: undefined });
+    const started = Date.now();
+    await expect(instance.run(roleRequest())).resolves.toBeTruthy();
+    expect(Date.now() - started).toBeGreaterThanOrEqual(950);
+    expect(calls).toHaveLength(2);
+  });
+});
+
+describe('a cancellation reason is untrusted text: redacted at the runner before any observer sees it', () => {
+  const reason = `deadline of 200 ms reached for ${KEY}`;
+
+  it('X4 — cancelled before the first send: the record carries the reason with the key redacted and the useful text kept', async () => {
+    process.env[LIVE_AGENTS_ENV] = LIVE_AGENTS_TOKEN;
+    const controller = new AbortController();
+    controller.abort(reason);
+    const { transport, calls } = scripted([ok()]);
+    const { instance, records } = runner(transport, { signal: controller.signal });
+    await expect(instance.run(roleRequest())).rejects.toBeInstanceOf(ExecutionCancelledError);
+    expect(calls).toHaveLength(0);
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({ sent: false, outcome: 'cancelled' });
+    expect(records[0]!.detail).toContain('deadline of 200 ms');
+    expect(records[0]!.detail).toContain('[redacted]');
+    expect(JSON.stringify(records)).not.toContain(KEY);
+  });
+
+  it('X5 — cancelled in flight: the in-flight record carries the reason with the key redacted', async () => {
+    process.env[LIVE_AGENTS_ENV] = LIVE_AGENTS_TOKEN;
+    const controller = new AbortController();
+    const { transport } = scripted(['hang']);
+    const { instance, records } = runner(transport, { timeoutMs: 10_000, signal: controller.signal });
+    const pending = instance.run(roleRequest());
+    setTimeout(() => controller.abort(reason), 30);
+    await expect(pending).rejects.toBeInstanceOf(ExecutionCancelledError);
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({ sent: true, outcome: 'cancelled' });
+    expect(records[0]!.detail).toContain('deadline of 200 ms');
+    expect(records[0]!.detail).toContain('[redacted]');
+    expect(JSON.stringify(records)).not.toContain(KEY);
+  });
+
+  it('X6 — cancelled during a retry wait: the unsent record after the wait carries the reason with the key redacted', async () => {
+    process.env[LIVE_AGENTS_ENV] = LIVE_AGENTS_TOKEN;
+    const controller = new AbortController();
+    const { transport, calls } = scripted([failure(429, 'rate_limit_error', { 'retry-after': '30' }), ok()]);
+    const { instance, records } = runner(transport, { sleep: undefined, signal: controller.signal });
+    const pending = instance.run(roleRequest());
+    setTimeout(() => controller.abort(reason), 50);
+    await expect(pending).rejects.toBeInstanceOf(ExecutionCancelledError);
+    expect(calls).toHaveLength(1);
+    expect(records.map((r) => r.outcome)).toEqual(['retry_scheduled', 'cancelled']);
+    expect(records[1]!.detail).toContain('deadline of 200 ms');
+    expect(records[1]!.detail).toContain('[redacted]');
+    expect(JSON.stringify(records)).not.toContain(KEY);
   });
 });

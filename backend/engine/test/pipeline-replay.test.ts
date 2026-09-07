@@ -126,6 +126,7 @@ import {
   LIVE_API_KEY_ENV,
   LIVE_ENDPOINT_ENV,
 } from './live-capture';
+import { LIVE_MAX_ATTEMPTS_ENV, LIVE_MAX_INPUT_BYTES_ENV } from '../src/cli/live-wiring';
 import {
   engineRoot,
   FIXTURE_TRANSCRIPT_ROOT,
@@ -1569,7 +1570,7 @@ describe('the live capture harness', () => {
         packId: PACK_ID,
         requirementId: REQUIREMENT_ID,
         paths: pathsFor(verificationDir),
-        transcriptRoot: join(verificationDir, 'transcripts'),
+        executionRoot: join(verificationDir, 'executions'),
         env: withEverythingButTheToken,
       }),
     ).rejects.toBeInstanceOf(LiveCaptureConfigError);
@@ -1586,6 +1587,8 @@ describe('the live capture harness', () => {
       [LIVE_AGENTS_ENV]: '1',
       [LIVE_ENDPOINT_ENV]: 'https://unused.invalid/',
       [LIVE_API_KEY_ENV]: 'sk-ant-unused',
+      [LIVE_MAX_ATTEMPTS_ENV]: '27',
+      [LIVE_MAX_INPUT_BYTES_ENV]: '4000000',
     };
     // The env gates all pass...
     expect(() => liveCaptureConfigFrom(fullyConfiguredButProviderless)).not.toThrow();
@@ -1595,13 +1598,13 @@ describe('the live capture harness', () => {
         packId: PACK_ID,
         requirementId: REQUIREMENT_ID,
         paths: pathsFor(verificationDir),
-        transcriptRoot: join(verificationDir, 'transcripts'),
+        executionRoot: join(verificationDir, 'executions'),
         env: fullyConfiguredButProviderless,
       }),
     ).rejects.toBeInstanceOf(MissingProviderAdapterError);
     expect(trap.calls).toEqual([]);
     // And nothing was written where a capture would have written.
-    expect(existsSync(join(verificationDir, 'transcripts'))).toBe(false);
+    expect(existsSync(join(verificationDir, 'executions'))).toBe(false);
   });
 
   it('every gate is separately load-bearing: drop any one and the capture refuses', async () => {
@@ -1611,13 +1614,15 @@ describe('the live capture harness', () => {
     // prose. A list-shaped assertion about a list is not evidence that the list
     // is enforced.
     //
-    // So: four configurations, each complete except for one gate, each required
+    // So: six configurations, each complete except for one gate, each required
     // to refuse. Removing any gate's enforcement reds exactly one row.
     const complete = {
       env: {
         [LIVE_AGENTS_ENV]: '1',
         [LIVE_ENDPOINT_ENV]: 'https://unused.invalid/',
         [LIVE_API_KEY_ENV]: 'sk-ant-unused',
+        [LIVE_MAX_ATTEMPTS_ENV]: '27',
+        [LIVE_MAX_INPUT_BYTES_ENV]: '4000000',
       },
       adapter: SYNTHETIC_ADAPTER_V1,
     };
@@ -1628,7 +1633,7 @@ describe('the live capture harness', () => {
       packId: PACK_ID,
       requirementId: REQUIREMENT_ID,
       paths: pathsFor(verificationDir),
-      transcriptRoot: join(verificationDir, 'transcripts'),
+      executionRoot: join(verificationDir, 'executions'),
       ...complete,
     }).catch((thrown: unknown) => thrown);
     expect(control).not.toBeInstanceOf(LiveCaptureConfigError);
@@ -1641,6 +1646,8 @@ describe('the live capture harness', () => {
       LIVE_AGENTS_ENV,
       LIVE_ENDPOINT_ENV,
       LIVE_API_KEY_ENV,
+      LIVE_MAX_ATTEMPTS_ENV,
+      LIVE_MAX_INPUT_BYTES_ENV,
       'adapter',
     ] as const;
 
@@ -1654,7 +1661,7 @@ describe('the live capture harness', () => {
         packId: PACK_ID,
         requirementId: REQUIREMENT_ID,
         paths: pathsFor(verificationDir),
-        transcriptRoot: join(verificationDir, 'transcripts'),
+        executionRoot: join(verificationDir, 'executions'),
         env,
         ...(adapter === undefined ? {} : { adapter }),
       }).catch((error: unknown) => error);
@@ -1681,7 +1688,7 @@ describe('the live capture harness', () => {
       }
     })();
     expect(error).toBeInstanceOf(LiveCaptureConfigError);
-    expect(error!.missing).toEqual([LIVE_ENDPOINT_ENV, LIVE_API_KEY_ENV]);
+    expect(error!.missing).toEqual([LIVE_ENDPOINT_ENV, LIVE_API_KEY_ENV, LIVE_MAX_ATTEMPTS_ENV, LIVE_MAX_INPUT_BYTES_ENV]);
   });
 
   it('the capture harness is in the suite `npm test` excludes, and needs its own script', () => {

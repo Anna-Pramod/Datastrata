@@ -19,24 +19,33 @@ import { cpSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  liveBudgetFrom,
   liveCapabilityFrom,
   LiveWiringError,
   LIVE_API_KEY_ENV,
   LIVE_ENDPOINT_ENV,
+  LIVE_MAX_ATTEMPTS_ENV,
+  LIVE_MAX_INPUT_BYTES_ENV,
   PRODUCTION_ADAPTERS,
 } from '../src/cli/live-wiring';
 import { dispatch } from '../src/cli/verify';
 import type { VerifyPaths } from '../src/cli/sign';
 import { EXIT_OK, EXIT_REFUSED } from '../src/cli/exit-codes';
 import { DEFAULT_ROLE_CONFIG } from '../src/pipeline/config';
-import { LIVE_AGENTS_ENV, LIVE_AGENTS_TOKEN } from '../src/pipeline/live-runner';
+import { LIVE_AGENTS_ENV, LIVE_AGENTS_TOKEN, type AttemptRecord, type LiveAgentRunner } from '../src/pipeline/live-runner';
 import { ANTHROPIC_MESSAGES_IDENTITY } from '../src/pipeline/anthropic-messages';
 import { UNSELECTED_PROVIDER_ADAPTER, UnknownProviderAdapterError, providerAdapterKey } from '../src/pipeline/provider-adapter';
 import type { RunTranscript } from '../src/pipeline/transcript';
 import { installNetworkTrap } from './helpers';
 import { cannedAnthropicTransport, engineRoot, PACK_ID, REQUIREMENT_ID } from './replay-fixtures';
 
-const LIVE_ENV = { [LIVE_AGENTS_ENV]: LIVE_AGENTS_TOKEN, [LIVE_ENDPOINT_ENV]: 'https://api.example.invalid/v1/messages', [LIVE_API_KEY_ENV]: 'sk-ant-test-inherited' };
+const LIVE_ENV = {
+  [LIVE_AGENTS_ENV]: LIVE_AGENTS_TOKEN,
+  [LIVE_ENDPOINT_ENV]: 'https://api.example.invalid/v1/messages',
+  [LIVE_API_KEY_ENV]: 'sk-ant-test-inherited',
+  [LIVE_MAX_ATTEMPTS_ENV]: '27',
+  [LIVE_MAX_INPUT_BYTES_ENV]: '4000000',
+};
 
 let trap: ReturnType<typeof installNetworkTrap>;
 let scratch = '';
@@ -69,14 +78,36 @@ describe('every prerequisite, each refused by name with no runner constructed', 
     expect(truthy.runner).toBeNull();
   });
 
-  it('W2 — with the token but no endpoint, or no credential, the wiring refuses naming the variable', () => {
-    for (const missing of [LIVE_ENDPOINT_ENV, LIVE_API_KEY_ENV]) {
+  it('W2 — with the token but no endpoint, credential, attempt budget or input admission size, the wiring refuses naming the variable', () => {
+    for (const missing of [LIVE_ENDPOINT_ENV, LIVE_API_KEY_ENV, LIVE_MAX_ATTEMPTS_ENV, LIVE_MAX_INPUT_BYTES_ENV]) {
       const env: NodeJS.ProcessEnv = { ...LIVE_ENV };
       delete env[missing];
       const attempt = () => liveCapabilityFrom({ env, config: DEFAULT_ROLE_CONFIG });
       expect(attempt, missing).toThrow(LiveWiringError);
       expect(attempt, missing).toThrow(new RegExp(missing));
     }
+  });
+
+  it('W7 — a budget variable that is not a positive integer is refused naming the variable; a valid one reaches the runner as its ledger', () => {
+    for (const bad of ['0', '-1', '1.5', 'abc', '27 ', '']) {
+      const env: NodeJS.ProcessEnv = { ...LIVE_ENV, [LIVE_MAX_ATTEMPTS_ENV]: bad };
+      const attempt = () => liveCapabilityFrom({ env, config: DEFAULT_ROLE_CONFIG });
+      expect(attempt, JSON.stringify(bad)).toThrow(LiveWiringError);
+      expect(attempt, JSON.stringify(bad)).toThrow(new RegExp(LIVE_MAX_ATTEMPTS_ENV));
+    }
+    expect(() => liveBudgetFrom({ ...LIVE_ENV, [LIVE_MAX_INPUT_BYTES_ENV]: 'lots' })).toThrow(new RegExp(LIVE_MAX_INPUT_BYTES_ENV));
+    expect(liveBudgetFrom(LIVE_ENV)).toEqual({ maxRunAttempts: 27, maxInputBytesPerAttempt: 4_000_000 });
+    // After conversion, too: a digit string that is not a safe integer, or that converts to Infinity, is refused by name.
+    expect(liveBudgetFrom({ ...LIVE_ENV, [LIVE_MAX_ATTEMPTS_ENV]: String(Number.MAX_SAFE_INTEGER) }).maxRunAttempts).toBe(Number.MAX_SAFE_INTEGER);
+    for (const [name, value] of [[LIVE_MAX_ATTEMPTS_ENV, '9007199254740992'], [LIVE_MAX_ATTEMPTS_ENV, '1'.repeat(400)], [LIVE_MAX_INPUT_BYTES_ENV, '99999999999999999999'], [LIVE_MAX_INPUT_BYTES_ENV, '9'.repeat(400)]] as const) {
+      const attempt = () => liveBudgetFrom({ ...LIVE_ENV, [name]: value });
+      expect(attempt, `${name}=${value.slice(0, 20)}`).toThrow(LiveWiringError);
+      expect(attempt, `${name}=${value.slice(0, 20)}`).toThrow(new RegExp(`${name}`));
+      expect(attempt, `${name}=${value.slice(0, 20)}`).toThrow(/safe integer/);
+    }
+    process.env[LIVE_AGENTS_ENV] = LIVE_AGENTS_TOKEN;
+    const capability = liveCapabilityFrom({ env: { ...LIVE_ENV, [LIVE_MAX_ATTEMPTS_ENV]: '5', [LIVE_MAX_INPUT_BYTES_ENV]: '123' }, config: DEFAULT_ROLE_CONFIG });
+    expect((capability.runner as LiveAgentRunner).ledger).toMatchObject({ maxRunAttempts: 5, maxInputBytesPerAttempt: 123, attemptsUsed: 0 });
   });
 
   it('W3 — with everything present but no adapter registered for the configured identity, the wiring refuses by name', () => {
@@ -99,7 +130,8 @@ describe('the positive case, and the inherited-environment case', () => {
     process.env[LIVE_AGENTS_ENV] = LIVE_AGENTS_TOKEN;
     const transport = cannedAnthropicTransport();
     let recorded: RunTranscript | null = null;
-    const capability = liveCapabilityFrom({ env: LIVE_ENV, config: DEFAULT_ROLE_CONFIG, transport });
+    const attempts: AttemptRecord[] = [];
+    const capability = liveCapabilityFrom({ env: LIVE_ENV, config: DEFAULT_ROLE_CONFIG, transport, observe: (record) => { attempts.push(record); } });
     expect(capability.runner?.kind).toBe('live');
     expect(capability.runner?.adapter).toEqual(ANTHROPIC_MESSAGES_IDENTITY);
     const outcome = await dispatch(['run', PACK_ID, REQUIREMENT_ID], paths(), () => true, undefined, { ...capability, record: (t) => { recorded = t; } });
@@ -112,6 +144,11 @@ describe('the positive case, and the inherited-environment case', () => {
     expect((recorded as unknown as RunTranscript).roles).toHaveLength(2 + DEFAULT_ROLE_CONFIG.prosecutorCount);
     // The credential reaches no recording.
     expect(JSON.stringify(recorded)).not.toContain(LIVE_ENV[LIVE_API_KEY_ENV]);
+    // W8 — the observer sees one record per role invocation, in execution order, and none carries the credential.
+    expect(attempts.map((a) => `${a.role}[${a.index}]`)).toEqual(['reader[0]', ...DEFAULT_ROLE_CONFIG.lenses.map((_, i) => `prosecutor[${i}]`), 'adjudicator[0]']);
+    expect(attempts.every((a) => a.outcome === 'completed' && a.status === 200 && a.sent)).toBe(true);
+    expect(JSON.stringify(attempts)).not.toContain(LIVE_ENV[LIVE_API_KEY_ENV]);
+    expect((capability.runner as LiveAgentRunner).ledger.attemptsUsed).toBe(2 + DEFAULT_ROLE_CONFIG.prosecutorCount);
   });
 
   it('W6 — an inherited token and credential with the default transport can reach nothing but the trap: the suite cannot spend', async () => {

@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { offlineGuard, OFFLINE_GUARD_MESSAGE } from './setup/offline-guard';
-import { liveCapabilityFrom, LIVE_API_KEY_ENV, LIVE_ENDPOINT_ENV } from '../src/cli/live-wiring';
+import { liveCapabilityFrom, LIVE_API_KEY_ENV, LIVE_ENDPOINT_ENV, LIVE_MAX_ATTEMPTS_ENV, LIVE_MAX_INPUT_BYTES_ENV } from '../src/cli/live-wiring';
 import { DEFAULT_ROLE_CONFIG } from '../src/pipeline/config';
 import { LIVE_AGENTS_ENV, LIVE_AGENTS_TOKEN } from '../src/pipeline/live-runner';
 import type { RoleRequest } from '../src/pipeline/roles';
@@ -33,7 +33,7 @@ describe('the guard is in place before any test runs', () => {
     process.env[LIVE_AGENTS_ENV] = LIVE_AGENTS_TOKEN;
     const endpoint = 'https://guard-live.invalid/v1/messages';
     const capability = liveCapabilityFrom({
-      env: { [LIVE_AGENTS_ENV]: LIVE_AGENTS_TOKEN, [LIVE_ENDPOINT_ENV]: endpoint, [LIVE_API_KEY_ENV]: 'sk-ant-inherited-looking' },
+      env: { [LIVE_AGENTS_ENV]: LIVE_AGENTS_TOKEN, [LIVE_ENDPOINT_ENV]: endpoint, [LIVE_API_KEY_ENV]: 'sk-ant-inherited-looking', [LIVE_MAX_ATTEMPTS_ENV]: '27', [LIVE_MAX_INPUT_BYTES_ENV]: '4000000' },
       config: DEFAULT_ROLE_CONFIG,
     });
     const request: RoleRequest = {

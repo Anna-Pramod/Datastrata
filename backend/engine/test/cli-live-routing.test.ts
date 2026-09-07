@@ -15,7 +15,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runCli } from '../src/cli/verify';
-import { LIVE_API_KEY_ENV, LIVE_ENDPOINT_ENV } from '../src/cli/live-wiring';
+import { LIVE_API_KEY_ENV, LIVE_ENDPOINT_ENV, LIVE_MAX_ATTEMPTS_ENV, LIVE_MAX_INPUT_BYTES_ENV } from '../src/cli/live-wiring';
 import { EXIT_OK, EXIT_REFUSED } from '../src/cli/exit-codes';
 import { LIVE_AGENTS_ENV, LIVE_AGENTS_TOKEN } from '../src/pipeline/live-runner';
 import { offlineGuard, OFFLINE_GUARD_MESSAGE } from './setup/offline-guard';
@@ -33,6 +33,7 @@ afterEach(() => {
 });
 
 const TOKEN_ONLY = { [LIVE_AGENTS_ENV]: LIVE_AGENTS_TOKEN };
+const BUDGET = { [LIVE_MAX_ATTEMPTS_ENV]: '27', [LIVE_MAX_INPUT_BYTES_ENV]: '4000000' };
 const roots = () => ({ engineRoot, verificationDir: join(root, 'verification'), outPath: join(root, 'review-sheet.html') });
 
 describe('offline commands under incomplete live configuration', () => {
@@ -72,8 +73,16 @@ describe('the run command, and only it, resolves the live capability', () => {
     process.env[LIVE_AGENTS_ENV] = LIVE_AGENTS_TOKEN;
     const endpoint = 'https://routing-full.invalid/v1/messages';
     const before = offlineGuard().calls.length;
-    await expect(runCli(['run', PACK_ID, REQUIREMENT_ID], { ...TOKEN_ONLY, [LIVE_ENDPOINT_ENV]: endpoint, [LIVE_API_KEY_ENV]: 'sk-ant-routing' }, roots())).rejects.toThrow(OFFLINE_GUARD_MESSAGE);
+    await expect(runCli(['run', PACK_ID, REQUIREMENT_ID], { ...TOKEN_ONLY, ...BUDGET, [LIVE_ENDPOINT_ENV]: endpoint, [LIVE_API_KEY_ENV]: 'sk-ant-routing' }, roots())).rejects.toThrow(OFFLINE_GUARD_MESSAGE);
     expect(offlineGuard().calls.slice(before)).toEqual([endpoint]);
     expect(existsSync(join(root, 'verification', PACK_ID, REQUIREMENT_ID, 'verification-result.json'))).toBe(false);
+  });
+
+  it('X6 — with the token, endpoint and credential but no attempt budget, a run is refused by name before anything is contacted', async () => {
+    const before = offlineGuard().calls.length;
+    const outcome = await runCli(['run', PACK_ID, REQUIREMENT_ID], { ...TOKEN_ONLY, [LIVE_ENDPOINT_ENV]: 'https://routing-nobudget.invalid/v1/messages', [LIVE_API_KEY_ENV]: 'sk-ant-routing' }, roots());
+    expect(outcome.exitCode).toBe(EXIT_REFUSED);
+    expect(outcome.lines.join('\n')).toMatch(/live_capability.*DATASTRATA_AGENT_MAX_ATTEMPTS/);
+    expect(offlineGuard().calls.length).toBe(before);
   });
 });

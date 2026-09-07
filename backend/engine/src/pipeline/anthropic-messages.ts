@@ -50,12 +50,19 @@
  * never echoed into an error message, and never reaches the transcript, which
  * records the role's messages and the projected content only.
  *
+ * **Usage is read, not trusted.** `readUsage` reports the envelope's `usage`
+ * figures for the runner's attempt records and budget ledger. It reads only
+ * integer fields and reports `null` — unknown — for anything else, because a
+ * zero standing in for a missing figure would say "nothing was billed" with no
+ * basis. Reading it changes neither the request nor the projection, so the
+ * adapter's identity does not move.
+ *
  * Pure: no filesystem, no clock, no network. The live runner performs the
  * request this module describes.
  */
 
 import { z } from 'zod';
-import type { ProviderAdapter, ProviderEndpointConfig, ProviderHttpRequest, ProviderAdapterIdentity } from './provider-adapter';
+import type { ProviderAdapter, ProviderEndpointConfig, ProviderHttpRequest, ProviderAdapterIdentity, ProviderUsage } from './provider-adapter';
 import { adjudicatorOutputSchema, prosecutorOutputSchema, readerOutputSchema } from './role-outputs';
 import type { RoleName, RoleRequest } from './roles';
 
@@ -319,8 +326,35 @@ function projectResponse(body: string, request: RoleRequest): string {
   return text.join('');
 }
 
+/** A non-negative integer, or nothing: a string, a float or a negative number is not a count. */
+function countOrNull(value: unknown): number | null {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null;
+}
+
+function readUsage(body: string): ProviderUsage | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return null;
+  }
+  const usage = (parsed as { usage?: unknown } | null)?.usage;
+  if (usage === null || usage === undefined || typeof usage !== 'object') return null;
+  const fields = usage as Record<string, unknown>;
+  const inputTokens = countOrNull(fields['input_tokens']);
+  const outputTokens = countOrNull(fields['output_tokens']);
+  if (inputTokens === null || outputTokens === null) return null;
+  return {
+    inputTokens,
+    outputTokens,
+    cacheCreationInputTokens: countOrNull(fields['cache_creation_input_tokens']),
+    cacheReadInputTokens: countOrNull(fields['cache_read_input_tokens']),
+  };
+}
+
 export const ANTHROPIC_MESSAGES_ADAPTER: ProviderAdapter = {
   identity: ANTHROPIC_MESSAGES_IDENTITY,
   buildRequest,
   projectResponse,
+  readUsage,
 };

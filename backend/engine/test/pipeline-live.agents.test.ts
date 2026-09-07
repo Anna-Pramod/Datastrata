@@ -14,8 +14,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync, cpSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   AgentCapabilityError,
@@ -25,21 +24,26 @@ import {
   LIVE_AGENTS_ENV,
   LIVE_AGENTS_TOKEN,
 } from '../src/pipeline/live-runner';
-import type { ProviderAdapter } from '../src/pipeline/provider-adapter';
-import { PACK_ID, REQUIREMENT_ID, engineRoot } from './replay-fixtures';
-import { captureLiveRun, liveCaptureConfigFrom } from './live-capture';
+import { engineRoot } from './replay-fixtures';
+import { assertSupportedLifetime, captureLiveRun, executionLifetimeMs, FIRST_LIVE_CASE, LIFETIME_MARGIN_MS, liveCaptureConfigFrom, LIVE_EXECUTION_ROOT, runFirstLiveCase } from './live-capture';
 
 /**
- * The provider adapter the first live run must supply.
- *
- * **B2 chooses none**, so this is `undefined` rather than a throwing stub. The
- * distinction matters: a stub that threw would make the capture below die with
- * an anonymous local error *before* reaching `captureLiveRun`, shadowing the
- * production refusal this suite exists to demonstrate. Leaving it absent means
- * the run refuses exactly as a real unconfigured live run would —
- * `MissingProviderAdapterError`, from `live-runner.ts`, before any request.
+ * Runs a negative check with the capability token absent from the ambient
+ * environment, and puts the environment back exactly as it was. This suite is
+ * the one that runs under the very environment that authorises a live
+ * execution, so a negative test that read the ambient token would fail
+ * precisely when the suite is meant to be used.
  */
-const providerAdapter: ProviderAdapter | undefined = undefined;
+function withoutAmbientToken<T>(body: () => T): T {
+  const saved = process.env[LIVE_AGENTS_ENV];
+  delete process.env[LIVE_AGENTS_ENV];
+  try {
+    return body();
+  } finally {
+    if (saved === undefined) delete process.env[LIVE_AGENTS_ENV];
+    else process.env[LIVE_AGENTS_ENV] = saved;
+  }
+}
 
 describe('the live agents suite', () => {
   it('runs in a suite the default run excludes', () => {
@@ -49,96 +53,99 @@ describe('the live agents suite', () => {
     expect(import.meta.url).toMatch(/\.agents\.test\.ts$/);
   });
 
-  it('still refuses to construct a live runner without the capability token', () => {
+  it('still refuses to construct a live runner without the capability token, whatever the ambient environment carries', () => {
     expect(liveAgentsEnabled({})).toBe(false);
-    expect(() =>
-      createLiveAgentRunner({ endpoint: 'https://unused.invalid/', apiKey: 'unused' }),
-    ).toThrow(AgentCapabilityError);
+    withoutAmbientToken(() => {
+      expect(() => createLiveAgentRunner({ endpoint: 'https://unused.invalid/', apiKey: 'unused' })).toThrow(AgentCapabilityError);
+    });
     expect(liveAgentsEnabled({ [LIVE_AGENTS_ENV]: LIVE_AGENTS_TOKEN })).toBe(true);
   });
 });
 
 /**
- * The capture path, built and gated, and inert until three separate things are
- * true at once.
+ * The capture path, built and gated, and inert until every gate is true at
+ * once.
  *
  * `it.runIf` rather than an unconditional test: running this suite is not by
  * itself permission to spend, so even `npm run test:agents` performs nothing
- * without the token, the endpoint and the credential. **Task 5e does not run
- * it**, and — as the first case below proves — it would refuse even if it were
- * run with all three, because a fourth thing is still missing.
+ * without the token, the endpoint, the credential and a stated budget. With
+ * all of them, this is the shape the first authorised execution runs, through
+ * `runFirstLiveCase` — the same function the offline suite proves over an
+ * injected transport under the network guard, delayed and cancelled included.
+ * The execution is filed under `LIVE_EXECUTION_ROOT` with its transcript,
+ * dossier and per-attempt diagnostics kept together, complete or not. Nothing
+ * here deletes what a run produced, and nothing here writes into the fixture
+ * tree; promoting a transcript there is a human act on a reviewed file.
  *
- * The first live run is a separate, explicitly authorised decision that settles
- * the requirement, the provider and model, the configuration and the maximum
- * spend, plus two items this task deliberately left open:
+ * The execution's lifetime is bounded by the harness, from the stated budget,
+ * and this test's own timeout sits above that bound: the test runner is never
+ * what stops provider work, and a deadline leaves an account behind.
  *
- * ```text
- * ProviderAdapter   how this provider's envelope yields content
- *                             — seamed by Task 5e, refused until supplied
- * the request shape           `x-api-key` and {model, messages} are still
- *                             one provider's; not seamed, only recorded
- * ```
+ * Whether this may be run at all is decided outside this file: the account,
+ * the applicable terms, permission to transmit the rendered inputs, retention
+ * settings and the spending limit are prerequisites this suite cannot see.
  */
 describe('capturing a live run', () => {
-  it('is inert without all three gates, however this suite was invoked', () => {
+  it('is inert without every environment gate, however this suite was invoked', () => {
     expect(() => liveCaptureConfigFrom({})).toThrow(/is a separate, deliberate act/);
   });
 
   it('is inert without a provider adapter, whatever the environment says', async () => {
     await expect(
       captureLiveRun({
-        packId: PACK_ID,
-        requirementId: REQUIREMENT_ID,
+        packId: FIRST_LIVE_CASE.packId,
+        requirementId: FIRST_LIVE_CASE.requirementId,
         paths: { packDir: 'unused', corpusDir: 'unused', verificationDir: 'unused' },
-        transcriptRoot: 'unused',
+        executionRoot: join(engineRoot, LIVE_EXECUTION_ROOT),
         env: {
           [LIVE_AGENTS_ENV]: LIVE_AGENTS_TOKEN,
           DATASTRATA_AGENT_ENDPOINT: 'https://unused.invalid/',
           DATASTRATA_AGENT_API_KEY: 'unused',
+          DATASTRATA_AGENT_MAX_ATTEMPTS: '1',
+          DATASTRATA_AGENT_MAX_INPUT_BYTES: '1',
         },
       }),
     ).rejects.toBeInstanceOf(MissingProviderAdapterError);
   });
 
+  // The lifetime is read at collection time so the test's timeout can be set
+  // from it, and checked against the timer range here as the harness checks
+  // it again before writing. An environment that has the token but no usable
+  // budget, or a budget whose lifetime the timers cannot honour, yields a zero
+  // lifetime here and a named refusal from the run itself, never a timeout
+  // the runner would silently shorten.
+  const lifetimeMs = (() => {
+    if (!liveAgentsEnabled()) return 0;
+    try {
+      const derived = executionLifetimeMs(liveCaptureConfigFrom(process.env).budget);
+      assertSupportedLifetime(derived);
+      return derived;
+    } catch {
+      return 0;
+    }
+  })();
+
   it.runIf(liveAgentsEnabled())(
-    'records a real transcript into the replay fixture root',
+    'executes the first live case through the accepted adapter within a bounded lifetime, and files the execution, complete or not',
     async () => {
-      const out = mkdtempSync(join(tmpdir(), 'live-capture-out-'));
-      try {
-        mkdirSync(join(out, 'requirement-versions'), { recursive: true });
-        cpSync(
-          join(engineRoot, 'verification', 'requirement-versions', `${PACK_ID}.json`),
-          join(out, 'requirement-versions', `${PACK_ID}.json`),
-        );
-        const captured = await captureLiveRun({
-          packId: PACK_ID,
-          requirementId: REQUIREMENT_ID,
-          paths: {
-            packDir: join(engineRoot, 'knowledge', PACK_ID),
-            corpusDir: join(engineRoot, 'corpus'),
-            verificationDir: out,
-          },
-          // A temporary root, never the committed fixture directory. Promoting
-          // the first real recording into `test/verification-transcripts/` is a
-          // human act on a reviewed file, not a side effect of a test run — the
-          // path is printed so it can be moved deliberately.
-          transcriptRoot: join(out, 'transcripts'),
-          env: process.env,
-          // The first live run supplies this alongside the provider, the model,
-          // the endpoint and the spend ceiling. Until then it is absent, and
-          // `captureLiveRun` refuses before constructing a runner — so with the
-          // token set this case reaches that refusal rather than a capture.
-          ...(providerAdapter === undefined ? {} : { adapter: providerAdapter }),
-        });
-        // Until a provider is chosen this line is unreachable: `captureLiveRun`
-        // refuses above. It is the shape the first authorised live run runs, not
-        // a claim that B2 ran it.
-        expect(captured.transcript.roles.length).toBeGreaterThan(0);
-        expect(captured.transcriptPath).toContain(captured.transcript.runId);
-        process.stdout.write(`\ncaptured live transcript: ${captured.transcriptPath}\n`);
-      } finally {
-        rmSync(out, { recursive: true, force: true });
-      }
+      const outcome = await runFirstLiveCase({
+        env: process.env,
+        executionRoot: join(engineRoot, LIVE_EXECUTION_ROOT),
+        // No transport is injected: this is the real one, and the execution
+        // summary records `synthetic: false` because of it. The deadline is
+        // the lifetime derived from the stated budget.
+      });
+      process.stdout.write(`\nlive execution ${outcome.status}: ${outcome.summaryPath}\n`);
+      // The evidence exists whatever happened; only then is completion asserted,
+      // so a failed or cancelled execution is reported as a failed test with its
+      // diagnostics kept.
+      expect(existsSync(outcome.summaryPath)).toBe(true);
+      expect(existsSync(outcome.attemptsPath)).toBe(true);
+      expect(outcome.httpAttempts).toBe(outcome.ledger.attemptsUsed);
+      expect(outcome.status, JSON.stringify(outcome.error)).toBe('completed');
+      expect(outcome.transcriptPath).toContain(outcome.runId);
+      expect(outcome.resultPath).not.toBeNull();
     },
+    lifetimeMs + LIFETIME_MARGIN_MS,
   );
 });

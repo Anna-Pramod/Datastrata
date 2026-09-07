@@ -148,6 +148,70 @@ investigation was undertaken. A guard that depends on each test remembering
 its own trap would not have prevented the attempt; one installed before any
 module runs does.
 
+## Pre-live preparation, as it stands in the candidate
+
+Offline, after B-ADAPTER, and before any provider call. What it adds, and
+what each addition does and does not establish:
+
+- **Per-attempt observability.** The live runner emits one `AttemptRecord`
+  per HTTP attempt — role, attempt within the invocation, attempt within the
+  run, whether it was sent, status, request id, the usage the adapter read
+  from the envelope or `null` for unknown, outcome, redacted detail and any
+  scheduled delay — *before* it throws anything about that attempt, so a
+  failed run still leaves an account of every request. `null` usage is
+  unknown, never zero. No header and no body is recorded; the credential is
+  redacted at the runner and again by the capture harness. Projection and
+  observation are decided apart: a response is projected first, then its one
+  record is booked and handed to the observer, so an observer that fails is
+  reported as an observation failure under its own name, the attempt has
+  been metered exactly once, and the runner sends nothing further.
+- **Budget controls, enforced before each send.** A `RunBudget` names the
+  largest request body admitted per attempt, in bytes, and the run's HTTP
+  attempt budget, retries included. Both are exact on what they measure and
+  neither is a token count or a sum of money: tokens are the provider's
+  figures and arrive afterwards, if at all. An attempt that ended ambiguously,
+  timed out or was cancelled in flight has spent its unit exactly as a
+  completed one has, because it may have been billed; the ledger counts such
+  attempts separately. Both values are validated as finite positive safe
+  integers after conversion — overflow, precision loss and a digit string
+  that converts to Infinity are refused by name — in the wiring and again in
+  the runner for any budget it is handed. The production wiring refuses a
+  live run whose environment does not state both figures
+  (`DATASTRATA_AGENT_MAX_ATTEMPTS`, `DATASTRATA_AGENT_MAX_INPUT_BYTES`). The
+  only enforceable cap in money is the provider-side spend limit, which is
+  an account setting outside this repository.
+- **Bounded lifetime.** A caller's signal bounds an execution: the attempt in
+  flight is aborted, any scheduled wait ends at once through the runner's own
+  abortable sleep, and every later send is refused. The capture harness
+  derives the deadline from the stated budget — every permitted attempt at
+  its full local timeout plus the longest permitted wait, and a minute — and
+  the agents test's own timeout sits above it, so a test runner is never what
+  stops provider work; the harness is, with its account written and the
+  execution filed as cancelled.
+- **The S-002 capture route.** `test/live-capture.ts` files each execution
+  under `test/live-executions/<pack>/<requirement>/<executionId>/` with the
+  transcript (filed by `runId` inside it, only if the run completed), the
+  dossier under its own `verification/` root, `attempts.jsonl` and
+  `execution.json` together. The execution id is not an identity of
+  anything; `runId` stays deterministic, so two genuine executions of one
+  question share a `runId` and different directories, and the first is never
+  overwritten. A root inside or containing the fixture root is refused, as
+  is an existing execution id. A failed execution keeps its diagnostics and
+  writes no transcript. The summary's `httpAttempts` is the runner ledger's
+  own figure; unsent admission, budget and cancellation refusals are counted
+  apart as `unsentEvents`. The agents suite's gated case runs
+  `runFirstLiveCase`, the same function the offline suite proves over an
+  injected transport under the network guard — completing, delayed by a
+  provider wait, and cancelled at its deadline — and it isolates and restores
+  the ambient token around its negative checks so it is correct under the
+  very environment that authorises it. It deletes nothing and remains inert
+  without every gate.
+
+Pipeline identity did not move: the adapter's request and projection are
+unchanged, reading usage is diagnostic, and the replay suite still binds the
+adapter-era recording. Model, effort and the 16 000-token output ceiling are
+unchanged.
+
 ## Open before the first genuine verification
 
 See `B3-RECONCILIATION-2026-09-06.md` for what the B3 draft still offers and

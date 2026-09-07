@@ -217,3 +217,18 @@ describe('the envelope becomes the model content, or a named refusal', () => {
     expect(() => parseRoleOutput('reader', 0, JSON.parse(content))).toThrow(/extra/);
   });
 });
+
+describe('usage is read from the envelope, or reported unknown', () => {
+  it('U1 — integer usage fields are read; absent cache fields are null, not zero', () => {
+    const body = envelope({ usage: { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 3 } });
+    expect(ANTHROPIC_MESSAGES_ADAPTER.readUsage!(body)).toEqual({ inputTokens: 10, outputTokens: 5, cacheCreationInputTokens: null, cacheReadInputTokens: 3 });
+  });
+
+  it('U2 — a missing, partial, non-integer or non-JSON usage is unknown, never zero', () => {
+    expect(ANTHROPIC_MESSAGES_ADAPTER.readUsage!(envelope({ usage: undefined }))).toBeNull();
+    expect(ANTHROPIC_MESSAGES_ADAPTER.readUsage!(envelope({ usage: { input_tokens: 10 } }))).toBeNull();
+    expect(ANTHROPIC_MESSAGES_ADAPTER.readUsage!(envelope({ usage: { input_tokens: '10', output_tokens: 5 } }))).toBeNull();
+    expect(ANTHROPIC_MESSAGES_ADAPTER.readUsage!(envelope({ usage: { input_tokens: 1.5, output_tokens: 5 } }))).toBeNull();
+    expect(ANTHROPIC_MESSAGES_ADAPTER.readUsage!('not json')).toBeNull();
+  });
+});

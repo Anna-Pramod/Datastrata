@@ -8,21 +8,27 @@
  * concrete adapter and the decision of when to construct a live runner. Both
  * live here, and nowhere else.
  *
- * **Three prerequisites, none implying another.**
+ * **Five prerequisites, none implying another.**
  *
  * ```text
  * DATASTRATA_VERIFICATION_AGENTS=1   the capability token — an act, not a state
  * DATASTRATA_AGENT_ENDPOINT          the endpoint, named explicitly
  * DATASTRATA_AGENT_API_KEY           the credential
+ * DATASTRATA_AGENT_MAX_ATTEMPTS      the run's HTTP attempt budget, retries included
+ * DATASTRATA_AGENT_MAX_INPUT_BYTES   the largest request body admitted per attempt
  * ```
  *
  * Without the token there is no runner, whatever credential and endpoint the
  * environment carries: an API key sitting in a developer's shell is not
  * permission to spend, and an ordinary `verify run` then refuses by name with
- * nothing contacted. With the token, a missing endpoint or credential is a
- * refusal naming the variable, and so is a configured adapter identity no
- * registered adapter answers to. The endpoint is named rather than defaulted
- * so that no host is contacted unless somebody typed it.
+ * nothing contacted. With the token, a missing endpoint, credential or budget
+ * variable is a refusal naming the variable, and so is a configured adapter
+ * identity no registered adapter answers to. The endpoint is named rather
+ * than defaulted so that no host is contacted unless somebody typed it, and
+ * the budget is stated rather than defaulted because a live run whose
+ * operator has not said how many attempts it may make has not been
+ * authorised. Both budget figures are exact on what they measure — attempts
+ * and bytes — and neither is a token count or a sum of money.
  *
  * **What the offline guarantee actually is.** The live runner is imported here
  * and by the tests that exercise this wiring; an import is not a request. The
@@ -43,7 +49,15 @@
 import type { RunCapabilities } from './run';
 import { ANTHROPIC_MESSAGES_ADAPTER } from '../pipeline/anthropic-messages';
 import type { RoleConfig } from '../pipeline/config';
-import { AgentCapabilityError, createLiveAgentRunner, liveAgentsEnabled, MissingProviderAdapterError, type ProviderTransport } from '../pipeline/live-runner';
+import {
+  AgentCapabilityError,
+  createLiveAgentRunner,
+  liveAgentsEnabled,
+  MissingProviderAdapterError,
+  type AttemptObserver,
+  type ProviderTransport,
+  type RunBudget,
+} from '../pipeline/live-runner';
 import {
   isProviderAdapterSelected,
   ProviderAdapterNotSelectedError,
@@ -55,18 +69,54 @@ import {
 
 export const LIVE_ENDPOINT_ENV = 'DATASTRATA_AGENT_ENDPOINT';
 export const LIVE_API_KEY_ENV = 'DATASTRATA_AGENT_API_KEY';
+export const LIVE_MAX_ATTEMPTS_ENV = 'DATASTRATA_AGENT_MAX_ATTEMPTS';
+export const LIVE_MAX_INPUT_BYTES_ENV = 'DATASTRATA_AGENT_MAX_INPUT_BYTES';
 
 /** Every adapter production may execute, keyed by identity. One today. */
 export const PRODUCTION_ADAPTERS: ProviderAdapterRegistry = registerProviderAdapter(new Map(), ANTHROPIC_MESSAGES_ADAPTER);
 
-/** The token was set and something else the live capability needs was not. */
+/** The token was set and something else the live capability needs was not, or was not a usable value. */
 export class LiveWiringError extends Error {
-  constructor(readonly missing: readonly string[]) {
+  constructor(readonly missing: readonly string[], readonly invalid: readonly string[] = []) {
+    const parts: string[] = [];
+    if (missing.length > 0) parts.push(`missing [${missing.join(', ')}]`);
+    if (invalid.length > 0) parts.push(`not a finite positive safe integer [${invalid.join(', ')}]`);
     super(
-      `the capability token is set but the live capability is missing [${missing.join(', ')}]: ${LIVE_ENDPOINT_ENV} names the host so that none is contacted unless somebody typed it, and ${LIVE_API_KEY_ENV} carries the credential; neither is defaulted`,
+      `the capability token is set but the live capability is ${parts.join(' and ')}: ${LIVE_ENDPOINT_ENV} names the host so that none is contacted unless somebody typed it, ${LIVE_API_KEY_ENV} carries the credential, ${LIVE_MAX_ATTEMPTS_ENV} bounds the run's HTTP attempts retries included, and ${LIVE_MAX_INPUT_BYTES_ENV} bounds each request body; none is defaulted`,
     );
     this.name = 'LiveWiringError';
   }
+}
+
+/** The variables an authorised live run must state, beyond the token. Order is the refusal's order. */
+export const LIVE_PREREQUISITE_ENVS: readonly string[] = [LIVE_ENDPOINT_ENV, LIVE_API_KEY_ENV, LIVE_MAX_ATTEMPTS_ENV, LIVE_MAX_INPUT_BYTES_ENV];
+
+function absent(env: NodeJS.ProcessEnv, name: string): boolean {
+  const value = env[name];
+  return value === undefined || value === '';
+}
+
+/**
+ * The budget the environment states, or a refusal naming what is missing or
+ * unusable. A positive decimal integer in the text, exactly: '0', '-1',
+ * '1.5', 'abc' and '27 ' are all refused. And after conversion, a finite
+ * positive safe integer: a digit string past 2^53 - 1 loses precision, and a
+ * long enough one converts to Infinity, and neither is a number the runner
+ * can count attempts or bytes against. The runner re-checks the same contract
+ * on whatever budget it is handed (`assertRunBudget`).
+ */
+export function liveBudgetFrom(env: NodeJS.ProcessEnv): RunBudget {
+  const names = [LIVE_MAX_ATTEMPTS_ENV, LIVE_MAX_INPUT_BYTES_ENV];
+  const missing = names.filter((name) => absent(env, name));
+  if (missing.length > 0) throw new LiveWiringError(missing);
+  const invalid = names.filter((name) => {
+    const text = env[name]!;
+    if (!/^[1-9][0-9]*$/.test(text)) return true;
+    const value = Number(text);
+    return !Number.isSafeInteger(value) || value < 1;
+  });
+  if (invalid.length > 0) throw new LiveWiringError([], invalid);
+  return { maxRunAttempts: Number(env[LIVE_MAX_ATTEMPTS_ENV]), maxInputBytesPerAttempt: Number(env[LIVE_MAX_INPUT_BYTES_ENV]) };
 }
 
 export interface LiveWiringOptions {
@@ -76,6 +126,8 @@ export interface LiveWiringOptions {
   registry?: ProviderAdapterRegistry;
   /** Defaults to the real transport. Tests inject a fake. */
   transport?: ProviderTransport;
+  /** Receives every attempt record. A capture harness files them; an ordinary run may pass none. */
+  observe?: AttemptObserver;
 }
 
 /**
@@ -89,22 +141,21 @@ export function liveCapabilityFrom(options: LiveWiringOptions): RunCapabilities 
   const { env, config } = options;
   if (!liveAgentsEnabled(env)) return { runner: null };
 
-  const missing: string[] = [];
-  const endpoint = env[LIVE_ENDPOINT_ENV];
-  const apiKey = env[LIVE_API_KEY_ENV];
-  if (endpoint === undefined || endpoint === '') missing.push(LIVE_ENDPOINT_ENV);
-  if (apiKey === undefined || apiKey === '') missing.push(LIVE_API_KEY_ENV);
+  const missing = LIVE_PREREQUISITE_ENVS.filter((name) => absent(env, name));
   if (missing.length > 0) throw new LiveWiringError(missing);
+  const budget = liveBudgetFrom(env);
 
   if (!isProviderAdapterSelected(config.providerAdapter)) throw new ProviderAdapterNotSelectedError();
   const adapter = resolveProviderAdapter(options.registry ?? PRODUCTION_ADAPTERS, config.providerAdapter);
 
   return {
     runner: createLiveAgentRunner({
-      endpoint: endpoint!,
-      apiKey: apiKey!,
+      endpoint: env[LIVE_ENDPOINT_ENV]!,
+      apiKey: env[LIVE_API_KEY_ENV]!,
       adapter,
+      budget,
       ...(options.transport === undefined ? {} : { transport: options.transport }),
+      ...(options.observe === undefined ? {} : { observe: options.observe }),
     }),
   };
 }

@@ -195,12 +195,34 @@ export interface ProviderEndpointConfig {
   apiKey: string;
 }
 
+/**
+ * What a provider reports having metered for one completed request.
+ *
+ * Every field is what the provider said, in the provider's units. A field the
+ * envelope does not carry is `null` — unknown — never zero: a zero would read
+ * as "nothing was billed", which is the one thing an absent figure cannot
+ * establish.
+ */
+export interface ProviderUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationInputTokens: number | null;
+  cacheReadInputTokens: number | null;
+}
+
 export interface ProviderAdapter {
   readonly identity: ProviderAdapterIdentity;
   /** Canonical role request -> this provider's request protocol. */
   buildRequest(request: RoleRequest, config: ProviderEndpointConfig): ProviderHttpRequest;
   /** This provider's response envelope -> the exact model-content string. */
   projectResponse(body: string, request: RoleRequest): string;
+  /**
+   * The usage a completed envelope reports, or `null` when it reports none the
+   * adapter can read. Diagnostic only: it changes neither the request nor the
+   * projected content, so an adapter that gains it keeps its identity. Optional
+   * because a synthetic adapter has nothing to meter.
+   */
+  readUsage?(body: string): ProviderUsage | null;
 }
 
 // ---------------------------------------------------------------------------
