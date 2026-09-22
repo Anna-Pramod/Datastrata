@@ -243,10 +243,40 @@ describe('static boundaries', () => {
         !path.endsWith(join('pipeline', 'live-runner.ts')) &&
         /from\s+'[^']*live-runner'/.test(code(path)),
     );
-    expect(importers).toEqual([join('src', 'cli', 'live-wiring.ts')]);
+    // The process transport (B-CLI-ADAPTER) throws the runner's own error
+    // classes — `TransportFailure`, `ProcessTransportError`,
+    // `EvidenceObservationFailedError` — so the runner can classify what it
+    // is handed; it constructs no runner and is itself injected into one.
+    expect(importers.sort()).toEqual([join('src', 'cli', 'live-wiring.ts'), join('src', 'pipeline', 'claude-code-cli-transport.ts')]);
     // Positive control: the pattern does match a real import, so an empty
     // result is a statement about the codebase rather than about the regex.
     expect(/from\s+'[^']*live-runner'/.test("import { x } from './live-runner';")).toBe(true);
+  });
+
+  it('the process transport is the only pipeline module that imports child_process; the sign gate is the one pre-existing importer under src/cli; nothing imports worker_threads', () => {
+    // B-CLI-ADAPTER: the suite-wide process guard covers every launch API on
+    // `node:child_process`, so what the static half must hold is that no
+    // engine source starts a process by any other module. `verify.ts`
+    // predates the adapter: its `suiteIsGreen` runs `npm test` for the sign
+    // command, is never called from a test, and would be refused by the
+    // guard if it were. Its import is pinned to exactly `execFileSync` so it
+    // cannot quietly become a second launch route.
+    const childProcessImport = /from\s+'(node:)?child_process'|require\(['"](node:)?child_process['"]\)/;
+    const importers = sourceFiles('src').filter((path) => childProcessImport.test(code(path))).sort();
+    expect(importers).toEqual([join('src', 'cli', 'verify.ts'), join('src', 'pipeline', 'claude-code-cli-transport.ts')]);
+    const pipelineImporters = sourceFiles(join('src', 'pipeline')).filter((path) => childProcessImport.test(code(path)));
+    expect(pipelineImporters).toEqual([join('src', 'pipeline', 'claude-code-cli-transport.ts')]);
+    const verifyImports = [...code(join('src', 'cli', 'verify.ts')).matchAll(/import\s+([^;]*?)\s+from\s+'(?:node:)?child_process'/g)].map((match) => match[1]);
+    expect(verifyImports).toEqual(['{ execFileSync }']);
+    const workerThreadsImport = /from\s+'(node:)?worker_threads'|require\(['"](node:)?worker_threads['"]\)/;
+    expect(sourceFiles('src').filter((path) => workerThreadsImport.test(code(path)))).toEqual([]);
+    // Positive controls: each pattern matches each form it claims to cover.
+    expect(childProcessImport.test("import { spawn } from 'node:child_process';")).toBe(true);
+    expect(childProcessImport.test("import { spawn } from 'child_process';")).toBe(true);
+    expect(childProcessImport.test("const cp = require('node:child_process');")).toBe(true);
+    expect(childProcessImport.test('const cp = require("child_process");')).toBe(true);
+    expect(workerThreadsImport.test("import { Worker } from 'node:worker_threads';")).toBe(true);
+    expect(workerThreadsImport.test("const wt = require('worker_threads');")).toBe(true);
   });
 
   it('nothing in the pipeline writes to the signature or promotion ledgers', () => {
@@ -262,6 +292,12 @@ describe('static boundaries', () => {
   it('the default vitest config excludes the live suite and a separate script runs it', () => {
     const config = readFileSync('vitest.config.ts', 'utf8');
     expect(config).toContain("'test/**/*.agents.test.ts'");
+    // The default suite installs the process guard; the live suite, which is
+    // the one allowed to launch the pinned CLI, installs no setup file at all.
+    expect(config).toContain("'test/setup/process-guard.ts'");
+    const agents = readFileSync('vitest.agents.config.ts', 'utf8');
+    expect(agents).not.toContain('process-guard');
+    expect(agents).not.toContain('setupFiles');
     const pkg = JSON.parse(readFileSync('package.json', 'utf8')) as {
       scripts: Record<string, string>;
     };

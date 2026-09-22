@@ -15,29 +15,35 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { spawn } from 'node:child_process';
 import { cpSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   liveBudgetFrom,
   liveCapabilityFrom,
+  liveWiringRefusal,
   LiveWiringError,
   LIVE_API_KEY_ENV,
   LIVE_ENDPOINT_ENV,
   LIVE_MAX_ATTEMPTS_ENV,
   LIVE_MAX_INPUT_BYTES_ENV,
   PRODUCTION_ADAPTERS,
+  SubscriptionRouteCaptureOnlyError,
 } from '../src/cli/live-wiring';
 import { dispatch } from '../src/cli/verify';
 import type { VerifyPaths } from '../src/cli/sign';
 import { EXIT_OK, EXIT_REFUSED } from '../src/cli/exit-codes';
 import { DEFAULT_ROLE_CONFIG } from '../src/pipeline/config';
 import { LIVE_AGENTS_ENV, LIVE_AGENTS_TOKEN, type AttemptRecord, type LiveAgentRunner } from '../src/pipeline/live-runner';
-import { ANTHROPIC_MESSAGES_IDENTITY } from '../src/pipeline/anthropic-messages';
-import { UNSELECTED_PROVIDER_ADAPTER, UnknownProviderAdapterError, providerAdapterKey } from '../src/pipeline/provider-adapter';
+import { ANTHROPIC_MESSAGES_ADAPTER, ANTHROPIC_MESSAGES_IDENTITY } from '../src/pipeline/anthropic-messages';
+import { CLAUDE_CODE_CLI_ADAPTER, CLAUDE_CODE_CLI_IDENTITY } from '../src/pipeline/claude-code-cli';
+import { UNSELECTED_PROVIDER_ADAPTER, UnknownProviderAdapterError, providerAdapterKey, resolveProviderAdapter } from '../src/pipeline/provider-adapter';
 import type { RunTranscript } from '../src/pipeline/transcript';
 import { installNetworkTrap } from './helpers';
 import { cannedAnthropicTransport, engineRoot, PACK_ID, REQUIREMENT_ID } from './replay-fixtures';
+import { offlineGuard } from './setup/offline-guard';
+import { processGuard } from './setup/process-guard';
 
 const LIVE_ENV = {
   [LIVE_AGENTS_ENV]: LIVE_AGENTS_TOKEN,
@@ -64,9 +70,60 @@ afterEach(() => {
 const paths = (): VerifyPaths => ({ packDir: join(engineRoot, 'knowledge', PACK_ID), corpusDir: join(engineRoot, 'corpus'), verificationDir: scratch });
 
 describe('the registry', () => {
-  it('W0 — registers the Anthropic Messages adapter under the identity the default configuration selects', () => {
-    expect([...PRODUCTION_ADAPTERS.keys()]).toEqual([providerAdapterKey(ANTHROPIC_MESSAGES_IDENTITY)]);
+  it('W0 — registers the Anthropic Messages adapter under the identity the default configuration selects, and the CLI adapter beside it', () => {
+    expect([...PRODUCTION_ADAPTERS.keys()]).toEqual([providerAdapterKey(ANTHROPIC_MESSAGES_IDENTITY), providerAdapterKey(CLAUDE_CODE_CLI_IDENTITY)]);
     expect(DEFAULT_ROLE_CONFIG.providerAdapter).toEqual(ANTHROPIC_MESSAGES_IDENTITY);
+    expect(resolveProviderAdapter(PRODUCTION_ADAPTERS, ANTHROPIC_MESSAGES_IDENTITY)).toBe(ANTHROPIC_MESSAGES_ADAPTER);
+    expect(resolveProviderAdapter(PRODUCTION_ADAPTERS, CLAUDE_CODE_CLI_IDENTITY)).toBe(CLAUDE_CODE_CLI_ADAPTER);
+  });
+});
+
+describe('the subscription route is capture-only', () => {
+  const CLI_CONFIG = { ...DEFAULT_ROLE_CONFIG, providerAdapter: CLAUDE_CODE_CLI_IDENTITY };
+
+  it('W9 — the CLI identity with a full HTTP-style live environment is refused by name before any prerequisite is read, and nothing is launched or contacted', async () => {
+    process.env[LIVE_AGENTS_ENV] = LIVE_AGENTS_TOKEN;
+    const processCalls = processGuard().calls.length;
+    const offlineCalls = offlineGuard().calls.length;
+
+    const attempt = () => liveCapabilityFrom({ env: LIVE_ENV, config: CLI_CONFIG });
+    expect(attempt).toThrow(SubscriptionRouteCaptureOnlyError);
+    expect(attempt).toThrow(/capture-only/);
+    expect(attempt).toThrow(new RegExp(providerAdapterKey(CLAUDE_CODE_CLI_IDENTITY)));
+    expect(attempt).toThrow(/test\/live-capture\.ts/);
+    // Before any prerequisite: with the token alone, or with nothing at all,
+    // the refusal is still the route's, never a missing-variable one.
+    expect(() => liveCapabilityFrom({ env: { [LIVE_AGENTS_ENV]: LIVE_AGENTS_TOKEN }, config: CLI_CONFIG })).toThrow(SubscriptionRouteCaptureOnlyError);
+    expect(() => liveCapabilityFrom({ env: {}, config: CLI_CONFIG })).toThrow(SubscriptionRouteCaptureOnlyError);
+    // The identity is compared, not the object: a fresh copy is the same route.
+    expect(() => liveCapabilityFrom({ env: LIVE_ENV, config: { ...DEFAULT_ROLE_CONFIG, providerAdapter: { id: 'claude-code-cli', version: '1' } } })).toThrow(SubscriptionRouteCaptureOnlyError);
+    // An injected transport does not change the answer: no runner is constructed for this route by this function, ever.
+    expect(() => liveCapabilityFrom({ env: LIVE_ENV, config: CLI_CONFIG, transport: cannedAnthropicTransport() })).toThrow(SubscriptionRouteCaptureOnlyError);
+
+    // `verify run` refuses by name at the process edge.
+    const outcome = await dispatch(['run', PACK_ID, REQUIREMENT_ID], paths(), () => true, undefined, () => liveCapabilityFrom({ env: LIVE_ENV, config: CLI_CONFIG }));
+    expect(outcome.exitCode).toBe(EXIT_REFUSED);
+    expect(outcome.lines.join('\n')).toContain('capture-only');
+    expect(outcome.lines.join('\n')).toContain(providerAdapterKey(CLAUDE_CODE_CLI_IDENTITY));
+
+    expect(processGuard().calls.slice(processCalls)).toEqual([]);
+    expect(offlineGuard().calls.slice(offlineCalls)).toEqual([]);
+    expect(trap.calls).toEqual([]);
+
+    // Positive controls for the two zeros above: the process guard's log does
+    // grow when something launches, and the HTTP identity with the same
+    // environment does construct a runner.
+    expect(() => spawn('/bin/echo', ['wiring'])).toThrow(/PROCESS GUARD/);
+    expect(processGuard().calls.slice(processCalls)).toEqual(['spawn /bin/echo']);
+    const http = liveCapabilityFrom({ env: LIVE_ENV, config: DEFAULT_ROLE_CONFIG, transport: cannedAnthropicTransport() });
+    expect(http.runner?.kind).toBe('live');
+    expect(http.runner?.adapter).toEqual(ANTHROPIC_MESSAGES_IDENTITY);
+  });
+
+  it('W10 — liveWiringRefusal maps the capture-only refusal to its message, and still lets a foreign error escape', () => {
+    const error = new SubscriptionRouteCaptureOnlyError(CLAUDE_CODE_CLI_IDENTITY);
+    expect(liveWiringRefusal(error)).toBe(error.message);
+    expect(liveWiringRefusal(new Error('not the wiring'))).toBeNull();
   });
 });
 

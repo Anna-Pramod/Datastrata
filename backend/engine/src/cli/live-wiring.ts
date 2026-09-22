@@ -43,11 +43,22 @@
  * `RoleConfig.providerAdapter` selects among them; a run whose configured
  * identity has no implementation is refused rather than defaulted.
  *
+ * **The subscription route is registered and refused (B-CLI-ADAPTER).**
+ * `claude-code-cli@1` reaches Claude through the pinned Claude Code CLI on
+ * a subscription. It is in the registry because the capture harness resolves
+ * it from here, and it is refused here by name — before any prerequisite
+ * variable is read — because an ordinary `verify run` is not the place it
+ * may run: only the capture harness's subscription path
+ * (`test/live-capture.ts`) constructs its runner, behind an execution-scoped
+ * authentication gate. A configured identity is a fact about the run, not
+ * about the environment, so the refusal consults nothing in `env`.
+ *
  * This module reads the environment, which is why it lives under `src/cli/`.
  */
 
 import type { RunCapabilities } from './run';
 import { ANTHROPIC_MESSAGES_ADAPTER } from '../pipeline/anthropic-messages';
+import { CLAUDE_CODE_CLI_ADAPTER, CLAUDE_CODE_CLI_IDENTITY } from '../pipeline/claude-code-cli';
 import type { RoleConfig } from '../pipeline/config';
 import {
   AgentCapabilityError,
@@ -61,9 +72,11 @@ import {
 import {
   isProviderAdapterSelected,
   ProviderAdapterNotSelectedError,
+  providerAdapterKey,
   registerProviderAdapter,
   resolveProviderAdapter,
   UnknownProviderAdapterError,
+  type ProviderAdapterIdentity,
   type ProviderAdapterRegistry,
 } from '../pipeline/provider-adapter';
 
@@ -72,8 +85,32 @@ export const LIVE_API_KEY_ENV = 'DATASTRATA_AGENT_API_KEY';
 export const LIVE_MAX_ATTEMPTS_ENV = 'DATASTRATA_AGENT_MAX_ATTEMPTS';
 export const LIVE_MAX_INPUT_BYTES_ENV = 'DATASTRATA_AGENT_MAX_INPUT_BYTES';
 
-/** Every adapter production may execute, keyed by identity. One today. */
-export const PRODUCTION_ADAPTERS: ProviderAdapterRegistry = registerProviderAdapter(new Map(), ANTHROPIC_MESSAGES_ADAPTER);
+/**
+ * Every adapter production may resolve, keyed by identity. Two: the HTTP
+ * adapter, which `verify run` may execute, and the subscription-route
+ * adapter, which it may not (`SubscriptionRouteCaptureOnlyError`).
+ */
+export const PRODUCTION_ADAPTERS: ProviderAdapterRegistry = registerProviderAdapter(
+  registerProviderAdapter(new Map(), ANTHROPIC_MESSAGES_ADAPTER),
+  CLAUDE_CODE_CLI_ADAPTER,
+);
+
+/**
+ * The configured identity is the subscription route, which this boundary
+ * makes capture-only. Thrown before any prerequisite variable is read.
+ */
+export class SubscriptionRouteCaptureOnlyError extends Error {
+  constructor(readonly identity: ProviderAdapterIdentity) {
+    super(
+      `the ${providerAdapterKey(identity)} route is capture-only in this boundary: it reaches Claude through the pinned Claude Code CLI on a subscription, and only the capture harness's subscription path (test/live-capture.ts) may construct its runner, behind an execution-scoped authentication gate; verify run refuses it by name and reads no live prerequisite for it`,
+    );
+    this.name = 'SubscriptionRouteCaptureOnlyError';
+  }
+}
+
+function isSubscriptionRoute(identity: ProviderAdapterIdentity): boolean {
+  return identity.id === CLAUDE_CODE_CLI_IDENTITY.id && identity.version === CLAUDE_CODE_CLI_IDENTITY.version;
+}
 
 /** The token was set and something else the live capability needs was not, or was not a usable value. */
 export class LiveWiringError extends Error {
@@ -139,6 +176,9 @@ export interface LiveWiringOptions {
  */
 export function liveCapabilityFrom(options: LiveWiringOptions): RunCapabilities {
   const { env, config } = options;
+  // Decided from the configuration alone, before the token or any other
+  // variable is read: the route is refused whatever the environment says.
+  if (isSubscriptionRoute(config.providerAdapter)) throw new SubscriptionRouteCaptureOnlyError(config.providerAdapter);
   if (!liveAgentsEnabled(env)) return { runner: null };
 
   const missing = LIVE_PREREQUISITE_ENVS.filter((name) => absent(env, name));
@@ -169,6 +209,7 @@ export function liveCapabilityFrom(options: LiveWiringOptions): RunCapabilities 
 export function liveWiringRefusal(error: unknown): string | null {
   if (
     error instanceof LiveWiringError ||
+    error instanceof SubscriptionRouteCaptureOnlyError ||
     error instanceof ProviderAdapterNotSelectedError ||
     error instanceof UnknownProviderAdapterError ||
     error instanceof MissingProviderAdapterError ||

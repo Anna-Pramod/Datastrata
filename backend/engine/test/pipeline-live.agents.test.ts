@@ -25,7 +25,23 @@ import {
   LIVE_AGENTS_TOKEN,
 } from '../src/pipeline/live-runner';
 import { engineRoot } from './replay-fixtures';
-import { assertSupportedLifetime, captureLiveRun, executionLifetimeMs, FIRST_LIVE_CASE, LIFETIME_MARGIN_MS, liveCaptureConfigFrom, LIVE_EXECUTION_ROOT, runFirstLiveCase } from './live-capture';
+import {
+  assertSupportedLifetime,
+  captureLiveRun,
+  captureRouteFor,
+  CaptureRouteConflictError,
+  executionLifetimeMs,
+  FIRST_LIVE_CASE,
+  LIFETIME_MARGIN_MS,
+  liveCaptureConfigFrom,
+  LIVE_EXECUTION_ROOT,
+  runFirstLiveCase,
+  runFirstSubscriptionCase,
+  SUBSCRIPTION_CAPTURE_ENV,
+  SUBSCRIPTION_CAPTURE_TOKEN,
+  subscriptionCaptureConfigFrom,
+  subscriptionCaptureSelected,
+} from './live-capture';
 
 /**
  * Runs a negative check with the capability token absent from the ambient
@@ -72,6 +88,11 @@ describe('the live agents suite', () => {
  * all of them, this is the shape the first authorised execution runs, through
  * `runFirstLiveCase` — the same function the offline suite proves over an
  * injected transport under the network guard, delayed and cancelled included.
+ * The route is the environment's: this case runs only when the environment
+ * selects the HTTP route, that is, when `DATASTRATA_SUBSCRIPTION_CAPTURE` is
+ * absent — under a subscription environment the same function would take
+ * the subscription route, and that case is the one below, behind its own
+ * selector.
  * The execution is filed under `LIVE_EXECUTION_ROOT` with its transcript,
  * dossier and per-attempt diagnostics kept together, complete or not. Nothing
  * here deletes what a run produced, and nothing here writes into the fixture
@@ -114,8 +135,10 @@ describe('capturing a live run', () => {
   // budget, or a budget whose lifetime the timers cannot honour, yields a zero
   // lifetime here and a named refusal from the run itself, never a timeout
   // the runner would silently shorten.
+  const httpAuthorised = liveAgentsEnabled() && captureRouteFor(process.env) === 'http';
+
   const lifetimeMs = (() => {
-    if (!liveAgentsEnabled()) return 0;
+    if (!httpAuthorised) return 0;
     try {
       const derived = executionLifetimeMs(liveCaptureConfigFrom(process.env).budget);
       assertSupportedLifetime(derived);
@@ -125,7 +148,7 @@ describe('capturing a live run', () => {
     }
   })();
 
-  it.runIf(liveAgentsEnabled())(
+  it.runIf(httpAuthorised)(
     'executes the first live case through the accepted adapter within a bounded lifetime, and files the execution, complete or not',
     async () => {
       const outcome = await runFirstLiveCase({
@@ -141,11 +164,80 @@ describe('capturing a live run', () => {
       // diagnostics kept.
       expect(existsSync(outcome.summaryPath)).toBe(true);
       expect(existsSync(outcome.attemptsPath)).toBe(true);
+      expect(outcome.route).toBe('http');
       expect(outcome.httpAttempts).toBe(outcome.ledger.attemptsUsed);
       expect(outcome.status, JSON.stringify(outcome.error)).toBe('completed');
       expect(outcome.transcriptPath).toContain(outcome.runId);
       expect(outcome.resultPath).not.toBeNull();
     },
     lifetimeMs + LIFETIME_MARGIN_MS,
+  );
+});
+
+/**
+ * The subscription route (B-CLI-ADAPTER), behind a second token of its own.
+ *
+ * A subscription run launches the pinned Claude Code CLI and authenticates
+ * as the operator, so the capability token alone does not open it:
+ * `DATASTRATA_SUBSCRIPTION_CAPTURE=1` — the route selector, the only thing
+ * that selects this route — must be set as well, and the environment must
+ * carry no endpoint, no credential and no `ANTHROPIC_*` or
+ * `CLAUDE_CODE_USE_*` variable — `runFirstSubscriptionCase` refuses those by
+ * name before anything is written, and refuses by name to run at all
+ * without the selector. Nothing is injected: the real `spawn`,
+ * the real pin resolved against `HOME`, and `process` as the interrupt
+ * source. This case never runs under `npm test` (this file is excluded from
+ * the default configuration) and is inert under `npm run test:agents` until
+ * both tokens are present.
+ */
+describe('capturing a subscription run', () => {
+  const subscriptionAuthorised = liveAgentsEnabled() && subscriptionCaptureSelected(process.env);
+
+  it('is inert without the environment gates, whatever this suite was invoked with', async () => {
+    expect(SUBSCRIPTION_CAPTURE_ENV).toBe('DATASTRATA_SUBSCRIPTION_CAPTURE');
+    expect(SUBSCRIPTION_CAPTURE_TOKEN).toBe('1');
+    expect(() => subscriptionCaptureConfigFrom({})).toThrow(/missing \[DATASTRATA_VERIFICATION_AGENTS/);
+    expect(() => subscriptionCaptureConfigFrom({ [LIVE_AGENTS_ENV]: LIVE_AGENTS_TOKEN, DATASTRATA_AGENT_MAX_ATTEMPTS: '9', DATASTRATA_AGENT_MAX_INPUT_BYTES: '1', DATASTRATA_AGENT_API_KEY: 'k' })).toThrow(/DATASTRATA_AGENT_API_KEY/);
+    // Without the selector the subscription case is refused by name before any gate, whatever else the environment carries.
+    await expect(
+      runFirstSubscriptionCase({ env: { [LIVE_AGENTS_ENV]: LIVE_AGENTS_TOKEN, DATASTRATA_AGENT_MAX_ATTEMPTS: '9', DATASTRATA_AGENT_MAX_INPUT_BYTES: '1' }, executionRoot: join(engineRoot, LIVE_EXECUTION_ROOT) }),
+    ).rejects.toBeInstanceOf(CaptureRouteConflictError);
+    expect(captureRouteFor({})).toBe('http');
+    expect(captureRouteFor({ [SUBSCRIPTION_CAPTURE_ENV]: SUBSCRIPTION_CAPTURE_TOKEN })).toBe('subscription');
+  });
+
+  const subscriptionLifetimeMs = (() => {
+    if (!subscriptionAuthorised) return 0;
+    try {
+      const derived = executionLifetimeMs(subscriptionCaptureConfigFrom(process.env).budget);
+      assertSupportedLifetime(derived);
+      return derived;
+    } catch {
+      return 0;
+    }
+  })();
+
+  it.runIf(subscriptionAuthorised)(
+    'executes the first live case through the pinned CLI on the subscription, after the authentication gate, and files the execution with every launch',
+    async () => {
+      const outcome = await runFirstSubscriptionCase({
+        env: process.env,
+        executionRoot: join(engineRoot, LIVE_EXECUTION_ROOT),
+      });
+      process.stdout.write(`\nsubscription execution ${outcome.status}: ${outcome.summaryPath}\n`);
+      expect(existsSync(outcome.summaryPath)).toBe(true);
+      expect(existsSync(outcome.attemptsPath)).toBe(true);
+      expect(existsSync(outcome.launchesPath!)).toBe(true);
+      expect(outcome.route).toBe('subscription');
+      expect(outcome.httpAttempts).toBeNull();
+      expect(outcome.launches).toBe(outcome.ledger.launchesStarted);
+      expect(outcome.gate?.pass, JSON.stringify(outcome.gate?.reasons)).toBe(true);
+      expect(outcome.terminationUnconfirmed).toBe(false);
+      expect(outcome.resultWithheld).toBe(false);
+      expect(outcome.status, JSON.stringify(outcome.error)).toBe('completed');
+      expect(outcome.transcriptPath).toContain(outcome.runId);
+      expect(outcome.resultPath).not.toBeNull();
+    },
+    subscriptionLifetimeMs + LIFETIME_MARGIN_MS,
   );
 });

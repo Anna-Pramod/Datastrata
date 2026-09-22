@@ -377,7 +377,9 @@ describe('what is not retried', () => {
 });
 
 describe('per-attempt observability: every HTTP attempt leaves a record, before any error is thrown', () => {
-  const RECORD_KEYS = ['attempt', 'delayMs', 'detail', 'index', 'outcome', 'possiblyBilled', 'requestId', 'role', 'runAttempt', 'sent', 'status', 'usage'];
+  // `channel` is the one key the process channel added to an HTTP record;
+  // `live-runner-channel.test.ts` holds the pre-change shapes as literals.
+  const RECORD_KEYS = ['attempt', 'channel', 'delayMs', 'detail', 'index', 'outcome', 'possiblyBilled', 'requestId', 'role', 'runAttempt', 'sent', 'status', 'usage'];
 
   it('O1 — a completed attempt records role, attempt, status, request id, usage and outcome; usage is read from the envelope', async () => {
     process.env[LIVE_AGENTS_ENV] = LIVE_AGENTS_TOKEN;

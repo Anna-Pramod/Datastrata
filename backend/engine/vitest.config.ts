@@ -22,9 +22,12 @@ export default defineConfig({
   test: {
     include: ['test/**/*.test.ts'],
     exclude: ['**/node_modules/**', 'test/**/*.agents.test.ts'],
-    // The suite-wide offline guard, in place before any test module loads.
-    // Absent from `vitest.agents.config.ts` on purpose: that suite is the one
-    // allowed to reach a provider, behind its own gates.
-    setupFiles: ['test/setup/offline-guard.ts'],
+    // The suite-wide guards, in place before any test module loads: the
+    // offline guard replaces `fetch`, the process guard replaces every launch
+    // API on `node:child_process`. Both are absent from
+    // `vitest.agents.config.ts` on purpose: that suite is the one allowed to
+    // reach a provider and to launch the pinned CLI, behind its own gates,
+    // and it must not be given either setup file.
+    setupFiles: ['test/setup/offline-guard.ts', 'test/setup/process-guard.ts'],
   },
 });

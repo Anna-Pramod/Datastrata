@@ -60,6 +60,26 @@
  * it aborts the attempt in flight, ends any wait, and refuses every later
  * send. An observer that throws halts the runner under its own name; the
  * attempt it was handed had already been booked once.
+ *
+ * **Two channels, one record shape.** An adapter declares its `channel`:
+ * `http` — the default, and everything described above — or `process`, where
+ * the "transport" launches a local child (the pinned Claude Code CLI on a
+ * subscription) and this file observes no HTTP exchange at all. The channel
+ * is fixed at construction from the adapter and stamped on every record,
+ * including one for an attempt that was never sent, because it is a property
+ * of what the run *was going to do*, and a reader must never infer it from
+ * what came back. On the process channel the HTTP fields keep their exact
+ * meaning rather than being reinterpreted: `status` is the HTTP status
+ * observed, so it is `null` — a synthetic 200 would be a claim about a wire
+ * this file never saw; `possiblyBilled` follows `launched`, because a child
+ * that started may have reached the provider whether or not the CLI reported
+ * usage; and the ledger names the unit it counted and records the HTTP attempt
+ * count as unknown. Retry-by-status, `retry-after` and error diagnosis are
+ * HTTP facts, so a response carrying process facts skips them entirely and
+ * goes to projection. A transport that could not observe its own evidence
+ * throws `EvidenceObservationFailedError`: booked once under its own outcome,
+ * it halts the runner as an observer failure does, and is rethrown unwrapped,
+ * so the harness that owns the evidence sees the failure under its own name.
  */
 
 import type { AgentRunner, RoleResponse } from './runner';
@@ -105,11 +125,46 @@ export class MissingProviderAdapterError extends Error {
   }
 }
 
-/** What a transport hands back: status, headers as sent, body as text. */
+/**
+ * What a process transport observed of one child, whether or not the child
+ * produced an answer. Every field is what the transport saw, never what it
+ * intended: `started` is true only once a child existed; `termination` is
+ * present only when the transport had to end one, and records what it
+ * observed of that rather than what it sent; the prompt-file fields say
+ * whether the evidence on disk was removed rather than assuming it was.
+ * `null` means unobserved, as everywhere else in the record.
+ */
+export interface ProcessFacts {
+  started: boolean;
+  pid: number | null;
+  exitCode: number | null;
+  signal: string | null;
+  durationMs: number;
+  stdoutBytes: number;
+  stderrBytes: number;
+  promptFileBytes: number | null;
+  stdinBytes: number | null;
+  promptFileRemoved: boolean | null;
+  promptFileRemovalError: string | null;
+  termination: {
+    forced: boolean;
+    processGroupMade: boolean;
+    signalsSent: string[];
+    childReaped: boolean;
+    groupGone: boolean | null;
+  } | null;
+}
+
+/**
+ * What a transport hands back: status, headers as sent, body as text. A
+ * process transport adds `process`; its `status` is then a placeholder the
+ * runner never records, because no HTTP status was observed.
+ */
 export interface ProviderHttpResponse {
   status: number;
   headers: Readonly<Record<string, string>>;
   body: string;
+  process?: ProcessFacts;
 }
 
 /**
@@ -138,6 +193,45 @@ export class TransportFailure extends Error {
   ) {
     super(detail);
     this.name = 'TransportFailure';
+  }
+}
+
+/**
+ * A transport could not observe its own evidence: a launch record it was to
+ * hand over was refused, a capture it owed could not be written. Distinct
+ * from every provider and process failure because the answer, if any, is not
+ * the problem — the account of the attempt is. The runner books the attempt
+ * once under `observation_failed`, halts, and rethrows this instance
+ * unwrapped, so the harness that owns the evidence sees its own failure and
+ * not a transport failure of unknown phase. Transports throw it or a
+ * subclass; `process` carries what was observed of the child, when there was
+ * one to observe.
+ */
+export class EvidenceObservationFailedError extends Error {
+  constructor(
+    detail: string,
+    readonly process?: ProcessFacts,
+  ) {
+    super(detail);
+    this.name = 'EvidenceObservationFailedError';
+  }
+}
+
+/**
+ * A process transport ended a child, or lost one, before an answer: an
+ * abort, an output bound exceeded, a child that would not exit. It always
+ * carries the facts, because a launch that started and was then terminated
+ * is exactly the account the ledger needs, and `started` is what decides
+ * whether the attempt may have been billed. The runner classifies it from
+ * its own abort reason — cancelled, timed out — not from this error's name.
+ */
+export class ProcessTransportError extends Error {
+  constructor(
+    detail: string,
+    readonly process: ProcessFacts,
+  ) {
+    super(detail);
+    this.name = 'ProcessTransportError';
   }
 }
 
@@ -191,7 +285,12 @@ export const DEFAULT_BACKOFF_MS = 1_000;
  */
 export const MAX_RETRY_AFTER_MS = 60_000;
 
-/** What one HTTP attempt did, as the runner saw it. Nothing here came from a header the runner did not read. */
+/**
+ * What one attempt did, as the runner saw it. Nothing here came from a header
+ * the runner did not read. `observation_failed` is the transport's own
+ * account failing, not the attempt: the answer, if there was one, is
+ * discarded because it cannot be evidenced.
+ */
 export type AttemptOutcome =
   | 'completed'
   | 'projection_refused'
@@ -200,27 +299,36 @@ export type AttemptOutcome =
   | 'timeout'
   | 'ambiguous'
   | 'cancelled'
-  | 'not_sent';
+  | 'not_sent'
+  | 'observation_failed';
 
 /**
- * One record per HTTP attempt, emitted before the runner throws anything
- * about it, so a run that fails still leaves an account of every request it
- * made. `runAttempt` counts across the whole runner — the spend figure;
- * `attempt` counts within one role invocation. `usage` is what the adapter
- * read from the envelope, or `null` for unknown, never zero. `possiblyBilled`
- * is true for every sent attempt whose usage is unknown, except a failure the
+ * One record per attempt, emitted before the runner throws anything about
+ * it, so a run that fails still leaves an account of every request it made.
+ * `runAttempt` counts across the whole runner — the spend figure; `attempt`
+ * counts within one role invocation. `usage` is what the adapter read from
+ * the envelope, or `null` for unknown, never zero. `possiblyBilled` is true
+ * for every sent attempt whose usage is unknown, except a failure the
  * transport vouched for as pre-submission: an error status is usually not
  * billed, but the runner does not know that, and says so. `cancelled` with
  * `sent: true` is an attempt aborted in flight by the caller's signal, and is
  * possibly billed; with `sent: false` it is an invocation refused because the
  * signal had already fired. `detail` is redacted diagnostic text; no header,
  * no body, no credential.
+ *
+ * On the process channel the same fields keep the same meaning and three are
+ * added. `status` stays the HTTP status observed, which is none, so `null`.
+ * `possiblyBilled` follows `launched`: a child that started may have reached
+ * the provider whatever the CLI reported, and one that never started cannot
+ * have. An HTTP record carries `channel: 'http'` and nothing else new.
  */
 export interface AttemptRecord {
   role: string;
   index: number;
   attempt: number;
   runAttempt: number;
+  /** Declared by the adapter before anything ran, and stamped on every record, sent or not. */
+  channel: 'http' | 'process';
   sent: boolean;
   status: number | null;
   requestId: string | null;
@@ -229,6 +337,12 @@ export interface AttemptRecord {
   detail: string | null;
   possiblyBilled: boolean;
   delayMs: number | null;
+  /** Process channel: a child was actually started. Absent where no launch was attempted, and on the HTTP channel, whose unit is the request. */
+  launched?: boolean;
+  /** Process channel: what the transport observed of the child, when it had facts to give. */
+  process?: ProcessFacts;
+  /** Where a non-null `usage` came from. Stamped `cli_report` on the process channel; the HTTP channel's records are unchanged and carry none. */
+  usageSource?: 'provider_envelope' | 'cli_report';
 }
 
 export type AttemptObserver = (record: AttemptRecord) => void;
@@ -247,8 +361,15 @@ export interface RunBudget {
   maxInputBytesPerAttempt: number;
 }
 
-/** The runner's own account of what it has spent, in units it can measure. */
+/**
+ * The runner's own account of what it has spent, in units it can measure.
+ * `attemptUnit` names the unit `attemptsUsed` counts, from the channel. On
+ * the process channel the CLI makes the HTTP requests and this file sees none
+ * of them, so `httpAttemptsObserved` is `null` — unknown, never zero — and
+ * `launchesStarted` is the count that can be known: children that existed.
+ */
 export interface BudgetLedger {
+  attemptUnit: 'http_attempt' | 'cli_launch';
   maxRunAttempts: number | null;
   attemptsUsed: number;
   attemptsRemaining: number | null;
@@ -258,6 +379,10 @@ export interface BudgetLedger {
   knownOutputTokens: number;
   unknownUsageAttempts: number;
   possiblyBilledAttempts: number;
+  /** `attemptsUsed` on the HTTP channel; `null` on the process channel. */
+  httpAttemptsObserved: number | null;
+  /** Records with `launched: true`. Zero on the HTTP channel, which launches nothing. */
+  launchesStarted: number;
 }
 
 /** A budget value that cannot be counted with: not a finite positive safe integer. Refused at construction, before anything is sent. */
@@ -461,6 +586,20 @@ function diagnose(response: ProviderHttpResponse, secret: string): { errorType: 
   return { errorType: clean(errorType), errorCode: clean(errorCode), requestId: clean(requestId) };
 }
 
+/**
+ * The process facts an error carries, if it carries any. Duck-typed rather
+ * than `instanceof`, deliberately: a transport may subclass `TransportFailure`
+ * or throw a class of its own, and what the record needs is not the class but
+ * whether a child started — the one fact that decides whether the attempt may
+ * have been billed. An object with a boolean `started` is taken at its word.
+ */
+function processFactsOf(error: unknown): ProcessFacts | null {
+  if (typeof error !== 'object' || error === null) return null;
+  const facts = (error as { process?: unknown }).process;
+  if (typeof facts !== 'object' || facts === null) return null;
+  return typeof (facts as { started?: unknown }).started === 'boolean' ? (facts as ProcessFacts) : null;
+}
+
 /** The provider's `retry-after`, in ms, or `null` when absent or unreadable. */
 function retryAfterMs(response: ProviderHttpResponse): number | null {
   const header = response.headers['retry-after'];
@@ -477,11 +616,17 @@ export class LiveAgentRunner implements AgentRunner {
   #knownOutputTokens = 0;
   #unknownUsageAttempts = 0;
   #possiblyBilledAttempts = 0;
-  /** Set once the observer has failed: every later invocation refuses with it, unsent and unrecorded. */
-  #halted: ObservationFailedError | null = null;
+  #launchesStarted = 0;
+  /** Set once the observer, or a transport's own evidence observation, has failed: every later invocation refuses with it, unsent and unrecorded. */
+  #halted: ObservationFailedError | EvidenceObservationFailedError | null = null;
+  /** Fixed here from the adapter's declaration, and never revised by anything a transport returns. */
+  readonly #channel: 'http' | 'process';
 
   constructor(private readonly options: LiveRunnerOptions) {
     if (options.budget !== undefined) assertRunBudget(options.budget);
+    // A runner with no adapter refuses at `run()` before any record exists,
+    // so the default here is never stamped on a record it does not describe.
+    this.#channel = options.adapter?.channel ?? 'http';
   }
 
   get adapter(): ProviderAdapterIdentity | undefined {
@@ -499,6 +644,7 @@ export class LiveAgentRunner implements AgentRunner {
   get ledger(): BudgetLedger {
     const budget = this.options.budget;
     return {
+      attemptUnit: this.#channel === 'http' ? 'http_attempt' : 'cli_launch',
       maxRunAttempts: budget?.maxRunAttempts ?? null,
       attemptsUsed: this.#attempts,
       attemptsRemaining: budget === undefined ? null : Math.max(0, budget.maxRunAttempts - this.#attempts),
@@ -508,6 +654,10 @@ export class LiveAgentRunner implements AgentRunner {
       knownOutputTokens: this.#knownOutputTokens,
       unknownUsageAttempts: this.#unknownUsageAttempts,
       possiblyBilledAttempts: this.#possiblyBilledAttempts,
+      // The CLI makes the HTTP requests on the process channel and this file
+      // sees none of them: unknown, never zero.
+      httpAttemptsObserved: this.#channel === 'http' ? this.#attempts : null,
+      launchesStarted: this.#launchesStarted,
     };
   }
 
@@ -526,6 +676,7 @@ export class LiveAgentRunner implements AgentRunner {
       }
       if (record.possiblyBilled) this.#possiblyBilledAttempts += 1;
     }
+    if (record.launched === true) this.#launchesStarted += 1;
     if (this.options.observe === undefined) return;
     try {
       this.options.observe(record);
@@ -561,11 +712,17 @@ export class LiveAgentRunner implements AgentRunner {
     const role = `${request.role}[${request.index}]`;
     const bodyBytes = Buffer.byteLength(spec.body, 'utf8');
 
-    const record = (attempt: number, fields: Pick<AttemptRecord, 'sent' | 'status' | 'requestId' | 'usage' | 'outcome' | 'detail' | 'possiblyBilled' | 'delayMs'>): AttemptRecord => ({
+    // The channel is on every record from here, sent or not: a refusal before
+    // the send is still a refusal on this channel.
+    const record = (
+      attempt: number,
+      fields: Pick<AttemptRecord, 'sent' | 'status' | 'requestId' | 'usage' | 'outcome' | 'detail' | 'possiblyBilled' | 'delayMs'> & Partial<Pick<AttemptRecord, 'launched' | 'process' | 'usageSource'>>,
+    ): AttemptRecord => ({
       role: request.role,
       index: request.index,
       attempt,
       runAttempt: this.#attempts,
+      channel: this.#channel,
       ...fields,
     });
     const unsent = (attempt: number, outcome: 'not_sent' | 'cancelled', detail: string): AttemptRecord =>
@@ -600,39 +757,63 @@ export class LiveAgentRunner implements AgentRunner {
       } catch (error) {
         clearTimeout(timer);
         signal?.removeEventListener('abort', cancel);
-        if (controller.signal.aborted) {
-          if (controller.signal.reason === 'cancelled') {
-            this.#emit(record(attempt, { sent: true, status: null, requestId: null, usage: null, outcome: 'cancelled', detail: `cancelled in flight (${redact(String(signal?.reason), secret)})`, possiblyBilled: true, delayMs: null }));
-            throw new ExecutionCancelledError(role, attempt, 'send');
-          }
-          this.#emit(record(attempt, { sent: true, status: null, requestId: null, usage: null, outcome: 'timeout', detail: `aborted after ${timeoutMs} ms`, possiblyBilled: true, delayMs: null }));
-          throw new ProviderTimeoutError(role, timeoutMs);
-        }
         // The credential is redacted from every message the transport
         // produced before anything is decided about it: this is the boundary
         // that knows the key, and the text is untrusted.
         const detail = redact(error instanceof Error ? `${error.name}: ${error.message}` : String(error), secret);
-        if (error instanceof TransportFailure && error.phase === 'before_send') {
-          // Vouched pre-submission: nothing was processed, so it may be retried.
+        // Facts about a child travel on the error, whatever its class. When
+        // there are any, `possiblyBilled` follows `launched` — a child that
+        // started may have reached the provider, one that never started cannot
+        // have — and the HTTP rule below is the fallback, not the override.
+        const facts = processFactsOf(error);
+        const observed = facts === null ? {} : { launched: facts.started, process: facts };
+        const possiblyBilled = (httpRule: boolean): boolean => (facts === null ? httpRule : facts.started);
+        if (error instanceof EvidenceObservationFailedError) {
+          // The transport's account of the attempt failed, not the attempt.
+          // Booked once under its own outcome, then the runner halts as it does
+          // for an observer failure, and the error keeps its identity: wrapping
+          // it as ambiguous would tell the harness the provider is in doubt
+          // when it is the harness's own evidence that is.
+          redactError(error, secret);
+          this.#emit(record(attempt, { sent: true, status: null, requestId: null, usage: null, outcome: 'observation_failed', detail, possiblyBilled: possiblyBilled(true), delayMs: null, ...observed }));
+          this.#halted = error;
+          throw error;
+        }
+        if (controller.signal.aborted) {
+          if (controller.signal.reason === 'cancelled') {
+            this.#emit(record(attempt, { sent: true, status: null, requestId: null, usage: null, outcome: 'cancelled', detail: `cancelled in flight (${redact(String(signal?.reason), secret)})`, possiblyBilled: possiblyBilled(true), delayMs: null, ...observed }));
+            throw new ExecutionCancelledError(role, attempt, 'send');
+          }
+          this.#emit(record(attempt, { sent: true, status: null, requestId: null, usage: null, outcome: 'timeout', detail: `aborted after ${timeoutMs} ms`, possiblyBilled: possiblyBilled(true), delayMs: null, ...observed }));
+          throw new ProviderTimeoutError(role, timeoutMs);
+        }
+        // Vouched pre-submission: nothing was processed, so it may be retried.
+        // Facts that say a child started contradict the vouching, and the
+        // contradiction is resolved the expensive way: not retried.
+        if (error instanceof TransportFailure && error.phase === 'before_send' && facts?.started !== true) {
           if (attempt >= maxAttempts) {
-            this.#emit(record(attempt, { sent: true, status: null, requestId: null, usage: null, outcome: 'refused', detail, possiblyBilled: false, delayMs: null }));
+            this.#emit(record(attempt, { sent: true, status: null, requestId: null, usage: null, outcome: 'refused', detail, possiblyBilled: false, delayMs: null, ...observed }));
             throw new ProviderHttpError(role, 0, `connection failure (${detail})`, null, attempt);
           }
           const delayMs = Math.min(backoffMs * 2 ** (attempt - 1), MAX_RETRY_AFTER_MS);
-          this.#emit(record(attempt, { sent: true, status: null, requestId: null, usage: null, outcome: 'retry_scheduled', detail, possiblyBilled: false, delayMs }));
+          this.#emit(record(attempt, { sent: true, status: null, requestId: null, usage: null, outcome: 'retry_scheduled', detail, possiblyBilled: false, delayMs, ...observed }));
           await sleep(delayMs, signal);
           continue;
         }
         // Anything else — a TypeError from fetch, a failure of unknown phase,
         // a defect in this code — is not retried. The suite's offline guard
         // arrives here too, and its message survives the redaction.
-        this.#emit(record(attempt, { sent: true, status: null, requestId: null, usage: null, outcome: 'ambiguous', detail, possiblyBilled: true, delayMs: null }));
+        this.#emit(record(attempt, { sent: true, status: null, requestId: null, usage: null, outcome: 'ambiguous', detail, possiblyBilled: possiblyBilled(true), delayMs: null, ...observed }));
         throw new ProviderAmbiguousFailureError(role, detail, attempt);
       }
       clearTimeout(timer);
       signal?.removeEventListener('abort', cancel);
 
-      if (response.status >= 200 && response.status < 300) {
+      // A response carrying process facts is an answer from a child, and
+      // goes to projection unconditionally: its `status` is a placeholder, and
+      // retry-by-status, `retry-after` and error diagnosis are HTTP facts
+      // about a wire this file never saw.
+      if (response.process !== undefined || (response.status >= 200 && response.status < 300)) {
         // The envelope goes to the adapter; the role sees only the model's
         // content. A completed answer the adapter refuses — truncated, refused,
         // malformed — is not retried: the request succeeded and the content is
@@ -645,9 +826,15 @@ export class LiveAgentRunner implements AgentRunner {
         // record for this attempt is emitted after it, outside any catch — so
         // an observer that fails is reported as exactly that, and never as a
         // refusal the adapter did not make.
+        const facts = response.process;
         const usage = adapter.readUsage?.(response.body) ?? null;
         const requestId = response.headers['request-id'] === undefined ? null : redact(response.headers['request-id'], secret);
-        const possiblyBilled = usage === null;
+        // HTTP: unknown usage is the one reason to suspect a bill for a
+        // completed request. Process: a started child is the reason, whatever
+        // the CLI reported, and no HTTP status was observed to record.
+        const possiblyBilled = facts === undefined ? usage === null : facts.started;
+        const status = facts === undefined ? response.status : null;
+        const observed = facts === undefined ? {} : { launched: facts.started, process: facts, ...(usage === null ? {} : { usageSource: 'cli_report' as const }) };
         let outputJson: string | null = null;
         let refusal: Error | null = null;
         try {
@@ -657,10 +844,10 @@ export class LiveAgentRunner implements AgentRunner {
           refusal = error instanceof Error ? error : new Error(redact(String(error), secret));
         }
         if (refusal === null) {
-          this.#emit(record(attempt, { sent: true, status: response.status, requestId, usage, outcome: 'completed', detail: null, possiblyBilled, delayMs: null }));
+          this.#emit(record(attempt, { sent: true, status, requestId, usage, outcome: 'completed', detail: null, possiblyBilled, delayMs: null, ...observed }));
           return { outputJson: outputJson! };
         }
-        this.#emit(record(attempt, { sent: true, status: response.status, requestId, usage, outcome: 'projection_refused', detail: `${refusal.name}: ${refusal.message}`, possiblyBilled, delayMs: null }));
+        this.#emit(record(attempt, { sent: true, status, requestId, usage, outcome: 'projection_refused', detail: `${refusal.name}: ${refusal.message}`, possiblyBilled, delayMs: null, ...observed }));
         throw refusal;
       }
       const { errorType, errorCode, requestId } = diagnose(response, secret);

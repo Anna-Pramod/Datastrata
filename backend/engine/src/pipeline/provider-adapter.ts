@@ -212,6 +212,23 @@ export interface ProviderUsage {
 
 export interface ProviderAdapter {
   readonly identity: ProviderAdapterIdentity;
+  /**
+   * How the runner reaches this provider: over HTTP, or by launching a local
+   * process that reaches it on the runner's behalf. Absent means `http`.
+   *
+   * A declared property of the adapter, fixed before anything is executed,
+   * and never inferred from a response. The channel decides what an attempt
+   * record can truthfully say — whether a `status` was observed at all,
+   * whether the unit spent was a request or a launch, whether an HTTP attempt
+   * count is known — and those are claims about what the run *was going to
+   * do*, not about what came back. Reading the channel off a response would
+   * let a transport's answer rewrite the account of the attempt that produced
+   * it, and would leave an attempt that produced no response — refused
+   * unsent, cancelled, failed to launch — with no channel at all. It travels
+   * with the identity: an adapter that speaks a protocol over a different
+   * channel is a different adapter, and its identity says so.
+   */
+  readonly channel?: 'http' | 'process';
   /** Canonical role request -> this provider's request protocol. */
   buildRequest(request: RoleRequest, config: ProviderEndpointConfig): ProviderHttpRequest;
   /** This provider's response envelope -> the exact model-content string. */

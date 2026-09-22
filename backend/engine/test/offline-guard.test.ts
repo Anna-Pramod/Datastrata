@@ -73,7 +73,8 @@ describe('the engine has one network path, and the guard covers it', () => {
   });
 
   it('G4 — the agents configuration does not install the guard; the default one does', () => {
-    expect(readFileSync('vitest.config.ts', 'utf8')).toContain("setupFiles: ['test/setup/offline-guard.ts']");
+    // The offline guard is first; B-CLI-ADAPTER's process guard follows it.
+    expect(readFileSync('vitest.config.ts', 'utf8')).toContain("setupFiles: ['test/setup/offline-guard.ts', 'test/setup/process-guard.ts']");
     expect(readFileSync('vitest.agents.config.ts', 'utf8')).not.toContain('offline-guard');
   });
 });
