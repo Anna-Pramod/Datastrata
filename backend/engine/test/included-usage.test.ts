@@ -36,7 +36,8 @@ const se = (kind: string, extra: Ev = {}): Ev => ({ type: 'stream_event', event:
 const usage = (extra: Ev = {}): Ev => ({ input_tokens: 2, output_tokens: 82, cache_creation_input_tokens: 626, cache_read_input_tokens: 0, ...extra });
 
 /**
- * A clean 2.1.295 stream, one event per line, the tool call in one delta:
+ * A synthetic stream in 2.1.295's recorded shape, one event per line, the
+ * tool call in one delta:
  * 1 init, 2 status, 3 message_start, 4 content_block_start, 5 delta,
  * 6 assistant, 7 content_block_stop, 8 user, 9 message_delta,
  * 10 message_stop, 11 thinking_tokens, 12 rate_limit_event, 13 result.

@@ -242,8 +242,9 @@ The addenda add these:
   controls, settings, both timeouts and the gate rules.
 - Every acceptance rule. `git diff` of `src/` changes only the four pin
   lines; every other changed line is a comment.
-- `src/pipeline/provider-adapter.ts` (`43d82d2a…`), mutated only for
-  round 2's tooth R2-d and restored by hash.
+- `src/pipeline/provider-adapter.ts` (`43d82d2a…`), mutated only by
+  round 2's tooth R2-d and the parent's P14, each restored by hash to
+  `43d82d2a…`.
 
 ## Decisions taken in this change (for review)
 
@@ -313,6 +314,10 @@ The addenda add these:
    - The v2 builder's comment calls its output "a synthetic stream in
      2.1.295's recorded shape", not a good 2.1.295 stream: nothing from
      2.1.295 has been observed.
+   - The comment on `clean()` in `test/included-usage.test.ts` says the
+     same, where it said "a clean 2.1.295 stream". The edit is comment-only
+     and follows the parent's scoped re-review
+     (`parent-r2-rereview-report.20261015T120648Z.md`, finding 3).
 
 ## New cases
 
@@ -493,10 +498,14 @@ pin) is now taken (reported by the parent, from the user's instruction of
 boundary) are confirmed statically on 2.1.295, though not at runtime. Its
 decision 13 says the first `@2` execution attempted would file a
 pin-mismatch error carrying the pin path under the inherited HOME (§The pin
-today, consequence 1). That no longer holds while the preserved copy is
-intact: the pin check then passes, and no pin-mismatch error is filed. It
-would hold again if the copy changed or went missing. The decision's other
-redaction questions stand.
+today, consequence 1). The pin is `~/`-relative. While the copy is intact
+and the launch inherits the operator's HOME, the pin check should pass and
+file no pin-mismatch error. This is a prediction: the pin check has not
+been run against the copy, whose sha256 and size match the pin
+(`parent-bundle-copy.20261015T072420Z.log`,
+`parent-bundle-preserve.20261015T072434Z.log`). Under any other HOME, or if
+the copy changes or goes missing, decision 13 holds again. The decision's
+other redaction questions stand.
 
 ## Suggestion not adopted
 
@@ -512,7 +521,7 @@ redaction questions stand.
 | `backend/engine/src/pipeline/claude-code-cli.ts` | `e1dc50ebee5a26b6ac5df2daef31a5c9d36944fc7808a36a898d21283b8af83c` |
 | `backend/engine/test/claude-code-cli.test.ts` | `932b4c0e72170653f6f2d48736b515e408c61eddd5c0ece5558f47a3968d8674` |
 | `backend/engine/test/claude-code-cli-v2.test.ts` | `2b4d05e011573962027d13658687d093a03674fe2c427abacd0abf2218fd3152` |
-| `backend/engine/test/included-usage.test.ts` | `7529331dcd479b985e16d8eb3b3ca2a926efb13352019bc74bf6087c2e3e6755` |
+| `backend/engine/test/included-usage.test.ts` (one comment after the re-review; `7529331d…` before it) | `d21a4384ee60ebb55a79be31d40967b1ebef05149da2252def18db0745011379` |
 | `backend/engine/test/included-usage.ts` (two comments, round 2) | `4f392145e8789b0f5971b4874df069213b96ab3d20bfecbcf78440214a678faa` |
 | `backend/engine/test/live-capture.test.ts` | `25d8f4832d886b2096123ab703bb27c577ade8866f07d28e0e4f8bedcb9742ae` |
 | `backend/engine/test/live-capture.ts` | `1cce0552e97cde9f1fed4e57ef716189ad94c556d22df815cdd4b0448a6b1337` |
