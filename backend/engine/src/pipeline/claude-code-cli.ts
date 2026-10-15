@@ -172,12 +172,23 @@
  * that breaks such a rule reds on the class rather than on an acceptance
  * (review repair U8, a parent decision).
  * A rate-limit window reported `rejected` is exhaustion wherever it appears,
- * because 2.1.280 continues past the limit by default and a later `allowed`
- * is what that looks like. An API-error item (model `<synthetic>`) is an
- * error, never a substitution; only its kind can classify it. None of this
- * is proved against a 2.1.280 stream yet: each rule is written from the
- * executable's strings and the 2.1.226 probes, and the first `@2` launch is
- * a probe that confirms or amends them.
+ * because the pinned build continues past the limit by default (2.1.280's
+ * strings showed it; the parent's static recheck confirmed the default for
+ * 2.1.295, `parent-static-recheck-summary.20261015T073247Z.log`) and a later
+ * `allowed` is what that looks like. An API-error item (model `<synthetic>`)
+ * is an error, never a substitution; only its kind can classify it. None of
+ * this is proved against a stream from the pinned build yet: each rule is
+ * written from 2.1.280's strings and the 2.1.226 probes, and the first `@2`
+ * launch is a probe that confirms or amends them. The parent's static
+ * recheck of 2.1.295 (the same log) read its bytes and executed nothing: it
+ * found the ten facts it rechecked (summary items 1-10) still stated, and
+ * seven differences (D1 to D7), recorded there and in the repository's
+ * `docs/superpowers/CHECKPOINT-opus55-pin-2.1.295.md`, not acted on here.
+ * 2.1.280's unforced-StructuredOutput fact (`--json-schema` becomes a tool
+ * with `toolChoice` undefined, a forced tool demoted to auto when thinking is
+ * on) was not rechecked
+ * (`parent-static-recheck-addendum-b.20261015T084920Z.log`), so how the
+ * pinned build asks for structured output stays a runtime unknown.
  *
  * Pure: no filesystem, no clock, no network, no child process. The transport
  * (`claude-code-cli-transport.ts`) performs the launch this module describes,
@@ -317,7 +328,11 @@ export const CLAUDE_CODE_CLI_GATE_RULES: CliGateRules = frozen({
 });
 
 /**
- * `@2`'s gate: `@1`'s rules and the three keys 2.1.280 adds to its answer.
+ * `@2`'s gate: `@1`'s rules and the three keys 2.1.280's answer added, which
+ * the pinned 2.1.295 still reports (confirmed statically by the parent's
+ * recheck, `parent-static-recheck-summary.20261015T073247Z.log`; the same
+ * recheck found that 2.1.295 can also add `allowedProviders`, a key this
+ * allowlist does not name, so such an answer blocks).
  *
  * The two directories are the CLI's projects and configuration paths, which
  * carry the operator's home directory and so their user name: they are
@@ -360,25 +375,38 @@ export const CLAUDE_CODE_CLI_V2_IDENTITY: ProviderAdapterIdentity = frozen({ id:
 const V2_MAX_OUTPUT_TOKENS = 64000;
 
 /**
- * `@2`: the desktop-managed 2.1.280 executable, the only local build that
- * knows `claude-opus-5-5`, run for included subscription usage only.
+ * `@2`: Claude Code 2.1.295, the only installed build at or above 2.1.280
+ * on 2026-10-15, and one whose catalog knows `claude-opus-5-5` (its row
+ * confirmed statically by the parent's recheck,
+ * `parent-static-recheck-summary.20261015T073247Z.log`), run for included
+ * subscription usage only. The pin is a preserved, read-only copy of the
+ * desktop-managed bundle, kept outside the updater's directory; the first
+ * pin, the desktop-managed 2.1.280, is absent from that directory
+ * (attributed to the updater's pruning, which D-4 predicted). Moving the pin
+ * would move this adapter's version (the module comment above); it stays
+ * `@2` under D-4's rule, that it can still be `@2` if no `@2` execution
+ * exists yet, and none exists (the parent's check,
+ * `parent-execution-history.20261015T072222Z.log`).
  *
  * The controls are `@1`'s nine with the ceiling raised to `@2`'s own, plus
  * no model fallback and no fast mode: either would change which model, or
  * which billing, answered without the stream having to say so. The
  * `--settings` text keeps `@1`'s `switchModelsOnFlag: false` and also turns
- * off fast mode and continuing automatically at the usage limit, which
- * 2.1.280 does by default. Whether `-p` mode honours those keys is not yet
- * observed, so none of this guarantees anything on its own: the projection
- * refuses what the stream shows.
+ * off fast mode and continuing automatically at the usage limit, which the
+ * pinned build does by default (2.1.280's strings showed it, and the
+ * parent's static recheck confirmed `autoContinueAtUsageLimit` defaulting to
+ * on in 2.1.295, `parent-static-recheck-summary.20261015T073247Z.log`).
+ * Whether `-p` mode honours those keys is not yet observed, so none of this
+ * guarantees anything on its own: the projection refuses what the stream
+ * shows.
  */
 export const CLAUDE_CODE_CLI_V2_PROFILE = frozen({
   identity: CLAUDE_CODE_CLI_V2_IDENTITY,
   pin: {
-    path: '~/Library/Application Support/Claude/claude-code/2.1.280/claude.app/Contents/MacOS/claude',
-    version: '2.1.280',
-    sha256: '862db5f39398606acd531777565505e14c792b9da72fd31df0b309b8eb55406e',
-    sizeBytes: 217221744,
+    path: '~/.local/share/datastrata/claude-code/2.1.295/9d6405864fdc/claude.app/Contents/MacOS/claude',
+    version: '2.1.295',
+    sha256: '494870c9763b5ea370b6165e7e04af589a7b2472bf0de18ffb25477f8230bdf6',
+    sizeBytes: 239695888,
   },
   permittedModels: ['claude-opus-5-5'],
   effort: 'high',
@@ -1297,14 +1325,19 @@ const API_ERROR_KIND_FIELDS = ['error', 'apiError', 'api_error'] as const;
  * reading of a kind that the credit, substitution, refusal and other-kind
  * rules share. The auth-failed probe carries a coarse category as the
  * assistant item's top-level string `error` ("authentication_failed");
- * 2.1.280's constructor names the kind `apiError`; the stream's own spelling
- * would be `api_error`. An item may carry more than one, so each string in
- * any of the three fields is a candidate (`error`'s first), and each rule
+ * 2.1.280's strings showed its constructor naming the kind `apiError`, and
+ * both spellings are statically confirmed for 2.1.295 (the parent's
+ * addendum, `parent-static-recheck-addendum.20261015T082621Z.log`):
+ * `apiError` and `apiErrorParams` in its internal constructor, `api_error`
+ * and `api_error_params` in its SDK schema text. Which one a `-p`
+ * `stream-json` run serialises stays a runtime unknown. An item may carry
+ * more than one, so each string in any of the three fields is a candidate
+ * (`error`'s first), and each rule
  * tests every candidate against its own kinds: a kind in one field is never
  * hidden by a coarse value in another (review repair R2, a parent decision:
  * the plan names the kinds, not the fields that carry them). Anything but a
- * string is no candidate. Which spelling 2.1.280 uses is a question for the
- * probe on both carriers — the assistant item as much as the system
+ * string is no candidate. Which spelling the pinned build uses is a question
+ * for the probe on both carriers — the assistant item as much as the system
  * `api_error` event, whose shape has not been observed at all (review repair
  * S7, a parent decision, added `api_error`). No other event may carry any
  * of the three fields: the walk refuses them there (review repair U3, a
@@ -1518,8 +1551,12 @@ const substitutionRule: Rule = (lines, request) => firstHit(lines, (event, line)
  * `model_refusal_no_fallback`, or a safety-monitor block. Category and
  * explanation as reported. For the last two they are read from
  * `apiRefusalCategory` and `apiRefusalExplanation`, names taken from
- * 2.1.280's strings; no stream has shown them, so where the CLI really puts
- * them is a probe question.
+ * 2.1.280's strings. Both occur in 2.1.295's bytes (84 and 24 times; the
+ * parent's second addendum,
+ * `parent-static-recheck-addendum-b.20261015T084920Z.log`), which shows
+ * their presence only; no stream has shown them, so where the pinned build
+ * really puts them, and on which events, is a runtime unknown and a probe
+ * question.
  */
 const refusalRule: Rule = (lines, request) => firstHit(lines, (event) => {
   const stop = stopOf(event);
@@ -1626,8 +1663,8 @@ function walkStreamV2(lines: Line[], request: RoleRequest): Stream {
     // event carrying an error, apiError or api_error key, whatever its value, is read neither as an API error nor as a
     // success or a model's answer, so it is refused here: a result, a user turn, a stream event, a rate-limit event, a
     // system note, or an assistant item without the flag (review repair U3, a parent decision under D-8's "Unknown means
-    // refused", generalising S6, which refused only a string on an unflagged assistant item; whether 2.1.280 ever
-    // writes one of these keys elsewhere is a probe question).
+    // refused", generalising S6, which refused only a string on an unflagged assistant item; whether the pinned build
+    // ever writes one of these keys elsewhere is a probe question).
     if (!isApiErrorItem(event) && !isSystem(event, 'api_error')) {
       const field = API_ERROR_KIND_FIELDS.find((key) => Object.hasOwn(event, key));
       if (field !== undefined) {
@@ -1642,8 +1679,8 @@ function walkStreamV2(lines: Line[], request: RoleRequest): Stream {
         const subtype = event['subtype'];
         if (!V2_SYSTEM_SUBTYPES.has(subtype)) refuse(line, `system subtype ${shown(subtype)} is not one this adapter reads (init, status, thinking_tokens)`);
         // "requesting" is the only status either probe showed. Another, such as "compacting" (context compaction:
-        // another model request nothing counted), or none at all, is refused; which values 2.1.280 emits is a probe
-        // question (review repair R5, a parent decision under D-8's "Unknown means refused").
+        // another model request nothing counted), or none at all, is refused; which values the pinned build emits is a
+        // probe question (review repair R5, a parent decision under D-8's "Unknown means refused").
         if (subtype === 'status' && event['status'] !== 'requesting') refuse(line, `a system status event with status ${shown(event['status'])}, which this adapter does not read ("requesting")`);
         if (subtype === 'init') {
           if (stream.init !== null) refuse(line, `a second system init event (the first was line ${stream.init.line})`);
@@ -1663,13 +1700,14 @@ function walkStreamV2(lines: Line[], request: RoleRequest): Stream {
           if (!V2_BLOCK_TYPES.has(itemType)) refuse(line, `an assistant content item of type ${shown(itemType)}, which this adapter does not read (text, thinking, redacted_thinking, tool_use)`);
         }
         // An item list with no item at all carries nothing this adapter reads, as S3 decided for user events (review
-        // repair U6, a parent decision under D-8's "Unknown means refused"; whether 2.1.280 ever writes an assistant
-        // event with an empty content array is a probe question).
+        // repair U6, a parent decision under D-8's "Unknown means refused"; whether the pinned build ever writes an
+        // assistant event with an empty content array is a probe question).
         if ((content as unknown[]).length === 0) refuse(line, 'an assistant event whose message.content is an empty array, which carries no item');
         // The accepted probe's item states null. "refusal" and "max_tokens" were classified before the walk; anything
         // else, such as "pause_turn", or no stop reason at all, is refused. A flagged API-error item is exempt: its
         // "stop_sequence" is the auth-failed probe's own, and the result step refuses the item (review repair S1, a
-        // parent decision under D-8's "Unknown means refused"; which values 2.1.280 states here is a probe question).
+        // parent decision under D-8's "Unknown means refused"; which values the pinned build states here is a probe
+        // question).
         // The allowlist refuses "refusal" and "max_tokens" too, so a defect in rule 6 or 7's reading of an item shows
         // here as CliStreamLifecycleError rather than as an acceptance: the overlap fails closed, as R14 and S5 record.
         const stopReason = (message as Rec)['stop_reason'];
@@ -1679,12 +1717,13 @@ function walkStreamV2(lines: Line[], request: RoleRequest): Stream {
       }
       case 'user': {
         // The CLI's own turns back to the model carry its tool loop's tool_result items and nothing else. A text item
-        // (an injected "continue", say, which is what continuing past the usage limit would look like under 2.1.280's
-        // autoContinueAtUsageLimit default) or content that is not an item list is refused (review repair R6, a parent
-        // decision under D-8's "Unknown means refused"; D-6 records the autoContinue risk). The list is an allowlist
-        // of one type, not a denylist of text: an image, a bare string, any item but a tool_result is refused (review
-        // repair S4, a parent decision), and so is a list with no item at all, which carries no tool_result (review
-        // repair S3, a parent decision).
+        // (an injected "continue", say, which is what continuing past the usage limit would look like under the pinned
+        // build's autoContinueAtUsageLimit default: on in 2.1.280's strings, and in 2.1.295 by the parent's static
+        // recheck, parent-static-recheck-summary.20261015T073247Z.log) or content that is not an item list is refused
+        // (review repair R6, a parent decision under D-8's "Unknown means refused"; D-6 records the autoContinue
+        // risk). The list is an allowlist of one type, not a denylist of text: an image, a bare string, any item but a
+        // tool_result is refused (review repair S4, a parent decision), and so is a list with no item at all, which
+        // carries no tool_result (review repair S3, a parent decision).
         const message = event['message'];
         const content = isRecord(message) ? message['content'] : undefined;
         if (!Array.isArray(content)) {
@@ -1695,7 +1734,8 @@ function walkStreamV2(lines: Line[], request: RoleRequest): Stream {
           const itemType = isRecord(item) ? item['type'] : undefined;
           if (itemType !== 'tool_result') refuse(line, `a user content item of type ${shown(itemType)}, which this adapter does not read (tool_result)`);
         }
-        // S3's refusal. Whether 2.1.280 ever writes a user event with an empty content array is a probe question.
+        // S3's refusal. Whether the pinned build ever writes a user event with an empty content array is a probe
+        // question.
         if ((content as unknown[]).length === 0) refuse(line, 'a user event whose message.content is an empty array, which carries no tool_result item');
         stream.users.push({ line, event });
         break;
@@ -1872,14 +1912,15 @@ function checkResultV2(stream: Stream, request: RoleRequest): Line {
   // "refusal" and "max_tokens" were classified before this step. Anything else but an ended turn, such as
   // "pause_turn" or "model_context_window_exceeded", or no stop reason at all, is refused (review repair S1, a parent
   // decision under D-8's "Unknown means refused"). The accepted probe's result says "tool_use"; the auth-failed
-  // probe's says "stop_sequence", which is_error refuses first. Which values 2.1.280 states is a probe question.
+  // probe's says "stop_sequence", which is_error refuses first. Which values the pinned build states is a probe
+  // question.
   if (!V2_RESULT_STOP_REASONS.has(e['stop_reason'])) throw new CliResultError(request, `stop_reason ${shown(e['stop_reason'])} ${at} (must be "tool_use" or "end_turn")`);
   // The result's stop reason is the last completed message's. A result stating a turn end no streamed message shows
   // points to a request the stream did not carry, and a result with no completed message at all has nothing to state
-  // (review repair U5, a parent decision under D-8's "Unknown means refused"; whether 2.1.280's result always restates
-  // the last message's stop reason is a probe question). Since the result's allowlist is "tool_use" and "end_turn",
-  // this also refuses a last message ending anything else, before checkStopReasonsV2 would: that check's refusal is
-  // reached for a message before the last, or for a last message that carries the call and ends "end_turn".
+  // (review repair U5, a parent decision under D-8's "Unknown means refused"; whether the pinned build's result always
+  // restates the last message's stop reason is a probe question). Since the result's allowlist is "tool_use" and
+  // "end_turn", this also refuses a last message ending anything else, before checkStopReasonsV2 would: that check's
+  // refusal is reached for a message before the last, or for a last message that carries the call and ends "end_turn".
   const last: Message | undefined = stream.messages[stream.messages.length - 1];
   if (last === undefined) throw new CliResultError(request, `stop_reason ${shown(e['stop_reason'])} ${at}, but no message completed in the stream`);
   if (e['stop_reason'] !== last.stopReason) throw new CliResultError(request, `stop_reason ${shown(e['stop_reason'])} ${at} differs from the last completed message's, which started at line ${last.line} and ended with stop_reason ${shown(last.stopReason)}`);
@@ -1889,7 +1930,7 @@ function checkResultV2(stream: Stream, request: RoleRequest): Line {
   if (e['fast_mode_state'] !== 'off') throw new CliResultError(request, `fast_mode_state ${shown(e['fast_mode_state'])} ${at} (must be "off")`);
   // Both probes' results say null. Any other value reports an API error beside a claimed success, the shape the next
   // check refuses on a flagged item (review repair U4, a parent decision under D-8's "Unknown means refused"; which
-  // values 2.1.280 writes here is a probe question).
+  // values the pinned build writes here is a probe question).
   if (Object.hasOwn(e, 'api_error_status') && e['api_error_status'] !== null) throw new CliResultError(request, `api_error_status ${shown(e['api_error_status'])} ${at} (must be absent or null)`);
   const apiError = stream.assistants.find(({ event }) => isApiErrorItem(event));
   if (apiError !== undefined) {

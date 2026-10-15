@@ -506,7 +506,7 @@ describe('the identities the @2 migration must not move', () => {
     const INVOCATION_V2: InvocationIdentity = {
       effort: 'high',
       maxOutputTokens: 64000,
-      executable: { version: '2.1.280', sha256: '862db5f39398606acd531777565505e14c792b9da72fd31df0b309b8eb55406e' },
+      executable: { version: '2.1.295', sha256: '494870c9763b5ea370b6165e7e04af589a7b2472bf0de18ffb25477f8230bdf6' },
     };
     const OPUS_5_5 = { reader: 'claude-opus-5-5', prosecutor: 'claude-opus-5-5', adjudicator: 'claude-opus-5-5' };
     const subscriptionV2Config: RoleConfig = {
@@ -518,12 +518,14 @@ describe('the identities the @2 migration must not move', () => {
 
     /**
      * What `pipelineVersionFor` returned for the configuration above, over the
-     * real prompts and S-002's closure, taken from this code on 2026-09-25 by
-     * a placeholder run. Corroborated by the hand-written derivation below,
-     * which reaches the same string without the builder and reproduces both
-     * literals above.
+     * real prompts and S-002's closure, taken from this code on 2026-10-15 by
+     * a placeholder run when the pin moved from 2.1.280 to 2.1.295 (the
+     * 2.1.280 value, taken the same way on 2026-09-25, was
+     * `pipeline-v3-e0570a08…f690`). Corroborated by the hand-written
+     * derivation below, which reaches the same string without the builder and
+     * reproduces both literals above.
      */
-    const SUBSCRIPTION_V2_PIPELINE_VERSION = 'pipeline-v3-e0570a0805b3df74fd2e391f8a1b8594dd1f1ada487d51a67e9215fcfd48f690';
+    const SUBSCRIPTION_V2_PIPELINE_VERSION = 'pipeline-v3-68c4d29bd770f9e7bc78f24cb2da97892a9da8f7c0bcabb499dff5301806a19a';
 
     const versionOf = (config: RoleConfig): string =>
       pipelineVersionFor({ prompts: loadPromptSet(), config, closure: s002Closure() });

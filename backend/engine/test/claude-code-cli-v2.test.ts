@@ -7,9 +7,9 @@
  * model and fields are `@1`'s, so a `@2` expectation built on it would agree
  * with whatever that generator happens to emit; and a stream built from the
  * `@2` profile would agree with any change made to the profile. The builder
- * below therefore writes 2.1.280, `claude-opus-5-5`, one compliant rate-limit
- * event and `fast_mode_state` "off" by hand, and imports the adapter only as
- * the subject under test.
+ * below therefore writes 2.1.295 (the pinned version), `claude-opus-5-5`, one
+ * compliant rate-limit event and `fast_mode_state` "off" by hand, and imports
+ * the adapter only as the subject under test.
  *
  * What carries the weight:
  * - Classification runs before the exit check and the malformed line, by rule
@@ -18,7 +18,7 @@
  *   higher-priority fact on the later line.
  * - Classification is the only authority for the facts it names, so each
  *   rule's case names that rule's class, not a later check's.
- * - The committed 2.1.226 probes, transformed in memory to 2.1.280 and
+ * - The committed 2.1.226 probes, transformed in memory to 2.1.295 and
  *   `claude-opus-5-5`, answer as real shapes must: the accepted probe
  *   projects to its 35 bytes, and the auth-failed probe's `<synthetic>`
  *   API-error item is an error, never a substitution.
@@ -117,8 +117,9 @@ function blockEvents(kind: BlockKind, index: number): Ev[] {
 }
 
 /**
- * A good 2.1.280 stream, one mutation away from every case: init (with the
- * version, model, permission mode and fast-mode state), a status note, one
+ * A synthetic stream in 2.1.295's recorded shape, one mutation away from
+ * every case: init (with the version, model, permission mode and fast-mode
+ * state), a status note, one
  * message whose one tool block carries the payload in three-character
  * deltas, the CLI's restatement and tool_result, a thinking_tokens note, one
  * compliant rate-limit event, and a result that completed with one
@@ -128,7 +129,7 @@ function build(before: BlockKind[] = []): Ev[] {
   const parsed = JSON.parse(PAYLOAD) as unknown;
   const index = before.length;
   const events: Ev[] = [];
-  events.push({ type: 'system', subtype: 'init', apiKeySource: 'none', claude_code_version: '2.1.280', model: 'claude-opus-5-5', permissionMode: 'default', fast_mode_state: 'off', tools: ['StructuredOutput'], mcp_servers: [], ...META });
+  events.push({ type: 'system', subtype: 'init', apiKeySource: 'none', claude_code_version: '2.1.295', model: 'claude-opus-5-5', permissionMode: 'default', fast_mode_state: 'off', tools: ['StructuredOutput'], mcp_servers: [], ...META });
   events.push({ type: 'system', subtype: 'status', status: 'requesting', ...META });
   events.push(se('message_start', { message: { id: 'msg_1', type: 'message', role: 'assistant', model: 'claude-opus-5-5', content: [], stop_reason: null, usage: { input_tokens: 2, output_tokens: 25 } } }));
   before.forEach((kind, i) => events.push(...blockEvents(kind, i)));
@@ -286,10 +287,10 @@ function fixture(name: string): string {
 const sha256 = (text: string | Buffer): string => createHash('sha256').update(text).digest('hex');
 const occurrences = (text: string, needle: string): number => text.split(needle).length - 1;
 
-/** The literal transform: 2.1.226's model and version become 2.1.280's. Refuses to run where it would double a replacement. */
+/** The literal transform: 2.1.226's model and version become `@2`'s, `claude-opus-5-5` and 2.1.295. Refuses to run where it would double a replacement. */
 function toV2(stdout: string): string {
   expect(stdout, 'the fixture already names claude-opus-5-5, so the replacement would double it').not.toContain('claude-opus-5-5');
-  return stdout.replaceAll('claude-opus-5', 'claude-opus-5-5').replaceAll('2.1.226', '2.1.280');
+  return stdout.replaceAll('claude-opus-5', 'claude-opus-5-5').replaceAll('2.1.226', '2.1.295');
 }
 
 // ---------------------------------------------------------------------------
@@ -297,9 +298,9 @@ function toV2(stdout: string): string {
 // ---------------------------------------------------------------------------
 
 describe('claude-code-cli@2 — the builder and its accepted controls', () => {
-  it('V-A0 — the builder carries the 2.1.280 shape as literals and projects to its payload, byte for byte', () => {
+  it('V-A0 — the builder carries the 2.1.295 shape as literals and projects to its payload, byte for byte', () => {
     const events = build();
-    expect(initOf(events)).toMatchObject({ claude_code_version: '2.1.280', model: 'claude-opus-5-5', permissionMode: 'default', fast_mode_state: 'off' });
+    expect(initOf(events)).toMatchObject({ claude_code_version: '2.1.295', model: 'claude-opus-5-5', permissionMode: 'default', fast_mode_state: 'off' });
     expect(resultOf(events)).toMatchObject({ terminal_reason: 'completed', fast_mode_state: 'off', usage: { speed: 'standard' } });
     expect(events.filter(isType('rate_limit_event'))).toHaveLength(1);
     expect(events.filter(isSystem('status'))).toHaveLength(1);
@@ -387,7 +388,7 @@ describe('claude-code-cli@2 — the builder and its accepted controls', () => {
 // Real shapes: the committed probes, transformed in memory
 // ---------------------------------------------------------------------------
 
-describe('claude-code-cli@2 — the committed probes, transformed to 2.1.280 in memory', () => {
+describe('claude-code-cli@2 — the committed probes, transformed to 2.1.295 in memory', () => {
   const accepted = (): string => fixture('probe-accepted.stream.jsonl');
   const authFailed = (): string => fixture('probe-auth-failed.stream.jsonl');
 
@@ -397,7 +398,7 @@ describe('claude-code-cli@2 — the committed probes, transformed to 2.1.280 in 
     expect([occurrences(accepted(), 'claude-opus-5'), occurrences(accepted(), '2.1.226')]).toEqual([5, 1]);
     expect([occurrences(authFailed(), 'claude-opus-5'), occurrences(authFailed(), '2.1.226')]).toEqual([1, 1]);
     const v2 = toV2(accepted());
-    expect([occurrences(v2, 'claude-opus-5-5'), occurrences(v2, '"claude-opus-5"'), occurrences(v2, '2.1.280'), occurrences(v2, '2.1.226')]).toEqual([5, 0, 1, 0]);
+    expect([occurrences(v2, 'claude-opus-5-5'), occurrences(v2, '"claude-opus-5"'), occurrences(v2, '2.1.295'), occurrences(v2, '2.1.226')]).toEqual([5, 0, 1, 0]);
     // The accepted probe already carries every @2 field the builder writes by hand; nothing is added to it.
     expect(v2).toContain('"fast_mode_state":"off"');
     expect(v2).toContain('"permissionMode":"default"');
@@ -415,8 +416,8 @@ describe('claude-code-cli@2 — the committed probes, transformed to 2.1.280 in 
 
   it('V-F1-refused — the transform matters: F1 with only the model replaced is refused by its version, and the raw fixture by its model', () => {
     const modelOnly = accepted().replaceAll('claude-opus-5', 'claude-opus-5-5');
-    expect([occurrences(modelOnly, '2.1.226'), occurrences(modelOnly, '2.1.280')]).toEqual([1, 0]);
-    expectRefused(thrownBy(() => projectText(modelOnly)), CliLaunchContextError, 'CliLaunchContextError', 'claude_code_version "2.1.226" (must be "2.1.280", the pin\'s) (init at line 1)');
+    expect([occurrences(modelOnly, '2.1.226'), occurrences(modelOnly, '2.1.295')]).toEqual([1, 0]);
+    expectRefused(thrownBy(() => projectText(modelOnly)), CliLaunchContextError, 'CliLaunchContextError', 'claude_code_version "2.1.226" (must be "2.1.295", the pin\'s) (init at line 1)');
     expectRefused(thrownBy(() => projectText(accepted())), CliModelSubstitutionError, 'CliModelSubstitutionError', 'init.model "claude-opus-5" at line 1');
   });
 
@@ -869,7 +870,7 @@ const CARRIERS: readonly [string, (kind: string) => Ev, string][] = [
   ['an assistant item\'s apiError field', (kind) => apiErrorItem({ apiError: kind }), 'an assistant API-error item'],
   ['a system api_error event', (kind) => systemEvent('api_error', { error: kind }), 'a system api_error event'],
   // Review repair S7, a parent decision: api_error, snake_case as the stream serialises is_api_error_message, is a third
-  // candidate field. Which spelling 2.1.280 uses for the kind, on either carrier, is a probe question.
+  // candidate field. Which spelling the pinned build uses for the kind, on either carrier, is a probe question.
   ['an assistant item\'s api_error field', (kind) => apiErrorItem({ api_error: kind }), 'an assistant API-error item'],
   ['a system api_error event\'s api_error field', (kind) => systemEvent('api_error', { api_error: kind }), 'a system api_error event'],
 ];
@@ -887,8 +888,8 @@ describe('claude-code-cli@2 — D-7: every API-error kind', () => {
     }
   }
 
-  // The likeliest 2.1.280 shape: a coarse category in `error` (the auth-failed probe's "authentication_failed") and the
-  // kind in `apiError`. The coarse value must not hide the kind, at either exit.
+  // The likeliest shape, as 2.1.280's strings showed it: a coarse category in `error` (the auth-failed probe's
+  // "authentication_failed") and the kind in `apiError`. The coarse value must not hide the kind, at either exit.
   const BOTH_FIELD_CARRIERS: readonly [string, (kind: string) => Ev, string][] = [
     ['an assistant item\'s apiError field beside a coarse error', (kind) => apiErrorItem({ error: 'authentication_failed', apiError: kind }), 'an assistant API-error item'],
     ['a system api_error event\'s apiError field beside a coarse error', (kind) => systemEvent('api_error', { error: 'authentication_failed', apiError: kind }), 'a system api_error event'],
@@ -1005,8 +1006,9 @@ describe('claude-code-cli@2 — refusal, carried as reported', () => {
     expectRefused(refusalOf(events), ProviderRefusalError, 'ProviderRefusalError', '(category frontier_llm)');
   });
 
-  // apiRefusalCategory and apiRefusalExplanation are taken from 2.1.280's strings; no stream has shown them beside
-  // safety_monitor_blocked, so where the CLI really puts them is a probe question.
+  // apiRefusalCategory and apiRefusalExplanation are taken from 2.1.280's strings, and both names occur in 2.1.295's
+  // bytes (parent-static-recheck-addendum-b.20261015T084920Z.log); no stream has shown them beside
+  // safety_monitor_blocked, so where the pinned build really puts them is a probe question.
   const SAFETY_CARRIERS: readonly [string, (fields: Ev) => Ev][] = [
     ['an assistant API-error item', (fields) => apiErrorItem(fields)],
     ['a system api_error event', (fields) => systemEvent('api_error', fields)],
@@ -1142,8 +1144,14 @@ describe('claude-code-cli@2 — D-8 launch context', () => {
   const cases: readonly [string, Ev, string][] = [
     ['permissionMode "acceptEdits"', { permissionMode: 'acceptEdits' }, 'permissionMode "acceptEdits" (must be "default") (init at line 1)'],
     ['permissionMode absent', { permissionMode: undefined }, 'permissionMode undefined (must be "default") (init at line 1)'],
-    ['another CLI version (2.1.226, @1\'s pin)', { claude_code_version: '2.1.226' }, 'claude_code_version "2.1.226" (must be "2.1.280", the pin\'s) (init at line 1)'],
-    ['another CLI version (2.1.281)', { claude_code_version: '2.1.281' }, 'claude_code_version "2.1.281" (must be "2.1.280", the pin\'s) (init at line 1)'],
+    ['another CLI version (2.1.226, @1\'s pin)', { claude_code_version: '2.1.226' }, 'claude_code_version "2.1.226" (must be "2.1.295", the pin\'s) (init at line 1)'],
+    ['another CLI version (2.1.281)', { claude_code_version: '2.1.281' }, 'claude_code_version "2.1.281" (must be "2.1.295", the pin\'s) (init at line 1)'],
+    // Since the pin moved to 2.1.295 (2026-10-15), every version above sorts below it. These three do not: a newer
+    // build (what the desktop updater installs), no version at all, and a version the pin is a prefix of, so a check
+    // that refused only older versions, only stated ones, or only those not starting with the pin would pass one.
+    ['a newer CLI version (2.1.296)', { claude_code_version: '2.1.296' }, 'claude_code_version "2.1.296" (must be "2.1.295", the pin\'s) (init at line 1)'],
+    ['claude_code_version absent', { claude_code_version: undefined }, 'claude_code_version undefined (must be "2.1.295", the pin\'s) (init at line 1)'],
+    ['a version the pin is a prefix of (2.1.2950)', { claude_code_version: '2.1.2950' }, 'claude_code_version "2.1.2950" (must be "2.1.295", the pin\'s) (init at line 1)'],
     ['apiKeySource other than none', { apiKeySource: 'ANTHROPIC_API_KEY' }, 'apiKeySource "ANTHROPIC_API_KEY" (must be "none") (init at line 1)'],
     ['an extra tool', { tools: ['StructuredOutput', 'Bash'] }, 'tools ["StructuredOutput","Bash"] (must be exactly ["StructuredOutput"]) (init at line 1)'],
     ['an MCP server', { mcp_servers: [{ name: 'x' }] }, 'mcp_servers [{"name":"x"}] (must be empty) (init at line 1)'],
@@ -1156,6 +1164,17 @@ describe('claude-code-cli@2 — D-8 launch context', () => {
       expectRefused(refusalOf(events), CliLaunchContextError, 'CliLaunchContextError', fragment);
     });
   }
+
+  // The pin moved from 2.1.280, absent from the desktop-managed directory, to 2.1.295 (2026-10-15): a stream from the
+  // former pin is another CLI version.
+  it('V-C-former-pin — claude_code_version "2.1.280", the former pin, → CliLaunchContextError naming it; the same stream at "2.1.295", its control, is accepted', () => {
+    const pinned = build();
+    initOf(pinned)['claude_code_version'] = '2.1.295';
+    expect(project(pinned)).toBe(PAYLOAD);
+    const former = build();
+    initOf(former)['claude_code_version'] = '2.1.280';
+    expectRefused(refusalOf(former), CliLaunchContextError, 'CliLaunchContextError', 'claude_code_version "2.1.280" (must be "2.1.295", the pin\'s) (init at line 1)');
+  });
 });
 
 describe('claude-code-cli@2 — D-8 result', () => {
@@ -1206,7 +1225,7 @@ describe('claude-code-cli@2 — D-8 result', () => {
 
   // Review repair U5, a parent decision under D-8's "Unknown means refused": the result's stop reason is the last
   // completed message's. A result stating a turn end no streamed message shows points to a request the stream did not
-  // carry. Whether 2.1.280's result always restates the last message's stop reason is a probe question.
+  // carry. Whether the pinned build's result always restates the last message's stop reason is a probe question.
   it('V-Z-stop-tied — result stop_reason "end_turn" while the only message ended "tool_use" → CliResultError naming both values and lines', () => {
     const events = build();
     resultOf(events)['stop_reason'] = 'end_turn';
@@ -1238,7 +1257,7 @@ describe('claude-code-cli@2 — D-8 result', () => {
 
   // Review repair U4, a parent decision under D-8's "Unknown means refused": both probes' results carry
   // api_error_status null. A success result reporting an API error status is the success-after-an-API-error shape the
-  // result step already refuses on a flagged item. Which values 2.1.280 writes here is a probe question.
+  // result step already refuses on a flagged item. Which values the pinned build writes here is a probe question.
   it('V-Z-api-error-status — api_error_status 429 on an otherwise clean success → CliResultError naming the value and the result line', () => {
     const events = build();
     resultOf(events)['api_error_status'] = 429;
@@ -1407,7 +1426,8 @@ describe('claude-code-cli@2 — D-8 walk allowlists', () => {
   });
 
   // Review repair U6, a parent decision under D-8's "Unknown means refused", as S3 decided for user events: an item
-  // list with no item at all carries nothing this adapter reads. Whether 2.1.280 writes one is a probe question.
+  // list with no item at all carries nothing this adapter reads. Whether the pinned build writes one is a probe
+  // question.
   it('V-W-item-empty — a second assistant item whose message.content is an empty array → CliStreamLifecycleError naming the line', () => {
     const events = build();
     const item = plainItem();
@@ -1425,7 +1445,8 @@ describe('claude-code-cli@2 — D-8 walk allowlists', () => {
 
   // Review repair U3, a parent decision under D-8's "Unknown means refused": an error, apiError or api_error key, of any
   // value, is read only on a flagged assistant API-error item and on a system api_error event. On any other event it is
-  // read neither as an API error nor as a success, so the walk refuses it. Whether 2.1.280 writes one is a probe question.
+  // read neither as an API error nor as a success, so the walk refuses it. Whether the pinned build writes one is a
+  // probe question.
   const U3_CASES: readonly [string, (ev: Ev[]) => number, string][] = [
     ['a result event carrying apiError "model_requires_usage_credits"', (ev) => { resultOf(ev)['apiError'] = 'model_requires_usage_credits'; return lineOf(ev, isType('result')); }, 'a result event carrying apiError "model_requires_usage_credits"'],
     ['a user event carrying error "x"', (ev) => { ev[at(ev, isType('user'))]!['error'] = 'x'; return lineOf(ev, isType('user')); }, 'a user event carrying error "x"'],

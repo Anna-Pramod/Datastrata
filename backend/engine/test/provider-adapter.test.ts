@@ -134,11 +134,24 @@ function goldenInput(): PipelineIdentityInput {
 const INVOCATION_V2: InvocationIdentity = {
   effort: 'high',
   maxOutputTokens: 64000,
+  executable: { version: '2.1.295', sha256: '494870c9763b5ea370b6165e7e04af589a7b2472bf0de18ffb25477f8230bdf6' },
+};
+
+/**
+ * The invocation `GOLDEN_IDENTITY_WITH_INVOCATION` was taken over: `@2`'s as
+ * this file declared it on 2026-09-25, pinned at 2.1.280. Test-local data,
+ * kept when `@2`'s pin moved to 2.1.295 (2026-10-15): the golden is an
+ * encoding test, one fixed input and its digest, and states nothing about
+ * which executable `@2` pins, which `INVOCATION_V2` states.
+ */
+const GOLDEN_INVOCATION: InvocationIdentity = {
+  effort: 'high',
+  maxOutputTokens: 64000,
   executable: { version: '2.1.280', sha256: '862db5f39398606acd531777565505e14c792b9da72fd31df0b309b8eb55406e' },
 };
 
 /**
- * `goldenInput()` with `INVOCATION_V2` declared: the present-invocation
+ * `goldenInput()` with `GOLDEN_INVOCATION` declared: the present-invocation
  * golden.
  *
  * Taken on 2026-09-25 by a placeholder run of `buildPipelineIdentity`, and
@@ -444,8 +457,8 @@ describe('a declared invocation is part of the identity, and absence is no key a
     expect(handWrittenIdentity(goldenInput())).toBe(GOLDEN_IDENTITY);
   });
 
-  it('with the @2 invocation declared, the hand-written payload is the present-invocation golden', () => {
-    expect(handWrittenIdentity({ ...goldenInput(), invocation: INVOCATION_V2 })).toBe(
+  it('with GOLDEN_INVOCATION declared, the hand-written payload is the present-invocation golden', () => {
+    expect(handWrittenIdentity({ ...goldenInput(), invocation: GOLDEN_INVOCATION })).toBe(
       GOLDEN_IDENTITY_WITH_INVOCATION,
     );
     // Two literals: no src/ defect can red this line; the builder cases carry the evidence.
@@ -453,7 +466,7 @@ describe('a declared invocation is part of the identity, and absence is no key a
   });
 
   it('and the builder derives the same literal', () => {
-    expect(buildPipelineIdentity({ ...goldenInput(), invocation: INVOCATION_V2 })).toBe(
+    expect(buildPipelineIdentity({ ...goldenInput(), invocation: GOLDEN_INVOCATION })).toBe(
       GOLDEN_IDENTITY_WITH_INVOCATION,
     );
   });
@@ -475,14 +488,14 @@ describe('a declared invocation is part of the identity, and absence is no key a
   });
 
   it.each([
-    ['effort', { ...INVOCATION_V2, effort: 'medium' }],
-    ['maxOutputTokens', { ...INVOCATION_V2, maxOutputTokens: 63999 }],
-    ['executable.version', { ...INVOCATION_V2, executable: { ...INVOCATION_V2.executable, version: '2.1.281' } }],
+    ['effort', { ...GOLDEN_INVOCATION, effort: 'medium' }],
+    ['maxOutputTokens', { ...GOLDEN_INVOCATION, maxOutputTokens: 63999 }],
+    ['executable.version', { ...GOLDEN_INVOCATION, executable: { ...GOLDEN_INVOCATION.executable, version: '2.1.281' } }],
     [
       'executable.sha256',
       {
-        ...INVOCATION_V2,
-        executable: { ...INVOCATION_V2.executable, sha256: '862db5f39398606acd531777565505e14c792b9da72fd31df0b309b8eb55406f' },
+        ...GOLDEN_INVOCATION,
+        executable: { ...GOLDEN_INVOCATION.executable, sha256: '862db5f39398606acd531777565505e14c792b9da72fd31df0b309b8eb55406f' },
       },
     ],
   ] as const)('moves when %s alone moves', (_field, moved) => {
@@ -492,7 +505,7 @@ describe('a declared invocation is part of the identity, and absence is no key a
     // exactly the defect this case is for (observed: Task 3 teeth T12, first
     // run). Two digests from one builder that differ in this field alone are
     // what show the field is hashed.
-    const unmoved = buildPipelineIdentity({ ...goldenInput(), invocation: INVOCATION_V2 });
+    const unmoved = buildPipelineIdentity({ ...goldenInput(), invocation: GOLDEN_INVOCATION });
     const identity = buildPipelineIdentity({ ...goldenInput(), invocation: moved });
     expect(identity).not.toBe(unmoved);
     expect(identity).not.toBe(GOLDEN_IDENTITY_WITH_INVOCATION);
@@ -502,14 +515,14 @@ describe('a declared invocation is part of the identity, and absence is no key a
     // Field-by-field emission: a path is deployment, and a payload that
     // spread the declared object would hash it.
     const withPath = {
-      ...INVOCATION_V2,
-      executable: { ...INVOCATION_V2.executable, path: '/Users/someone/Library/claude' },
+      ...GOLDEN_INVOCATION,
+      executable: { ...GOLDEN_INVOCATION.executable, path: '/Users/someone/Library/claude' },
     } as InvocationIdentity;
     expect(buildPipelineIdentity({ ...goldenInput(), invocation: withPath })).toBe(GOLDEN_IDENTITY_WITH_INVOCATION);
   });
 
   it('an extra key beside the invocation fields does not reach the digest', () => {
-    const withChannel = { ...INVOCATION_V2, channel: 'process' } as InvocationIdentity;
+    const withChannel = { ...GOLDEN_INVOCATION, channel: 'process' } as InvocationIdentity;
     expect(buildPipelineIdentity({ ...goldenInput(), invocation: withChannel })).toBe(
       GOLDEN_IDENTITY_WITH_INVOCATION,
     );
@@ -1006,7 +1019,7 @@ describe('the capability must make the invocation the identity was derived over'
     expect(error).toBeInstanceOf(InvocationMismatchError);
     const mismatch = error as InvocationMismatchError;
     expect(mismatch.message).toContain('maxOutputTokens configured 64000, actual 63999');
-    expect(mismatch.message).toContain('executable.version configured "2.1.280", actual "2.1.275"');
+    expect(mismatch.message).toContain('executable.version configured "2.1.295", actual "2.1.275"');
     expect(mismatch.configured).toEqual(INVOCATION_V2);
     expect(mismatch.actual).toEqual(other);
     expect(mismatch.fields).toEqual(['maxOutputTokens', 'executable.version']);
@@ -1050,12 +1063,12 @@ describe('the capability must make the invocation the identity was derived over'
     [
       'executable.version',
       { ...INVOCATION_V2, executable: { ...INVOCATION_V2.executable, version: '2.1.281' } },
-      'executable.version configured "2.1.280", actual "2.1.281"',
+      'executable.version configured "2.1.295", actual "2.1.281"',
     ],
     [
       'executable.sha256',
       { ...INVOCATION_V2, executable: { ...INVOCATION_V2.executable, sha256: 'f'.repeat(64) } },
-      `executable.sha256 configured "862db5f39398606acd531777565505e14c792b9da72fd31df0b309b8eb55406e", actual "${'f'.repeat(64)}"`,
+      `executable.sha256 configured "494870c9763b5ea370b6165e7e04af589a7b2472bf0de18ffb25477f8230bdf6", actual "${'f'.repeat(64)}"`,
     ],
   ] as const)('refuses a live capability differing in %s alone, naming only that field', async (field, other, fragment) => {
     const { runner, asked, bound } = capability('live', { adapter: SYNTHETIC_ADAPTER_V1.identity, invocation: other });
@@ -1066,6 +1079,28 @@ describe('the capability must make the invocation the identity was derived over'
     expect((error as InvocationMismatchError).configured).toEqual(INVOCATION_V2);
     expect((error as InvocationMismatchError).actual).toEqual(other);
     expect((error as Error).message).toContain(fragment);
+    expect(asked()).toBe(0);
+    expect(bound()).toBe(0);
+    expect(network).toEqual([]);
+  });
+
+  // Since the pin moved to 2.1.295 (2026-10-15), both version rows above declare an actual version older than the
+  // configured one. This one declares a newer build, which is what the desktop updater installs, so a comparison
+  // that named only an older executable would pass it.
+  it('refuses a live capability declaring a newer executable version (2.1.296 against the configured 2.1.295), naming only executable.version', async () => {
+    const other: InvocationIdentity = {
+      effort: 'high',
+      maxOutputTokens: 64000,
+      executable: { version: '2.1.296', sha256: '494870c9763b5ea370b6165e7e04af589a7b2472bf0de18ffb25477f8230bdf6' },
+    };
+    const { runner, asked, bound } = capability('live', { adapter: SYNTHETIC_ADAPTER_V1.identity, invocation: other });
+    const { error, network } = await attempt(CONFIGURED, runner);
+
+    expect(error).toBeInstanceOf(InvocationMismatchError);
+    expect((error as InvocationMismatchError).fields).toEqual(['executable.version']);
+    expect((error as InvocationMismatchError).configured).toEqual(INVOCATION_V2);
+    expect((error as InvocationMismatchError).actual).toEqual(other);
+    expect((error as Error).message).toContain('executable.version configured "2.1.295", actual "2.1.296"');
     expect(asked()).toBe(0);
     expect(bound()).toBe(0);
     expect(network).toEqual([]);
@@ -1190,7 +1225,7 @@ describe('the capability must make the invocation the identity was derived over'
     const equal: InvocationIdentity = {
       effort: 'high',
       maxOutputTokens: 64000,
-      executable: { version: '2.1.280', sha256: '862db5f39398606acd531777565505e14c792b9da72fd31df0b309b8eb55406e' },
+      executable: { version: '2.1.295', sha256: '494870c9763b5ea370b6165e7e04af589a7b2472bf0de18ffb25477f8230bdf6' },
     };
     expect(equal).not.toBe(INVOCATION_V2);
     expect(equal.executable).not.toBe(INVOCATION_V2.executable);

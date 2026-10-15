@@ -255,6 +255,8 @@ version 2.1.280, sha256
 
 ## The pin today (a finding of this checkpoint)
 
+Superseded on 2026-10-15: `@2` now pins a preserved, read-only copy of the desktop-managed Claude Code 2.1.295 bundle, outside the updater's directory, with this checkpoint's facts below kept as recorded; see `CHECKPOINT-opus55-pin-2.1.295.md`.
+
 The parent listed the pin directories read-only (nothing executed or hashed)
 between 2026-10-14T21:45:37Z and 21:46:07Z, that is 2026-10-15
 03:15 to 03:16 IST: `parent-task6-pin-presence.20261014T214537Z.log` (its last

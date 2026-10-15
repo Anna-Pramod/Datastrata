@@ -241,7 +241,8 @@
  * `@2` execution and not enforced here. A window reported in two positions
  * with different values, in events that alternate between reporting both and
  * reporting one, can also make a false in-flight `unnatural_reset` stop,
- * which fails closed; how 2.1.280 reports windows is a probe question.
+ * which fails closed; how the pinned build reports windows is a probe
+ * question.
  *
  * An open risk, recorded under the user's open decision 13 and not repaired
  * here (Task 5b review repair N6, a parent decision P-5b-12, narrowed): the
@@ -1373,13 +1374,16 @@ export const SUBSCRIPTION_UNOBSERVED = Object.freeze({
 /**
  * Stated once, filed on every `claude-code-cli@2` summary: what `@2`'s
  * profile configures without the stream showing it (plan 2026-09-25, D-5,
- * D-6).
+ * D-6). The ceiling and catalog statements are the pinned 2.1.295's, read
+ * statically by the parent's recheck
+ * (`parent-static-recheck-summary.20261015T073247Z.log`) when the pin moved
+ * from 2.1.280 on 2026-10-15.
  */
 export const SUBSCRIPTION_V2_UNOBSERVED = Object.freeze({
-  outputCeiling: 'configured CLAUDE_CODE_MAX_OUTPUT_TOKENS=64000, which 2.1.280 honours statically up to the model\'s own limit; wire-level max_tokens unobserved',
+  outputCeiling: 'configured CLAUDE_CODE_MAX_OUTPUT_TOKENS=64000, which 2.1.295 honours statically up to the model\'s own limit; wire-level max_tokens unobserved',
   effort: 'effort high passed as --effort; its application unobserved',
   thinking: 'always on for claude-opus-5-5, and counted toward the 64000 ceiling; not asserted',
-  modelCatalog: 'not pinned by the executable hash: the embedded catalog expires at 2026-09-27T14:56:08Z, and a remote catalog is assumed blocked by CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC, unverified',
+  modelCatalog: 'not pinned by the executable hash: the embedded catalog expires at 2026-10-15T05:28:34Z, and a remote catalog is assumed blocked by CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC, unverified',
 });
 export const SUBSCRIPTION_MEASURED = Object.freeze({
   admittedLaunchInputBytes: 'UTF-8 length of the JSON launch description; upper bound on prompt-file + stdin bytes; not the provider request size',

@@ -36,7 +36,7 @@ const se = (kind: string, extra: Ev = {}): Ev => ({ type: 'stream_event', event:
 const usage = (extra: Ev = {}): Ev => ({ input_tokens: 2, output_tokens: 82, cache_creation_input_tokens: 626, cache_read_input_tokens: 0, ...extra });
 
 /**
- * A clean 2.1.280 stream, one event per line, the tool call in one delta:
+ * A clean 2.1.295 stream, one event per line, the tool call in one delta:
  * 1 init, 2 status, 3 message_start, 4 content_block_start, 5 delta,
  * 6 assistant, 7 content_block_stop, 8 user, 9 message_delta,
  * 10 message_stop, 11 thinking_tokens, 12 rate_limit_event, 13 result.
@@ -44,7 +44,7 @@ const usage = (extra: Ev = {}): Ev => ({ input_tokens: 2, output_tokens: 82, cac
 function clean(): Ev[] {
   const parsed = JSON.parse(PAYLOAD) as unknown;
   return [
-    { type: 'system', subtype: 'init', apiKeySource: 'none', claude_code_version: '2.1.280', model: 'claude-opus-5-5', permissionMode: 'default', fast_mode_state: 'off', tools: ['StructuredOutput'], mcp_servers: [], ...META },
+    { type: 'system', subtype: 'init', apiKeySource: 'none', claude_code_version: '2.1.295', model: 'claude-opus-5-5', permissionMode: 'default', fast_mode_state: 'off', tools: ['StructuredOutput'], mcp_servers: [], ...META },
     { type: 'system', subtype: 'status', status: 'requesting', ...META },
     se('message_start', { message: { id: 'msg_1', type: 'message', role: 'assistant', model: 'claude-opus-5-5', content: [], stop_reason: null, usage: { input_tokens: 2, output_tokens: 25 } } }),
     se('content_block_start', { index: 0, content_block: { type: 'tool_use', id: 'toolu_1', name: 'StructuredOutput', input: {} } }),
@@ -150,7 +150,7 @@ describe('a clean @2 stream observes what it reports, and makes no fact and no s
         { line: 13, where: 'result.modelUsage key', model: 'claude-opus-5-5', onApiError: false },
         { line: 13, where: 'result.modelUsage["claude-opus-5-5"].canonicalModel', model: 'claude-opus-5-5', onApiError: false },
       ],
-      cliVersion: '2.1.280',
+      cliVersion: '2.1.295',
       // The one init states no betas: an entry for it, without them (Task 5b review repair R4).
       initBetas: [{ line: 1 }],
       rateLimits: [{ line: 12, info: { status: 'allowed', rateLimitType: 'five_hour', isUsingOverage: false, overageStatus: 'rejected', resetsAt: 1790075400 }, notAnObject: null }],
@@ -217,7 +217,7 @@ describe('a clean @2 stream observes what it reports, and makes no fact and no s
       ev.push({ ...resultOf(ev), fast_mode_state: 'cooldown' });
     });
     const observation = observed(events);
-    expect(observation.cliVersion).toBe('2.1.280');
+    expect(observation.cliVersion).toBe('2.1.295');
     expect(observation.initBetas).toStrictEqual([{ line: 1 }, { line: 2, betas: ['beta-two'] }]);
     expect(observation.fastMode.init).toStrictEqual([{ line: 1, fields: { fast_mode_state: 'off' } }, { line: 2, fields: { fast_mode_state: 'on', fast_mode_reason: 'second' } }]);
     expect(observation.fastMode.result).toStrictEqual([{ line: 14, fields: { fast_mode_state: 'off' } }, { line: 15, fields: { fast_mode_state: 'cooldown' } }]);

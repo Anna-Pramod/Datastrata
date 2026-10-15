@@ -24,9 +24,10 @@
  * look for one.
  *
  * The route runs `claude-code-cli@2` by default (the Opus 5.5 migration), so
- * a second dummy stands in for its 2.1.280 executable: the same script over
- * streams `@2`'s projection accepts and a 2.1.280 gate answer, every value a
- * literal written here rather than read off the `@2` profile. The `@1` cases
+ * a second dummy stands in for its pinned 2.1.295 executable: the same script
+ * over streams `@2`'s projection accepts and a gate answer of the shape
+ * 2.1.280's strings showed, every value a literal written here rather than
+ * read off the `@2` profile. The `@1` cases
  * pass `@1` explicitly, over an injected launch, which is the only way the
  * route still runs it.
  *
@@ -615,10 +616,10 @@ function writeStreamSources(): void {
 }
 
 /**
- * A 2.1.280 `stream-json` stream for one role, which `@2`'s projection
+ * A 2.1.295 `stream-json` stream for one role, which `@2`'s projection
  * accepts: the literal shapes of `claude-code-cli-v2.test.ts`'s `build()`,
  * written again here as literals and never read off the `@2` profile — CLI
- * 2.1.280 and `claude-opus-5-5` at init, in `message_start`, on the assistant
+ * 2.1.295 and `claude-opus-5-5` at init, in `message_start`, on the assistant
  * restatement and as the one `modelUsage` entry; `permissionMode` default and
  * `fast_mode_state` "off" at init and on the result; one system status note,
  * "requesting"; one compliant rate-limit event; a result that completed with
@@ -633,7 +634,7 @@ function syntheticStreamV2(output: unknown, requestId: string): string {
   const se = (kind: string, extra: Record<string, unknown> = {}) => ({ type: 'stream_event', event: { type: kind, ...extra }, parent_tool_use_id: null, ...meta });
   const usage = (extra: Record<string, unknown> = {}) => ({ input_tokens: 2, output_tokens: 82, cache_creation_input_tokens: 626, cache_read_input_tokens: 0, ...extra });
   const events: unknown[] = [
-    { type: 'system', subtype: 'init', apiKeySource: 'none', claude_code_version: '2.1.280', model: 'claude-opus-5-5', permissionMode: 'default', fast_mode_state: 'off', tools: ['StructuredOutput'], mcp_servers: [], ...meta },
+    { type: 'system', subtype: 'init', apiKeySource: 'none', claude_code_version: '2.1.295', model: 'claude-opus-5-5', permissionMode: 'default', fast_mode_state: 'off', tools: ['StructuredOutput'], mcp_servers: [], ...meta },
     { type: 'system', subtype: 'status', status: 'requesting', ...meta },
     se('message_start', { message: { id: 'msg_1', type: 'message', role: 'assistant', model: 'claude-opus-5-5', content: [], stop_reason: null, usage: { input_tokens: 2, output_tokens: 25 } } }),
     se('content_block_start', { index: 0, content_block: { type: 'tool_use', id: 'toolu_1', name: 'StructuredOutput', input: {} } }),
@@ -677,7 +678,7 @@ interface DummyBehaviour {
   gate?: Record<string, unknown>;
   /**
    * Which executable the dummy stands in for: `@1`'s 2.1.226 (the default),
-   * or `@2`'s 2.1.280, which serves `syntheticStreamV2` streams, answers the
+   * or `@2`'s 2.1.295, which serves `syntheticStreamV2` streams, answers the
    * gate with `GATE_V2` unless told otherwise, and copies the answer it
    * prints to `gate-v2-stdout.txt` in the record directory.
    */
@@ -2193,9 +2194,9 @@ describe('the subscription route runs claude-code-cli@2 from its profile, and @1
   // agree with any change made to it.
   const V2_SETTINGS = '{"switchModelsOnFlag":false,"fastMode":false,"autoContinueAtUsageLimit":false}';
   const V1_SETTINGS = '{"switchModelsOnFlag":false}';
-  const V2_PIPELINE_VERSION = 'pipeline-v3-e0570a0805b3df74fd2e391f8a1b8594dd1f1ada487d51a67e9215fcfd48f690';
+  const V2_PIPELINE_VERSION = 'pipeline-v3-68c4d29bd770f9e7bc78f24cb2da97892a9da8f7c0bcabb499dff5301806a19a';
   const V1_PIPELINE_VERSION = 'pipeline-v3-fd3ed34d558145c09ef7105506c76767d1dc335ce2d82d57fbc6e2c148509ae5';
-  const V2_SHA256 = '862db5f39398606acd531777565505e14c792b9da72fd31df0b309b8eb55406e';
+  const V2_SHA256 = '494870c9763b5ea370b6165e7e04af589a7b2472bf0de18ffb25477f8230bdf6';
   const V1_SHA256 = '013a1cf17df5ff1dcc189d5d6fd3fdd5f097ddc3cd41aa9992e99805574febbe';
   /** `@2`'s eleven launch controls. */
   const V2_CONTROLS = {
@@ -2224,10 +2225,10 @@ describe('the subscription route runs claude-code-cli@2 from its profile, and @1
     DISABLE_AUTOUPDATER: '1',
   };
   const V2_UNOBSERVED = {
-    outputCeiling: 'configured CLAUDE_CODE_MAX_OUTPUT_TOKENS=64000, which 2.1.280 honours statically up to the model\'s own limit; wire-level max_tokens unobserved',
+    outputCeiling: 'configured CLAUDE_CODE_MAX_OUTPUT_TOKENS=64000, which 2.1.295 honours statically up to the model\'s own limit; wire-level max_tokens unobserved',
     effort: 'effort high passed as --effort; its application unobserved',
     thinking: 'always on for claude-opus-5-5, and counted toward the 64000 ceiling; not asserted',
-    modelCatalog: 'not pinned by the executable hash: the embedded catalog expires at 2026-09-27T14:56:08Z, and a remote catalog is assumed blocked by CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC, unverified',
+    modelCatalog: 'not pinned by the executable hash: the embedded catalog expires at 2026-10-15T05:28:34Z, and a remote catalog is assumed blocked by CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC, unverified',
   };
   const INHERITED_ENV = { HOME: INHERITED.HOME, USER: INHERITED.USER, PATH: INHERITED.PATH };
   /** The reader's full recorded argv under `@2`: every element a literal but the role's schema. */
@@ -2291,9 +2292,9 @@ describe('the subscription route runs claude-code-cli@2 from its profile, and @1
 
     const summary = summaryOf(outcome.summaryPath);
     expect(summary).toMatchObject({ status: 'completed', route: 'subscription', attemptUnit: 'cli_launch', adapter: 'claude-code-cli@2', transport: 'injected-launch', synthetic: true, launches: 9, gateLaunches: 1, error: null, runId: outcome.runId });
-    expect(summary['requested']).toEqual({ pin: { version: '2.1.280', sha256: V2_SHA256, sizeBytes: 217221744 }, permittedModels: ['claude-opus-5-5'], effort: 'high', maxOutputTokens: 64000, settings: V2_SETTINGS, settingsFrom: 'profile' });
+    expect(summary['requested']).toEqual({ pin: { version: '2.1.295', sha256: V2_SHA256, sizeBytes: 239695888 }, permittedModels: ['claude-opus-5-5'], effort: 'high', maxOutputTokens: 64000, settings: V2_SETTINGS, settingsFrom: 'profile' });
     // The executable actually launched: the dummy, injected, under the version the profile pins.
-    expect(summary['pin']).toEqual({ version: '2.1.280', sha256: pin.sha256, sizeBytes: pin.sizeBytes, injected: true });
+    expect(summary['pin']).toEqual({ version: '2.1.295', sha256: pin.sha256, sizeBytes: pin.sizeBytes, injected: true });
     expect(summary['unobserved']).toEqual(V2_UNOBSERVED);
     expect(JSON.stringify(summary['unobserved'])).toContain('CLAUDE_CODE_MAX_OUTPUT_TOKENS=64000');
     expect(JSON.stringify(summary['unobserved'])).not.toContain('16000');
@@ -2393,8 +2394,8 @@ describe('the subscription route runs claude-code-cli@2 from its profile, and @1
     expect(roleLaunchCount()).toBe(9);
   });
 
-  it('V2-X1 — subscriptionExecutableFor is pure: each adapter\'s profile pin, resolved against the home it is handed, spaces kept', () => {
-    const v2 = { path: '/Users/someone/Library/Application Support/Claude/claude-code/2.1.280/claude.app/Contents/MacOS/claude', sha256: V2_SHA256, sizeBytes: 217221744 };
+  it('V2-X1 — subscriptionExecutableFor is pure: each adapter\'s profile pin, resolved against the home it is handed', () => {
+    const v2 = { path: '/Users/someone/.local/share/datastrata/claude-code/2.1.295/9d6405864fdc/claude.app/Contents/MacOS/claude', sha256: V2_SHA256, sizeBytes: 239695888 };
     expect(subscriptionExecutableFor(CLAUDE_CODE_CLI_V2_ADAPTER, '/Users/someone')).toEqual(v2);
     expect(subscriptionExecutableFor({ identity: { id: 'claude-code-cli', version: '2' } }, '/Users/someone/')).toEqual(v2);
     expect(subscriptionExecutableFor(CLAUDE_CODE_CLI_ADAPTER, '/Users/someone')).toEqual({ path: '/Users/someone/.local/share/claude/versions/2.1.226', sha256: V1_SHA256, sizeBytes: 279661952 });
@@ -2752,7 +2753,7 @@ describe('the subscription route runs claude-code-cli@2 from its profile, and @1
       subscription: { inheritedEnv: { ...INHERITED }, interrupts: new EventEmitter(), termGraceMs: 300, killGraceMs: 300, tempRoot, ...sub },
     });
   /** `@2`'s pin resolved under the nonexistent inherited HOME, written out. */
-  const V2_PIN_UNDER_INHERITED_HOME = '/nonexistent/ds-capture-home/Library/Application Support/Claude/claude-code/2.1.280/claude.app/Contents/MacOS/claude';
+  const V2_PIN_UNDER_INHERITED_HOME = '/nonexistent/ds-capture-home/.local/share/datastrata/claude-code/2.1.295/9d6405864fdc/claude.app/Contents/MacOS/claude';
 
   it('V2-D2 — @2 with neither an injected launch nor an injected executable passes the D-1 refusal and the budget cap, resolves @2\'s own pin under the inherited HOME, and is refused by the pin check before any spawn: transport spawn, synthetic false (Task 5a review repair R4)', async () => {
     // The inherited HOME is the nonexistent literal, so the default executable resolves where nothing exists: the
@@ -2782,7 +2783,7 @@ describe('the subscription route runs claude-code-cli@2 from its profile, and @1
     expect(processGuard().calls.slice(guardCalls), 'launches the process guard saw').toEqual([]);
     const summary = summaryOf(outcome!.summaryPath);
     expect(summary).toMatchObject({ adapter: 'claude-code-cli@2', transport: 'spawn', synthetic: false, status: 'failed', error: { name: 'ExecutablePinMismatchError' } });
-    expect(summary['pin']).toEqual({ version: '2.1.280', sha256: '862db5f39398606acd531777565505e14c792b9da72fd31df0b309b8eb55406e', sizeBytes: 217221744, injected: false });
+    expect(summary['pin']).toEqual({ version: '2.1.295', sha256: '494870c9763b5ea370b6165e7e04af589a7b2472bf0de18ffb25477f8230bdf6', sizeBytes: 239695888, injected: false });
     expect(summary['budgets']).toEqual({ launchTimeoutMs: 1_800_000, gateTimeoutMs: 60_000, lifetimeMs: 16_470_000, injected: false });
     // Refused at the gate's pin check: nothing was assessed (Task 5c).
     expectTrust(outcome!.summaryPath, trustBlock('failed', 'ExecutablePinMismatchError', 'unassessed', 'unassessed', null));
@@ -3799,7 +3800,7 @@ describe('included usage on the @2 route: the usage stop, the in-flight stops, t
     const v2Summary = summaryOf(v2.summaryPath);
     expect(Object.hasOwn(v2Summary, 'usageStop')).toBe(true);
     expect(v2Summary['usageStop']).toBeNull();
-    expect(launchLinesOf(v2.launchesPath!)[1]!.observed).toMatchObject({ cliVersion: '2.1.280', reportedContextTokens: 628, fastMode: { init: [{ line: 1, fields: { fast_mode_state: 'off' } }] } });
+    expect(launchLinesOf(v2.launchesPath!)[1]!.observed).toMatchObject({ cliVersion: '2.1.295', reportedContextTokens: 628, fastMode: { init: [{ line: 1, fields: { fast_mode_state: 'off' } }] } });
     // The trust block is @2's alone (Task 5c, a parent decision P-5c-1): @1 files no trust key, and @2's clean run, the
     // positive control, files the four tiers.
     expect(Object.hasOwn(summaryOf(v1.summaryPath), 'trust'), '@1\'s execution.json carries a trust key').toBe(false);

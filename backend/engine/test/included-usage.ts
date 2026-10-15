@@ -195,7 +195,7 @@ export const USAGE_STOP_NOTE = 'a resume is a new, separately approved execution
  *   events that alternate between reporting both and reporting one, can make
  *   a false in-flight `unnatural_reset` stop, since the state kept from an
  *   event that reported both is the smallest of the two. A false stop fails
- *   closed; how 2.1.280 reports windows is a probe question.
+ *   closed; how the pinned build reports windows is a probe question.
  * - A recorded limitation (Task 5b review repair O3, a parent decision
  *   P-5b-13): the harness renames only a count map's keys. A key inside a
  *   copied subtree that matches the email pattern or carries the inherited
@@ -215,11 +215,11 @@ export const USAGE_STOP_NOTE = 'a resume is a new, separately approved execution
  * - Two notes (Task 5b review repair M7, a parent comment-only edit):
  *   `apiErrors[].kinds` files every string of `error`, `apiError` and
  *   `api_error` as reported, as the projection reads them, so a
- *   human-readable message there would be filed (which field 2.1.280 fills,
- *   and with what, is a probe question); and a reading's `line` counts the
- *   non-blank stdout lines, as the filed stream does, where the projection
- *   counts raw stdout lines, so a fact's detail and the projection's refusal
- *   can name different lines for one event.
+ *   human-readable message there would be filed (which field the pinned
+ *   build fills, and with what, is a probe question); and a reading's
+ *   `line` counts the non-blank stdout lines, as the filed stream does, where
+ *   the projection counts raw stdout lines, so a fact's detail and the
+ *   projection's refusal can name different lines for one event.
  */
 
 // ---------------------------------------------------------------------------

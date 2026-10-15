@@ -1103,13 +1103,13 @@ describe('claude-code-cli@2 — the profile', () => {
     expect(() => assertValidProviderAdapterIdentity(CLAUDE_CODE_CLI_V2_ADAPTER.identity)).not.toThrow();
     expect(CLAUDE_CODE_CLI_V2_ADAPTER.channel).toBe('process');
     expect(CLAUDE_CODE_CLI_V2_PROFILE.pin).toEqual({
-      path: '~/Library/Application Support/Claude/claude-code/2.1.280/claude.app/Contents/MacOS/claude',
-      version: '2.1.280',
-      sha256: '862db5f39398606acd531777565505e14c792b9da72fd31df0b309b8eb55406e',
-      sizeBytes: 217221744,
+      path: '~/.local/share/datastrata/claude-code/2.1.295/9d6405864fdc/claude.app/Contents/MacOS/claude',
+      version: '2.1.295',
+      sha256: '494870c9763b5ea370b6165e7e04af589a7b2472bf0de18ffb25477f8230bdf6',
+      sizeBytes: 239695888,
     });
-    expect(resolvePinPath(CLAUDE_CODE_CLI_V2_PROFILE.pin.path, '/Users/someone')).toBe('/Users/someone/Library/Application Support/Claude/claude-code/2.1.280/claude.app/Contents/MacOS/claude');
-    expect(resolvePinPath(CLAUDE_CODE_CLI_V2_PROFILE.pin.path, '/Users/someone/')).toBe('/Users/someone/Library/Application Support/Claude/claude-code/2.1.280/claude.app/Contents/MacOS/claude');
+    expect(resolvePinPath(CLAUDE_CODE_CLI_V2_PROFILE.pin.path, '/Users/someone')).toBe('/Users/someone/.local/share/datastrata/claude-code/2.1.295/9d6405864fdc/claude.app/Contents/MacOS/claude');
+    expect(resolvePinPath(CLAUDE_CODE_CLI_V2_PROFILE.pin.path, '/Users/someone/')).toBe('/Users/someone/.local/share/datastrata/claude-code/2.1.295/9d6405864fdc/claude.app/Contents/MacOS/claude');
     expect(CLAUDE_CODE_CLI_V2_PROFILE.permittedModels).toEqual(['claude-opus-5-5']);
     expect(CLAUDE_CODE_CLI_V2_PROFILE.effort).toBe('high');
     expect(CLAUDE_CODE_CLI_V2_PROFILE.settings).toBe('{"switchModelsOnFlag":false,"fastMode":false,"autoContinueAtUsageLimit":false}');
@@ -1189,7 +1189,7 @@ describe('claude-code-cli@2 — the profile', () => {
     expect(CLAUDE_CODE_CLI_V2_ADAPTER.invocation).toEqual({
       effort: 'high',
       maxOutputTokens: 64000,
-      executable: { version: '2.1.280', sha256: '862db5f39398606acd531777565505e14c792b9da72fd31df0b309b8eb55406e' },
+      executable: { version: '2.1.295', sha256: '494870c9763b5ea370b6165e7e04af589a7b2472bf0de18ffb25477f8230bdf6' },
     });
   });
 
@@ -1214,18 +1214,18 @@ describe('claude-code-cli@2 — the profile', () => {
 // ---------------------------------------------------------------------------
 
 describe('pin paths', () => {
-  it('H1 — any ~/-relative pin resolves against an absolute home, its spaces kept verbatim, with or without a trailing slash', () => {
-    const v2 = '~/Library/Application Support/Claude/claude-code/2.1.280/claude.app/Contents/MacOS/claude';
-    expect(resolvePinPath(v2, '/Users/someone')).toBe('/Users/someone/Library/Application Support/Claude/claude-code/2.1.280/claude.app/Contents/MacOS/claude');
-    expect(resolvePinPath(v2, '/Users/someone/')).toBe('/Users/someone/Library/Application Support/Claude/claude-code/2.1.280/claude.app/Contents/MacOS/claude');
-    expect(resolvePinPath(v2, '/')).toBe('/Library/Application Support/Claude/claude-code/2.1.280/claude.app/Contents/MacOS/claude');
+  it('H1 — any ~/-relative pin resolves against an absolute home, with or without a trailing slash, a space in the home kept verbatim (H3 holds a space in the pin)', () => {
+    const v2 = '~/.local/share/datastrata/claude-code/2.1.295/9d6405864fdc/claude.app/Contents/MacOS/claude';
+    expect(resolvePinPath(v2, '/Users/someone')).toBe('/Users/someone/.local/share/datastrata/claude-code/2.1.295/9d6405864fdc/claude.app/Contents/MacOS/claude');
+    expect(resolvePinPath(v2, '/Users/someone/')).toBe('/Users/someone/.local/share/datastrata/claude-code/2.1.295/9d6405864fdc/claude.app/Contents/MacOS/claude');
+    expect(resolvePinPath(v2, '/')).toBe('/.local/share/datastrata/claude-code/2.1.295/9d6405864fdc/claude.app/Contents/MacOS/claude');
     expect(resolvePinPath('~/.local/share/claude/versions/2.1.226', '/Users/someone')).toBe('/Users/someone/.local/share/claude/versions/2.1.226');
     // resolvePinnedCliPath is the same resolver over @1's pin (C1 holds its literals).
     expect(resolvePinnedCliPath('/Users/some one')).toBe('/Users/some one/.local/share/claude/versions/2.1.226');
   });
 
   it('H2 — a relative or empty home is refused, naming it; so is a pin that is not relative to ~/', () => {
-    const pin = '~/Library/Application Support/Claude/claude-code/2.1.280/claude.app/Contents/MacOS/claude';
+    const pin = '~/.local/share/datastrata/claude-code/2.1.295/9d6405864fdc/claude.app/Contents/MacOS/claude';
     for (const home of ['relative', '', '~/Users/someone']) {
       const error = thrownBy(() => resolvePinPath(pin, home));
       expect(error, `home ${JSON.stringify(home)} was not refused`).toBeInstanceOf(Error);
@@ -1240,6 +1240,13 @@ describe('pin paths', () => {
     }
     // @1's resolver keeps its refusal exactly.
     expect(() => resolvePinnedCliPath('relative')).toThrow('the pinned CLI path is resolved against an absolute home directory; received "relative"');
+  });
+
+  it('H3 — a pin path with a space resolves with the space kept verbatim, with or without a trailing slash on the home', () => {
+    // `@2`'s 2.1.280 pin, under `Application Support`, was the only pin path with a space; the 2.1.295 pin has none
+    // (2026-10-15), so this literal is what keeps the property shown.
+    expect(resolvePinPath('~/Library/Application Support/x/claude', '/Users/someone')).toBe('/Users/someone/Library/Application Support/x/claude');
+    expect(resolvePinPath('~/Library/Application Support/x/claude', '/Users/someone/')).toBe('/Users/someone/Library/Application Support/x/claude');
   });
 });
 
