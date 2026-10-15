@@ -12,21 +12,33 @@
  * `buildRequest` returns a description that nothing sends.
  */
 
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
 import {
+  AgentCapabilityError,
   createLiveAgentRunner,
   LiveAgentRunner,
   MissingProviderAdapterError,
   LIVE_AGENTS_ENV,
   LIVE_AGENTS_TOKEN,
+  type ProviderTransport,
 } from '../src/pipeline/live-runner';
 import { pipelineVersionFor, runVerificationPipeline } from '../src/pipeline/orchestrate';
 import {
+  assertValidInvocationIdentity,
+  InvalidInvocationIdentityError,
+  INVOCATION_EFFORTS,
+  invocationDifferences,
+  InvocationMismatchError,
   ProviderAdapterMismatchError,
   ProviderAdapterNotSelectedError,
   UnverifiedProviderAdapterError,
+  type InvocationIdentity,
+  type ProviderAdapterIdentity,
 } from '../src/pipeline/provider-adapter';
+import { CLAUDE_CODE_CLI_ADAPTER, CLAUDE_CODE_CLI_V2_ADAPTER } from '../src/pipeline/claude-code-cli';
+import type { RoleConfig } from '../src/pipeline/config';
 import { RoleOutputError, RoleTransportError } from '../src/pipeline/roles';
 import type { AgentRunner } from '../src/pipeline/runner';
 import { installNetworkTrap } from './helpers';
@@ -96,6 +108,91 @@ import { CLOSURE_RENDERER_VERSION } from '../src/pipeline/entitlement';
  */
 const GOLDEN_IDENTITY =
   'pipeline-v3-1d566c9903cb90711e3e52750460759d4c87a5900765d4349c61eca37e285b7c';
+
+/**
+ * The input `GOLDEN_IDENTITY` is taken over, as the golden case below writes
+ * it: every value a literal. It declares no invocation, so the golden is the
+ * absent-invocation case (plan 2026-09-25, Task 3).
+ */
+function goldenInput(): PipelineIdentityInput {
+  return {
+    promptSha256: { reader: 'r'.repeat(64), prosecutor: 'p'.repeat(64), adjudicator: 'a'.repeat(64) },
+    models: { reader: 'm-r', prosecutor: 'm-p', adjudicator: 'm-a' },
+    roleConfig: { prosecutorCount: 2, lenses: ['l1', 'l2'], order: ['reader', 'prosecutor', 'adjudicator'] },
+    resultSchemaVersion: '1.3.0',
+    closureRendererVersion: '1.0.0',
+    providerAdapter: { id: 'test-provider', version: '1' },
+    closurePolicy: CLOSURE_POLICY_V0,
+  };
+}
+
+/**
+ * `claude-code-cli@2`'s invocation, written out (plan 2026-09-25, D-3 to D-5).
+ * A literal, never read off the `@2` profile or adapter: an expectation
+ * computed from the profile agrees with the profile however wrong it becomes.
+ */
+const INVOCATION_V2: InvocationIdentity = {
+  effort: 'high',
+  maxOutputTokens: 64000,
+  executable: { version: '2.1.280', sha256: '862db5f39398606acd531777565505e14c792b9da72fd31df0b309b8eb55406e' },
+};
+
+/**
+ * `goldenInput()` with `INVOCATION_V2` declared: the present-invocation
+ * golden.
+ *
+ * Taken on 2026-09-25 by a placeholder run of `buildPipelineIdentity`, and
+ * held to account by `handWrittenIdentity` below, which derives the same
+ * string without `identityPayload`, `canonicalJson` or `sha256Hex` and
+ * reproduces `GOLDEN_IDENTITY` when the invocation is left off. Re-deriving
+ * it to make a red test green is the repair that retires it; it is reviewed
+ * as a golden.
+ */
+const GOLDEN_IDENTITY_WITH_INVOCATION =
+  'pipeline-v3-002ec70e66b27d39ffb742112ec22d5b96812221b4012ffc8bb5fdece59f4237';
+
+/**
+ * The identity, derived without the code under test.
+ *
+ * The canonical payload is written out by hand — keys in sorted order, no
+ * whitespace, each field placed explicitly — and hashed with `node:crypto`.
+ * Nothing here calls `identityPayload`, `canonicalJson` or `sha256Hex`, so a
+ * defect in any of them (a key emitted as `null`, a field left out, the
+ * declared object spread wholesale) cannot be reproduced here by agreement.
+ * Only the four declared invocation fields are written, which is the rule the
+ * builder is held to.
+ */
+function handWrittenIdentity(input: PipelineIdentityInput): string {
+  const q = (value: string): string => JSON.stringify(value);
+  const list = (values: readonly string[]): string => `[${values.map(q).join(',')}]`;
+  const policy = input.closurePolicy;
+  const invocation = input.invocation;
+  const json =
+    `{"closurePolicy":{"expansion":${q(policy.expansion)},"referenceDepth":${policy.referenceDepth},` +
+    `"referenceKinds":${list(policy.referenceKinds)},"structuralKinds":${list(policy.structuralKinds)}},` +
+    `"closureRendererVersion":${q(input.closureRendererVersion)},` +
+    (invocation === undefined
+      ? ''
+      : `"invocation":{"effort":${q(invocation.effort)},"executable":{"sha256":${q(invocation.executable.sha256)},` +
+        `"version":${q(invocation.executable.version)}},"maxOutputTokens":${invocation.maxOutputTokens}},`) +
+    `"models":{"adjudicator":${q(input.models.adjudicator)},"prosecutor":${q(input.models.prosecutor)},"reader":${q(input.models.reader)}},` +
+    `"prompts":{"adjudicator":${q(input.promptSha256.adjudicator)},"prosecutor":${q(input.promptSha256.prosecutor)},"reader":${q(input.promptSha256.reader)}},` +
+    `"providerAdapter":{"id":${q(input.providerAdapter.id)},"version":${q(input.providerAdapter.version)}},` +
+    `"resultSchemaVersion":${q(input.resultSchemaVersion)},` +
+    `"roleConfig":{"lenses":${list(input.roleConfig.lenses)},"order":${list(input.roleConfig.order)},"prosecutorCount":${input.roleConfig.prosecutorCount}},` +
+    `"scheme":"v3"}`;
+  return `pipeline-v3-${createHash('sha256').update(json, 'utf8').digest('hex')}`;
+}
+
+/** What an act threw, or `undefined` when it threw nothing. */
+function thrownBy(act: () => unknown): unknown {
+  try {
+    act();
+  } catch (error) {
+    return error;
+  }
+  return undefined;
+}
 
 const prompts = loadPromptSet();
 const corpus = fixtureAuthorisedCorpus();
@@ -335,6 +432,214 @@ describe('deployment configuration is not verification semantics', () => {
 });
 
 // ---------------------------------------------------------------------------
+// The invocation, where an adapter declares one (plan 2026-09-25, Task 3)
+// ---------------------------------------------------------------------------
+
+describe('a declared invocation is part of the identity, and absence is no key at all', () => {
+  it('the hand-written payload reproduces GOLDEN_IDENTITY without an invocation', () => {
+    // The hand-writer's positive control: it agrees with the golden the
+    // builder has been held to since B-E2, over the golden's own input, so its
+    // derivation of the present case below is worth believing.
+    expect(buildPipelineIdentity(goldenInput())).toBe(GOLDEN_IDENTITY);
+    expect(handWrittenIdentity(goldenInput())).toBe(GOLDEN_IDENTITY);
+  });
+
+  it('with the @2 invocation declared, the hand-written payload is the present-invocation golden', () => {
+    expect(handWrittenIdentity({ ...goldenInput(), invocation: INVOCATION_V2 })).toBe(
+      GOLDEN_IDENTITY_WITH_INVOCATION,
+    );
+    // Two literals: no src/ defect can red this line; the builder cases carry the evidence.
+    expect(GOLDEN_IDENTITY_WITH_INVOCATION).not.toBe(GOLDEN_IDENTITY);
+  });
+
+  it('and the builder derives the same literal', () => {
+    expect(buildPipelineIdentity({ ...goldenInput(), invocation: INVOCATION_V2 })).toBe(
+      GOLDEN_IDENTITY_WITH_INVOCATION,
+    );
+  });
+
+  it('over the suite baseline, with the real prompt hashes, the builder and the hand-written payload agree too', () => {
+    // A second input, so an agreement over the golden's input alone cannot be
+    // a coincidence of the values it happens to hold.
+    const present = { ...baseline(), invocation: INVOCATION_V2 };
+    expect(buildPipelineIdentity(present)).toBe(handWrittenIdentity(present));
+    expect(buildPipelineIdentity(present)).not.toBe(buildPipelineIdentity(baseline()));
+  });
+
+  it('an invocation explicitly undefined is the absent case: the golden does not move', () => {
+    const input: PipelineIdentityInput = { ...goldenInput(), invocation: undefined };
+    // The key is really on the object, so this is not the absent case by
+    // construction.
+    expect('invocation' in input).toBe(true);
+    expect(buildPipelineIdentity(input)).toBe(GOLDEN_IDENTITY);
+  });
+
+  it.each([
+    ['effort', { ...INVOCATION_V2, effort: 'medium' }],
+    ['maxOutputTokens', { ...INVOCATION_V2, maxOutputTokens: 63999 }],
+    ['executable.version', { ...INVOCATION_V2, executable: { ...INVOCATION_V2.executable, version: '2.1.281' } }],
+    [
+      'executable.sha256',
+      {
+        ...INVOCATION_V2,
+        executable: { ...INVOCATION_V2.executable, sha256: '862db5f39398606acd531777565505e14c792b9da72fd31df0b309b8eb55406f' },
+      },
+    ],
+  ] as const)('moves when %s alone moves', (_field, moved) => {
+    // Against the builder's own digest of the unmoved invocation, not only the
+    // literal: a field dropped from the payload moves every present digest
+    // away from the literal, so "differs from the literal" would hold against
+    // exactly the defect this case is for (observed: Task 3 teeth T12, first
+    // run). Two digests from one builder that differ in this field alone are
+    // what show the field is hashed.
+    const unmoved = buildPipelineIdentity({ ...goldenInput(), invocation: INVOCATION_V2 });
+    const identity = buildPipelineIdentity({ ...goldenInput(), invocation: moved });
+    expect(identity).not.toBe(unmoved);
+    expect(identity).not.toBe(GOLDEN_IDENTITY_WITH_INVOCATION);
+  });
+
+  it('an extra key inside the executable does not reach the digest', () => {
+    // Field-by-field emission: a path is deployment, and a payload that
+    // spread the declared object would hash it.
+    const withPath = {
+      ...INVOCATION_V2,
+      executable: { ...INVOCATION_V2.executable, path: '/Users/someone/Library/claude' },
+    } as InvocationIdentity;
+    expect(buildPipelineIdentity({ ...goldenInput(), invocation: withPath })).toBe(GOLDEN_IDENTITY_WITH_INVOCATION);
+  });
+
+  it('an extra key beside the invocation fields does not reach the digest', () => {
+    const withChannel = { ...INVOCATION_V2, channel: 'process' } as InvocationIdentity;
+    expect(buildPipelineIdentity({ ...goldenInput(), invocation: withChannel })).toBe(
+      GOLDEN_IDENTITY_WITH_INVOCATION,
+    );
+  });
+});
+
+describe('a declared invocation must be usable as one', () => {
+  const SHORT_SHA = '862db5f39398606acd531777565505e14c792b9da72fd31df0b309b8eb55406';
+  const UPPER_SHA = '862DB5F39398606ACD531777565505E14C792B9DA72FD31DF0B309B8EB55406E';
+  const NON_HEX_SHA = '862db5f39398606acd531777565505e14c792b9da72fd31df0b309b8eb55406g';
+  const withExecutable = (executable: unknown): unknown => ({ ...INVOCATION_V2, executable });
+
+  it('accepts the @2 literal', () => {
+    expect(() => assertValidInvocationIdentity(INVOCATION_V2)).not.toThrow();
+  });
+
+  it('accepts the invocation the @2 adapter actually declares', () => {
+    // The link between the effort set and the adapter: a set that lost the
+    // effort `@2` passes would refuse `@2`'s own declaration here.
+    expect(CLAUDE_CODE_CLI_V2_ADAPTER.invocation).toBeDefined();
+    expect(() => assertValidInvocationIdentity(CLAUDE_CODE_CLI_V2_ADAPTER.invocation)).not.toThrow();
+  });
+
+  it('the effort set is exactly the one effort a registered adapter passes, and cannot be edited in place', () => {
+    // When a second effort is registered, the orchestration effort row must
+    // return as an InvocationMismatchError case (see 'refuses a live
+    // capability differing in effort alone, as an effort no registered adapter
+    // passes' and the direct comparison case).
+    expect(INVOCATION_EFFORTS).toEqual(['high']);
+    expect(Object.isFrozen(INVOCATION_EFFORTS)).toBe(true);
+  });
+
+  it.each([
+    ['a sha256 of the wrong length', withExecutable({ version: '2.1.280', sha256: SHORT_SHA }), [`executable.sha256 "${SHORT_SHA}" is not 64 lowercase hex characters`]],
+    ['an uppercase sha256', withExecutable({ version: '2.1.280', sha256: UPPER_SHA }), [`executable.sha256 "${UPPER_SHA}" is not 64 lowercase hex characters`]],
+    ['a non-hex sha256', withExecutable({ version: '2.1.280', sha256: NON_HEX_SHA }), [`executable.sha256 "${NON_HEX_SHA}" is not 64 lowercase hex characters`]],
+    ['a ceiling of 0', { ...INVOCATION_V2, maxOutputTokens: 0 }, ['maxOutputTokens 0 is not a positive safe integer']],
+    ['a ceiling of -1', { ...INVOCATION_V2, maxOutputTokens: -1 }, ['maxOutputTokens -1 is not a positive safe integer']],
+    ['a ceiling of 1.5', { ...INVOCATION_V2, maxOutputTokens: 1.5 }, ['maxOutputTokens 1.5 is not a positive safe integer']],
+    [
+      'a ceiling past the safe integers',
+      { ...INVOCATION_V2, maxOutputTokens: Number.MAX_SAFE_INTEGER + 1 },
+      ['maxOutputTokens 9007199254740992 is not a positive safe integer'],
+    ],
+    ['a ceiling of NaN', { ...INVOCATION_V2, maxOutputTokens: Number.NaN }, ['maxOutputTokens NaN is not a positive safe integer']],
+    ['a ceiling written as a string', { ...INVOCATION_V2, maxOutputTokens: '64000' }, ['maxOutputTokens "64000" is not a positive safe integer']],
+    ['an empty version', withExecutable({ version: '', sha256: INVOCATION_V2.executable.sha256 }), ['executable.version is empty']],
+    [
+      'a version with surrounding whitespace',
+      withExecutable({ version: ' 2.1.280', sha256: INVOCATION_V2.executable.sha256 }),
+      ['executable.version has surrounding whitespace'],
+    ],
+    [
+      'a version with whitespace inside',
+      withExecutable({ version: '2.1 .280', sha256: INVOCATION_V2.executable.sha256 }),
+      ['executable.version contains whitespace'],
+    ],
+    ['a version that is not a string', withExecutable({ version: 2.1, sha256: INVOCATION_V2.executable.sha256 }), ['executable.version is not a string']],
+    ['the effort medium', { ...INVOCATION_V2, effort: 'medium' }, ['effort "medium" is not one a registered adapter passes (high)']],
+    ['the effort HIGH', { ...INVOCATION_V2, effort: 'HIGH' }, ['effort "HIGH" is not one a registered adapter passes (high)']],
+    ['a null executable', withExecutable(null), ['executable is not an object']],
+    ['an array for the executable', withExecutable([]), ['executable is not an object']],
+    ['a string for the executable', withExecutable('2.1.280'), ['executable is not an object']],
+    ['null', null, ['invocation is not an object']],
+    ['a string for the whole invocation', 'high', ['invocation is not an object']],
+    ['a number for the whole invocation', 64000, ['invocation is not an object']],
+    [
+      'an empty object',
+      {},
+      ['effort is not a string', 'maxOutputTokens undefined is not a positive safe integer', 'executable is not an object'],
+    ],
+    ['an array', [], ['invocation is not an object']],
+  ] as const)('refuses %s, naming the field', (_name, value, problems) => {
+    const error = thrownBy(() => assertValidInvocationIdentity(value));
+    expect(error).toBeInstanceOf(InvalidInvocationIdentityError);
+    expect((error as InvalidInvocationIdentityError).problems).toEqual(problems);
+    expect((error as Error).message).toContain(problems[0]);
+    // A direct call names no side: the control for the two sides named below,
+    // so that a default of either one reds here.
+    expect((error as InvalidInvocationIdentityError).side).toBe(null);
+    expect((error as Error).message).toContain(`the invocation identity is not usable:\n - ${problems[0]}`);
+  });
+
+  describe('through pipelineVersionFor, before anything is hashed', () => {
+    const closure = (): EntitledClosure =>
+      EntitledClosure.forSources(corpus, fixtureRegister(), fixtureSourceUniverse(), ['SRC-100']);
+    const configured = (invocation: unknown): RoleConfig =>
+      ({ ...SINGLE_PROSECUTOR, providerAdapter: SYNTHETIC_ADAPTER_V1.identity, invocation }) as RoleConfig;
+
+    it('refuses a null invocation rather than hashing it as absent', () => {
+      const error = thrownBy(() => pipelineVersionFor({ prompts, config: configured(null), closure: closure() }));
+      expect(error).toBeInstanceOf(InvalidInvocationIdentityError);
+      expect((error as InvalidInvocationIdentityError).problems).toEqual(['invocation is not an object']);
+      expect((error as Error).message).toContain('invocation is not an object');
+      // The configuration's declaration, named as such: its repair is an edit
+      // to the configuration, not to the capability.
+      expect((error as InvalidInvocationIdentityError).side).toBe('configuration');
+      expect((error as Error).message).toContain(
+        'the invocation the configuration declares is not usable:\n - invocation is not an object',
+      );
+    });
+
+    it('refuses an invalid invocation', () => {
+      const error = thrownBy(() =>
+        pipelineVersionFor({
+          prompts,
+          config: configured({ ...INVOCATION_V2, executable: { version: '2.1.280', sha256: UPPER_SHA } }),
+          closure: closure(),
+        }),
+      );
+      expect(error).toBeInstanceOf(InvalidInvocationIdentityError);
+      expect((error as InvalidInvocationIdentityError).problems).toEqual([
+        `executable.sha256 "${UPPER_SHA}" is not 64 lowercase hex characters`,
+      ]);
+      expect((error as Error).message).toContain(`executable.sha256 "${UPPER_SHA}" is not 64 lowercase hex characters`);
+      expect((error as InvalidInvocationIdentityError).side).toBe('configuration');
+      expect((error as Error).message).toContain(
+        `the invocation the configuration declares is not usable:\n - executable.sha256 "${UPPER_SHA}" is not 64 lowercase hex characters`,
+      );
+    });
+
+    it('positive control: the valid invocation derives an identity, and a different one from none', () => {
+      const withInvocation = pipelineVersionFor({ prompts, config: configured(INVOCATION_V2), closure: closure() });
+      expect(withInvocation).toMatch(/^pipeline-v3-[0-9a-f]{64}$/);
+      expect(withInvocation).not.toBe(pipelineVersionFor({ prompts, config: configured(undefined), closure: closure() }));
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Identity is declared, and must be usable as one
 // ---------------------------------------------------------------------------
 
@@ -482,6 +787,23 @@ describe('a live run with no provider selected', () => {
   });
 });
 
+describe('a live runner exposes the invocation its adapter declares', () => {
+  // Constructed only: nothing here calls `run()` or reaches a transport.
+  const over = (adapter?: typeof CLAUDE_CODE_CLI_V2_ADAPTER): LiveAgentRunner =>
+    new LiveAgentRunner({ endpoint: 'https://unused.invalid/', apiKey: 'k', ...(adapter === undefined ? {} : { adapter }) });
+
+  it('over claude-code-cli@2, the @2 invocation', () => {
+    expect(over(CLAUDE_CODE_CLI_V2_ADAPTER).invocation).toEqual(INVOCATION_V2);
+  });
+
+  it('over claude-code-cli@1, a synthetic adapter or no adapter, none', () => {
+    // The @2 case above is the positive control: the getter can return one.
+    expect(over(CLAUDE_CODE_CLI_ADAPTER).invocation).toBe(undefined);
+    expect(over(SYNTHETIC_ADAPTER_V1).invocation).toBe(undefined);
+    expect(over().invocation).toBe(undefined);
+  });
+});
+
 describe('the capability must speak the protocol the identity was derived over', () => {
   it('refuses a run whose configured adapter is not the one the capability speaks', async () => {
     const trap = installNetworkTrap();
@@ -611,6 +933,372 @@ describe('the capability must speak the protocol the identity was derived over',
         runner: capability,
       }),
     ).resolves.toBeDefined();
+  });
+});
+
+describe('the capability must make the invocation the identity was derived over', () => {
+  /** The configuration under test: a selected adapter, and `@2`'s invocation declared. */
+  const CONFIGURED: RoleConfig = {
+    ...SINGLE_PROSECUTOR,
+    providerAdapter: SYNTHETIC_ADAPTER_V1.identity,
+    invocation: INVOCATION_V2,
+  };
+  /** The same adapter, and no invocation. */
+  const UNDECLARED: RoleConfig = { ...SINGLE_PROSECUTOR, providerAdapter: SYNTHETIC_ADAPTER_V1.identity };
+
+  /**
+   * A capability of the given kind answering every role with a stub, counting
+   * what it was asked and how often it was bound. `bind` is where a run first
+   * hands its identity to the capability, so a refusal that is to come before
+   * any work leaves it at zero, and a run that completes binds exactly once.
+   */
+  function capability(
+    kind: 'live' | 'replay',
+    declared: { adapter?: ProviderAdapterIdentity; invocation?: InvocationIdentity | undefined },
+  ): { runner: AgentRunner; asked: () => number; bound: () => number } {
+    let asked = 0;
+    let bound = 0;
+    const runner: AgentRunner = {
+      kind,
+      ...declared,
+      bind: () => {
+        bound += 1;
+      },
+      run: (request) => {
+        asked += 1;
+        return Promise.resolve({
+          outputJson: JSON.stringify(
+            request.role === 'reader'
+              ? stubReaderOutput()
+              : request.role === 'prosecutor'
+                ? stubProsecutorOutput(lensFromRequest(request))
+                : stubAdjudicatorOutput(),
+          ),
+        });
+      },
+    };
+    return { runner, asked: () => asked, bound: () => bound };
+  }
+
+  /** Runs to the first refusal under the network trap, and says what was reached. */
+  async function attempt(config: RoleConfig, runner: AgentRunner): Promise<{ error: unknown; network: string[] }> {
+    const trap = installNetworkTrap();
+    try {
+      const error = await runVerificationPipeline({ ...pipelineInput(), config, runner }).then(
+        () => undefined,
+        (thrown: unknown) => thrown,
+      );
+      return { error, network: [...trap.calls] };
+    } finally {
+      trap.restore();
+    }
+  }
+
+  it('refuses a live capability making a different invocation under the same adapter identity', async () => {
+    const other = {
+      ...INVOCATION_V2,
+      maxOutputTokens: 63999,
+      executable: { ...INVOCATION_V2.executable, version: '2.1.275' },
+    };
+    const { runner, asked, bound } = capability('live', { adapter: SYNTHETIC_ADAPTER_V1.identity, invocation: other });
+    const { error, network } = await attempt(CONFIGURED, runner);
+
+    expect(error).toBeInstanceOf(InvocationMismatchError);
+    const mismatch = error as InvocationMismatchError;
+    expect(mismatch.message).toContain('maxOutputTokens configured 64000, actual 63999');
+    expect(mismatch.message).toContain('executable.version configured "2.1.280", actual "2.1.275"');
+    expect(mismatch.configured).toEqual(INVOCATION_V2);
+    expect(mismatch.actual).toEqual(other);
+    expect(mismatch.fields).toEqual(['maxOutputTokens', 'executable.version']);
+    expect(asked()).toBe(0);
+    expect(bound()).toBe(0);
+    expect(network).toEqual([]);
+  });
+
+  it('refuses when the configuration declares an invocation and the live capability declares none', async () => {
+    const { runner, asked, bound } = capability('live', { adapter: SYNTHETIC_ADAPTER_V1.identity });
+    const { error, network } = await attempt(CONFIGURED, runner);
+
+    expect(error).toBeInstanceOf(InvocationMismatchError);
+    const mismatch = error as InvocationMismatchError;
+    expect(mismatch.message).toContain('but the execution capability declares none');
+    expect(mismatch.configured).toEqual(INVOCATION_V2);
+    expect(mismatch.actual).toBe(undefined);
+    expect(mismatch.fields).toEqual([]);
+    expect(asked()).toBe(0);
+    expect(bound()).toBe(0);
+    expect(network).toEqual([]);
+  });
+
+  it('refuses when the live capability declares an invocation and the configuration declares none', async () => {
+    const { runner, asked, bound } = capability('live', { adapter: SYNTHETIC_ADAPTER_V1.identity, invocation: INVOCATION_V2 });
+    const { error, network } = await attempt(UNDECLARED, runner);
+
+    expect(error).toBeInstanceOf(InvocationMismatchError);
+    const mismatch = error as InvocationMismatchError;
+    expect(mismatch.message).toContain("but the configuration this run's pipelineVersion is derived over declares none");
+    expect(mismatch.configured).toBe(undefined);
+    expect(mismatch.actual).toEqual(INVOCATION_V2);
+    expect(mismatch.fields).toEqual([]);
+    expect(asked()).toBe(0);
+    expect(bound()).toBe(0);
+    expect(network).toEqual([]);
+  });
+
+  it.each([
+    ['maxOutputTokens', { ...INVOCATION_V2, maxOutputTokens: 32000 }, 'maxOutputTokens configured 64000, actual 32000'],
+    [
+      'executable.version',
+      { ...INVOCATION_V2, executable: { ...INVOCATION_V2.executable, version: '2.1.281' } },
+      'executable.version configured "2.1.280", actual "2.1.281"',
+    ],
+    [
+      'executable.sha256',
+      { ...INVOCATION_V2, executable: { ...INVOCATION_V2.executable, sha256: 'f'.repeat(64) } },
+      `executable.sha256 configured "862db5f39398606acd531777565505e14c792b9da72fd31df0b309b8eb55406e", actual "${'f'.repeat(64)}"`,
+    ],
+  ] as const)('refuses a live capability differing in %s alone, naming only that field', async (field, other, fragment) => {
+    const { runner, asked, bound } = capability('live', { adapter: SYNTHETIC_ADAPTER_V1.identity, invocation: other });
+    const { error, network } = await attempt(CONFIGURED, runner);
+
+    expect(error).toBeInstanceOf(InvocationMismatchError);
+    expect((error as InvocationMismatchError).fields).toEqual([field]);
+    expect((error as InvocationMismatchError).configured).toEqual(INVOCATION_V2);
+    expect((error as InvocationMismatchError).actual).toEqual(other);
+    expect((error as Error).message).toContain(fragment);
+    expect(asked()).toBe(0);
+    expect(bound()).toBe(0);
+    expect(network).toEqual([]);
+  });
+
+  // Effort is the one field whose difference cannot reach the comparison
+  // through a run. `INVOCATION_EFFORTS` holds a single effort and both sides
+  // are validated against it, so a declared effort other than the configured
+  // `high` is one no registered adapter passes: the capability's declaration
+  // is refused as invalid before it is compared. This case holds that refusal
+  // and its place; the next holds the comparison's own effort conjunct.
+  it('refuses a live capability differing in effort alone, as an effort no registered adapter passes', async () => {
+    const other = { ...INVOCATION_V2, effort: 'max' };
+    const { runner, asked, bound } = capability('live', { adapter: SYNTHETIC_ADAPTER_V1.identity, invocation: other });
+    const { error, network } = await attempt(CONFIGURED, runner);
+
+    expect(error).toBeInstanceOf(InvalidInvocationIdentityError);
+    expect((error as InvalidInvocationIdentityError).problems).toEqual([
+      'effort "max" is not one a registered adapter passes (high)',
+    ]);
+    expect((error as Error).message).toContain('effort "max" is not one a registered adapter passes (high)');
+    // The capability's declaration, named as such: the configuration's `high`
+    // is valid, and its repair is the capability's.
+    expect((error as InvalidInvocationIdentityError).side).toBe('capability');
+    expect((error as Error).message).toContain(
+      'the invocation the execution capability declares is not usable:\n - effort "max" is not one a registered adapter passes (high)',
+    );
+    expect(asked()).toBe(0);
+    expect(bound()).toBe(0);
+    expect(network).toEqual([]);
+  });
+
+  it('the comparison names an effort difference alone, and the mismatch reports it', () => {
+    // Called directly, because a run refuses an effort difference by
+    // validation first (above): this is the case that reds if the comparison
+    // drops `effort`. Equal invocations, as distinct objects, are its control.
+    const other = { ...INVOCATION_V2, effort: 'max' };
+    expect(invocationDifferences(INVOCATION_V2, { ...INVOCATION_V2, executable: { ...INVOCATION_V2.executable } })).toEqual([]);
+    expect(invocationDifferences(INVOCATION_V2, other)).toEqual(['effort']);
+    const mismatch = new InvocationMismatchError(INVOCATION_V2, other);
+    expect(mismatch.fields).toEqual(['effort']);
+    expect(mismatch.configured).toEqual(INVOCATION_V2);
+    expect(mismatch.actual).toEqual(other);
+    expect(mismatch.message).toContain('effort configured "high", actual "max"');
+  });
+
+  it('a capability differing in both adapter and invocation is refused for the adapter first', async () => {
+    const { runner, asked, bound } = capability('live', {
+      adapter: SYNTHETIC_ADAPTER_V2.identity,
+      invocation: { ...INVOCATION_V2, maxOutputTokens: 32000 },
+    });
+    const { error, network } = await attempt(CONFIGURED, runner);
+
+    expect(error).toBeInstanceOf(ProviderAdapterMismatchError);
+    expect(error).not.toBeInstanceOf(InvocationMismatchError);
+    expect((error as Error).message).toContain(
+      'derived over provider adapter test-provider@1 but the execution capability speaks test-provider@2',
+    );
+    expect(asked()).toBe(0);
+    expect(bound()).toBe(0);
+    expect(network).toEqual([]);
+  });
+
+  it('a capability differing in adapter and declaring a malformed invocation is refused for the adapter first', async () => {
+    // The case above cannot tell where the capability's declaration is
+    // validated, because its declaration is valid. This one is not: validated
+    // before the adapter checks, it would be refused as an unusable invocation
+    // rather than as another protocol. The rows below, where the adapter
+    // agrees, are the control that this same `null` is refused as that.
+    const { runner, asked, bound } = capability('live', {
+      adapter: SYNTHETIC_ADAPTER_V2.identity,
+      invocation: null as unknown as InvocationIdentity,
+    });
+    const { error, network } = await attempt(CONFIGURED, runner);
+
+    expect(error).toBeInstanceOf(ProviderAdapterMismatchError);
+    expect(error).not.toBeInstanceOf(InvalidInvocationIdentityError);
+    expect((error as Error).message).toContain(
+      'derived over provider adapter test-provider@1 but the execution capability speaks test-provider@2',
+    );
+    expect(asked()).toBe(0);
+    expect(bound()).toBe(0);
+    expect(network).toEqual([]);
+  });
+
+  // A capability's declaration is a value like any other, whatever its static
+  // type: the capture harness's role wrapper is to forward whatever its inner
+  // runner holds (plan 2026-09-25, D-3, Task 5). Declared but malformed, it is
+  // refused by name before it is
+  // compared — not by a TypeError from the comparison, or from the mismatch
+  // message describing it. `null` is a declaration, not absence.
+  it.each([
+    ['null, under a configuration declaring the @2 invocation', CONFIGURED, null, ['invocation is not an object']],
+    ['null, under a configuration declaring none', UNDECLARED, null, ['invocation is not an object']],
+    [
+      'an invocation without its executable, under a configuration declaring the @2 invocation',
+      CONFIGURED,
+      { effort: 'high', maxOutputTokens: 64000 },
+      ['executable is not an object'],
+    ],
+  ] as const)('refuses a live capability declaring %s, by name and before any work', async (_name, config, declared, problems) => {
+    const { runner, asked, bound } = capability('live', {
+      adapter: SYNTHETIC_ADAPTER_V1.identity,
+      invocation: declared as unknown as InvocationIdentity,
+    });
+    const { error, network } = await attempt(config, runner);
+
+    expect(error).toBeInstanceOf(InvalidInvocationIdentityError);
+    expect((error as InvalidInvocationIdentityError).problems).toEqual(problems);
+    // Named as the capability's declaration, not the configuration's: the
+    // repair is the capability's.
+    expect((error as InvalidInvocationIdentityError).side).toBe('capability');
+    expect((error as Error).message).toContain(
+      `the invocation the execution capability declares is not usable:\n - ${problems[0]}`,
+    );
+    expect(asked()).toBe(0);
+    expect(bound()).toBe(0);
+    expect(network).toEqual([]);
+  });
+
+  it('positive control: equal invocations, as distinct objects, run to completion', async () => {
+    const equal: InvocationIdentity = {
+      effort: 'high',
+      maxOutputTokens: 64000,
+      executable: { version: '2.1.280', sha256: '862db5f39398606acd531777565505e14c792b9da72fd31df0b309b8eb55406e' },
+    };
+    expect(equal).not.toBe(INVOCATION_V2);
+    expect(equal.executable).not.toBe(INVOCATION_V2.executable);
+    const { runner, asked, bound } = capability('live', { adapter: SYNTHETIC_ADAPTER_V1.identity, invocation: equal });
+    const { error, network } = await attempt(CONFIGURED, runner);
+
+    expect(error).toBe(undefined);
+    expect(asked()).toBeGreaterThan(0);
+    expect(bound()).toBe(1);
+    expect(network).toEqual([]);
+  });
+
+  it('positive control: keys the identity does not hash move nothing, beside the four fields or inside the executable', async () => {
+    // The comparison is over the four fields the identity hashes, as the
+    // emission is: a key the digest cannot see — a path, which is deployment,
+    // or one beside the four — can move neither the identity nor the check.
+    const withExtras = {
+      ...INVOCATION_V2,
+      executable: { ...INVOCATION_V2.executable, path: '/x' },
+      channel: 'process',
+    } as unknown as InvocationIdentity;
+    const { runner, asked, bound } = capability('live', { adapter: SYNTHETIC_ADAPTER_V1.identity, invocation: withExtras });
+    const { error, network } = await attempt(CONFIGURED, runner);
+
+    expect(error).toBe(undefined);
+    expect(asked()).toBeGreaterThan(0);
+    expect(bound()).toBe(1);
+    expect(network).toEqual([]);
+  });
+
+  it('positive control: claude-code-cli@1 declares no invocation, and runs under a configuration that declares none', async () => {
+    expect(CLAUDE_CODE_CLI_ADAPTER.invocation).toBe(undefined);
+    const config: RoleConfig = { ...SINGLE_PROSECUTOR, providerAdapter: { id: 'claude-code-cli', version: '1' } };
+    const { runner, asked, bound } = capability('live', {
+      adapter: CLAUDE_CODE_CLI_ADAPTER.identity,
+      invocation: CLAUDE_CODE_CLI_ADAPTER.invocation,
+    });
+    const { error, network } = await attempt(config, runner);
+
+    expect(error).toBe(undefined);
+    expect(asked()).toBeGreaterThan(0);
+    expect(bound()).toBe(1);
+    expect(network).toEqual([]);
+  });
+
+  it('positive control: replay is exempt, and declares none against a configuration that declares one', async () => {
+    const { runner, asked, bound } = capability('replay', {});
+    expect(runner.invocation).toBe(undefined);
+    const { error, network } = await attempt(CONFIGURED, runner);
+
+    expect(error).toBe(undefined);
+    expect(asked()).toBeGreaterThan(0);
+    expect(bound()).toBe(1);
+    expect(network).toEqual([]);
+  });
+
+  describe('through the live runner itself, which reads its adapter’s declaration', () => {
+    /** A transport that must never be reached: counted, and refusing. */
+    function unreachable(): { transport: ProviderTransport; calls: () => number } {
+      let calls = 0;
+      return {
+        transport: () => {
+          calls += 1;
+          return Promise.reject(new Error('the transport was reached'));
+        },
+        calls: () => calls,
+      };
+    }
+    const V2_UNDECLARED: RoleConfig = { ...SINGLE_PROSECUTOR, providerAdapter: { id: 'claude-code-cli', version: '2' } };
+
+    it('a @2 live runner under a configuration declaring no invocation is refused before any role', async () => {
+      const saved = process.env[LIVE_AGENTS_ENV];
+      delete process.env[LIVE_AGENTS_ENV];
+      try {
+        const spy = unreachable();
+        const runner = new LiveAgentRunner({ endpoint: '', apiKey: '', adapter: CLAUDE_CODE_CLI_V2_ADAPTER, transport: spy.transport });
+        const { error, network } = await attempt(V2_UNDECLARED, runner);
+
+        expect(error).toBeInstanceOf(InvocationMismatchError);
+        expect((error as Error).message).toContain(
+          "but the configuration this run's pipelineVersion is derived over declares none",
+        );
+        expect((error as InvocationMismatchError).configured).toBe(undefined);
+        expect((error as InvocationMismatchError).actual).toEqual(INVOCATION_V2);
+        expect(spy.calls()).toBe(0);
+        expect(network).toEqual([]);
+      } finally {
+        if (saved !== undefined) process.env[LIVE_AGENTS_ENV] = saved;
+      }
+    });
+
+    it('positive control: under the configuration declaring its invocation, it passes the check and stops at the capability gate', async () => {
+      // The run reaches `run()`, which refuses without the token: the invocation
+      // check was passed, and nothing was sent.
+      const saved = process.env[LIVE_AGENTS_ENV];
+      delete process.env[LIVE_AGENTS_ENV];
+      try {
+        const spy = unreachable();
+        const runner = new LiveAgentRunner({ endpoint: '', apiKey: '', adapter: CLAUDE_CODE_CLI_V2_ADAPTER, transport: spy.transport });
+        const { error, network } = await attempt({ ...V2_UNDECLARED, invocation: INVOCATION_V2 }, runner);
+
+        expect(error).toBeInstanceOf(AgentCapabilityError);
+        expect(spy.calls()).toBe(0);
+        expect(network).toEqual([]);
+      } finally {
+        if (saved !== undefined) process.env[LIVE_AGENTS_ENV] = saved;
+      }
+    });
   });
 });
 

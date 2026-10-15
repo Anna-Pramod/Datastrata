@@ -22,6 +22,12 @@
  * so no refusal is satisfied by a stream that would have been refused anyway,
  * and each "ignored" event is shown both ignored and distinguishable from an
  * unknown one.
+ *
+ * The last blocks cover `claude-code-cli@2`'s profile, request and
+ * truncation error, beside `@1`'s unchanged answers. Every `@2` expectation
+ * is a literal written in this file: the profile and adapter are imported
+ * only as the subjects under test, because an expectation computed from the
+ * profile would agree with any change made to it.
  */
 
 import { createHash } from 'node:crypto';
@@ -33,16 +39,23 @@ import { MAX_OUTPUT_TOKENS, ProviderOutputTruncatedError, ProviderRefusalError, 
 import {
   ApiKeySuppliedToSubscriptionRouteError,
   CLAUDE_CODE_CLI_ADAPTER,
+  CLAUDE_CODE_CLI_GATE_RULES,
   CLAUDE_CODE_CLI_IDENTITY,
+  CLAUDE_CODE_CLI_PROFILE,
+  CLAUDE_CODE_CLI_V2_ADAPTER,
+  CLAUDE_CODE_CLI_V2_GATE_RULES,
+  CLAUDE_CODE_CLI_V2_PROFILE,
   CLI_LAUNCH_URL,
   CliEnvelopeMalformedError,
   CliExitError,
   CliLaunchContextError,
   CliLaunchSpecMalformedError,
   CliModelMismatchError,
+  CliModelNotAllowedError,
   CliMultipleStructuredOutputError,
   CliNoStructuredOutputError,
   CliOutputConflictError,
+  CliOutputTruncatedError,
   CliOverageError,
   CliResultError,
   CliStopReasonError,
@@ -55,6 +68,7 @@ import {
   parseCliEnvelope,
   parseCliLaunchSpec,
   resolvePinnedCliPath,
+  resolvePinPath,
   type CliEnvelope,
 } from '../src/pipeline/claude-code-cli';
 import { assertValidProviderAdapterIdentity } from '../src/pipeline/provider-adapter';
@@ -1063,5 +1077,564 @@ describe('readUsage', () => {
     expect(CLAUDE_CODE_CLI_ADAPTER.readUsage!(wrap('{broken\n'))).toBeNull();
     // Usage reads regardless of the exit code: it reports what the CLI said, and the runner decides what that is worth.
     expect(readUsage(synth(PAYLOAD), { exitCode: 1 })).toEqual({ inputTokens: 2, outputTokens: 82, cacheCreationInputTokens: 626, cacheReadInputTokens: 0 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// claude-code-cli@2: the profile, as literals
+// ---------------------------------------------------------------------------
+
+const NO_KEY = { endpoint: '', apiKey: '' } as const;
+
+/** What `fn` threw, or `undefined` when it returned: a refusal that did not happen is then a named red, not a crash. */
+function thrownBy(fn: () => unknown): unknown {
+  try {
+    fn();
+  } catch (error) {
+    return error;
+  }
+  return undefined;
+}
+
+describe('claude-code-cli@2 — the profile', () => {
+  it('C1-v2 — identity, pin, resolved path, models, effort, settings, timeouts and ceiling are exactly as recorded (the declared invocation is C5\'s)', () => {
+    expect(CLAUDE_CODE_CLI_V2_PROFILE.identity).toEqual({ id: 'claude-code-cli', version: '2' });
+    expect(CLAUDE_CODE_CLI_V2_ADAPTER.identity).toEqual({ id: 'claude-code-cli', version: '2' });
+    expect(() => assertValidProviderAdapterIdentity(CLAUDE_CODE_CLI_V2_ADAPTER.identity)).not.toThrow();
+    expect(CLAUDE_CODE_CLI_V2_ADAPTER.channel).toBe('process');
+    expect(CLAUDE_CODE_CLI_V2_PROFILE.pin).toEqual({
+      path: '~/Library/Application Support/Claude/claude-code/2.1.280/claude.app/Contents/MacOS/claude',
+      version: '2.1.280',
+      sha256: '862db5f39398606acd531777565505e14c792b9da72fd31df0b309b8eb55406e',
+      sizeBytes: 217221744,
+    });
+    expect(resolvePinPath(CLAUDE_CODE_CLI_V2_PROFILE.pin.path, '/Users/someone')).toBe('/Users/someone/Library/Application Support/Claude/claude-code/2.1.280/claude.app/Contents/MacOS/claude');
+    expect(resolvePinPath(CLAUDE_CODE_CLI_V2_PROFILE.pin.path, '/Users/someone/')).toBe('/Users/someone/Library/Application Support/Claude/claude-code/2.1.280/claude.app/Contents/MacOS/claude');
+    expect(CLAUDE_CODE_CLI_V2_PROFILE.permittedModels).toEqual(['claude-opus-5-5']);
+    expect(CLAUDE_CODE_CLI_V2_PROFILE.effort).toBe('high');
+    expect(CLAUDE_CODE_CLI_V2_PROFILE.settings).toBe('{"switchModelsOnFlag":false,"fastMode":false,"autoContinueAtUsageLimit":false}');
+    expect(CLAUDE_CODE_CLI_V2_PROFILE.launchTimeoutMs).toBe(1800000);
+    expect(CLAUDE_CODE_CLI_V2_PROFILE.gateTimeoutMs).toBe(60000);
+    // The HTTP adapter's ceiling does not move; @2's is its own, and different.
+    expect(MAX_OUTPUT_TOKENS).toBe(16000);
+    expect(CLAUDE_CODE_CLI_V2_PROFILE.maxOutputTokens).toBe(64000);
+    expect(CLAUDE_CODE_CLI_V2_PROFILE.maxOutputTokens).not.toBe(MAX_OUTPUT_TOKENS);
+    // Nothing beyond the fields above, and nothing that can be edited in place.
+    expect(Object.keys(CLAUDE_CODE_CLI_V2_PROFILE).sort()).toEqual(['controls', 'effort', 'gate', 'gateTimeoutMs', 'identity', 'launchTimeoutMs', 'maxOutputTokens', 'permittedModels', 'pin', 'settings']);
+    for (const part of [CLAUDE_CODE_CLI_V2_PROFILE, CLAUDE_CODE_CLI_V2_PROFILE.pin, CLAUDE_CODE_CLI_V2_PROFILE.identity, CLAUDE_CODE_CLI_V2_PROFILE.permittedModels, CLAUDE_CODE_CLI_V2_ADAPTER.invocation!, CLAUDE_CODE_CLI_V2_ADAPTER.invocation!.executable]) {
+      expect(Object.isFrozen(part)).toBe(true);
+    }
+  });
+
+  it('C2-v2 — the launch controls are @1\'s nine with the ceiling at 64000, plus no model fallback and no fast mode: eleven, frozen', () => {
+    expect(CLAUDE_CODE_CLI_V2_PROFILE.controls).toEqual({
+      CLAUDE_CODE_MAX_RETRIES: '0',
+      MAX_STRUCTURED_OUTPUT_RETRIES: '0',
+      CLAUDE_CODE_MAX_OUTPUT_TOKENS: '64000',
+      CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK: '1',
+      CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK: '1',
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+      DISABLE_TELEMETRY: '1',
+      DISABLE_ERROR_REPORTING: '1',
+      DISABLE_AUTOUPDATER: '1',
+      CLAUDE_CODE_NO_MODEL_FALLBACK: '1',
+      CLAUDE_CODE_DISABLE_FAST_MODE: '1',
+    });
+    expect(Object.keys(CLAUDE_CODE_CLI_V2_PROFILE.controls)).toHaveLength(11);
+    expect(Object.isFrozen(CLAUDE_CODE_CLI_V2_PROFILE.controls)).toBe(true);
+    // @1's are not moved by the derivation: still nine, still 16000.
+    expect(Object.keys(LAUNCH_CONTROL_ENV)).toHaveLength(9);
+    expect(LAUNCH_CONTROL_ENV['CLAUDE_CODE_MAX_OUTPUT_TOKENS']).toBe('16000');
+  });
+
+  it('C3-v2 — the gate rules: @2 adds analyticsDisabled and the two directories, reads the directories as identifiers and requires analyticsDisabled true; @1\'s are as the gate has always read them', () => {
+    expect(CLAUDE_CODE_CLI_V2_PROFILE.gate).toEqual({
+      allowlist: ['loggedIn', 'authMethod', 'apiProvider', 'apiKeySource', 'forcedLoginMethod', 'subscriptionType', 'email', 'orgId', 'orgName', 'analyticsDisabled', 'projectsDirectory', 'configDirectory'],
+      identifierFields: ['email', 'orgId', 'orgName', 'projectsDirectory', 'configDirectory'],
+      required: [
+        ['loggedIn', true],
+        ['authMethod', 'claude.ai'],
+        ['apiProvider', 'firstParty'],
+        ['subscriptionType', 'max'],
+        ['analyticsDisabled', true],
+      ],
+      requiredAbsent: ['apiKeySource', 'forcedLoginMethod'],
+    });
+    expect(CLAUDE_CODE_CLI_V2_PROFILE.gate).toBe(CLAUDE_CODE_CLI_V2_GATE_RULES);
+    expect(CLAUDE_CODE_CLI_GATE_RULES).toEqual({
+      allowlist: ['loggedIn', 'authMethod', 'apiProvider', 'apiKeySource', 'forcedLoginMethod', 'subscriptionType', 'email', 'orgId', 'orgName'],
+      identifierFields: ['email', 'orgId', 'orgName'],
+      required: [
+        ['loggedIn', true],
+        ['authMethod', 'claude.ai'],
+        ['apiProvider', 'firstParty'],
+        ['subscriptionType', 'max'],
+      ],
+      requiredAbsent: ['apiKeySource', 'forcedLoginMethod'],
+    });
+    expect(Object.isFrozen(CLAUDE_CODE_CLI_V2_GATE_RULES.identifierFields)).toBe(true);
+  });
+
+  it('C4 — @1 declares no invocation: the key is absent from its adapter, not undefined and not empty', () => {
+    expect('invocation' in CLAUDE_CODE_CLI_ADAPTER, "@1's adapter declares an invocation").toBe(false);
+    expect(Object.keys(CLAUDE_CODE_CLI_ADAPTER).sort()).toEqual(['buildRequest', 'channel', 'identity', 'projectResponse', 'readUsage']);
+  });
+
+  it('C5 — @2 declares its invocation (the positive control for C4: the same question, asked of the adapter that has one)', () => {
+    expect('invocation' in CLAUDE_CODE_CLI_V2_ADAPTER).toBe(true);
+    expect(Object.keys(CLAUDE_CODE_CLI_V2_ADAPTER).sort()).toEqual(['buildRequest', 'channel', 'identity', 'invocation', 'projectResponse', 'readUsage']);
+    // In its own case rather than after C1-v2's pin literal, so a changed pin
+    // reds here too: that is what shows the invocation is read from the
+    // profile, not restated beside it.
+    expect(CLAUDE_CODE_CLI_V2_ADAPTER.invocation).toEqual({
+      effort: 'high',
+      maxOutputTokens: 64000,
+      executable: { version: '2.1.280', sha256: '862db5f39398606acd531777565505e14c792b9da72fd31df0b309b8eb55406e' },
+    });
+  });
+
+  it('C6 — @1\'s profile is read from the constants @1 has always exported, sets no timers and carries no settings', () => {
+    expect(CLAUDE_CODE_CLI_PROFILE.identity).toBe(CLAUDE_CODE_CLI_IDENTITY);
+    expect(CLAUDE_CODE_CLI_PROFILE.pin).toBe(PINNED_CLI);
+    expect(CLAUDE_CODE_CLI_PROFILE.controls).toBe(LAUNCH_CONTROL_ENV);
+    expect(CLAUDE_CODE_CLI_PROFILE.gate).toBe(CLAUDE_CODE_CLI_GATE_RULES);
+    expect(CLAUDE_CODE_CLI_PROFILE.identity).toEqual({ id: 'claude-code-cli', version: '1' });
+    expect(CLAUDE_CODE_CLI_PROFILE.pin.version).toBe('2.1.226');
+    expect(CLAUDE_CODE_CLI_PROFILE.permittedModels).toEqual(['claude-opus-5']);
+    expect(CLAUDE_CODE_CLI_PROFILE.effort).toBe('high');
+    expect(CLAUDE_CODE_CLI_PROFILE.maxOutputTokens).toBe(16000);
+    expect(CLAUDE_CODE_CLI_PROFILE.settings).toBeNull();
+    expect(CLAUDE_CODE_CLI_PROFILE.launchTimeoutMs).toBeNull();
+    expect(CLAUDE_CODE_CLI_PROFILE.gateTimeoutMs).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Pin paths
+// ---------------------------------------------------------------------------
+
+describe('pin paths', () => {
+  it('H1 — any ~/-relative pin resolves against an absolute home, its spaces kept verbatim, with or without a trailing slash', () => {
+    const v2 = '~/Library/Application Support/Claude/claude-code/2.1.280/claude.app/Contents/MacOS/claude';
+    expect(resolvePinPath(v2, '/Users/someone')).toBe('/Users/someone/Library/Application Support/Claude/claude-code/2.1.280/claude.app/Contents/MacOS/claude');
+    expect(resolvePinPath(v2, '/Users/someone/')).toBe('/Users/someone/Library/Application Support/Claude/claude-code/2.1.280/claude.app/Contents/MacOS/claude');
+    expect(resolvePinPath(v2, '/')).toBe('/Library/Application Support/Claude/claude-code/2.1.280/claude.app/Contents/MacOS/claude');
+    expect(resolvePinPath('~/.local/share/claude/versions/2.1.226', '/Users/someone')).toBe('/Users/someone/.local/share/claude/versions/2.1.226');
+    // resolvePinnedCliPath is the same resolver over @1's pin (C1 holds its literals).
+    expect(resolvePinnedCliPath('/Users/some one')).toBe('/Users/some one/.local/share/claude/versions/2.1.226');
+  });
+
+  it('H2 — a relative or empty home is refused, naming it; so is a pin that is not relative to ~/', () => {
+    const pin = '~/Library/Application Support/Claude/claude-code/2.1.280/claude.app/Contents/MacOS/claude';
+    for (const home of ['relative', '', '~/Users/someone']) {
+      const error = thrownBy(() => resolvePinPath(pin, home));
+      expect(error, `home ${JSON.stringify(home)} was not refused`).toBeInstanceOf(Error);
+      expect((error as Error).name).toBe('Error');
+      expect((error as Error).message).toBe(`the pinned CLI path is resolved against an absolute home directory; received ${JSON.stringify(home)}`);
+    }
+    for (const pinPath of ['/Users/someone/claude', 'relative/claude', '~other/claude', '~', '']) {
+      const error = thrownBy(() => resolvePinPath(pinPath, '/Users/someone'));
+      expect(error, `pin ${JSON.stringify(pinPath)} was not refused`).toBeInstanceOf(Error);
+      expect((error as Error).name).toBe('Error');
+      expect((error as Error).message).toBe(`a pin path is resolved only when it is relative to the home directory ("~/..."); received ${JSON.stringify(pinPath)}`);
+    }
+    // @1's resolver keeps its refusal exactly.
+    expect(() => resolvePinnedCliPath('relative')).toThrow('the pinned CLI path is resolved against an absolute home directory; received "relative"');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// claude-code-cli@2: the request
+// ---------------------------------------------------------------------------
+
+describe('claude-code-cli@2 — buildRequest', () => {
+  it('R1-v2 — describes the same SPAWN with effort high and the @2 settings text, in a fixed key order', () => {
+    const built = CLAUDE_CODE_CLI_V2_ADAPTER.buildRequest(request('reader', 0, 'claude-opus-5-5'), NO_KEY);
+    const expectedBody = JSON.stringify({
+      model: 'claude-opus-5-5',
+      systemPrompt: PROMPT,
+      userMessage: INPUT,
+      jsonSchema: roleOutputJsonSchema('reader'),
+      effort: 'high',
+      settings: '{"switchModelsOnFlag":false,"fastMode":false,"autoContinueAtUsageLimit":false}',
+      role: 'reader',
+      index: 0,
+    });
+    expect(built).toEqual({ url: 'claude-code-cli:pinned', method: 'SPAWN', headers: {}, body: expectedBody });
+    expect(Object.keys(JSON.parse(built.body))).toEqual(['model', 'systemPrompt', 'userMessage', 'jsonSchema', 'effort', 'settings', 'role', 'index']);
+    expect(parseCliLaunchSpec(built.body)).toEqual({
+      model: 'claude-opus-5-5',
+      systemPrompt: PROMPT,
+      userMessage: INPUT,
+      jsonSchema: roleOutputJsonSchema('reader'),
+      effort: 'high',
+      settings: '{"switchModelsOnFlag":false,"fastMode":false,"autoContinueAtUsageLimit":false}',
+      role: 'reader',
+      index: 0,
+    });
+    const prosecutor = parseCliLaunchSpec(CLAUDE_CODE_CLI_V2_ADAPTER.buildRequest(request('prosecutor', 2, 'claude-opus-5-5'), NO_KEY).body);
+    expect(prosecutor.jsonSchema).toEqual(roleOutputJsonSchema('prosecutor'));
+    expect([prosecutor.role, prosecutor.index, prosecutor.settings]).toEqual(['prosecutor', 2, '{"switchModelsOnFlag":false,"fastMode":false,"autoContinueAtUsageLimit":false}']);
+  });
+
+  it('R2-v2 — @1\'s body carries no settings key and @2\'s does; @1 still describes any model it is handed', () => {
+    const v1 = JSON.parse(CLAUDE_CODE_CLI_ADAPTER.buildRequest(request(), NO_KEY).body) as Record<string, unknown>;
+    expect(Object.hasOwn(v1, 'settings')).toBe(false);
+    expect(Object.keys(v1)).toEqual(['model', 'systemPrompt', 'userMessage', 'jsonSchema', 'effort', 'role', 'index']);
+    const v2 = JSON.parse(CLAUDE_CODE_CLI_V2_ADAPTER.buildRequest(request('reader', 0, 'claude-opus-5-5'), NO_KEY).body) as Record<string, unknown>;
+    expect(Object.hasOwn(v2, 'settings')).toBe(true);
+    // @1 refuses no model: what @2 refuses, @1 describes as it always did.
+    for (const model of ['claude-sonnet-5', 'claude-opus-5-5']) {
+      expect(JSON.parse(CLAUDE_CODE_CLI_ADAPTER.buildRequest(request('reader', 0, model), NO_KEY).body).model).toBe(model);
+    }
+  });
+
+  it('R3-v2 — @2 makes @1\'s refusals first: an API key (even beside a model @2 would refuse), and messages that are not one prompt and one input', () => {
+    const key = 'sk-ant-should-not-appear-0123456789';
+    for (const model of ['claude-opus-5-5', 'claude-sonnet-5']) {
+      const error = thrownBy(() => CLAUDE_CODE_CLI_V2_ADAPTER.buildRequest(request('reader', 0, model), { endpoint: '', apiKey: key }));
+      expect(error, `the key was not refused for ${model}`).toBeInstanceOf(ApiKeySuppliedToSubscriptionRouteError);
+      expect((error as Error).name).toBe('ApiKeySuppliedToSubscriptionRouteError');
+      expect((error as Error).message).not.toContain(key);
+      expect((error as Error).message).toMatch(/^reader\[0\]: an API key was supplied/);
+    }
+    const extra: RoleRequest = { ...request('reader', 0, 'claude-opus-5-5'), messages: [...request().messages, { from: 'agent', content: '{}' }] };
+    expect(() => CLAUDE_CODE_CLI_V2_ADAPTER.buildRequest(extra, NO_KEY)).toThrow(/it also carries agent/);
+    const missing: RoleRequest = { ...request('reader', 0, 'claude-opus-5-5'), messages: [request().messages[0]!] };
+    expect(() => CLAUDE_CODE_CLI_V2_ADAPTER.buildRequest(missing, NO_KEY)).toThrow(/found 1 prompt and 0 input/);
+  });
+
+  it.each([
+    ["@1's model", 'claude-opus-5'],
+    ['a long-context suffix', 'claude-opus-5-5[1m]'],
+    ['another model family', 'claude-sonnet-5'],
+    ['a case variant', 'Claude-Opus-5-5'],
+    ['a trailing space', 'claude-opus-5-5 '],
+  ])('R4-v2 — %s (%j) is refused with CliModelNotAllowedError before anything is described', (_label, model) => {
+    const error = thrownBy(() => CLAUDE_CODE_CLI_V2_ADAPTER.buildRequest(request('reader', 0, model), NO_KEY));
+    expect(error, `${JSON.stringify(model)} was not refused`).toBeInstanceOf(CliModelNotAllowedError);
+    expect((error as Error).name).toBe('CliModelNotAllowedError');
+    expect((error as Error).message).toBe(`reader[0]: model ${JSON.stringify(model)} is not permitted for claude-code-cli@2, which permits ["claude-opus-5-5"]; nothing was launched`);
+  });
+
+  it('R5-v2 — positive control for R4-v2: claude-opus-5-5 is described, for every role', () => {
+    for (const [role, index] of [['reader', 0], ['prosecutor', 3], ['adjudicator', 0]] as const) {
+      const spec = parseCliLaunchSpec(CLAUDE_CODE_CLI_V2_ADAPTER.buildRequest(request(role, index, 'claude-opus-5-5'), NO_KEY).body);
+      expect([spec.model, spec.role, spec.index, spec.effort]).toEqual(['claude-opus-5-5', role, index, 'high']);
+    }
+  });
+
+  it('R6-v2 — parseCliLaunchSpec reads settings as an optional string and refuses any other type, naming settings', () => {
+    const base = { model: 'claude-opus-5-5', systemPrompt: '', userMessage: '', jsonSchema: {}, effort: 'high', role: 'reader', index: 0 };
+    expect(parseCliLaunchSpec(JSON.stringify({ ...base, settings: '{}' }))).toEqual({ ...base, settings: '{}' });
+    expect(Object.hasOwn(parseCliLaunchSpec(JSON.stringify(base)), 'settings')).toBe(false);
+    for (const settings of [5, null, {}, [], true]) {
+      const error = thrownBy(() => parseCliLaunchSpec(JSON.stringify({ ...base, settings })));
+      expect(error, `settings ${JSON.stringify(settings)} was not refused`).toBeInstanceOf(CliLaunchSpecMalformedError);
+      expect((error as Error).message).toMatch(/^the request body is not a CliLaunchSpec — settings: Expected string/);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// claude-code-cli@2: the truncation error
+// ---------------------------------------------------------------------------
+
+describe('claude-code-cli@2 — CliOutputTruncatedError', () => {
+  it('X1 — is a ProviderOutputTruncatedError whose message names 64000, never 16000, and the role', () => {
+    const req = request('adjudicator', 0, 'claude-opus-5-5');
+    const error = new CliOutputTruncatedError(req);
+    expect(error).toBeInstanceOf(ProviderOutputTruncatedError);
+    expect(error).toBeInstanceOf(CliOutputTruncatedError);
+    expect(error.name).toBe('CliOutputTruncatedError');
+    expect(error.message).toMatch(/64000/);
+    expect(error.message).not.toMatch(/16000/);
+    expect(error.message).toBe("adjudicator[0]: the model's output stopped at max_tokens (64000); the partial content is not published as a role result");
+    expect(String(error)).toMatch(/^CliOutputTruncatedError: adjudicator\[0\]: /);
+    // Positive control for the negative above: the parent, from the same request, does name 16000.
+    expect(new ProviderOutputTruncatedError(req).message).toMatch(/16000/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// claude-code-cli@1: characterisation on the shapes @2 refuses
+// ---------------------------------------------------------------------------
+
+/**
+ * One assistant API-error item, shaped like the auth-failed probe's line 3:
+ * the kind in `error`, `is_api_error_message: true`, model `<synthetic>`.
+ */
+function apiErrorItem(kind: string): Ev {
+  return {
+    type: 'assistant',
+    error: kind,
+    is_api_error_message: true,
+    message: { id: 'err_1', type: 'message', role: 'assistant', model: '<synthetic>', content: [{ type: 'text', text: 'API Error' }], stop_reason: 'stop_sequence', stop_sequence: '', usage: { input_tokens: 0, output_tokens: 0, speed: null } },
+    parent_tool_use_id: null,
+    ...META,
+  };
+}
+
+function rateLimitInfo(events: Ev[]): Ev {
+  return events[at(events, isType('rate_limit_event'))]!['rate_limit_info'] as Ev;
+}
+
+function resultOf(events: Ev[]): Ev {
+  return events[at(events, isType('result'))]!;
+}
+
+/** Inserts events as new lines just before the rate_limit_event, after the message has closed. */
+function beforeRateLimit(events: Ev[], ...inserted: Ev[]): void {
+  events.splice(at(events, isType('rate_limit_event')), 0, ...inserted);
+}
+
+/** A complete second message carrying one text block, ending with the given stop reason. */
+function textMessage(stopReason: string): Ev[] {
+  return bareMessage([
+    se('content_block_start', { index: 0, content_block: { type: 'text', text: '' } }),
+    se('content_block_delta', { index: 0, delta: { type: 'text_delta', text: 'Done.' } }),
+    se('content_block_stop', { index: 0 }),
+  ], stopReason);
+}
+
+interface CharacterisationCase {
+  /** The shape, as @2 sees it. */
+  shape: string;
+  /** What @2 answers; documentation here, asserted in claude-code-cli-v2.test.ts. */
+  v2: string;
+  mutate(events: Ev[]): void;
+  /** Applied to the serialised lines after `mutate`, for shapes no event can express. */
+  raw?(lines: string[], events: Ev[]): void;
+  over?: Partial<CliEnvelope>;
+  /** Blocks the generator emits before the tool block; none unless the shape needs one. */
+  before?: ('thinking' | 'text')[];
+  /** @1's answer today: the payload, or the class and a message fragment naming what it read. */
+  answer: 'accepted' | readonly [new (...args: never[]) => Error, RegExp | ((events: Ev[]) => RegExp)];
+}
+
+const NEW_2_1_280_SUBTYPES = ['cloud_session_delta', 'cloud_session_status', 'dev_intent', 'peer_message_hold', 'tool_host_result', 'turn_handoff_available', 'turn_preempted'] as const;
+
+const CHARACTERISATION_CASES: CharacterisationCase[] = [
+  // Overage and exhaustion: @1 reads isUsingOverage and status "rejected", and nothing else.
+  { shape: 'overageStatus "allowed"', v2: 'CliOverageError', mutate: (ev) => { rateLimitInfo(ev)['overageStatus'] = 'allowed'; }, answer: 'accepted' },
+  { shape: 'overageStatus "allowed_warning"', v2: 'CliOverageError', mutate: (ev) => { rateLimitInfo(ev)['overageStatus'] = 'allowed_warning'; }, answer: 'accepted' },
+  { shape: 'overageInUse true', v2: 'CliOverageError', mutate: (ev) => { rateLimitInfo(ev)['overageInUse'] = true; }, answer: 'accepted' },
+  { shape: 'rateLimitType "overage"', v2: 'CliOverageError', mutate: (ev) => { rateLimitInfo(ev)['rateLimitType'] = 'overage'; }, answer: 'accepted' },
+  {
+    shape: 'a rejected event followed by an allowed one, with a clean success',
+    v2: 'CliIncludedUsageExhaustedError',
+    mutate: (ev) => { const i = at(ev, isType('rate_limit_event')); ev.splice(i, 0, { type: 'rate_limit_event', rate_limit_info: { ...rateLimitInfo(ev), status: 'rejected' }, ...META }); },
+    answer: [CliOverageError, (ev) => new RegExp(`status "rejected" at line ${line(at(ev, isType('rate_limit_event')))}`)],
+  },
+  { shape: 'a rejected event at exit 1', v2: 'CliIncludedUsageExhaustedError', mutate: (ev) => { rateLimitInfo(ev)['status'] = 'rejected'; }, over: { exitCode: 1 }, answer: [CliExitError, /exitCode 1, signal null/] },
+  { shape: 'overageStatus absent', v2: 'CliUsageUnobservedError', mutate: (ev) => { delete rateLimitInfo(ev)['overageStatus']; }, answer: 'accepted' },
+  { shape: 'rateLimitType "seven_day_overage_included"', v2: 'CliUsageUnobservedError', mutate: (ev) => { rateLimitInfo(ev)['rateLimitType'] = 'seven_day_overage_included'; }, answer: 'accepted' },
+  { shape: 'rateLimitGraceActive true', v2: 'CliUsageUnobservedError', mutate: (ev) => { rateLimitInfo(ev)['rateLimitGraceActive'] = true; }, answer: 'accepted' },
+  { shape: 'errorCode present', v2: 'CliUsageUnobservedError', mutate: (ev) => { rateLimitInfo(ev)['errorCode'] = 'rate_limited'; }, answer: 'accepted' },
+  { shape: 'a top-level utilization above 1', v2: 'CliUsageUnobservedError', mutate: (ev) => { rateLimitInfo(ev)['utilization'] = 1.5; }, answer: 'accepted' },
+  { shape: 'a unifiedWindows utilization above 1', v2: 'CliUsageUnobservedError', mutate: (ev) => { rateLimitInfo(ev)['unifiedWindows'] = [{ window: 'five_hour', utilization: 1.5 }]; }, answer: 'accepted' },
+  { shape: 'status "blocked", which no rule names', v2: 'CliUsageUnobservedError', mutate: (ev) => { rateLimitInfo(ev)['status'] = 'blocked'; }, answer: 'accepted' },
+  { shape: 'rate_limit_info null', v2: 'CliUsageUnobservedError', mutate: (ev) => { ev[at(ev, isType('rate_limit_event'))]!['rate_limit_info'] = null; }, answer: 'accepted' },
+  { shape: 'no rate_limit_event at all', v2: 'CliUsageUnobservedError', mutate: (ev) => { ev.splice(at(ev, isType('rate_limit_event')), 1); }, answer: 'accepted' },
+  // Credits, long context and substitution: @1 reads models only at init, message_start, assistant and the modelUsage keys.
+  {
+    shape: 'an assistant API-error item of kind "model_requires_usage_credits", exit 0',
+    v2: 'CliCreditsRequiredError',
+    mutate: (ev) => beforeRateLimit(ev, apiErrorItem('model_requires_usage_credits')),
+    answer: [CliModelMismatchError, (ev) => new RegExp(`assistant message at line ${line(at(ev, isType('assistant'), 1))} names "<synthetic>"`)],
+  },
+  { shape: 'an assistant API-error item of kind "model_requires_usage_credits", exit 1', v2: 'CliCreditsRequiredError', mutate: (ev) => beforeRateLimit(ev, apiErrorItem('model_requires_usage_credits')), over: { exitCode: 1 }, answer: [CliExitError, /exitCode 1, signal null/] },
+  { shape: 'a system api_error event of kind "long_context_credits_required"', v2: 'CliCreditsRequiredError', mutate: (ev) => ev.splice(2, 0, { type: 'system', subtype: 'api_error', error: 'long_context_credits_required', ...META }), answer: 'accepted' },
+  { shape: 'an init model with the [1m] suffix', v2: 'CliLongContextRouteError', mutate: (ev) => { ev[0]!['model'] = 'claude-opus-5[1m]'; }, answer: [CliLaunchContextError, /model "claude-opus-5\[1m\]".*\(init at line 1\)/] },
+  { shape: 'a context-1m beta in init.betas', v2: 'CliLongContextRouteError', mutate: (ev) => { ev[0]!['betas'] = ['context-1m-2025-08-07']; }, answer: 'accepted' },
+  {
+    shape: 'a fallback content block',
+    v2: 'CliModelSubstitutionError',
+    mutate: (ev) => ev.splice(at(ev, isStream('content_block_stop')) + 1, 0, se('content_block_start', { index: 1, content_block: { type: 'fallback', model: 'claude-sonnet-5' } }), se('content_block_stop', { index: 1 })),
+    answer: 'accepted',
+  },
+  { shape: 'a fallback assistant item', v2: 'CliModelSubstitutionError', mutate: (ev) => { assistantContent(ev).push({ type: 'fallback', model: 'claude-sonnet-5' }); }, answer: 'accepted' },
+  { shape: 'a system model_fallback event', v2: 'CliModelSubstitutionError', mutate: (ev) => ev.splice(2, 0, { type: 'system', subtype: 'model_fallback', ...META }), answer: 'accepted' },
+  { shape: 'a modelUsage canonicalModel naming another model', v2: 'CliModelSubstitutionError', mutate: (ev) => { ((resultOf(ev)['modelUsage'] as Ev)['claude-opus-5'] as Ev)['canonicalModel'] = 'claude-sonnet-5'; }, answer: 'accepted' },
+  { shape: 'a system api_error event of kind "model_substitution_disabled"', v2: 'CliModelSubstitutionError', mutate: (ev) => ev.splice(2, 0, { type: 'system', subtype: 'api_error', error: 'model_substitution_disabled', ...META }), answer: 'accepted' },
+  // Refusal and truncation: @1 reads the stop reason of the message carrying the call, and nothing else.
+  { shape: 'stop_reason "refusal" on the result only', v2: 'ProviderRefusalError', mutate: (ev) => { resultOf(ev)['stop_reason'] = 'refusal'; }, answer: 'accepted' },
+  { shape: 'a system model_refusal_no_fallback event', v2: 'ProviderRefusalError', mutate: (ev) => ev.splice(2, 0, { type: 'system', subtype: 'model_refusal_no_fallback', apiRefusalCategory: 'frontier_llm', ...META }), answer: 'accepted' },
+  { shape: 'a refusal whose message never completes, exit 1', v2: 'ProviderRefusalError', mutate: (ev) => { (inner(ev, at(ev, isStream('message_delta')))['delta'] as Ev)['stop_reason'] = 'refusal'; ev.splice(at(ev, isStream('message_stop')), 1); }, over: { exitCode: 1 }, answer: [CliExitError, /exitCode 1, signal null/] },
+  { shape: 'stop_reason "refusal" in a second, non-tool message', v2: 'ProviderRefusalError', mutate: (ev) => beforeRateLimit(ev, ...textMessage('refusal')), answer: 'accepted' },
+  { shape: 'stop_reason "max_tokens" in a second, non-tool message', v2: 'CliOutputTruncatedError', mutate: (ev) => beforeRateLimit(ev, ...textMessage('max_tokens')), answer: 'accepted' },
+  { shape: 'stop_reason "max_tokens" on the result only', v2: 'CliOutputTruncatedError', mutate: (ev) => { resultOf(ev)['stop_reason'] = 'max_tokens'; }, answer: 'accepted' },
+  // Fast mode and the other API-error kinds: @1 reads none of them.
+  { shape: 'init fast_mode_state "on"', v2: 'CliFastModeError', mutate: (ev) => { ev[0]!['fast_mode_state'] = 'on'; }, answer: 'accepted' },
+  { shape: 'result fast_mode_state "cooldown"', v2: 'CliFastModeError', mutate: (ev) => { resultOf(ev)['fast_mode_state'] = 'cooldown'; }, answer: 'accepted' },
+  { shape: 'result usage.speed "fast"', v2: 'CliFastModeError', mutate: (ev) => { (resultOf(ev)['usage'] as Ev)['speed'] = 'fast'; }, answer: 'accepted' },
+  { shape: 'a system api_error event of kind "claude_code_version_too_old"', v2: 'CliPinObsoleteError', mutate: (ev) => ev.splice(2, 0, { type: 'system', subtype: 'api_error', error: 'claude_code_version_too_old', ...META }), answer: 'accepted' },
+  { shape: 'an assistant API-error item of an unknown kind in a clean stream, exit 0', v2: 'CliResultError', mutate: (ev) => beforeRateLimit(ev, apiErrorItem('authentication_failed')), answer: [CliModelMismatchError, /names "<synthetic>"/] },
+  // Tolerant parse: @1 refuses the first malformed line before reading any event.
+  {
+    shape: 'an overage event followed by a malformed line',
+    v2: 'CliOverageError',
+    mutate: (ev) => { rateLimitInfo(ev)['isUsingOverage'] = true; },
+    raw: (lines, ev) => { lines.splice(at(ev, isType('rate_limit_event')) + 1, 0, '{not json'); },
+    answer: [CliStreamMalformedError, (ev) => new RegExp(`stream line ${line(at(ev, isType('rate_limit_event')) + 1)} is not a JSON object`)],
+  },
+  // The walk's allowlists: @1 ignores every system subtype but init, and every block or item type it does not count.
+  { shape: 'a system api_retry event', v2: 'CliStreamLifecycleError', mutate: (ev) => ev.splice(2, 0, { type: 'system', subtype: 'api_retry', attempt: 1, ...META }), answer: 'accepted' },
+  ...NEW_2_1_280_SUBTYPES.map((subtype): CharacterisationCase => ({ shape: `a system ${subtype} event (new in 2.1.280)`, v2: 'CliStreamLifecycleError', mutate: (ev) => ev.splice(2, 0, { type: 'system', subtype, ...META }), answer: 'accepted' })),
+  {
+    shape: 'a server_tool_use content block',
+    v2: 'CliStreamLifecycleError',
+    mutate: (ev) => ev.splice(at(ev, isStream('content_block_stop')) + 1, 0, se('content_block_start', { index: 1, content_block: { type: 'server_tool_use', id: 'srvtoolu_1', name: 'web_search', input: {} } }), se('content_block_stop', { index: 1 })),
+    answer: 'accepted',
+  },
+  { shape: 'an unknown assistant item type', v2: 'CliStreamLifecycleError', mutate: (ev) => { assistantContent(ev).push({ type: 'server_tool_use', id: 'srvtoolu_1', name: 'web_search', input: {} }); }, answer: 'accepted' },
+  {
+    shape: 'an unknown thinking delta',
+    v2: 'CliStreamLifecycleError',
+    before: ['thinking'],
+    mutate: (ev) => { const i = at(ev, isStream('content_block_delta')); (inner(ev, i)['delta'] as Ev)['type'] = 'thinking_summary_delta'; },
+    answer: [CliStreamLifecycleError, /delta type "thinking_summary_delta" does not match block type "thinking" at index 0/],
+  },
+  // Launch context and result: @1 reads neither the version, the permission mode, the terminal reason nor fast_mode_state.
+  { shape: 'claude_code_version "2.1.999", neither pin', v2: 'CliLaunchContextError', mutate: (ev) => { ev[0]!['claude_code_version'] = '2.1.999'; }, answer: 'accepted' },
+  { shape: 'permissionMode "acceptEdits"', v2: 'CliLaunchContextError', mutate: (ev) => { ev[0]!['permissionMode'] = 'acceptEdits'; }, answer: 'accepted' },
+  { shape: 'init fast_mode_state absent', v2: 'CliLaunchContextError', mutate: (ev) => { expect(ev[0]).not.toHaveProperty('fast_mode_state'); }, answer: 'accepted' },
+  { shape: 'terminal_reason "max_turns"', v2: 'CliResultError', mutate: (ev) => { resultOf(ev)['terminal_reason'] = 'max_turns'; }, answer: 'accepted' },
+  { shape: 'result fast_mode_state absent', v2: 'CliResultError', mutate: (ev) => { expect(resultOf(ev)).not.toHaveProperty('fast_mode_state'); }, answer: 'accepted' },
+  // Stop reasons: @1 does not read a second message's. @2 refuses this one at the result step: it is the last message,
+  // and the result's stop reason must be the last message's (review repair U5, a parent decision; V-O5). A non-call
+  // message that is not the last reaches @2's stop-reason check instead (V-O1, V-O4).
+  { shape: 'stop_reason "pause_turn" in a second, non-tool message', v2: 'CliResultError', mutate: (ev) => beforeRateLimit(ev, ...textMessage('pause_turn')), answer: 'accepted' },
+  // Added by the Task 2 review repairs: the kinds and subtypes the first pass left out, and the shapes the repairs made @2 refuse.
+  {
+    shape: 'an assistant API-error item of kind "effort_requires_thinking"',
+    v2: 'CliEffortRefusedError',
+    mutate: (ev) => beforeRateLimit(ev, apiErrorItem('effort_requires_thinking')),
+    answer: [CliModelMismatchError, (ev) => new RegExp(`assistant message at line ${line(at(ev, isType('assistant'), 1))} names "<synthetic>"`)],
+  },
+  { shape: 'a system api_error event of kind "effort_requires_thinking"', v2: 'CliEffortRefusedError', mutate: (ev) => ev.splice(2, 0, { type: 'system', subtype: 'api_error', error: 'effort_requires_thinking', ...META }), answer: 'accepted' },
+  {
+    shape: 'an assistant API-error item of kind "safety_monitor_blocked"',
+    v2: 'ProviderRefusalError',
+    mutate: (ev) => beforeRateLimit(ev, apiErrorItem('safety_monitor_blocked')),
+    answer: [CliModelMismatchError, (ev) => new RegExp(`assistant message at line ${line(at(ev, isType('assistant'), 1))} names "<synthetic>"`)],
+  },
+  { shape: 'a system api_error event of kind "safety_monitor_blocked"', v2: 'ProviderRefusalError', mutate: (ev) => ev.splice(2, 0, { type: 'system', subtype: 'api_error', error: 'safety_monitor_blocked', ...META }), answer: 'accepted' },
+  { shape: 'a system api_error event of kind "consent_unanswered"', v2: 'CliCreditsRequiredError', mutate: (ev) => ev.splice(2, 0, { type: 'system', subtype: 'api_error', error: 'consent_unanswered', ...META }), answer: 'accepted' },
+  { shape: 'a system api_error event of kind "no_allowed_fallback"', v2: 'CliModelSubstitutionError', mutate: (ev) => ev.splice(2, 0, { type: 'system', subtype: 'api_error', error: 'no_allowed_fallback', ...META }), answer: 'accepted' },
+  {
+    shape: 'an assistant API-error item with "authentication_failed" in error and "model_requires_usage_credits" in apiError',
+    v2: 'CliCreditsRequiredError',
+    mutate: (ev) => beforeRateLimit(ev, { ...apiErrorItem('authentication_failed'), apiError: 'model_requires_usage_credits' }),
+    answer: [CliModelMismatchError, (ev) => new RegExp(`assistant message at line ${line(at(ev, isType('assistant'), 1))} names "<synthetic>"`)],
+  },
+  { shape: 'a system model_refusal_fallback event', v2: 'CliModelSubstitutionError', mutate: (ev) => ev.splice(2, 0, { type: 'system', subtype: 'model_refusal_fallback', ...META }), answer: 'accepted' },
+  { shape: 'a system model_consent_fallback event', v2: 'CliModelSubstitutionError', mutate: (ev) => ev.splice(2, 0, { type: 'system', subtype: 'model_consent_fallback', ...META }), answer: 'accepted' },
+  { shape: 'a system compact_boundary event', v2: 'CliStreamLifecycleError', mutate: (ev) => ev.splice(2, 0, { type: 'system', subtype: 'compact_boundary', ...META }), answer: 'accepted' },
+  { shape: 'isUsingOverage absent', v2: 'CliUsageUnobservedError', mutate: (ev) => { delete rateLimitInfo(ev)['isUsingOverage']; }, answer: 'accepted' },
+  { shape: 'a unifiedWindows entry that is a bare number above 1', v2: 'CliUsageUnobservedError', mutate: (ev) => { rateLimitInfo(ev)['unifiedWindows'] = { five_hour: 1.4 }; }, answer: 'accepted' },
+  { shape: 'a nested unifiedWindows utilization above 1', v2: 'CliUsageUnobservedError', mutate: (ev) => { rateLimitInfo(ev)['unifiedWindows'] = { five_hour: { current: { utilization: 1.4 } } }; }, answer: 'accepted' },
+  { shape: 'init fast_mode_state "enabled"', v2: 'CliLaunchContextError', mutate: (ev) => { ev[0]!['fast_mode_state'] = 'enabled'; }, answer: 'accepted' },
+  { shape: 'result fast_mode_state "enabled"', v2: 'CliResultError', mutate: (ev) => { resultOf(ev)['fast_mode_state'] = 'enabled'; }, answer: 'accepted' },
+  { shape: 'result usage.speed null', v2: 'CliFastModeError', mutate: (ev) => { (resultOf(ev)['usage'] as Ev)['speed'] = null; }, answer: 'accepted' },
+  { shape: 'a system status event with status "compacting"', v2: 'CliStreamLifecycleError', mutate: (ev) => ev.splice(2, 0, { type: 'system', subtype: 'status', status: 'compacting', ...META }), answer: 'accepted' },
+  { shape: 'a system status event with no status', v2: 'CliStreamLifecycleError', mutate: (ev) => ev.splice(2, 0, { type: 'system', subtype: 'status', ...META }), answer: 'accepted' },
+  { shape: 'a user event carrying a text item beside its tool_result', v2: 'CliStreamLifecycleError', mutate: (ev) => { userContent(ev).push({ type: 'text', text: 'continue' }); }, answer: 'accepted' },
+  // Added by the Task 2 review repairs, round 2 (S9): the shapes round 2 made @2 refuse, and the null speeds R1 did.
+  { shape: 'a user event carrying an image item beside its tool_result', v2: 'CliStreamLifecycleError', mutate: (ev) => { userContent(ev).push({ type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'x' } }); }, answer: 'accepted' },
+  {
+    shape: 'a second user event whose message.content is a string',
+    v2: 'CliStreamLifecycleError',
+    mutate: (ev) => { ev.splice(at(ev, isType('user')) + 1, 0, { type: 'user', message: { role: 'user', content: 'continue' }, parent_tool_use_id: null, ...META }); },
+    answer: 'accepted',
+  },
+  {
+    shape: 'a second user event whose message.content is an empty array',
+    v2: 'CliStreamLifecycleError',
+    mutate: (ev) => { ev.splice(at(ev, isType('user')) + 1, 0, { type: 'user', message: { role: 'user', content: [] }, parent_tool_use_id: null, ...META }); },
+    answer: 'accepted',
+  },
+  { shape: 'message_start usage.speed null', v2: 'CliFastModeError', mutate: (ev) => { ((inner(ev, at(ev, isStream('message_start')))['message'] as Ev)['usage'] as Ev)['speed'] = null; }, answer: 'accepted' },
+  { shape: 'message_delta usage.speed null', v2: 'CliFastModeError', mutate: (ev) => { (inner(ev, at(ev, isStream('message_delta')))['usage'] as Ev)['speed'] = null; }, answer: 'accepted' },
+  { shape: 'an assistant item\'s usage.speed null', v2: 'CliFastModeError', mutate: (ev) => { ((ev[at(ev, isType('assistant'))]!['message'] as Ev)['usage'] as Ev)['speed'] = null; }, answer: 'accepted' },
+  { shape: 'result stop_reason "pause_turn"', v2: 'CliResultError', mutate: (ev) => { resultOf(ev)['stop_reason'] = 'pause_turn'; }, answer: 'accepted' },
+  { shape: 'an assistant item whose message.stop_reason is "pause_turn"', v2: 'CliStreamLifecycleError', mutate: (ev) => { (ev[at(ev, isType('assistant'))]!['message'] as Ev)['stop_reason'] = 'pause_turn'; }, answer: 'accepted' },
+  { shape: 'a unifiedWindows window reporting status "rejected"', v2: 'CliIncludedUsageExhaustedError', mutate: (ev) => { rateLimitInfo(ev)['unifiedWindows'] = { seven_day: { status: 'rejected', utilization: 1 } }; }, answer: 'accepted' },
+  { shape: 'a unifiedWindows window with isUsingOverage true', v2: 'CliOverageError', mutate: (ev) => { rateLimitInfo(ev)['unifiedWindows'] = { five_hour: { utilization: 0.1, isUsingOverage: true } }; }, answer: 'accepted' },
+  { shape: 'a unifiedWindows window keyed seven_day_overage_included', v2: 'CliUsageUnobservedError', mutate: (ev) => { rateLimitInfo(ev)['unifiedWindows'] = { seven_day_overage_included: { utilization: 0.2 } }; }, answer: 'accepted' },
+  { shape: 'a negative top-level utilization', v2: 'CliUsageUnobservedError', mutate: (ev) => { rateLimitInfo(ev)['utilization'] = -0.1; }, answer: 'accepted' },
+  { shape: 'a negative unifiedWindows utilization', v2: 'CliUsageUnobservedError', mutate: (ev) => { rateLimitInfo(ev)['unifiedWindows'] = { five_hour: { utilization: -5 } }; }, answer: 'accepted' },
+  {
+    shape: 'an assistant item carrying error "model_requires_usage_credits" without is_api_error_message',
+    v2: 'CliStreamLifecycleError',
+    mutate: (ev) => beforeRateLimit(ev, { type: 'assistant', error: 'model_requires_usage_credits', message: { id: 'msg_x', type: 'message', role: 'assistant', model: MODEL, content: [{ type: 'text', text: 'x' }], stop_reason: null, usage: usage() }, parent_tool_use_id: null, ...META }),
+    answer: 'accepted',
+  },
+  {
+    shape: 'an assistant API-error item with "model_requires_usage_credits" in api_error alone',
+    v2: 'CliCreditsRequiredError',
+    mutate: (ev) => { const item = apiErrorItem('unused'); delete item['error']; item['api_error'] = 'model_requires_usage_credits'; beforeRateLimit(ev, item); },
+    answer: [CliModelMismatchError, (ev) => new RegExp(`assistant message at line ${line(at(ev, isType('assistant'), 1))} names "<synthetic>"`)],
+  },
+  // Added by the Task 2 review repairs, round 3: the shapes round 3 made @2 refuse (U1, U3, U4, U5, U6, each a parent
+  // decision). @1 reads none.
+  { shape: 'a unifiedWindows array window named seven_day_overage_included in its window field', v2: 'CliUsageUnobservedError', mutate: (ev) => { rateLimitInfo(ev)['unifiedWindows'] = [{ window: 'seven_day_overage_included', utilization: 0.2 }]; }, answer: 'accepted' },
+  { shape: 'a unifiedWindows window with a nested key seven_day_overage_included', v2: 'CliUsageUnobservedError', mutate: (ev) => { rateLimitInfo(ev)['unifiedWindows'] = { five_hour: { seven_day_overage_included: { utilization: 0.1 } } }; }, answer: 'accepted' },
+  { shape: 'a result event carrying apiError "model_requires_usage_credits"', v2: 'CliStreamLifecycleError', mutate: (ev) => { resultOf(ev)['apiError'] = 'model_requires_usage_credits'; }, answer: 'accepted' },
+  { shape: 'a user event carrying error "x"', v2: 'CliStreamLifecycleError', mutate: (ev) => { ev[at(ev, isType('user'))]!['error'] = 'x'; }, answer: 'accepted' },
+  { shape: 'a stream_event carrying api_error {}', v2: 'CliStreamLifecycleError', mutate: (ev) => { ev[at(ev, isStream('message_delta'))]!['api_error'] = {}; }, answer: 'accepted' },
+  { shape: 'an assistant item carrying error {"kind":"x"} without is_api_error_message', v2: 'CliStreamLifecycleError', mutate: (ev) => { ev[at(ev, isType('assistant'))]!['error'] = { kind: 'x' }; }, answer: 'accepted' },
+  { shape: 'result api_error_status 429', v2: 'CliResultError', mutate: (ev) => { resultOf(ev)['api_error_status'] = 429; }, answer: 'accepted' },
+  { shape: 'result stop_reason "end_turn" while the only message ended "tool_use"', v2: 'CliResultError', mutate: (ev) => { resultOf(ev)['stop_reason'] = 'end_turn'; }, answer: 'accepted' },
+  {
+    shape: 'a second assistant item whose message.content is an empty array',
+    v2: 'CliStreamLifecycleError',
+    mutate: (ev) => beforeRateLimit(ev, { type: 'assistant', message: { id: 'msg_x', type: 'message', role: 'assistant', model: MODEL, content: [], stop_reason: null, usage: usage() }, parent_tool_use_id: null, ...META }),
+    answer: 'accepted',
+  },
+];
+
+describe('claude-code-cli@1 — characterisation on the shapes @2 refuses', () => {
+  // Each case pins what @1 answers today, so @2's rules cannot leak into @1
+  // unseen. The streams are @1's own generator's, so "accepted" means @1
+  // projected the payload; a refusal is pinned by class and by what it names.
+  // Per-case evidence is a targeted leak: one @2 rule inserted into @1's
+  // walkStream (or, for a result rule, @1's checkResult) reds its own cases.
+  // Such a leak exists for the status cases, the user-item cases, the two
+  // user-content cases, the unflagged error-field case and the round-3 cases
+  // (review repairs S9 and U7, a parent decision); every other case rests on
+  // the coarse check alone. That check, RX4, points @1's adapter at @2's
+  // whole projection, and @2 refuses @1's 2.1.226 generator stream whatever
+  // the case, at whichever step first meets a shape only @1 accepts:
+  // classification, where a rule names the case's own fact; often the walk,
+  // where the case carries a subtype, block, item, key or value @2's walk
+  // does not read; and otherwise the launch context, which refuses the
+  // generator's own init (its 2.1.226 version, and no permissionMode or
+  // fast_mode_state) before the result, the usage or the stop reasons are
+  // read. So RX4 is coarse: it shows only that something leaked, and it is
+  // not per-case evidence.
+  for (const c of CHARACTERISATION_CASES) {
+    const answer = c.answer === 'accepted' ? 'accepted' : c.answer[0].name;
+    it(`G8 — ${c.shape} (@2: ${c.v2}) → @1 answers ${answer}`, () => {
+      const events = synth(PAYLOAD, { before: c.before ?? [] });
+      c.mutate(events);
+      const lines = serialise(events).split('\n');
+      c.raw?.(lines, events);
+      const run = (): string => CLAUDE_CODE_CLI_ADAPTER.projectResponse(wrap(lines.join('\n'), c.over), request());
+      if (c.answer === 'accepted') {
+        expect(run()).toBe(PAYLOAD);
+        return;
+      }
+      const [cls, fragment] = c.answer;
+      const error = thrownBy(run);
+      expect(error, `@1 accepted ${c.shape}`).toBeInstanceOf(cls);
+      expect((error as Error).name).toBe(cls.name);
+      expect((error as Error).message).toMatch(typeof fragment === 'function' ? fragment(events) : fragment);
+    });
+  }
+
+  it('G8-control — the unmutated generator stream the cases start from is accepted, with and without a thinking block', () => {
+    expect(project(synth(PAYLOAD))).toBe(PAYLOAD);
+    expect(project(synth(PAYLOAD, { before: ['thinking'] }))).toBe(PAYLOAD);
   });
 });

@@ -42,11 +42,15 @@ import { CLOSURE_RENDERER_VERSION, renderEntitledClosure, type EntitledClosure }
 import type { PipelineGap } from './gaps';
 import { buildPipelineIdentity, RESULT_SCHEMA_VERSION } from './identity';
 import {
+  assertValidInvocationIdentity,
   assertValidProviderAdapterIdentity,
+  invocationDifferences,
+  InvocationMismatchError,
   isProviderAdapterSelected,
   ProviderAdapterMismatchError,
   ProviderAdapterNotSelectedError,
   UnverifiedProviderAdapterError,
+  type InvocationIdentity,
 } from './provider-adapter';
 import type { PromptSet } from './prompts';
 import { promptHashes } from './prompts';
@@ -288,6 +292,17 @@ export function pipelineVersionFor(input: {
   // `{id:' x ',version:'1'}` and `{id:'x',version:'1'}` hash differently, so an
   // unvalidated identity makes two declarations of one adapter two pipelines.
   assertValidProviderAdapterIdentity(input.config.providerAdapter);
+  // The invocation, validated before it is hashed and forwarded only when
+  // declared. One gate, and it is `!== undefined`, not `!= null`: a `null`
+  // invocation is a broken declaration, and hashing it as if nothing had been
+  // declared would give it the identity of a route that makes none. It is
+  // refused by name instead, as the configuration's: the capability's
+  // declaration is refused as its own below, because the repairs differ.
+  let declared: { invocation?: InvocationIdentity } = {};
+  if (input.config.invocation !== undefined) {
+    assertValidInvocationIdentity(input.config.invocation, 'configuration');
+    declared = { invocation: input.config.invocation };
+  }
   return buildPipelineIdentity({
     promptSha256: promptHashes(input.prompts),
     models: input.config.models,
@@ -301,6 +316,7 @@ export function pipelineVersionFor(input: {
     // read under is a fact about this code, not a choice a caller makes.
     closureRendererVersion: CLOSURE_RENDERER_VERSION,
     providerAdapter: input.config.providerAdapter,
+    ...declared,
     closurePolicy: input.closure.policy,
   });
 }
@@ -396,6 +412,40 @@ export async function runVerificationPipeline(
     ) {
       throw new ProviderAdapterMismatchError(configuredAdapter, runner.adapter);
     }
+  }
+
+  // The capability must also make the invocation the identity was derived
+  // over (plan 2026-09-25, D-3). An adapter identity names a protocol; on a
+  // route that launches a pinned executable, the effort, the output ceiling
+  // and the executable are settings of the launch, so one adapter identity
+  // can run as two pipelines. `pipelineVersion` carries the configured
+  // invocation, so a live capability making another one — or making one where
+  // the configuration declares none, or none where it declares one — would
+  // publish an identity describing a pipeline that did not run.
+  //
+  // After the adapter checks, deliberately: a capability speaking another
+  // protocol is refused as that, the more basic fact, before any invocation is
+  // compared. Replay is exempt for the reason it is exempt above: it launches
+  // nothing, makes no invocation, and reproduces the identity of the run it
+  // replays from the configuration alone.
+  if (runner.kind === 'live') {
+    const configuredInvocation = input.config.invocation;
+    const actualInvocation = runner.invocation;
+    // The capability's declaration is validated before it is compared, as the
+    // configured one is before it is hashed. It is a value like any other,
+    // whatever its static type: the capture harness's role wrapper is to
+    // forward `inner.invocation` (plan 2026-09-25, D-3, Task 5), whatever that
+    // holds. A declaration that is defined but malformed — `null`, or one
+    // without its executable — is refused by name here, as the capability's,
+    // rather than by a `TypeError` from the comparison or from the mismatch
+    // message describing it. `!== undefined`, so `null` is checked as the
+    // broken declaration it is, not taken for absence.
+    if (actualInvocation !== undefined) assertValidInvocationIdentity(actualInvocation, 'capability');
+    const agree =
+      configuredInvocation === undefined || actualInvocation === undefined
+        ? configuredInvocation === actualInvocation
+        : invocationDifferences(configuredInvocation, actualInvocation).length === 0;
+    if (!agree) throw new InvocationMismatchError(configuredInvocation, actualInvocation);
   }
 
   // Before the first role call, and for the same reason the guard above is

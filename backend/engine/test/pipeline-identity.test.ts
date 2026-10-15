@@ -16,6 +16,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
 import { cpSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -41,6 +42,15 @@ import { sha256Hex } from '../src/corpus/hash';
 import { isPromoted, type PromotionRecord } from '../src/verification/promotions';
 import { verificationResultSchema } from '../src/verification/result';
 import { CLOSURE_RENDERER_VERSION } from '../src/pipeline/entitlement';
+import { EntitledClosure } from '../src/pipeline/entitlement';
+import { pipelineVersionFor } from '../src/pipeline/orchestrate';
+import { CLAUDE_CODE_CLI_ADAPTER, CLAUDE_CODE_CLI_IDENTITY, CLAUDE_CODE_CLI_V2_ADAPTER } from '../src/pipeline/claude-code-cli';
+import type { RoleConfig } from '../src/pipeline/config';
+import type { InvocationIdentity } from '../src/pipeline/provider-adapter';
+import { readWorld, type VerifyPaths } from '../src/cli/sign';
+import { sourceIdsOf } from '../src/knowledge/provenance';
+import { engineRoot } from './replay-fixtures';
+import { SUBSCRIPTION_ROLE_CONFIG, SUBSCRIPTION_ROLE_CONFIG_V1, subscriptionRoleConfigFor, SubscriptionRouteMismatchError } from './live-capture';
 
 const prompts = loadPromptSet();
 
@@ -364,5 +374,271 @@ describe('the run identity', () => {
     expect(buildRunId({ ...run, requirementId: 'TEST-R-002' })).not.toBe(before);
     expect(buildRunId({ ...run, corpusClosureSha256: 'd'.repeat(64) })).not.toBe(before);
     expect(buildRunId({ ...run, pipelineVersion: `${run.pipelineVersion}x` })).not.toBe(before);
+  });
+});
+
+/**
+ * The two identities the `@2` migration must leave where they are, pinned
+ * before it starts (plan 2026-09-25, Task 0).
+ *
+ * **Literals, not recomputations.** Every case above compares one derivation
+ * with another, so a change that moved every identity at once — an encoding,
+ * a prompt, a default — would leave them all green. These two compare the
+ * production derivation with a string written down on the day it was taken,
+ * so anything that moves either identity is a red someone has to answer.
+ *
+ * **The production path, end to end.** The closure is S-002's, built the way
+ * `verify run` and the capture harness build it (`readWorld`, then
+ * `EntitledClosure.forSources`) over the repository's own pack, corpus and
+ * registry, all read and none written; the prompts are the real files; the
+ * digest is `pipelineVersionFor`'s. The subscription configuration is written
+ * out here rather than imported from the capture harness, which the migration
+ * repoints to `@2`; the configurations the harness exports are then held to
+ * the literals, and to the written-out configurations (Task 5a).
+ *
+ * **What the closure contributes.** Only its policy (`CLOSURE_POLICY_V1`,
+ * `forSources`' default) reaches the identity; which documents S-002 entitles
+ * is pinned by the run identity's `corpusClosureSha256`, not here. That is
+ * also why the HTTP digest over S-002's closure equals the value S-001's
+ * recording carries.
+ *
+ * **The HTTP literal is not today's output.** It is the value the committed
+ * S-001 recording was filed under, and a case below reads that recording to
+ * say so, so the anchor holds independently of anything this file computes.
+ */
+describe('the identities the @2 migration must not move', () => {
+  /**
+   * What `pipelineVersionFor` returned for `claude-code-cli@1` on 2026-09-25,
+   * before the migration — the identity the S-002 capture package prepared on
+   * 2026-09-24 states as its expected `pipelineVersion`.
+   */
+  const SUBSCRIPTION_V1_PIPELINE_VERSION = 'pipeline-v3-fd3ed34d558145c09ef7105506c76767d1dc335ce2d82d57fbc6e2c148509ae5';
+  /** What the committed S-001 recording was filed under. */
+  const HTTP_PIPELINE_VERSION = 'pipeline-v3-06789a364d220899535cbf0cc40fcd5b816becf4328be70b795f54340d4ad7c0';
+
+  /** Today's subscription configuration, written out: the default with the `@1` adapter selected. */
+  const subscriptionV1Config: RoleConfig = { ...DEFAULT_ROLE_CONFIG, providerAdapter: CLAUDE_CODE_CLI_IDENTITY };
+
+  /** The repository's own world, as `firstLiveCasePaths` in the capture harness names it. Read only. */
+  const paths: VerifyPaths = {
+    packDir: join(engineRoot, 'knowledge', 'csrd'),
+    corpusDir: join(engineRoot, 'corpus'),
+    verificationDir: join(engineRoot, 'verification'),
+  };
+
+  let closure: EntitledClosure | undefined;
+  /** S-002's entitled closure through the production path, loaded once. */
+  function s002Closure(): EntitledClosure {
+    if (closure === undefined) {
+      const world = readWorld(paths, 'csrd', 'CSRD-S-002');
+      // Not a control: `readWorld` selects by id and throws for an unknown one.
+      // Stated so a reader sees which requirement the closure is built for.
+      expect(world.requirement.id).toBe('CSRD-S-002');
+      closure = EntitledClosure.forSources(world.corpus, world.sourceRegister, world.pack, sourceIdsOf(world.requirement));
+    }
+    return closure;
+  }
+
+  it('the @1 adapter identity is claude-code-cli version 1', () => {
+    expect(CLAUDE_CODE_CLI_IDENTITY).toEqual({ id: 'claude-code-cli', version: '1' });
+  });
+
+  it('the HTTP identity over the real prompts and the S-002 closure is the literal', () => {
+    expect(
+      pipelineVersionFor({ prompts: loadPromptSet(), config: DEFAULT_ROLE_CONFIG, closure: s002Closure() }),
+    ).toBe(HTTP_PIPELINE_VERSION);
+  });
+
+  it('the @1 subscription identity over the real prompts and the S-002 closure is the literal', () => {
+    expect(
+      pipelineVersionFor({ prompts: loadPromptSet(), config: subscriptionV1Config, closure: s002Closure() }),
+    ).toBe(SUBSCRIPTION_V1_PIPELINE_VERSION);
+  });
+
+  it('SUBSCRIPTION_ROLE_CONFIG_V1, as the capture harness exports it, gives the @1 literal and is the configuration written out above, with no invocation key at all', () => {
+    // Moved here from Task 3, where the export did not exist yet (a parent decision).
+    expect(
+      pipelineVersionFor({ prompts: loadPromptSet(), config: SUBSCRIPTION_ROLE_CONFIG_V1, closure: s002Closure() }),
+    ).toBe(SUBSCRIPTION_V1_PIPELINE_VERSION);
+    expect(SUBSCRIPTION_ROLE_CONFIG_V1).toEqual(subscriptionV1Config);
+    expect('invocation' in SUBSCRIPTION_ROLE_CONFIG_V1).toBe(false);
+  });
+
+  it('the HTTP literal is the pipelineVersion the committed S-001 recording carries', () => {
+    const recording = JSON.parse(
+      readFileSync(
+        join(
+          engineRoot,
+          'test',
+          'verification-transcripts',
+          'csrd',
+          'CSRD-S-001',
+          'run-v1-8717925d731334f6162bdc2fd35a230d3bde7a5d1dc66588db5f5544a0748310.json',
+        ),
+        'utf8',
+      ),
+    ) as { runId: string; pipelineVersion: string };
+    // Positive control: the file read is the recording named, not another one.
+    expect(recording.runId).toBe('run-v1-8717925d731334f6162bdc2fd35a230d3bde7a5d1dc66588db5f5544a0748310');
+    expect(recording.pipelineVersion).toBe(HTTP_PIPELINE_VERSION);
+  });
+
+  it('the two configurations differ in the adapter alone, and the two literals differ', () => {
+    // The first and last conjuncts guard this block's own definitions, not
+    // code under src/: the first holds by the spread above, and the last
+    // compares two literals — with the two digest cases it says the adapter
+    // moves the identity. The middle one is the only conjunct src/ can fail:
+    // it reds if the `@1` identity ever equals the HTTP adapter's.
+    const { providerAdapter: httpAdapter, ...httpRest } = DEFAULT_ROLE_CONFIG;
+    const { providerAdapter: subscriptionAdapter, ...subscriptionRest } = subscriptionV1Config;
+    expect(subscriptionRest).toEqual(httpRest);
+    expect(subscriptionAdapter).not.toEqual(httpAdapter);
+    expect(SUBSCRIPTION_V1_PIPELINE_VERSION).not.toBe(HTTP_PIPELINE_VERSION);
+  });
+
+  /**
+   * The identity the migration does move: `claude-code-cli@2` on
+   * `claude-opus-5-5`, with its invocation declared (plan 2026-09-25, Task 3,
+   * D-3). Every value here is a literal, never read off the `@2` profile or
+   * adapter.
+   */
+  describe('the @2 subscription identity, which the invocation moves', () => {
+    const INVOCATION_V2: InvocationIdentity = {
+      effort: 'high',
+      maxOutputTokens: 64000,
+      executable: { version: '2.1.280', sha256: '862db5f39398606acd531777565505e14c792b9da72fd31df0b309b8eb55406e' },
+    };
+    const OPUS_5_5 = { reader: 'claude-opus-5-5', prosecutor: 'claude-opus-5-5', adjudicator: 'claude-opus-5-5' };
+    const subscriptionV2Config: RoleConfig = {
+      ...DEFAULT_ROLE_CONFIG,
+      models: OPUS_5_5,
+      providerAdapter: { id: 'claude-code-cli', version: '2' },
+      invocation: INVOCATION_V2,
+    };
+
+    /**
+     * What `pipelineVersionFor` returned for the configuration above, over the
+     * real prompts and S-002's closure, taken from this code on 2026-09-25 by
+     * a placeholder run. Corroborated by the hand-written derivation below,
+     * which reaches the same string without the builder and reproduces both
+     * literals above.
+     */
+    const SUBSCRIPTION_V2_PIPELINE_VERSION = 'pipeline-v3-e0570a0805b3df74fd2e391f8a1b8594dd1f1ada487d51a67e9215fcfd48f690';
+
+    const versionOf = (config: RoleConfig): string =>
+      pipelineVersionFor({ prompts: loadPromptSet(), config, closure: s002Closure() });
+
+    /**
+     * SHA-256 of each prompt file's bytes, read and hashed here: the files
+     * `prompts.ts` names, read without an encoding, as it reads them — but
+     * through neither its loader nor `sha256Hex`.
+     */
+    function promptFileSha256(): Record<'reader' | 'prosecutor' | 'adjudicator', string> {
+      const of = (file: string): string =>
+        createHash('sha256').update(readFileSync(join(engineRoot, 'prompts', 'verification', file))).digest('hex');
+      return { reader: of('reader.md'), prosecutor: of('prosecutor.md'), adjudicator: of('adjudicator.md') };
+    }
+
+    /**
+     * The identity over S-002's closure, derived without the code under test:
+     * the canonical payload written by hand, keys sorted and no whitespace,
+     * hashed with `node:crypto`. Everything but the prompts, the models, the
+     * adapter and the invocation is a literal: the lens set and order of
+     * `DEFAULT_ROLE_CONFIG`, result schema 1.3.0, closure renderer 1.1.0, and
+     * `CLOSURE_POLICY_V1`, the policy `forSources` builds S-002's closure
+     * under.
+     */
+    function handWrittenIdentity(values: {
+      models: { reader: string; prosecutor: string; adjudicator: string };
+      providerAdapter: { id: string; version: string };
+      invocation?: InvocationIdentity;
+    }): string {
+      const prompt = promptFileSha256();
+      const invocation = values.invocation;
+      const json =
+        '{"closurePolicy":{"expansion":"served_sources_in_force","referenceDepth":1,"referenceKinds":["references"],' +
+        '"structuralKinds":["amends","amendedBy","consolidates","definesTermsFor"]},' +
+        '"closureRendererVersion":"1.1.0",' +
+        (invocation === undefined
+          ? ''
+          : `"invocation":{"effort":"${invocation.effort}","executable":{"sha256":"${invocation.executable.sha256}",` +
+            `"version":"${invocation.executable.version}"},"maxOutputTokens":${invocation.maxOutputTokens}},`) +
+        `"models":{"adjudicator":"${values.models.adjudicator}","prosecutor":"${values.models.prosecutor}","reader":"${values.models.reader}"},` +
+        `"prompts":{"adjudicator":"${prompt.adjudicator}","prosecutor":"${prompt.prosecutor}","reader":"${prompt.reader}"},` +
+        `"providerAdapter":{"id":"${values.providerAdapter.id}","version":"${values.providerAdapter.version}"},` +
+        '"resultSchemaVersion":"1.3.0",' +
+        '"roleConfig":{"lenses":["missing_criterion","wrong_conjunction","wrong_threshold_or_units","wrong_measurement_period",' +
+        '"wrong_scope_type_or_addressee","superseded_or_miscited_provision","missing_exclusion"],' +
+        '"order":["reader","prosecutor","adjudicator"],"prosecutorCount":7},' +
+        '"scheme":"v3"}';
+      return `pipeline-v3-${createHash('sha256').update(json, 'utf8').digest('hex')}`;
+    }
+
+    const OPUS_5 = { reader: 'claude-opus-5', prosecutor: 'claude-opus-5', adjudicator: 'claude-opus-5' };
+
+    it('the hand-writer reproduces the HTTP literal and the @1 literal (its positive controls)', () => {
+      expect(handWrittenIdentity({ models: OPUS_5, providerAdapter: { id: 'anthropic-messages', version: '1' } })).toBe(
+        HTTP_PIPELINE_VERSION,
+      );
+      expect(handWrittenIdentity({ models: OPUS_5, providerAdapter: { id: 'claude-code-cli', version: '1' } })).toBe(
+        SUBSCRIPTION_V1_PIPELINE_VERSION,
+      );
+    });
+
+    it('the @2 identity over the real prompts and the S-002 closure is the literal', () => {
+      expect(versionOf(subscriptionV2Config)).toBe(SUBSCRIPTION_V2_PIPELINE_VERSION);
+    });
+
+    it('SUBSCRIPTION_ROLE_CONFIG, as the capture harness exports it, gives the @2 literal and is the configuration written out above', () => {
+      expect(versionOf(SUBSCRIPTION_ROLE_CONFIG)).toBe(SUBSCRIPTION_V2_PIPELINE_VERSION);
+      expect(SUBSCRIPTION_ROLE_CONFIG).toEqual(subscriptionV2Config);
+    });
+
+    it('subscriptionRoleConfigFor maps each subscription adapter, by identity, to the literal configuration it must return, and refuses any other by name', () => {
+      expect(subscriptionRoleConfigFor(CLAUDE_CODE_CLI_V2_ADAPTER)).toEqual(subscriptionV2Config);
+      expect(subscriptionRoleConfigFor(CLAUDE_CODE_CLI_ADAPTER)).toEqual(subscriptionV1Config);
+      expect('invocation' in subscriptionRoleConfigFor(CLAUDE_CODE_CLI_ADAPTER)).toBe(false);
+      // By identity, not by object: a bare identity of each version is answered the same way.
+      expect(subscriptionRoleConfigFor({ identity: { id: 'claude-code-cli', version: '2' } })).toEqual(subscriptionV2Config);
+      expect(subscriptionRoleConfigFor({ identity: { id: 'claude-code-cli', version: '1' } })).toEqual(subscriptionV1Config);
+      for (const [identity, key] of [
+        [{ id: 'anthropic-messages', version: '1' }, 'anthropic-messages@1'],
+        [{ id: 'claude-code-cli', version: '3' }, 'claude-code-cli@3'],
+      ] as const) {
+        expect(() => subscriptionRoleConfigFor({ identity }), key).toThrow(SubscriptionRouteMismatchError);
+        expect(() => subscriptionRoleConfigFor({ identity }), key).toThrow(`the adapter handed in is ${key}`);
+      }
+    });
+
+    it('and the hand-written derivation, independent of the builder, is the same literal', () => {
+      expect(
+        handWrittenIdentity({
+          models: OPUS_5_5,
+          providerAdapter: { id: 'claude-code-cli', version: '2' },
+          invocation: INVOCATION_V2,
+        }),
+      ).toBe(SUBSCRIPTION_V2_PIPELINE_VERSION);
+    });
+
+    it('a ceiling of 63,999 is a different pipeline', () => {
+      const lower = versionOf({ ...subscriptionV2Config, invocation: { ...INVOCATION_V2, maxOutputTokens: 63999 } });
+      expect(lower).toMatch(/^pipeline-v3-[0-9a-f]{64}$/);
+      expect(lower).not.toBe(versionOf(subscriptionV2Config));
+    });
+
+    it('the same configuration with the invocation removed is a different pipeline', () => {
+      const { invocation: _removed, ...withoutInvocation } = subscriptionV2Config;
+      expect('invocation' in withoutInvocation).toBe(false);
+      expect(versionOf(withoutInvocation)).not.toBe(versionOf(subscriptionV2Config));
+    });
+
+    it('differs from both identities the migration must not move', () => {
+      // Both conjuncts guard this block's own constants, not code under src/:
+      // each compares two literals, and no src/ defect can red either. The
+      // digest cases above, which hold `pipelineVersionFor` to each literal,
+      // carry the evidence that the invocation moves the identity.
+      expect(SUBSCRIPTION_V2_PIPELINE_VERSION).not.toBe(HTTP_PIPELINE_VERSION);
+      expect(SUBSCRIPTION_V2_PIPELINE_VERSION).not.toBe(SUBSCRIPTION_V1_PIPELINE_VERSION);
+    });
   });
 });

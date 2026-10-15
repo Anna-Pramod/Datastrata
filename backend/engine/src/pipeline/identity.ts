@@ -7,7 +7,8 @@
  * then resolves to a name rather than to evidence. A derived one cannot be
  * reused that way: change any prompt file, any model identifier, the prosecutor
  * count, the lens set or its order, the result schema version, the closure
- * policy or the provider adapter's semantic identity, and the identity moves —
+ * policy, the provider adapter's semantic identity or, where an adapter
+ * declares one, the invocation it makes, and the identity moves —
  * which means the promotion record that approved the old one no longer matches,
  * and `verify sign` refuses with `unpromoted_pipeline`.
  *
@@ -37,7 +38,7 @@ import { sha256Hex } from '../corpus/hash';
 import { verificationResultSchema } from '../verification/result';
 import type { RoleName } from './roles';
 import type { RoleConfig } from './config';
-import type { ProviderAdapterIdentity } from './provider-adapter';
+import type { InvocationIdentity, ProviderAdapterIdentity } from './provider-adapter';
 
 /**
  * The result schema version, read off the schema rather than restated.
@@ -105,6 +106,16 @@ export interface PipelineIdentityInput {
    * credential. `ProviderEndpointConfig` records why routing is not semantics.
    */
   providerAdapter: ProviderAdapterIdentity;
+  /**
+   * The invocation the adapter declares, where its identity does not imply it
+   * (`InvocationIdentity`): effort, output ceiling and pinned executable.
+   *
+   * Absent for every adapter that declares none, and then absent from the
+   * payload as well, so the identities derived without it — the HTTP route's,
+   * the one the committed S-001 recording is bound to, `claude-code-cli@1`'s —
+   * are unchanged by its existence.
+   */
+  invocation?: InvocationIdentity;
 }
 
 /**
@@ -149,6 +160,27 @@ function identityPayload(input: PipelineIdentityInput): unknown {
       // hashes as standing-aware is one that traverses standing-aware.
       expansion: input.closurePolicy.expansion,
     },
+    // Field by field, for the reason `providerAdapter` is: an extra key on the
+    // declared object must not reach the digest. And only when declared.
+    // Absent is no key at all — never `null`, never `{}` — because either of
+    // those is a new payload for every identity derived without an
+    // invocation, and would move the HTTP identity and the S-001 recording's
+    // binding with it. `canonicalJson` would drop an `undefined` value by
+    // itself; the key is left out here rather than relying on that, so the
+    // absence is this function's decision and not a side effect of the
+    // serialiser.
+    ...(input.invocation === undefined
+      ? {}
+      : {
+          invocation: {
+            effort: input.invocation.effort,
+            maxOutputTokens: input.invocation.maxOutputTokens,
+            executable: {
+              version: input.invocation.executable.version,
+              sha256: input.invocation.executable.sha256,
+            },
+          },
+        }),
   };
 }
 

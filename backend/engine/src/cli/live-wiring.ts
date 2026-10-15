@@ -44,21 +44,25 @@
  * identity has no implementation is refused rather than defaulted.
  *
  * **The subscription route is registered and refused (B-CLI-ADAPTER).**
- * `claude-code-cli@1` reaches Claude through the pinned Claude Code CLI on
- * a subscription. It is in the registry because the capture harness resolves
- * it from here, and it is refused here by name — before any prerequisite
- * variable is read — because an ordinary `verify run` is not the place it
- * may run: only the capture harness's subscription path
- * (`test/live-capture.ts`) constructs its runner, behind an execution-scoped
- * authentication gate. A configured identity is a fact about the run, not
- * about the environment, so the refusal consults nothing in `env`.
+ * `claude-code-cli@1` and `claude-code-cli@2` reach Claude through a pinned
+ * Claude Code CLI on a subscription. Both are in the registry because the
+ * capture harness resolves them from here, and both are refused here by
+ * name — before any prerequisite variable is read — because an ordinary
+ * `verify run` is not the place either may run: only the capture harness's
+ * subscription path (`test/live-capture.ts`) constructs their runners,
+ * behind an execution-scoped authentication gate. The refusal matches the
+ * identity's id, not its version (Opus 5.5 migration, Task 5a), so a later
+ * version of the CLI adapter is refused the day it is registered rather
+ * than the day someone remembers this function. A configured identity is a
+ * fact about the run, not about the environment, so the refusal consults
+ * nothing in `env`.
  *
  * This module reads the environment, which is why it lives under `src/cli/`.
  */
 
 import type { RunCapabilities } from './run';
 import { ANTHROPIC_MESSAGES_ADAPTER } from '../pipeline/anthropic-messages';
-import { CLAUDE_CODE_CLI_ADAPTER, CLAUDE_CODE_CLI_IDENTITY } from '../pipeline/claude-code-cli';
+import { CLAUDE_CODE_CLI_ADAPTER, CLAUDE_CODE_CLI_IDENTITY, CLAUDE_CODE_CLI_V2_ADAPTER } from '../pipeline/claude-code-cli';
 import type { RoleConfig } from '../pipeline/config';
 import {
   AgentCapabilityError,
@@ -86,13 +90,14 @@ export const LIVE_MAX_ATTEMPTS_ENV = 'DATASTRATA_AGENT_MAX_ATTEMPTS';
 export const LIVE_MAX_INPUT_BYTES_ENV = 'DATASTRATA_AGENT_MAX_INPUT_BYTES';
 
 /**
- * Every adapter production may resolve, keyed by identity. Two: the HTTP
- * adapter, which `verify run` may execute, and the subscription-route
- * adapter, which it may not (`SubscriptionRouteCaptureOnlyError`).
+ * Every adapter production may resolve, keyed by identity. Three: the HTTP
+ * adapter, which `verify run` may execute, and the two subscription-route
+ * adapters, `claude-code-cli@1` and `@2`, which it may not
+ * (`SubscriptionRouteCaptureOnlyError`).
  */
 export const PRODUCTION_ADAPTERS: ProviderAdapterRegistry = registerProviderAdapter(
-  registerProviderAdapter(new Map(), ANTHROPIC_MESSAGES_ADAPTER),
-  CLAUDE_CODE_CLI_ADAPTER,
+  registerProviderAdapter(registerProviderAdapter(new Map(), ANTHROPIC_MESSAGES_ADAPTER), CLAUDE_CODE_CLI_ADAPTER),
+  CLAUDE_CODE_CLI_V2_ADAPTER,
 );
 
 /**
@@ -108,8 +113,9 @@ export class SubscriptionRouteCaptureOnlyError extends Error {
   }
 }
 
+/** Any version of the CLI adapter is the subscription route: matched by id, never by version. */
 function isSubscriptionRoute(identity: ProviderAdapterIdentity): boolean {
-  return identity.id === CLAUDE_CODE_CLI_IDENTITY.id && identity.version === CLAUDE_CODE_CLI_IDENTITY.version;
+  return identity.id === CLAUDE_CODE_CLI_IDENTITY.id;
 }
 
 /** The token was set and something else the live capability needs was not, or was not a usable value. */

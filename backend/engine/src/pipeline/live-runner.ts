@@ -85,6 +85,7 @@
 import type { AgentRunner, RoleResponse } from './runner';
 import type { RoleRequest } from './roles';
 import type {
+  InvocationIdentity,
   ProviderAdapter,
   ProviderAdapterIdentity,
   ProviderEndpointConfig,
@@ -631,6 +632,11 @@ export class LiveAgentRunner implements AgentRunner {
 
   get adapter(): ProviderAdapterIdentity | undefined {
     return this.options.adapter?.identity;
+  }
+
+  /** The invocation the adapter declares, read from it and never restated: what orchestration compares with the configured one. */
+  get invocation(): InvocationIdentity | undefined {
+    return this.options.adapter?.invocation;
   }
 
   get attempts(): number {

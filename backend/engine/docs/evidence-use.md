@@ -1,7 +1,12 @@
 # Evidence use — the reviewer's designation beside a verification result
 
-A verification result proves that every quote it carries exists in a pinned
-document. A signature needs more of a positive legal proposition: an
+A verification result's evidence makes claims about the corpus: a quote,
+that its text is in the document it names, at the hash it pins; an absence
+item, that its term occurs in none of the documents it names; an edge, that
+the corpus index records the relation it cites. Writing the result
+establishes none of these; only re-checking them against the corpus does —
+the sign gate's re-check, and `checkResultEvidence` as a measurement before
+any signature. A signature needs more of a positive legal proposition: an
 occurrence of a supporting quote located wholly inside an authored
 operative-provision range, the occurrence identified rather than inferred,
 and the whole designation bound to the exact result. This file is how the

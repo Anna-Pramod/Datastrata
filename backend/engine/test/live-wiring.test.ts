@@ -37,7 +37,7 @@ import { EXIT_OK, EXIT_REFUSED } from '../src/cli/exit-codes';
 import { DEFAULT_ROLE_CONFIG } from '../src/pipeline/config';
 import { LIVE_AGENTS_ENV, LIVE_AGENTS_TOKEN, type AttemptRecord, type LiveAgentRunner } from '../src/pipeline/live-runner';
 import { ANTHROPIC_MESSAGES_ADAPTER, ANTHROPIC_MESSAGES_IDENTITY } from '../src/pipeline/anthropic-messages';
-import { CLAUDE_CODE_CLI_ADAPTER, CLAUDE_CODE_CLI_IDENTITY } from '../src/pipeline/claude-code-cli';
+import { CLAUDE_CODE_CLI_ADAPTER, CLAUDE_CODE_CLI_IDENTITY, CLAUDE_CODE_CLI_V2_ADAPTER } from '../src/pipeline/claude-code-cli';
 import { UNSELECTED_PROVIDER_ADAPTER, UnknownProviderAdapterError, providerAdapterKey, resolveProviderAdapter } from '../src/pipeline/provider-adapter';
 import type { RunTranscript } from '../src/pipeline/transcript';
 import { installNetworkTrap } from './helpers';
@@ -70,18 +70,21 @@ afterEach(() => {
 const paths = (): VerifyPaths => ({ packDir: join(engineRoot, 'knowledge', PACK_ID), corpusDir: join(engineRoot, 'corpus'), verificationDir: scratch });
 
 describe('the registry', () => {
-  it('W0 — registers the Anthropic Messages adapter under the identity the default configuration selects, and the CLI adapter beside it', () => {
-    expect([...PRODUCTION_ADAPTERS.keys()]).toEqual([providerAdapterKey(ANTHROPIC_MESSAGES_IDENTITY), providerAdapterKey(CLAUDE_CODE_CLI_IDENTITY)]);
+  it('W0 — registers the Anthropic Messages adapter under the identity the default configuration selects, and the two CLI adapters beside it', () => {
+    expect([...PRODUCTION_ADAPTERS.keys()]).toEqual([providerAdapterKey(ANTHROPIC_MESSAGES_IDENTITY), providerAdapterKey(CLAUDE_CODE_CLI_IDENTITY), 'claude-code-cli@2']);
     expect(DEFAULT_ROLE_CONFIG.providerAdapter).toEqual(ANTHROPIC_MESSAGES_IDENTITY);
     expect(resolveProviderAdapter(PRODUCTION_ADAPTERS, ANTHROPIC_MESSAGES_IDENTITY)).toBe(ANTHROPIC_MESSAGES_ADAPTER);
     expect(resolveProviderAdapter(PRODUCTION_ADAPTERS, CLAUDE_CODE_CLI_IDENTITY)).toBe(CLAUDE_CODE_CLI_ADAPTER);
+    expect(resolveProviderAdapter(PRODUCTION_ADAPTERS, { id: 'claude-code-cli', version: '2' })).toBe(CLAUDE_CODE_CLI_V2_ADAPTER);
   });
 });
 
 describe('the subscription route is capture-only', () => {
   const CLI_CONFIG = { ...DEFAULT_ROLE_CONFIG, providerAdapter: CLAUDE_CODE_CLI_IDENTITY };
+  /** `@2`'s identity, written out. */
+  const CLI_CONFIG_V2 = { ...DEFAULT_ROLE_CONFIG, providerAdapter: { id: 'claude-code-cli', version: '2' } };
 
-  it('W9 — the CLI identity with a full HTTP-style live environment is refused by name before any prerequisite is read, and nothing is launched or contacted', async () => {
+  it('W9 — the CLI identity, @1 or @2, with a full HTTP-style live environment is refused by name before any prerequisite is read, and nothing is launched or contacted', async () => {
     process.env[LIVE_AGENTS_ENV] = LIVE_AGENTS_TOKEN;
     const processCalls = processGuard().calls.length;
     const offlineCalls = offlineGuard().calls.length;
@@ -99,12 +102,31 @@ describe('the subscription route is capture-only', () => {
     expect(() => liveCapabilityFrom({ env: LIVE_ENV, config: { ...DEFAULT_ROLE_CONFIG, providerAdapter: { id: 'claude-code-cli', version: '1' } } })).toThrow(SubscriptionRouteCaptureOnlyError);
     // An injected transport does not change the answer: no runner is constructed for this route by this function, ever.
     expect(() => liveCapabilityFrom({ env: LIVE_ENV, config: CLI_CONFIG, transport: cannedAnthropicTransport() })).toThrow(SubscriptionRouteCaptureOnlyError);
+    // The route is the CLI adapter's id, whatever its version: `@2`, registered beside `@1`, is refused the same way,
+    // before any prerequisite, and so is a version nothing has registered yet.
+    const attemptV2 = () => liveCapabilityFrom({ env: LIVE_ENV, config: CLI_CONFIG_V2 });
+    expect(attemptV2).toThrow(SubscriptionRouteCaptureOnlyError);
+    expect(attemptV2).toThrow(/the claude-code-cli@2 route is capture-only/);
+    // Each refusal by its class and its words (Task 5a review repair R11).
+    for (const [label, refused, words] of [
+      ['@2, no environment', () => liveCapabilityFrom({ env: {}, config: CLI_CONFIG_V2 }), /the claude-code-cli@2 route is capture-only/],
+      ['@2, injected transport', () => liveCapabilityFrom({ env: LIVE_ENV, config: CLI_CONFIG_V2, transport: cannedAnthropicTransport() }), /the claude-code-cli@2 route is capture-only/],
+      ['@3, unregistered', () => liveCapabilityFrom({ env: LIVE_ENV, config: { ...DEFAULT_ROLE_CONFIG, providerAdapter: { id: 'claude-code-cli', version: '3' } } }), /the claude-code-cli@3 route is capture-only/],
+    ] as const) {
+      expect(refused, label).toThrow(SubscriptionRouteCaptureOnlyError);
+      expect(refused, label).toThrow(words);
+    }
 
     // `verify run` refuses by name at the process edge.
     const outcome = await dispatch(['run', PACK_ID, REQUIREMENT_ID], paths(), () => true, undefined, () => liveCapabilityFrom({ env: LIVE_ENV, config: CLI_CONFIG }));
     expect(outcome.exitCode).toBe(EXIT_REFUSED);
     expect(outcome.lines.join('\n')).toContain('capture-only');
     expect(outcome.lines.join('\n')).toContain(providerAdapterKey(CLAUDE_CODE_CLI_IDENTITY));
+    // And `@2` the same way.
+    const outcomeV2 = await dispatch(['run', PACK_ID, REQUIREMENT_ID], paths(), () => true, undefined, () => liveCapabilityFrom({ env: LIVE_ENV, config: CLI_CONFIG_V2 }));
+    expect(outcomeV2.exitCode).toBe(EXIT_REFUSED);
+    expect(outcomeV2.lines.join('\n')).toContain('capture-only');
+    expect(outcomeV2.lines.join('\n')).toContain('claude-code-cli@2');
 
     expect(processGuard().calls.slice(processCalls)).toEqual([]);
     expect(offlineGuard().calls.slice(offlineCalls)).toEqual([]);

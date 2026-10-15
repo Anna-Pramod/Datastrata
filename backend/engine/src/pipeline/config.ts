@@ -27,7 +27,7 @@
  */
 
 import type { RoleName } from './roles';
-import type { ProviderAdapterIdentity } from './provider-adapter';
+import type { InvocationIdentity, ProviderAdapterIdentity } from './provider-adapter';
 import { ANTHROPIC_MESSAGES_IDENTITY } from './anthropic-messages';
 
 /**
@@ -75,6 +75,20 @@ export interface RoleConfig {
    * a different pipeline. Neither implies the other, and both must move it.
    */
   providerAdapter: ProviderAdapterIdentity;
+  /**
+   * How the model is invoked, where the adapter's identity does not already
+   * imply it: the effort, the output ceiling and the pinned executable of a
+   * route that launches one (`InvocationIdentity`). A `pipelineVersion` input.
+   *
+   * Configuration for the reason `providerAdapter` is: replay reproduces the
+   * identity from here and launches nothing. Absent on `DEFAULT_ROLE_CONFIG`
+   * and on every configuration whose adapter declares none, so those
+   * identities do not move; present only where the adapter declares one
+   * (`claude-code-cli@2`). Orchestration refuses a live capability whose
+   * declared invocation differs from this, or where one side has one and the
+   * other does not (`InvocationMismatchError`) — plan 2026-09-25, D-3.
+   */
+  invocation?: InvocationIdentity;
 }
 
 /**

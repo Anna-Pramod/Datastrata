@@ -28,7 +28,7 @@
  */
 
 import type { RoleRequest } from './roles';
-import type { ProviderAdapterIdentity } from './provider-adapter';
+import type { InvocationIdentity, ProviderAdapterIdentity } from './provider-adapter';
 
 /** What a runner is: replayed from a recording, or live against a model. */
 export type RunnerKind = 'replay' | 'live';
@@ -105,6 +105,19 @@ export interface AgentRunner {
    * another.
    */
   readonly adapter?: ProviderAdapterIdentity | undefined;
+  /**
+   * The invocation this capability makes, where its adapter declares one
+   * (`InvocationIdentity`): the effort, output ceiling and pinned executable
+   * of a route that launches one.
+   *
+   * Absent where the adapter declares none, and on replay, which launches
+   * nothing. The configured invocation (`RoleConfig.invocation`) is what the
+   * identity carries; for a live capability orchestration compares this with
+   * it, as it compares `adapter` with `RoleConfig.providerAdapter`, so a
+   * capability cannot launch one effort, ceiling or executable while the
+   * record claims another.
+   */
+  readonly invocation?: InvocationIdentity | undefined;
   /** Called once, before any role runs. Throwing refuses the whole run. */
   bind?(binding: RunBinding): void;
   run(request: RoleRequest): Promise<RoleResponse>;

@@ -17,6 +17,15 @@
  * is still alive, and the last case of each process-ending kind asserts the
  * child is gone by `kill(pid, 0)`, so a leftover would be a red test, not a
  * stray on the machine.
+ *
+ * The last blocks take `claude-code-cli@2` through the same dummies: its
+ * adapter's request reaches the child as a literal argv beside `@1`'s, a
+ * `--settings` text that is not one JSON object launches nothing, the gate
+ * reads a 2.1.280-shaped answer under whichever rules it was handed, and a
+ * transport holding its profile's `--settings` text launches nothing for a
+ * description whose effective settings say otherwise.
+ * The adapters and rule sets are imported as subjects; every expectation is
+ * a literal here.
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -29,6 +38,8 @@ import {
   createSpawnTransport,
   evaluateGateOutput,
   ExecutablePinMismatchError,
+  GATE_FIELD_ALLOWLIST,
+  LaunchSettingsMismatchError,
   WrongTransportError,
   type GateResult,
   type LaunchFunction,
@@ -39,6 +50,9 @@ import {
 import { EvidenceObservationFailedError, ProcessTransportError, TransportFailure, type ProcessFacts, type ProviderHttpResponse } from '../src/pipeline/live-runner';
 import type { ProviderHttpRequest } from '../src/pipeline/provider-adapter';
 import { allowDummyDir } from './setup/process-guard';
+import { roleOutputJsonSchema } from '../src/pipeline/anthropic-messages';
+import { CLAUDE_CODE_CLI_ADAPTER, CLAUDE_CODE_CLI_GATE_RULES, CLAUDE_CODE_CLI_V2_ADAPTER, CLAUDE_CODE_CLI_V2_GATE_RULES } from '../src/pipeline/claude-code-cli';
+import type { RoleRequest } from '../src/pipeline/roles';
 
 // ---------------------------------------------------------------------------
 // Literals. These are the contract as this file understands it.
@@ -1077,5 +1091,364 @@ describe('the launch boundary', () => {
     expect(source).not.toMatch(/shell:\s*true/);
     // Positive control for the pattern.
     expect(/\b(spawnSync|execFile|execFileSync|execSync|exec|fork)\s*\(/.test('const x = exec("ls")')).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// claude-code-cli@2 through the transport
+// ---------------------------------------------------------------------------
+
+/** A role request as the pipeline hands it to an adapter; the prompt and message are the literals above. */
+function adapterRoleRequest(model: string): RoleRequest {
+  return {
+    role: 'reader',
+    index: 0,
+    model,
+    promptSha256: 'a'.repeat(64),
+    messages: [
+      { from: 'prompt', content: SYSTEM_PROMPT },
+      { from: 'input', content: USER_MESSAGE },
+    ],
+  };
+}
+
+/** Compares element by element first, so a red names the position that moved, then as a whole. */
+function expectArgv(actual: readonly string[], expected: readonly string[]): void {
+  for (let i = 0; i < expected.length; i += 1) expect(actual[i], `argv[${i}]`).toBe(expected[i]);
+  expect(actual).toEqual(expected);
+}
+
+describe('claude-code-cli@2 through the transport', () => {
+  it('V2-A1 — @2\'s request, built by its adapter, reaches the child as exactly this argv: claude-opus-5-5, effort high, the @2 settings, safe mode and no tools', async () => {
+    const pin = writeDummy('v2-answer', 'printf %s "ok"');
+    const built = CLAUDE_CODE_CLI_V2_ADAPTER.buildRequest(adapterRoleRequest('claude-opus-5-5'), { endpoint: '', apiKey: '' });
+
+    await transportFor(pin)(built, never());
+
+    const expected = [
+      '-p',
+      '--model',
+      'claude-opus-5-5',
+      '--effort',
+      'high',
+      '--safe-mode',
+      '--tools',
+      '',
+      '--strict-mcp-config',
+      '--setting-sources',
+      '',
+      '--disable-slash-commands',
+      '--no-session-persistence',
+      '--settings',
+      '{"switchModelsOnFlag":false,"fastMode":false,"autoContinueAtUsageLimit":false}',
+      '--system-prompt-file',
+      '<system-prompt-file>',
+      '--json-schema',
+      JSON.stringify(roleOutputJsonSchema('reader')),
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--include-partial-messages',
+    ];
+    expect(records).toHaveLength(1);
+    expectArgv(records[0]!.record.argv, expected);
+    // What the child saw: the same, with the real prompt path in the one variable position.
+    const seen = nulSeparated('argv.bin');
+    expect(seen[16]).toBe(join(launches[0]!.options.cwd, 'system-prompt.txt'));
+    expectArgv(seen, expected.map((element, i) => (i === 16 ? seen[16]! : element)));
+    expect(recorded('marker')).toBe('');
+  });
+
+  it('V1-A1 — @1\'s request, built by its adapter, reaches the child as the argv it always had (the control for V2-A1\'s model and settings elements)', async () => {
+    const pin = writeDummy('v1-answer', 'printf %s "ok"');
+    const built = CLAUDE_CODE_CLI_ADAPTER.buildRequest(adapterRoleRequest('claude-opus-5'), { endpoint: '', apiKey: '' });
+
+    await transportFor(pin)(built, never());
+
+    expect(records).toHaveLength(1);
+    expectArgv(records[0]!.record.argv, [
+      '-p',
+      '--model',
+      'claude-opus-5',
+      '--effort',
+      'high',
+      '--safe-mode',
+      '--tools',
+      '',
+      '--strict-mcp-config',
+      '--setting-sources',
+      '',
+      '--disable-slash-commands',
+      '--no-session-persistence',
+      '--settings',
+      '{"switchModelsOnFlag":false}',
+      '--system-prompt-file',
+      '<system-prompt-file>',
+      '--json-schema',
+      JSON.stringify(roleOutputJsonSchema('reader')),
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--include-partial-messages',
+    ]);
+  });
+
+  it.each([
+    ['not JSON', 'not json'],
+    ['empty', ''],
+    ['an array', '[]'],
+    ['null', 'null'],
+    ['a JSON string', '"x"'],
+    ['a number', '1'],
+    ['a boolean', 'true'],
+  ])('V2-S1 — a settings text that is %s (%j) is refused as a LaunchSpecError naming settings, before the pin, with nothing launched', async (_label, settings) => {
+    const pin = writeDummy('unused', 'exit 0');
+    // A pin that cannot match: a body that got past the schema would be refused by the pin instead, under another name.
+    const transport = transportFor({ ...pin, sha256: 'f'.repeat(64) });
+    const error = await settleWith(transport(roleRequest({ settings }), never()), Error);
+    expect(error.name).toBe('LaunchSpecError');
+    expect(error.message).toBe('request body is not a CLI launch description: settings: must be the text of one JSON object');
+    expect((error as { process?: ProcessFacts }).process?.started).toBe(false);
+    expect(launches).toHaveLength(0);
+    expect(existsSync(join(recordDir, 'marker'))).toBe(false);
+  });
+
+  it('V2-S2 — a settings value that is not a string is refused the same way, naming settings', async () => {
+    const pin = writeDummy('unused', 'exit 0');
+    const transport = transportFor({ ...pin, sha256: 'f'.repeat(64) });
+    const error = await settleWith(transport(roleRequest({ settings: { fastMode: false } }), never()), Error);
+    expect(error.name).toBe('LaunchSpecError');
+    expect(error.message).toBe('request body is not a CLI launch description: settings: Expected string, received object');
+    expect(launches).toHaveLength(0);
+  });
+
+  it('V2-S3 — positive control for V2-S1: the text of an object reaches argv verbatim, whitespace and all, at --settings', async () => {
+    const pin = writeDummy('settings-ok', 'printf %s "ok"');
+    const settings = '{"a": [1, 2],  "b": {"c": null}}';
+    await transportFor(pin)(roleRequest({ settings }), never());
+    expect(records).toHaveLength(1);
+    expect(records[0]!.record.argv.slice(13, 15)).toEqual(['--settings', '{"a": [1, 2],  "b": {"c": null}}']);
+    expect(nulSeparated('argv.bin').slice(13, 15)).toEqual(['--settings', '{"a": [1, 2],  "b": {"c": null}}']);
+  });
+});
+
+describe('the gate under @2\'s rules', () => {
+  /** The shape 2.1.280's `auth status --json` answers with: @1's keys plus three. */
+  const GATE_2_1_280 = {
+    loggedIn: true,
+    authMethod: 'claude.ai',
+    apiProvider: 'firstParty',
+    email: 'someone@example.invalid',
+    orgId: 'org_1234567890',
+    orgName: 'Example Org',
+    subscriptionType: 'max',
+    analyticsDisabled: true,
+    projectsDirectory: '/Users/someone/.claude/projects',
+    configDirectory: '/Users/someone/.claude',
+  };
+  const CLEAN: ProcessFacts = {
+    started: true,
+    pid: 1,
+    exitCode: 0,
+    signal: null,
+    durationMs: 1,
+    stdoutBytes: 1,
+    stderrBytes: 0,
+    promptFileBytes: null,
+    stdinBytes: 0,
+    promptFileRemoved: null,
+    promptFileRemovalError: null,
+    termination: null,
+  };
+  const V2_FIELDS = {
+    loggedIn: 'true',
+    authMethod: '"claude.ai"',
+    apiProvider: '"firstParty"',
+    apiKeySource: 'ABSENT',
+    forcedLoginMethod: 'ABSENT',
+    subscriptionType: '"max"',
+    email: 'PRESENT',
+    orgId: 'PRESENT',
+    orgName: 'PRESENT',
+    analyticsDisabled: 'true',
+    projectsDirectory: 'PRESENT',
+    configDirectory: 'PRESENT',
+  };
+
+  it('V2-G1 — a 2.1.280-shaped answer passes under @2\'s rules; the directories are PRESENT and neither value appears anywhere in the result', () => {
+    const stdout = JSON.stringify(GATE_2_1_280) + '\n';
+    // Positive control: both values are in what was evaluated, so their absence below is the gate's doing.
+    expect(stdout).toContain('"/Users/someone/.claude/projects"');
+    expect(stdout).toContain('"/Users/someone/.claude"');
+
+    const result = evaluateGateOutput(stdout, CLEAN, CLAUDE_CODE_CLI_V2_GATE_RULES);
+
+    const serialised = JSON.stringify(result);
+    expect(serialised, 'the projects directory was reproduced in the gate result').not.toContain('/Users/someone/.claude/projects');
+    expect(serialised, 'the config directory was reproduced in the gate result').not.toContain('/Users/someone/.claude');
+    expect(serialised).not.toContain('/Users/someone');
+    expect(serialised).not.toContain('example.invalid');
+    expect(serialised).not.toContain('org_1234567890');
+    expect(serialised).not.toContain('Example Org');
+    expect(result).toEqual({ pass: true, reasons: [], fields: V2_FIELDS });
+    expect(Object.keys(result.fields)).toEqual(Object.keys(V2_FIELDS));
+  });
+
+  it.each([
+    ['false', false, 'analyticsDisabled is false, required true'],
+    ['absent', undefined, 'analyticsDisabled is ABSENT, required true'],
+    ['the string "true"', 'true', 'analyticsDisabled is "true", required true'],
+    ['null', null, 'analyticsDisabled is null, required true'],
+  ])('V2-G2 — analyticsDisabled %s blocks with exactly that reason', (_label, value, reason) => {
+    const answer: Record<string, unknown> = { ...GATE_2_1_280, analyticsDisabled: value };
+    if (value === undefined) delete answer['analyticsDisabled'];
+    expect(evaluateGateOutput(JSON.stringify(answer), CLEAN, CLAUDE_CODE_CLI_V2_GATE_RULES)).toEqual({ pass: false, reasons: [reason], fields: expect.any(Object) });
+  });
+
+  it('V2-G3 — an unknown key still blocks under @2\'s rules, beside an otherwise good answer', () => {
+    expect(evaluateGateOutput(JSON.stringify({ ...GATE_2_1_280, overage: true }), CLEAN, CLAUDE_CODE_CLI_V2_GATE_RULES)).toEqual({
+      pass: false,
+      reasons: ['unexpected key: overage'],
+      fields: V2_FIELDS,
+    });
+  });
+
+  it('V2-G4 — @1\'s rules, by default and by name, block the 2.1.280 answer exactly as today: one unexpected-key reason per new key', () => {
+    const stdout = JSON.stringify(GATE_2_1_280);
+    const expected = {
+      pass: false,
+      reasons: ['unexpected key: analyticsDisabled', 'unexpected key: projectsDirectory', 'unexpected key: configDirectory'],
+      fields: {
+        loggedIn: 'true',
+        authMethod: '"claude.ai"',
+        apiProvider: '"firstParty"',
+        apiKeySource: 'ABSENT',
+        forcedLoginMethod: 'ABSENT',
+        subscriptionType: '"max"',
+        email: 'PRESENT',
+        orgId: 'PRESENT',
+        orgName: 'PRESENT',
+      },
+    };
+    expect(evaluateGateOutput(stdout, CLEAN)).toEqual(expected);
+    expect(evaluateGateOutput(stdout, CLEAN, CLAUDE_CODE_CLI_GATE_RULES)).toEqual(expected);
+    expect(JSON.stringify(evaluateGateOutput(stdout, CLEAN))).not.toContain('/Users/someone');
+  });
+
+  it('V2-G6 — the exported GATE_FIELD_ALLOWLIST is still @1\'s nine keys, in order: nothing reads it since the rules moved into the profile, so this is what pins it', () => {
+    expect(GATE_FIELD_ALLOWLIST).toEqual(['loggedIn', 'authMethod', 'apiProvider', 'apiKeySource', 'forcedLoginMethod', 'subscriptionType', 'email', 'orgId', 'orgName']);
+  });
+
+  it('V2-G5 — runGate applies the rules it was handed: the same 2.1.280 answer passes with gate = @2\'s rules, and blocks without them', async () => {
+    const pin = writeDummy('gate-2-1-280', `printf %s ${JSON.stringify(JSON.stringify(GATE_2_1_280))}`);
+
+    const withV2 = await transportFor(pin, { gate: CLAUDE_CODE_CLI_V2_GATE_RULES }).runGate(never());
+    const withDefault = await transportFor(pin).runGate(never());
+
+    expect(withV2.reasons).toEqual([]);
+    expect(withV2.pass).toBe(true);
+    expect(withV2.fields).toEqual(V2_FIELDS);
+    expect(JSON.stringify(withV2)).not.toContain('/Users/someone');
+    expect(withDefault.reasons).toEqual(['unexpected key: analyticsDisabled', 'unexpected key: projectsDirectory', 'unexpected key: configDirectory']);
+    expect(withDefault.pass).toBe(false);
+    // Both were real gate launches of the same dummy, under the same argv.
+    expect(records.map((entry) => entry.record.kind)).toEqual(['gate', 'gate']);
+    expect(records.map((entry) => entry.record.argv)).toEqual([
+      ['auth', 'status', '--json'],
+      ['auth', 'status', '--json'],
+    ]);
+    expect(withV2.process.exitCode).toBe(0);
+    expect(withDefault.process.exitCode).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The profile's --settings, held by the transport (Task 5a, a parent decision)
+// ---------------------------------------------------------------------------
+
+describe('a transport holding its profile\'s --settings text', () => {
+  /** `@2`'s settings text, written out: never read off the profile. */
+  const V2_SETTINGS = '{"switchModelsOnFlag":false,"fastMode":false,"autoContinueAtUsageLimit":false}';
+  /** The text a description without settings launches with, written out. */
+  const DEFAULT_SETTINGS = '{"switchModelsOnFlag":false}';
+  const DISAGREE = 'the launch description and the transport\'s profile disagree';
+
+  it('H1-1 — positive control: a description whose settings are exactly the profile\'s launches once, with that text at --settings', async () => {
+    const pin = writeDummy('h1-agree', 'printf %s "ok"');
+    const built = CLAUDE_CODE_CLI_V2_ADAPTER.buildRequest(adapterRoleRequest('claude-opus-5-5'), { endpoint: '', apiKey: '' });
+
+    const response = await transportFor(pin, { settings: V2_SETTINGS })(built, never());
+
+    expect(response.process?.started).toBe(true);
+    expect(launches).toHaveLength(1);
+    expect(records).toHaveLength(1);
+    expect(records[0]!.record.argv.slice(13, 15)).toEqual(['--settings', V2_SETTINGS]);
+    expect(nulSeparated('argv.bin').slice(13, 15)).toEqual(['--settings', V2_SETTINGS]);
+  });
+
+  it('H1-2 — a description without settings, as @1\'s adapter builds it, is refused before the pin: nothing launched, no directory, no prompt file', async () => {
+    const pin = writeDummy('unused', 'exit 0');
+    // A pin that cannot match: a description that got past the comparison would be refused by the pin instead, under another name.
+    const transport = transportFor({ ...pin, sha256: 'f'.repeat(64) }, { settings: V2_SETTINGS });
+    const built = CLAUDE_CODE_CLI_ADAPTER.buildRequest(adapterRoleRequest('claude-opus-5'), { endpoint: '', apiKey: '' });
+    expect(JSON.parse(built.body)).not.toHaveProperty('settings');
+
+    const error = await settleWith(transport(built, never()), Error);
+
+    expect(error.name).toBe('LaunchSettingsMismatchError');
+    expect(error).toBeInstanceOf(LaunchSettingsMismatchError);
+    expect(error.message).toContain('--settings');
+    expect(error.message).toContain(DISAGREE);
+    expect(error.message).toBe(
+      `the launch description's --settings ${JSON.stringify(DEFAULT_SETTINGS)} is not the transport's profile settings ${JSON.stringify(V2_SETTINGS)}: ${DISAGREE}, so nothing was launched`,
+    );
+    expect((error as { process?: ProcessFacts }).process?.started).toBe(false);
+    expect(launches).toHaveLength(0);
+    expect(records).toHaveLength(0);
+    expect(readdirSync(tempRoot)).toEqual([]);
+    expect(existsSync(join(recordDir, 'marker'))).toBe(false);
+  });
+
+  it.each([
+    ['other settings', '{"switchModelsOnFlag":false,"fastMode":false}'],
+    ['the same keys in another order', '{"fastMode":false,"switchModelsOnFlag":false,"autoContinueAtUsageLimit":false}'],
+    ['the same object with a space', '{"switchModelsOnFlag":false, "fastMode":false,"autoContinueAtUsageLimit":false}'],
+  ])('H1-3 — a description carrying %s is refused the same way: the text is compared, not the object', async (_label, settings) => {
+    const pin = writeDummy('unused', 'exit 0');
+    const transport = transportFor({ ...pin, sha256: 'f'.repeat(64) }, { settings: V2_SETTINGS });
+
+    const error = await settleWith(transport(roleRequest({ settings }), never()), Error);
+
+    expect(error.name).toBe('LaunchSettingsMismatchError');
+    // The class beside the name (Task 5a review repair R11).
+    expect(error).toBeInstanceOf(LaunchSettingsMismatchError);
+    expect(error.message).toContain(`--settings ${JSON.stringify(settings)}`);
+    expect(error.message).toContain(DISAGREE);
+    expect((error as { process?: ProcessFacts }).process?.started).toBe(false);
+    expect(launches).toHaveLength(0);
+    expect(readdirSync(tempRoot)).toEqual([]);
+  });
+
+  it('H1-4 — the comparison is of the effective settings: a transport holding the default text launches a description without settings', async () => {
+    const pin = writeDummy('h1-default', 'printf %s "ok"');
+    const built = CLAUDE_CODE_CLI_ADAPTER.buildRequest(adapterRoleRequest('claude-opus-5'), { endpoint: '', apiKey: '' });
+
+    await transportFor(pin, { settings: DEFAULT_SETTINGS })(built, never());
+
+    expect(launches).toHaveLength(1);
+    expect(records[0]!.record.argv.slice(13, 15)).toEqual(['--settings', DEFAULT_SETTINGS]);
+  });
+
+  it('H1-5 — without the option nothing is compared, as before: @1\'s and @2\'s descriptions both launch, each with its own text', async () => {
+    const pin = writeDummy('h1-unset', 'printf %s "ok"');
+    const transport = transportFor(pin);
+    await transport(CLAUDE_CODE_CLI_ADAPTER.buildRequest(adapterRoleRequest('claude-opus-5'), { endpoint: '', apiKey: '' }), never());
+    await transport(CLAUDE_CODE_CLI_V2_ADAPTER.buildRequest(adapterRoleRequest('claude-opus-5-5'), { endpoint: '', apiKey: '' }), never());
+
+    expect(launches).toHaveLength(2);
+    expect(records.map((entry) => entry.record.argv.slice(13, 15))).toEqual([
+      ['--settings', DEFAULT_SETTINGS],
+      ['--settings', V2_SETTINGS],
+    ]);
   });
 });

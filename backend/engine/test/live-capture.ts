@@ -45,11 +45,12 @@
  *
  * `route: 'http'` (everything the paragraphs above describe) reaches a provider
  * through `anthropic-messages@1` over an injected or real `fetch`.
- * `route: 'subscription'` (B-CLI-ADAPTER) reaches Claude through the pinned
- * Claude Code CLI on a Max subscription, over `claude-code-cli@1` and the
- * process transport, and it is the **only** place in the repository that
- * constructs a runner over that adapter — `verify run` refuses the identity
- * by name (`SubscriptionRouteCaptureOnlyError`). **The environment selects
+ * `route: 'subscription'` (B-CLI-ADAPTER) reaches Claude through a pinned
+ * Claude Code CLI on a Max subscription, over `claude-code-cli@2` by default
+ * (the Opus 5.5 migration) and the process transport, and it is the **only**
+ * place in the repository that constructs a runner over a CLI adapter —
+ * `verify run` refuses every `claude-code-cli` identity by name
+ * (`SubscriptionRouteCaptureOnlyError`). **The environment selects
  * the route**: `DATASTRATA_SUBSCRIPTION_CAPTURE=1` and nothing else selects
  * the subscription route, its absence the HTTP route, and a request whose
  * stated route, adapter, transport or variables belong to the other one is
@@ -64,11 +65,37 @@
  *   or behave other than the accepted probe did. The refusal names variables,
  *   never values. The environment is the one this function is *handed*;
  *   `process.env` is never read here.
+ * - **Two adapters, one profile each (plan 2026-09-25, D-1, D-2, D-5).**
+ *   The route runs `claude-code-cli@2`, or `claude-code-cli@1` over an
+ *   injected launch only: `@1` has none of `@2`'s included-usage, fast-mode
+ *   or exact-model protections, so an execution that would spawn the real
+ *   executable under it is refused (`SubscriptionRouteMismatchError`)
+ *   before anything is created. The adapter carries no link to its profile,
+ *   so the identity selects it here, and the profile is the authority for
+ *   what the execution runs and reports: the executable
+ *   (`subscriptionExecutableFor`), the launch controls, the gate's rules,
+ *   the `--settings` text the transport holds every role launch to, the
+ *   launch timeout handed to the runner, the gate's own timeout, and the
+ *   summary's `pin`, `requested`, `budgets` and `unobserved`. For `@2` the
+ *   launch budget may not exceed the configuration's role launches, one
+ *   reader, the prosecutors and one adjudicator (`SubscriptionBudgetError`,
+ *   before anything is created).
  * - **An execution-scoped gate.** Before any role is dispatched the
  *   transport runs `auth status --json` under the same pin and environment;
  *   the verdict (labels and process facts, never the account's email or
  *   organisation identifiers) is filed as `execution.json.gate`, and a
- *   refusal ends the execution with nothing dispatched.
+ *   refusal ends the execution with nothing dispatched. Where the profile
+ *   bounds the gate (`@2`), it runs under its own controller, which follows
+ *   the lifetime and also fires at the gate timeout: a gate that outlives it
+ *   fails the execution as `GateTimeout` with the cancellation reason
+ *   `gate_timeout`, nothing dispatched, and the message says how the timer
+ *   met the launch — it ended the running child (whose launch line is still
+ *   filed), it fired before any child was launched, or it fired after the
+ *   child had answered, whose verdict is then not taken
+ *   (`gateVerdictErrorOf`). Only the transport's own abort of the gate
+ *   launch and that late verdict are filed so; an error the gate throws for
+ *   another reason — a pin mismatch, an evidence failure — keeps its own
+ *   name, and says the timer had fired (`subscriptionErrorOf`).
  * - **Every child is evidence.** The transport hands each launch's record and
  *   stdout to `onLaunch`, which appends one line to `launches.jsonl` and
  *   writes the stdout, sanitised, under `streams/`. A record that cannot be
@@ -99,6 +126,60 @@
  *   `TerminationUnconfirmed`, no transcript is written, a result the pipeline
  *   already wrote is deleted and `resultWithheld` says so, and every observed
  *   fact stays in `launches.jsonl` and `execution.json`.
+ * - **Included usage is observed, stopped on and held (plan 2026-09-25, D-5,
+ *   D-6; Task 5b).** Every role launch's line carries what its stream reports
+ *   about included usage — the models, the CLI version and every init's
+ *   betas, every rate-limit reading, the fast-mode states of every init and
+ *   result event and the speeds, the stop reasons and categories (never an
+ *   explanation), the API-error kinds, block and subtype counts, and the
+ *   largest per-request context — read by `observeUsage` in
+ *   `included-usage.ts`, which imports nothing, so this account is
+ *   independent of the `@2` projection it backs up. It is filed redacted by
+ *   the stream's own key and value rules (`redactObservation`, below), and
+ *   every rule reads the lines as filed. For `@2`,
+ *   `usageViolations` turns every launch line into facts, and
+ *   `execution.json.usageStop` files them: `null` while the run is running,
+ *   then `usageStopOf` of every fact, completed or failed, whatever failed.
+ *   After each launch the projection accepted, a fact no projection rule
+ *   covers — the per-request context above D-5's ceiling
+ *   (`long_context_boundary`), or a window reset early (`unnatural_reset`) —
+ *   aborts the lifetime (`usage_stop:<role>[<index>]`) and fails the run as
+ *   `UsageStopError`, and nothing later launches. After the drain, and after
+ *   the `TerminationUnconfirmed` rule, a `@2` run still completed with any
+ *   fact is failed as `IncludedUsageUnconfirmed`, its result deleted and
+ *   withheld as that rule's are. The precedence (Task 5b review repair M5):
+ *   a completed run with both an unconfirmed termination and a usage fact is
+ *   named `TerminationUnconfirmed`; both withhold the result, and `usageStop`
+ *   still carries the facts. `@1`, whose 2.1.226 streams report no
+ *   fast-mode state, files no `usageStop` and has neither stop. Before any
+ *   subscription execution is created, on either adapter, every
+ *   `execution.json` at depth three under the execution root it is handed
+ *   (`<pack>/<requirement>/<execution>/`) is read — across every pack and
+ *   requirement under that root (production uses the one fixed root,
+ *   `LIVE_EXECUTION_ROOT`), not every root on the machine (Task 5b review
+ *   repair M5) — and a start before the latest `usageStop.resetsAt` any of
+ *   them recorded is refused (`UsageResetPendingError`), as is a finished
+ *   record whose stop recorded an exhaustion or overage that reported no
+ *   reset time as a number, which holds until an operator reviews it (Task
+ *   5b review repair M4, a parent decision P-5b-14), a record that cannot be
+ *   read, a record of an execution that never finished, a symbolic link at
+ *   any level of the walk, the execution root included, which is neither
+ *   followed nor passed over, and a root or an entry the walk cannot list or
+ *   examine: a resume is a new, separately approved execution. A recorded
+ *   limitation (Task 5b review repair M5): a directory entry whose type the
+ *   filesystem does not report (a `Dirent` neither a file, a directory nor
+ *   a link; not on APFS) is passed over by the walk, as a regular file is.
+ * - **Trust in four tiers (plan 2026-09-25, D-9; Task 5c).** Every `@2`
+ *   `execution.json` carries `trust`: `null` while the run is running, then
+ *   `trustOf`'s four tiers, each a status and the method behind it —
+ *   `execution` (completed or failed, and the error's name),
+ *   `schemaValidity` (read off how far `runSubscriptionCommand` got),
+ *   `evidenceValidity` (`checkResultEvidence` over the written record and
+ *   the corpus the run authorised) and `substantiveCorrectness`, always
+ *   `unassessed`. It is taken after every withhold decision, so a withheld
+ *   run's evidence tier is `withheld`, never `passed`; it is a measurement,
+ *   and gates no status, transcript or result. No status and no method says
+ *   "verified", the status only signing confers. `@1` files no such key.
  * - **The command is composed here.** `runRun` (`src/cli/run.ts`) fixes
  *   `DEFAULT_ROLE_CONFIG`, whose `providerAdapter` is the HTTP identity, and
  *   orchestration refuses a live runner whose adapter differs from the
@@ -107,14 +188,19 @@
  *   under `src/` is changed for this: the subscription path composes the same
  *   production functions `runRun` composes (`readWorld`,
  *   `EntitledClosure.forSources`, `loadPromptSet`, `runVerificationPipeline`,
- *   `writeVerificationResult`) with `SUBSCRIPTION_ROLE_CONFIG`, which differs
- *   from the default in that one field.
+ *   `writeVerificationResult`) with the configuration for the adapter it
+ *   runs (`subscriptionRoleConfigFor`): `SUBSCRIPTION_ROLE_CONFIG`, `@2`'s,
+ *   which differs from the default in its models, its adapter and its
+ *   invocation, or `SUBSCRIPTION_ROLE_CONFIG_V1`, which differs in the
+ *   adapter alone. The role wrapper forwards the runner's invocation, which
+ *   orchestration compares with the configuration's.
  *
  * # What the sanitised streams keep, and what they never keep
  *
  * Each stdout line that parses as a JSON object is written back with
- * `session_id`, `uuid`, `cwd`, `email`, `orgId` and `orgName` replaced
- * wherever they occur as keys, and every other string that matches an email
+ * `session_id`, `uuid`, `cwd`, `email`, `orgId`, `orgName`,
+ * `projectsDirectory` and `configDirectory` replaced wherever they occur as
+ * keys, and every other string that matches an email
  * pattern or contains the inherited `HOME` or `USER` value replaced by
  * `[REDACTED]`. The model's own output — `event.delta`, `event.content_block`,
  * `message.content`, `result` and `structured_output` — is never modified,
@@ -128,11 +214,60 @@
  * rule holds for the partial stdout of a launch ended by an abort.
  * A line that is not a JSON object is written as `{"unparsed": true, "bytes": N}`.
  *
+ * The launch line's observation, read from the same raw lines, is held to
+ * the same rules before it is filed (`redactObservation`; Task 5b review
+ * repairs R15 and N3, a parent decision P-5b-11, extended): a value under
+ * any of those keys, and any string that matches an email pattern or carries
+ * the inherited `HOME` or `USER` value, wherever it sits in a subtree the
+ * observation copied, is `[REDACTED]`; a block type or system subtype that
+ * would be is counted under `[REDACTED]`. Without the value rule, such a
+ * string copied into the observation would make `onLaunch`'s leak check
+ * refuse the whole launch line, and the launch's facts with it. What this
+ * does not do (Task 5b review repair O3, a parent decision P-5b-13; each is a
+ * recorded limitation in `included-usage.ts`): only a count map's keys are
+ * renamed, so a key inside a copied subtree that matches the email pattern or
+ * carries the inherited `HOME` or `USER` value still makes the leak check
+ * refuse that launch line, and that launch's facts, a rejected window's reset
+ * hold among them, are lost (fail closed: the projection still judges the
+ * launch); a replaced string is read by no rule as what it was, so a replaced
+ * credit kind, `[1m]` model, context-1M beta or window string naming overage
+ * leaves no fact while the projection still refuses, a replaced "off" or
+ * "standard" makes a false `fast_mode` fact on a clean run, a replaced
+ * rate-limit status, type or overage status becomes a fact of another kind,
+ * and a replaced "rejected" loses the exhaustion and its reset hold; and the
+ * value rule depends on the inherited `USER` and `HOME`, so an operator whose
+ * either is contained in any literal those rules compare would meet the last
+ * on every launch, a precondition for the user to confirm before the first
+ * `@2` execution and not enforced here. A window reported in two positions
+ * with different values, in events that alternate between reporting both and
+ * reporting one, can also make a false in-flight `unnatural_reset` stop,
+ * which fails closed; how 2.1.280 reports windows is a probe question.
+ *
+ * An open risk, recorded under the user's open decision 13 and not repaired
+ * here (Task 5b review repair N6, a parent decision P-5b-12, narrowed): the
+ * harness files an error's message verbatim, as `execution.json`'s
+ * `error.message` and as `attempts.jsonl`'s `detail`, and no rule scans
+ * either. A refusal's explanation (D-7 rule 6) is carried in
+ * `ProviderRefusalError`'s message as reported. Only where it sits under a
+ * model-output path — a `message_delta`'s `stop_details`, under
+ * `event.delta` — does the sanitiser withhold a sensitive one, and
+ * `onLaunch` fail the launch before anything projects it. At the four other
+ * positions — a result's `stop_details`, an assistant message's
+ * `stop_details`, and `apiRefusalExplanation` on a system
+ * `model_refusal_no_fallback` event or on an API-error item — and in any
+ * projection error that quotes a stream value, a sensitive value reaches
+ * both files unscanned: the class of that decision, which Task 5a recorded
+ * for the inherited `HOME` in a pin-mismatch error.
+ *
  * # Lifetime
  *
  * An execution has a deadline. `runFirstLiveCase` derives it from the stated
- * budget: every permitted attempt at its full local timeout plus the longest
- * permitted wait, and a minute besides (`executionLifetimeMs`). When it fires,
+ * budget: on the HTTP route, every permitted attempt at its full local
+ * timeout plus the longest permitted wait, and a minute besides
+ * (`executionLifetimeMs`); on the subscription route, D-5's lifetime over
+ * `@2`'s profile, every permitted launch at its launch timeout and the
+ * transport's cleanup bound, the gate at its timeout and one cleanup bound,
+ * and a minute besides (`subscriptionLifetimeMs`). When it fires,
  * the runner aborts the attempt in flight, ends any wait, and refuses every
  * later send; the execution is filed as failed with `cancelled: true`. A test
  * runner's own timeout is therefore never what stops provider work — the
@@ -186,7 +321,7 @@
  * second layer, by this file before any summary is written.
  */
 
-import { appendFileSync, cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync, type Dirent, type Stats } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import type { EventEmitter } from 'node:events';
 import { join, resolve, sep } from 'node:path';
@@ -196,9 +331,21 @@ import { liveBudgetFrom, LIVE_API_KEY_ENV, LIVE_ENDPOINT_ENV, LIVE_MAX_ATTEMPTS_
 import { ANTHROPIC_MESSAGES_ADAPTER } from '../src/pipeline/anthropic-messages';
 import { outcomeFor, readRegistryOrFail, readWorld, resultPath, type CurrentWorld, type VerifyPaths } from '../src/cli/sign';
 import { dispatch } from '../src/cli/verify';
-import { CLAUDE_CODE_CLI_ADAPTER, CLAUDE_CODE_CLI_IDENTITY, CLI_LAUNCH_URL, LAUNCH_CONTROL_ENV, PINNED_CLI, resolvePinnedCliPath } from '../src/pipeline/claude-code-cli';
+import type { LoadedCorpus } from '../src/corpus/store';
+import {
+  CLAUDE_CODE_CLI_IDENTITY,
+  CLAUDE_CODE_CLI_PROFILE,
+  CLAUDE_CODE_CLI_V2_ADAPTER,
+  CLAUDE_CODE_CLI_V2_IDENTITY,
+  CLAUDE_CODE_CLI_V2_PROFILE,
+  CLI_LAUNCH_URL,
+  resolvePinPath,
+  type CliProfile,
+} from '../src/pipeline/claude-code-cli';
 import {
   createSpawnTransport,
+  DEFAULT_GRACE_MS,
+  DEFAULT_LAUNCH_SETTINGS,
   type ExecutablePin,
   type GateResult,
   type InheritedEnv,
@@ -214,6 +361,7 @@ import {
   EvidenceObservationFailedError,
   liveAgentsEnabled,
   MAX_RETRY_AFTER_MS,
+  ProcessTransportError,
   requireProviderAdapter,
   LIVE_AGENTS_ENV,
   LIVE_AGENTS_TOKEN,
@@ -226,12 +374,15 @@ import {
 } from '../src/pipeline/live-runner';
 import { runVerificationPipeline } from '../src/pipeline/orchestrate';
 import { loadPromptSet } from '../src/pipeline/prompts';
-import type { ProviderAdapter } from '../src/pipeline/provider-adapter';
+import { providerAdapterKey, type ProviderAdapter } from '../src/pipeline/provider-adapter';
 import { RoleOutputError } from '../src/pipeline/roles';
 import type { AgentRunner } from '../src/pipeline/runner';
 import { TRANSCRIPT_ROOT, writeRunTranscript, type RunTranscript } from '../src/pipeline/transcript';
-import { writeVerificationResult } from '../src/pipeline/write-result';
+import { writeVerificationResult, type ResultWriteOutcome } from '../src/pipeline/write-result';
+import { checkResultEvidence, type EvidenceSetValidity } from '../src/verification/evidence-validity';
+import type { VerificationResult } from '../src/verification/result';
 import { sourceIdsOf } from '../src/knowledge/provenance';
+import { describeUsageFacts, observeUsage, usageStopOf, usageViolations, type UsageObservation, type UsageStop } from './included-usage';
 import { engineRoot } from './replay-fixtures';
 
 export { LIVE_ENDPOINT_ENV, LIVE_API_KEY_ENV };
@@ -253,6 +404,32 @@ export const DEFAULT_FIXTURE_ROOT = resolve(engineRoot, TRANSCRIPT_ROOT);
  */
 export function executionLifetimeMs(budget: RunBudget): number {
   return budget.maxRunAttempts * (DEFAULT_TIMEOUT_MS + MAX_RETRY_AFTER_MS) + 60_000;
+}
+
+/** A launch's time bounds, as D-5's lifetime reads them. */
+export interface SubscriptionTimeouts {
+  launchTimeoutMs: number;
+  gateTimeoutMs: number;
+}
+
+/**
+ * The subscription route's lifetime (plan 2026-09-25, D-5): every permitted
+ * launch at its launch timeout plus the transport's cleanup bound, the gate
+ * at its timeout plus one cleanup bound, and a minute of margin —
+ * `maxRunAttempts × (launchTimeoutMs + termGrace + killGrace + termGrace) +
+ * gateTimeoutMs + (termGrace + killGrace + termGrace) + 60,000`. The cleanup
+ * bound is the transport's drain bound (TERM grace, KILL grace, then the
+ * bounded wait for the pipes) at its default graces, which production never
+ * overrides. The timeouts default to `@2`'s profile, so a budget of 9 is
+ * 16,470,000 ms. Like `executionLifetimeMs`, an enforced bound on wall time
+ * derived from enforced bounds; not a latency estimate.
+ */
+export function subscriptionLifetimeMs(
+  budget: Pick<RunBudget, 'maxRunAttempts'>,
+  timeouts: SubscriptionTimeouts = { launchTimeoutMs: CLAUDE_CODE_CLI_V2_PROFILE.launchTimeoutMs, gateTimeoutMs: CLAUDE_CODE_CLI_V2_PROFILE.gateTimeoutMs },
+): number {
+  const cleanupMs = DEFAULT_GRACE_MS + DEFAULT_GRACE_MS + DEFAULT_GRACE_MS;
+  return budget.maxRunAttempts * (timeouts.launchTimeoutMs + cleanupMs) + timeouts.gateTimeoutMs + cleanupMs + 60_000;
 }
 
 /**
@@ -280,6 +457,26 @@ export class UnsupportedLifetimeError extends Error {
 /** The complete check, applied to a derived lifetime and to an explicit override alike. */
 export function assertSupportedLifetime(deadlineMs: number): void {
   if (!Number.isSafeInteger(deadlineMs) || deadlineMs < 1 || deadlineMs > MAX_EXECUTION_LIFETIME_MS) throw new UnsupportedLifetimeError(deadlineMs);
+}
+
+/**
+ * A test-only time bound (`launchTimeoutMs`, `gateTimeoutMs`) the timers
+ * cannot honour as stated. Refused by name, before any execution file exists
+ * (Task 5a review repair R10): zero, a negative, a fraction, `NaN` or a value
+ * above the timer range would fire at once rather than bound anything, and
+ * `NaN` would also make the recorded lifetime `NaN`.
+ */
+export class UnsupportedTimeoutError extends Error {
+  constructor(readonly option: 'launchTimeoutMs' | 'gateTimeoutMs', readonly value: unknown) {
+    super(`refusing subscription.${option} of ${String(value)} ms: an injected time bound must be a positive integer of at most ${MAX_TIMER_MS} ms, the timer range; any other value would fire at once rather than bound the launch it is for`);
+    this.name = 'UnsupportedTimeoutError';
+  }
+}
+
+/** The check for an injected time bound: a positive safe integer within the timer range, or a refusal naming the option. */
+function assertSupportedTimeout(option: UnsupportedTimeoutError['option'], value: number | undefined): void {
+  if (value === undefined) return;
+  if (!Number.isSafeInteger(value) || value < 1 || value > MAX_TIMER_MS) throw new UnsupportedTimeoutError(option, value);
 }
 
 /**
@@ -413,11 +610,31 @@ export class SubscriptionCaptureConfigError extends Error {
   }
 }
 
-/** The subscription route was handed an adapter or a transport that is not its own. */
+/**
+ * The subscription route was handed an adapter or a transport that is not its
+ * own, or `claude-code-cli@1` for an execution that would spawn the real
+ * executable (plan 2026-09-25, D-1).
+ */
 export class SubscriptionRouteMismatchError extends Error {
   constructor(detail: string) {
-    super(`the subscription route runs claude-code-cli@1 over the process transport and nothing else: ${detail}`);
+    super(`the subscription route runs claude-code-cli@2, or claude-code-cli@1 over an injected launch only, over the process transport and nothing else: ${detail}`);
     this.name = 'SubscriptionRouteMismatchError';
+  }
+}
+
+/**
+ * The stated launch budget is larger than the run's own role launches (plan
+ * 2026-09-25, D-5). One reader, the configured prosecutors and one
+ * adjudicator are every launch a run makes, and each may spend; a budget
+ * above that admits only launches no run of this configuration makes, so it
+ * is refused rather than clamped, before anything is created. The
+ * configuration's prosecutor count is handed in, never derived from the
+ * maximum (Task 5a review repair R7).
+ */
+export class SubscriptionBudgetError extends Error {
+  constructor(readonly adapter: string, readonly stated: number, readonly maxRoleLaunches: number, readonly prosecutorCount: number) {
+    super(`the subscription route on ${adapter} admits a launch budget of at most ${maxRoleLaunches}, the configuration's role launches (one reader, ${prosecutorCount} prosecutors, one adjudicator), and ${LIVE_MAX_ATTEMPTS_ENV} states ${stated}; a budget is not clamped, so state one no larger than the run's launches`);
+    this.name = 'SubscriptionBudgetError';
   }
 }
 
@@ -444,18 +661,87 @@ export function subscriptionCaptureConfigFrom(env: NodeJS.ProcessEnv): Subscript
 }
 
 /**
- * The role configuration the subscription route runs under: the default in
- * every field but the adapter identity, which is the CLI's. A different
- * `pipelineVersion` and a different `runId` from the HTTP route's, by design.
+ * The role configuration the subscription route runs under by default,
+ * `claude-code-cli@2`'s (plan 2026-09-25, D-3): the default's roles, lenses
+ * and order, every role on the `@2` profile's permitted model, the `@2`
+ * adapter identity, and the invocation the `@2` adapter declares. A
+ * different `pipelineVersion` and a different `runId` from the HTTP route's
+ * and from `@1`'s, by design.
  */
-export const SUBSCRIPTION_ROLE_CONFIG: RoleConfig = { ...DEFAULT_ROLE_CONFIG, providerAdapter: CLAUDE_CODE_CLI_IDENTITY };
+export const SUBSCRIPTION_ROLE_CONFIG: RoleConfig = {
+  ...DEFAULT_ROLE_CONFIG,
+  models: {
+    reader: CLAUDE_CODE_CLI_V2_PROFILE.permittedModels[0]!,
+    prosecutor: CLAUDE_CODE_CLI_V2_PROFILE.permittedModels[0]!,
+    adjudicator: CLAUDE_CODE_CLI_V2_PROFILE.permittedModels[0]!,
+  },
+  providerAdapter: CLAUDE_CODE_CLI_V2_IDENTITY,
+  invocation: CLAUDE_CODE_CLI_V2_ADAPTER.invocation,
+};
+
+/**
+ * `claude-code-cli@1`'s configuration, as the route ran it before the
+ * migration: the default in every field but the adapter identity, and no
+ * invocation at all, so `@1`'s identity does not move.
+ */
+export const SUBSCRIPTION_ROLE_CONFIG_V1: RoleConfig = { ...DEFAULT_ROLE_CONFIG, providerAdapter: CLAUDE_CODE_CLI_IDENTITY };
+
+const SUBSCRIPTION_V1_KEY = providerAdapterKey(CLAUDE_CODE_CLI_IDENTITY);
+const SUBSCRIPTION_V2_KEY = providerAdapterKey(CLAUDE_CODE_CLI_V2_IDENTITY);
+
+/**
+ * Which subscription adapter this is, by identity — never by object, so a
+ * copy of an adapter is the adapter it copies — or a refusal naming it.
+ */
+function subscriptionVersionOf(adapter: Pick<ProviderAdapter, 'identity'>): '1' | '2' {
+  const key = providerAdapterKey(adapter.identity);
+  if (key === SUBSCRIPTION_V1_KEY) return '1';
+  if (key === SUBSCRIPTION_V2_KEY) return '2';
+  throw new SubscriptionRouteMismatchError(`the adapter handed in is ${key}`);
+}
+
+/** The configuration the subscription route runs a given adapter under, matched by identity; any other adapter is refused by name. */
+export function subscriptionRoleConfigFor(adapter: Pick<ProviderAdapter, 'identity'>): RoleConfig {
+  return subscriptionVersionOf(adapter) === '1' ? SUBSCRIPTION_ROLE_CONFIG_V1 : SUBSCRIPTION_ROLE_CONFIG;
+}
+
+/** The profile an adapter launches under. The adapter carries no link to it, so the identity selects it here. */
+function subscriptionProfileFor(adapter: Pick<ProviderAdapter, 'identity'>): CliProfile {
+  return subscriptionVersionOf(adapter) === '1' ? CLAUDE_CODE_CLI_PROFILE : CLAUDE_CODE_CLI_V2_PROFILE;
+}
+
+/**
+ * The executable an adapter's profile pins, resolved against `home`: the
+ * path the transport launches and the sha256 and size it checks before
+ * every launch. Pure: nothing is checked to exist, hashed or read.
+ */
+export function subscriptionExecutableFor(adapter: Pick<ProviderAdapter, 'identity'>, home: string): ExecutablePin {
+  const { pin } = subscriptionProfileFor(adapter);
+  return { path: resolvePinPath(pin.path, home), sha256: pin.sha256, sizeBytes: pin.sizeBytes };
+}
+
+/**
+ * Every role launch one run of a configuration makes: one reader, its
+ * prosecutors, one adjudicator — the most launches D-5 lets a `@2` budget
+ * state. Exported so the count is shown to follow the configuration, not to
+ * be the nine the harness's own configurations happen to make (Task 5a
+ * review repair R7).
+ */
+export function maxRoleLaunchesFor(config: Pick<RoleConfig, 'prosecutorCount'>): number {
+  return 1 + config.prosecutorCount + 1;
+}
 
 // ---------------------------------------------------------------------------
 // Stream sanitisation, pure
 // ---------------------------------------------------------------------------
 
-/** Keys whose values are replaced wherever they occur outside a model-output subtree. */
-export const STREAM_REDACTED_KEYS: ReadonlySet<string> = new Set(['session_id', 'uuid', 'cwd', 'email', 'orgId', 'orgName']);
+/**
+ * Keys whose values are replaced wherever they occur outside a model-output
+ * subtree. `projectsDirectory` and `configDirectory` are 2.1.280's gate
+ * answer's two directories, which carry the operator's home and so their user
+ * name: the gate labels them, and the filed gate stream must not carry them.
+ */
+export const STREAM_REDACTED_KEYS: ReadonlySet<string> = new Set(['session_id', 'uuid', 'cwd', 'email', 'orgId', 'orgName', 'projectsDirectory', 'configDirectory']);
 /** Dotted paths, from the event root, below which nothing is modified. */
 export const MODEL_OUTPUT_PATHS: readonly string[] = ['event.delta', 'event.content_block', 'message.content', 'result', 'structured_output'];
 export const REDACTED = '[REDACTED]';
@@ -590,8 +876,13 @@ export function sanitiseStream(parsed: readonly ParsedStreamLine[], literals: re
   return { lines, omitted: null };
 }
 
-/** What one role launch's stream said about itself, read from the CLI's own events; `null` where the stream said nothing. */
-export interface StreamObservation {
+/**
+ * What one role launch's stream said about itself, read from the CLI's own
+ * events; `null` where the stream said nothing. The fields it shares with
+ * `UsageObservation` are what the stream reports about included usage, read
+ * by `observeUsage` (plan 2026-09-25, D-6; Task 5b).
+ */
+export interface StreamObservation extends UsageObservation {
   /** Every `request_id` on an `assistant` event, in order. */
   requestIds: string[];
   /** `result.num_turns`. */
@@ -608,9 +899,13 @@ function countOrNull(value: unknown): number | null {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null;
 }
 
-/** Reads the observation off the parsed events. Never throws: a stream that says nothing observes nothing. */
+/**
+ * Reads the observation off the parsed events, and what they report about
+ * included usage through `observeUsage`, for a role launch of either adapter.
+ * Never throws: a stream that says nothing observes nothing.
+ */
 export function observeStream(parsed: readonly ParsedStreamLine[]): StreamObservation {
-  const observation: StreamObservation = { requestIds: [], numTurns: null, thinkingTokens: null, rateLimitEvents: 0, reportedUsage: null };
+  const observation: Pick<StreamObservation, 'requestIds' | 'numTurns' | 'thinkingTokens' | 'rateLimitEvents' | 'reportedUsage'> = { requestIds: [], numTurns: null, thinkingTokens: null, rateLimitEvents: 0, reportedUsage: null };
   for (const { event } of parsed) {
     if (event === null) continue;
     if (event['type'] === 'assistant' && typeof event['request_id'] === 'string') observation.requestIds.push(event['request_id']);
@@ -624,7 +919,50 @@ export function observeStream(parsed: readonly ParsedStreamLine[]): StreamObserv
       }
     }
   }
-  return observation;
+  return { ...observation, ...observeUsage(parsed) };
+}
+
+/** The observation's count maps: their keys are stream strings and their values counts, not copied subtrees. */
+const OBSERVATION_COUNTS: ReadonlySet<string> = new Set(['blockTypes', 'systemSubtypes']);
+
+/**
+ * An observation as it is filed, held to the stream's own rules outside the
+ * model's output (Task 5b review repairs R15 and N3, a parent decision
+ * P-5b-11, extended): the value of every `STREAM_REDACTED_KEYS` key, and
+ * every string that matches an email pattern or carries an inherited
+ * literal, replaced by `[REDACTED]`, wherever it sits in what the
+ * observation copied from the stream. `observeStream` reads the raw parse,
+ * and `observeUsage` copies whole subtrees — a `unifiedWindows`, an
+ * object-valued `overageScope`, the `fast_mode*` fields, a result's `usage`
+ * — so an `orgId` or an email address inside one would reach
+ * `launches.jsonl` though the stream filed beside it is redacted; and
+ * `onLaunch`'s leak check, which refuses a line carrying either, would then
+ * refuse the launch line itself, and the launch's facts — a rejected
+ * window's reset among them — would be filed nowhere. The count maps keep
+ * their counts, and a key the value rule would replace is renamed
+ * `[REDACTED]`, its count added to any already there; the observation's own
+ * field names never collide with either rule. Pure.
+ */
+export function redactObservation(observation: StreamObservation, literals: readonly SensitiveLiteral[]): StreamObservation {
+  // Every copy is built with own-data-property semantics (Object.fromEntries), never `out[key] =` (Task 5b review
+  // repair O1): JSON.parse makes "__proto__" an own key, and assigning it would set the copy's prototype instead,
+  // so a window keyed "__proto__" that reports "rejected" would vanish from the filed observation and its reset hold with it.
+  const walk = (value: unknown): unknown => {
+    if (typeof value === 'string') return sensitivityOf(value, literals) === null ? value : REDACTED;
+    if (Array.isArray(value)) return value.map(walk);
+    if (typeof value !== 'object' || value === null) return value;
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, STREAM_REDACTED_KEYS.has(key) ? REDACTED : walk(item)]));
+  };
+  const counted = (counts: Record<string, number>): Record<string, number> => {
+    const merged = new Map<string, number>();
+    for (const [key, count] of Object.entries(counts)) {
+      const name = sensitivityOf(key, literals) === null ? key : REDACTED;
+      merged.set(name, (merged.get(name) ?? 0) + count);
+    }
+    return Object.fromEntries(merged);
+  };
+  const out = Object.fromEntries(Object.entries(observation).map(([key, item]) => [key, OBSERVATION_COUNTS.has(key) ? counted(item as Record<string, number>) : walk(item)]));
+  return out as unknown as StreamObservation;
 }
 
 // ---------------------------------------------------------------------------
@@ -633,10 +971,14 @@ export function observeStream(parsed: readonly ParsedStreamLine[]): StreamObserv
 
 /** What tests inject on the subscription route; production supplies none of it. */
 export interface SubscriptionCaptureOptions {
-  /** The pin. Defaults to `PINNED_CLI` resolved against the handed environment's `HOME`. */
+  /** The pin. Defaults to the adapter's profile's pin resolved against the inherited `HOME` (`subscriptionExecutableFor`). */
   executable?: ExecutablePin;
-  /** The launch function. Defaults to the real `spawn`. */
+  /** The launch function. Defaults to the real `spawn`; `claude-code-cli@1` without an injected one is refused (D-1). */
   launch?: LaunchFunction;
+  /** Test-only: the bound on each role launch in place of the profile's. Marks the execution synthetic and `budgets.injected`. A positive integer of at most `MAX_TIMER_MS`, or refused (`UnsupportedTimeoutError`). */
+  launchTimeoutMs?: number;
+  /** Test-only: the bound on the gate launch in place of the profile's. Marks the execution synthetic and `budgets.injected`. A positive integer of at most `MAX_TIMER_MS`, or refused (`UnsupportedTimeoutError`). */
+  gateTimeoutMs?: number;
   /** The three inherited variables. Defaults to `HOME`, `USER`, `PATH` from the handed environment. */
   inheritedEnv?: InheritedEnv;
   /** Where `SIGINT`/`SIGTERM` are listened for. Defaults to `process`. */
@@ -661,7 +1003,7 @@ export interface LiveCaptureRequest {
   env: NodeJS.ProcessEnv;
   /** Which route. Defaults to `http`. */
   route?: CaptureRoute;
-  /** The provider adapter. Refused before construction when absent. On the subscription route it must be the CLI adapter, and defaults to it. */
+  /** The provider adapter. Refused before construction when absent. On the subscription route it must be `claude-code-cli@2`, or `@1` over an injected launch, and defaults to `@2`. */
   adapter?: ProviderAdapter;
   /** Injected by offline tests on the HTTP route. A genuine execution supplies none and is marked as such. Refused on the subscription route. */
   transport?: ProviderTransport;
@@ -713,7 +1055,7 @@ export interface LiveCaptureOutcome {
   interrupts: InterruptRecord[];
   interruptedBy: 'SIGINT' | 'SIGTERM' | null;
   terminationUnconfirmed: boolean;
-  /** The harness withheld the run's outputs: a completed run whose termination was unconfirmed, or a launch whose model output could not be filed. Any result already written was deleted. */
+  /** The harness withheld the run's outputs: a completed run whose termination was unconfirmed, a completed `@2` run whose launches report a fact against included usage, or a launch whose model output could not be filed. Any result already written was deleted. */
   resultWithheld: boolean;
   ledger: BudgetLedger;
   error: { name: string; message: string } | null;
@@ -781,12 +1123,13 @@ export async function captureLiveRun(request: LiveCaptureRequest): Promise<LiveC
   }
   if (route === 'subscription') return captureSubscriptionRun(request);
   // The HTTP path refuses anything of the other route's: the selector in any
-  // form, a process-channel adapter, or the CLI identity on any channel.
+  // form, a process-channel adapter, or a CLI identity — any version — on any
+  // channel.
   if (selectorPresent) throw new CaptureRouteConflictError(`the HTTP route was derived while ${SUBSCRIPTION_CAPTURE_ENV} is set to a value other than ${SUBSCRIPTION_CAPTURE_TOKEN}`);
   if (request.adapter !== undefined) {
     const { identity } = request.adapter;
     if (request.adapter.channel === 'process') throw new CaptureRouteConflictError(`the adapter ${identity.id}@${identity.version} speaks the process channel, which only the subscription route runs`);
-    if (identity.id === CLAUDE_CODE_CLI_IDENTITY.id && identity.version === CLAUDE_CODE_CLI_IDENTITY.version) throw new CaptureRouteConflictError(`the adapter identity is claude-code-cli@1, which only the subscription route runs`);
+    if (identity.id === CLAUDE_CODE_CLI_IDENTITY.id) throw new CaptureRouteConflictError(`the adapter identity is ${identity.id}@${identity.version}, which only the subscription route runs`);
   }
   const config = liveCaptureConfigFrom(request.env);
   assertLiveAgentsEnabled(request.env);
@@ -951,11 +1294,92 @@ export async function captureLiveRun(request: LiveCaptureRequest): Promise<LiveC
 
 /** The name of the gate's refusal in `execution.json.error`. */
 export const GATE_REFUSED_ERROR_NAME = 'AuthenticationGateRefused';
+/** The name in `execution.json.error` of a gate that outlived its own timeout. */
+export const GATE_TIMEOUT_ERROR_NAME = 'GateTimeout';
+/** The lifetime's abort reason, and so the cancellation reason, when the gate's timer fires. */
+export const GATE_TIMEOUT_REASON = 'gate_timeout';
 
-/** Stated once, filed on every subscription summary: what this route configures without observing. */
+/** Where in a subscription execution an error was thrown: the gate call, or the roles dispatched after the gate passed. */
+export type SubscriptionPhase = 'gate' | 'roles';
+
+/** The transport's words for a launch its signal refused before the child existed. */
+const ABORTED_BEFORE_LAUNCH = 'aborted before launch';
+
+/** The transport's own words for a launch its signal ended: refused before the child existed, or ended while it ran. */
+function isTransportAbort(thrown: unknown): thrown is ProcessTransportError {
+  return thrown instanceof ProcessTransportError && (thrown.message === ABORTED_BEFORE_LAUNCH || thrown.message.startsWith('aborted while the child was running ('));
+}
+
+/**
+ * How the gate's timer met the gate launch: it ended the running child; it
+ * fired before the child was launched (during the pin check, so none was); or
+ * it fired after the child had answered, before the verdict was read.
+ */
+type GateTimeoutPath = 'ended' | 'before_launch' | 'after_answer';
+
+/**
+ * `execution.json.error` for a gate that outlived its own timeout, saying
+ * which way the timer met the launch (Task 5a review repair N2): one message
+ * for every path said the gate child was ended, which on two of them no
+ * timer did.
+ */
+function gateTimeoutErrorFor(gateTimeoutMs: number | null, path: GateTimeoutPath): { name: string; message: string } {
+  const what =
+    path === 'ended' ? 'the gate child was ended and no role was dispatched'
+    : path === 'before_launch' ? 'the timer fired before the gate child was launched (none was), and no role was dispatched'
+    : 'the timer fired after the gate child had answered, so its verdict was not taken, and no role was dispatched';
+  return { name: GATE_TIMEOUT_ERROR_NAME, message: `the authentication gate did not finish within its gate timeout of ${gateTimeoutMs} ms; ${what}` };
+}
+
+/**
+ * What `execution.json.error` says for an error a subscription execution
+ * threw (Task 5a review repair R3). `GateTimeout` only when all three hold:
+ * the gate call threw it; it is the transport's own abort of the gate launch;
+ * and the lifetime was aborted for `gate_timeout`, which only the gate's
+ * timer does. Its message says whether the transport ended the running gate
+ * child or refused to launch one (N2). Filing every error thrown once the
+ * timer had fired as a timeout hid a pin mismatch or an evidence failure
+ * behind the timer's name, and would have renamed a role's error too. Any
+ * other error keeps its own name and message, and when the lifetime was
+ * aborted for `gate_timeout` the message says the timer had fired. Pure, so
+ * each condition is shown to decide alone.
+ */
+export function subscriptionErrorOf(thrown: unknown, phase: SubscriptionPhase, abortReason: unknown, gateTimeoutMs: number | null): { name: string; message: string } {
+  const timerFired = abortReason === GATE_TIMEOUT_REASON;
+  if (phase === 'gate' && timerFired && isTransportAbort(thrown)) return gateTimeoutErrorFor(gateTimeoutMs, thrown.message === ABORTED_BEFORE_LAUNCH ? 'before_launch' : 'ended');
+  const own = describeError(thrown, '');
+  return timerFired ? { name: own.name, message: `${own.message} (the gate timer of ${gateTimeoutMs} ms had fired, and the lifetime was aborted for ${GATE_TIMEOUT_REASON})` } : own;
+}
+
+/**
+ * What `execution.json.error` says, if anything, for a gate call that
+ * returned a verdict rather than throwing (Task 5a review repair N1). The
+ * timer can fire after the gate child has answered and before the verdict is
+ * read — while the transport cleans up and files the launch — and then the
+ * lifetime is already over: the verdict is not taken, and the execution fails
+ * as `GateTimeout`, saying the child had answered. Under any other reason, or
+ * none, `null`: the verdict's own handling applies. Pure, so the decision is
+ * shown directly as well as through the harness.
+ */
+export function gateVerdictErrorOf(abortReason: unknown, gateTimeoutMs: number | null): { name: string; message: string } | null {
+  return abortReason === GATE_TIMEOUT_REASON ? gateTimeoutErrorFor(gateTimeoutMs, 'after_answer') : null;
+}
+
+/** Stated once, filed on every `claude-code-cli@1` summary: what this route configures without observing. */
 export const SUBSCRIPTION_UNOBSERVED = Object.freeze({
   outputCeiling: 'configured CLAUDE_CODE_MAX_OUTPUT_TOKENS=16000; wire-level max_tokens unobserved',
   thinking: 'CLI-decided for effort high; not asserted',
+});
+/**
+ * Stated once, filed on every `claude-code-cli@2` summary: what `@2`'s
+ * profile configures without the stream showing it (plan 2026-09-25, D-5,
+ * D-6).
+ */
+export const SUBSCRIPTION_V2_UNOBSERVED = Object.freeze({
+  outputCeiling: 'configured CLAUDE_CODE_MAX_OUTPUT_TOKENS=64000, which 2.1.280 honours statically up to the model\'s own limit; wire-level max_tokens unobserved',
+  effort: 'effort high passed as --effort; its application unobserved',
+  thinking: 'always on for claude-opus-5-5, and counted toward the 64000 ceiling; not asserted',
+  modelCatalog: 'not pinned by the executable hash: the embedded catalog expires at 2026-09-27T14:56:08Z, and a remote catalog is assumed blocked by CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC, unverified',
 });
 export const SUBSCRIPTION_MEASURED = Object.freeze({
   admittedLaunchInputBytes: 'UTF-8 length of the JSON launch description; upper bound on prompt-file + stdin bytes; not the provider request size',
@@ -999,18 +1423,341 @@ export function unconfirmedLaunches(lines: readonly LaunchLine[]): string[] {
   });
 }
 
+/** The name in `execution.json.error` of a completed `@2` run whose launches report a fact against included usage (plan 2026-09-25, D-6). */
+export const INCLUDED_USAGE_UNCONFIRMED = 'IncludedUsageUnconfirmed';
+
+/**
+ * The kinds the harness stops a run for in flight, after a launch the
+ * projection accepted: the two no projection rule covers (Task 5b, a parent
+ * decision P-5b-6). Every other fact is the projection's to refuse (D-7 is
+ * its authority) and the post-drain backstop's to catch.
+ */
+const IN_FLIGHT_STOP_KINDS: ReadonlySet<string> = new Set(['long_context_boundary', 'unnatural_reset']);
+
+/**
+ * A `@2` launch the projection accepted reports a context above D-5's
+ * per-request ceiling, or a window reset early (D-6), and the run stops
+ * there: the lifetime is aborted (`usage_stop:<role>[<index>]`) so nothing
+ * later launches, the launch stays booked as the runner booked it, and the
+ * usage stop is carried here and filed in `execution.json`.
+ */
+export class UsageStopError extends Error {
+  constructor(readonly usageStop: UsageStop, readonly launch: { seq: number | null; role: string; index: number }) {
+    super(`included usage stops the run after launch ${launch.seq ?? 'unknown'} (${launch.role}[${launch.index}]): usage stop ${usageStop.kind} — ${describeUsageFacts(usageStop.facts)}; no later role is launched, and ${usageStop.note}`);
+    this.name = 'UsageStopError';
+  }
+}
+
+/**
+ * An earlier execution under the execution root stopped for included usage
+ * until a time not yet reached, or left a record this check cannot read, or
+ * never finished; or the walk met the execution root or an entry under it
+ * that it cannot examine, or that is a symbolic link, which it neither
+ * follows nor passes over. Refused before anything is created (plan
+ * 2026-09-25, D-6; Task 5b, a parent decision P-5b-7, and review repairs R9,
+ * R10, N4 and N5, parent decisions P-5b-9 and P-5b-10): usage limits are the
+ * account's, not a requirement's.
+ */
+export class UsageResetPendingError extends Error {
+  constructor(detail: string, readonly resetsAt: number | null = null, readonly recordedBy: string | null = null) {
+    super(`refusing to start a subscription execution: ${detail}; a resume is a new, separately approved execution`);
+    this.name = 'UsageResetPendingError';
+  }
+}
+
+const isJsonObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/** A filesystem error's code, or what the error is when it carries none: never its message, which names the whole path. */
+function errorCodeOf(error: unknown): string {
+  const code = (error as NodeJS.ErrnoException | null)?.code;
+  return typeof code === 'string' ? code : error instanceof Error ? error.name : String(error);
+}
+
+/**
+ * The names of the directories directly under `<executionRoot>/<relative>`,
+ * sorted, for the reset-pending walk. A file is not one and is passed over; a
+ * symbolic link is refused by name, never followed and never passed over,
+ * and so is a directory that cannot be listed (Task 5b review repair R10, a
+ * parent decision P-5b-10): either could hide an earlier execution's record.
+ */
+function directoriesUnder(executionRoot: string, relative: string): string[] {
+  let entries: Dirent[];
+  try {
+    entries = readdirSync(join(executionRoot, relative), { withFileTypes: true });
+  } catch (error) {
+    throw new UsageResetPendingError(`${relative === '' ? 'the execution root' : `the directory ${relative} under the execution root`} cannot be listed (${errorCodeOf(error)}), so whether an earlier execution in it stopped for included usage is unknown`);
+  }
+  const names: string[] = [];
+  for (const entry of entries) {
+    if (entry.isSymbolicLink()) throw new UsageResetPendingError(`the entry ${join(relative, entry.name)} under the execution root is a symbolic link, which this check neither follows nor passes over`);
+    if (entry.isDirectory()) names.push(entry.name);
+  }
+  return names.sort();
+}
+
+/**
+ * What `lstat` says of an execution directory's record, or `null` when there
+ * is none (ENOENT): an execution directory without a record holds no usage
+ * stop. Any other error is refused by name, never taken for an absence (Task
+ * 5b review repair R10, a parent decision P-5b-10): `existsSync` said "no
+ * record" for a directory it could not search.
+ */
+function recordStatsOf(file: string, named: string): Stats | null {
+  try {
+    return lstatSync(file);
+  } catch (error) {
+    if (errorCodeOf(error) === 'ENOENT') return null;
+    throw new UsageResetPendingError(`the earlier execution record ${named} under the execution root cannot be examined (${errorCodeOf(error)}), so whether it stopped for included usage is unknown`);
+  }
+}
+
+/** An epoch-seconds instant as ISO text, or a note when it lies outside the Date range. */
+function isoOfSeconds(seconds: number): string {
+  const date = new Date(seconds * 1000);
+  return Number.isNaN(date.getTime()) ? `an instant outside the Date range` : date.toISOString();
+}
+
+/**
+ * D-6's reset-pending check, over the clock the execution would start at:
+ * every `<executionRoot>/<packId>/<requirementId>/<executionId>/execution.json`
+ * at exactly depth three, any pack, any requirement. A start before the
+ * latest finite `usageStop.resetsAt` any of them recorded is refused, naming
+ * it and the execution that recorded it; a start at or after it proceeds.
+ * This check fails closed, refusing by name:
+ * - a record that is not a JSON object, or whose `usageStop` is neither
+ *   `null` nor an object, or whose `usageStop.resetsAt` is present and
+ *   neither `null` nor a finite number;
+ * - a record whose `status` is neither "completed" nor "failed" (Task 5b
+ *   review repair R9, a parent decision P-5b-9): a crashed or still-running
+ *   execution never wrote its usage stop, and its `launches.jsonl` may record
+ *   a rejected window, so an operator must review it first;
+ * - a symbolic link at the pack, requirement, execution or record level,
+ *   which is neither followed nor passed over, and any entry the walk cannot
+ *   list or examine (Task 5b review repair R10, a parent decision P-5b-10);
+ *   and the execution root itself when it is a symbolic link, or cannot be
+ *   examined for any reason but its absence (Task 5b review repairs N4 and
+ *   N5, a parent decision P-5b-10, extended).
+ * An absent root holds no earlier execution, and an execution directory
+ * without a record holds no usage stop. A regular file where the walk
+ * expects a directory is no execution and is passed over.
+ */
+function assertNoResetPending(namedRoot: string, startedAt: Date): void {
+  // The root as resolved (Task 5b review repair O2): POSIX lstat follows a link named with a trailing separator, and
+  // resolve drops it, so the link check sees the link itself; the walk below reads the same resolved path.
+  const executionRoot = resolve(namedRoot);
+  let rootStats: Stats;
+  try {
+    rootStats = lstatSync(executionRoot);
+  } catch (error) {
+    if (errorCodeOf(error) === 'ENOENT') return;
+    throw new UsageResetPendingError(`the execution root cannot be examined (${errorCodeOf(error)}), so whether an earlier execution under it stopped for included usage is unknown`);
+  }
+  // The root is held to the rule every level below it is (Task 5b review repair N5, a parent decision P-5b-10,
+  // extended): `lstat` reports its last component only, so a link above it (macOS's /var) is not one here.
+  if (rootStats.isSymbolicLink()) throw new UsageResetPendingError('the execution root is a symbolic link, which this check neither follows nor passes over');
+  let latest: { resetsAt: number; recordedBy: string } | null = null;
+  for (const packId of directoriesUnder(executionRoot, '')) {
+    for (const requirementId of directoriesUnder(executionRoot, packId)) {
+      for (const executionId of directoriesUnder(executionRoot, join(packId, requirementId))) {
+        const recordedBy = join(packId, requirementId, executionId);
+        const file = join(executionRoot, recordedBy, 'execution.json');
+        const named = join(recordedBy, 'execution.json');
+        const stats = recordStatsOf(file, named);
+        if (stats === null) continue;
+        if (stats.isSymbolicLink()) throw new UsageResetPendingError(`the earlier execution record ${named} under the execution root is a symbolic link, which this check neither follows nor passes over`);
+        let summary: unknown;
+        try {
+          summary = JSON.parse(readFileSync(file, 'utf8'));
+        } catch (error) {
+          throw new UsageResetPendingError(`the earlier execution record ${named} under the execution root cannot be read as JSON (${error instanceof Error ? error.message : String(error)}), so whether it stopped for included usage is unknown`);
+        }
+        if (!isJsonObject(summary)) throw new UsageResetPendingError(`the earlier execution record ${named} under the execution root is not a JSON object, so whether it stopped for included usage is unknown`);
+        const usageStop = Object.hasOwn(summary, 'usageStop') ? summary['usageStop'] : null;
+        if (usageStop !== null && !isJsonObject(usageStop)) throw new UsageResetPendingError(`the earlier execution record ${named} under the execution root carries a usageStop that is neither null nor an object`);
+        const resetsAt = usageStop === null || !Object.hasOwn(usageStop, 'resetsAt') ? null : usageStop['resetsAt'];
+        if (resetsAt !== null && (typeof resetsAt !== 'number' || !Number.isFinite(resetsAt))) throw new UsageResetPendingError(`the earlier execution record ${named} under the execution root carries usageStop.resetsAt ${JSON.stringify(resetsAt)}, which is neither null nor a finite number of epoch seconds`);
+        // A stop's facts are read to see what it recorded, so a shape other than an array of objects fails closed
+        // (Task 5b review repair M4, a parent decision P-5b-14).
+        const facts = usageStop === null ? [] : Object.hasOwn(usageStop, 'facts') ? usageStop['facts'] : undefined;
+        if (!Array.isArray(facts) || !facts.every(isJsonObject)) {
+          throw new UsageResetPendingError(`the earlier execution record ${named} under the execution root carries usageStop.facts ${facts === undefined ? 'absent' : JSON.stringify(facts)}, which is not an array of objects, so whether it stopped for included usage is unknown`);
+        }
+        const status = summary['status'];
+        if (status !== 'completed' && status !== 'failed') {
+          throw new UsageResetPendingError(
+            `the earlier execution record ${named} under the execution root has status ${status === undefined ? 'absent' : JSON.stringify(status)}, neither "completed" nor "failed": a crashed or still-running execution, whose usage stop, if any, was never written and whose launches.jsonl may record a rejected window, so an operator must review it before any new subscription execution starts`,
+          );
+        }
+        // An exhaustion or overage whose reset time was not a finite number holds until reviewed (Task 5b review repair
+        // M4, a parent decision P-5b-14): usageStopOf files resetsAt null for it, and a null would let the next start at once.
+        if (resetsAt === null && facts.some((fact) => fact['kind'] === 'exhausted' || fact['kind'] === 'overage')) {
+          throw new UsageResetPendingError(
+            `the earlier execution record ${named} under the execution root recorded an exhaustion or overage that reported no reset time as a number (usageStop.resetsAt null), so an operator must review it before any new subscription execution starts`,
+            null,
+            recordedBy,
+          );
+        }
+        if (typeof resetsAt === 'number' && (latest === null || resetsAt > latest.resetsAt)) latest = { resetsAt, recordedBy };
+      }
+    }
+  }
+  if (latest !== null && startedAt.getTime() < latest.resetsAt * 1000) {
+    throw new UsageResetPendingError(
+      `the execution ${latest.recordedBy} under the execution root stopped for included usage until ${isoOfSeconds(latest.resetsAt)} (usageStop.resetsAt ${latest.resetsAt}, epoch seconds), the latest any earlier execution recorded, and this one would start at ${startedAt.toISOString()}, before it`,
+      latest.resetsAt,
+      latest.recordedBy,
+    );
+  }
+}
+
+/**
+ * How far `runSubscriptionCommand` got, which only it can say (Task 5c, a
+ * parent decision P-5c-6). The trust block's schema tier is read off it,
+ * because an exit code and lines do not tell a role output refused at its
+ * seam from a world refused before any role ran, nor a record the writer
+ * refused as invalid from one the filesystem refused after it assembled
+ * valid.
+ *
+ * ```text
+ * world_refused        readWorld or readRegistryOrFail threw, and outcomeFor mapped the error
+ * role_output_refused  a RoleOutputError at a role's seam
+ * result_invalid       writeVerificationResult returned invalid
+ * write_failed         it returned write_failed: the record had assembled valid
+ * written              it returned written
+ * ```
+ */
+export type SubscriptionCommandStage = 'world_refused' | 'role_output_refused' | 'result_invalid' | 'write_failed' | 'written';
+
+/** What `runSubscriptionCommand` returns (Task 5c, a parent decision P-5c-6). */
+export interface SubscriptionCommand {
+  /** The command's own account, word for word as before: what the harness files as `exitCode` and `lines`. */
+  outcome: CliOutcome;
+  stage: SubscriptionCommandStage;
+  /** The world the run was read over; `null` only for `world_refused`. */
+  world: CurrentWorld | null;
+  /** The writer's `written` outcome, its validated record included, for stage `written`; `null` otherwise. */
+  written: Extract<ResultWriteOutcome, { status: 'written' }> | null;
+}
+
+/**
+ * The method each of D-9's tiers is filed under, stated once (Task 5c, a
+ * parent decision P-5c-5): the trust spec's method column, with "lower-cased"
+ * where it says "case-folded", because the comparison is
+ * `normalizeWhitespace` then `toLowerCase`, which is not Unicode case
+ * folding. None says "verified", the status only signing confers (a parent
+ * decision P-5c-4). Not exported, so no test can compute its expectations
+ * from it (Task 5c review repair R6): the tests type every method again.
+ */
+const TRUST_METHODS = Object.freeze({
+  execution: 'the harness\'s own account: the gate, the launches, the drain, cleanup confirmation and usage stops',
+  schemaValidity: 'role outputs parsed at their seams (RoleOutputError otherwise), then assembleVerificationResult (structure, cross-field consistency, pins, gap identity, version registry)',
+  evidenceValidity: 'checkResultEvidence: every evidence set from evidenceSetsOf, judged by the signing gate\'s own checkEvidenceSet against the corpus the run authorised; quotes and absence terms compared whitespace-collapsed and lower-cased, not byte-exact; edges looked up across the loaded corpus index, not only the entitled closure; whether evidence supports its proposition is not assessed',
+  substantiveCorrectness: 'none at capture time',
+});
+
+/** `execution.json.trust` on `@2` (plan 2026-09-25, D-9): four tiers, each a status and the method behind it. */
+export interface TrustBlock {
+  execution: { status: 'completed' | 'failed'; method: string; error: string | null };
+  schemaValidity: { status: 'valid' | 'invalid' | 'unassessed'; method: string };
+  evidenceValidity: { status: 'passed' | 'failed' | 'withheld' | 'unassessed'; method: string; sets: EvidenceSetValidity[] | null };
+  substantiveCorrectness: { status: 'unassessed'; method: string };
+}
+
+/** What `trustOf` is handed: values only, as the harness holds them once every withhold decision is made. */
+export interface TrustInputs {
+  /** The final `execution.json.error`'s name, or `null` when the execution completed. */
+  error: string | null;
+  /** How far `runSubscriptionCommand` got, or `null` when it was never reached or threw. */
+  stage: SubscriptionCommandStage | null;
+  /** The validated record the writer wrote, or `null`. */
+  result: VerificationResult | null;
+  /** The corpus the run authorised (`world.corpus`), or `null`. */
+  corpus: LoadedCorpus | null;
+  /** The final `resultWithheld`: a withhold rule fired, or a result the pipeline wrote was deleted. */
+  resultWithheld: boolean;
+  /** The harness rule, if any, that withheld the run's outputs. */
+  withheldBy: string | null;
+}
+
+/**
+ * D-9's four tiers (Task 5c). Without them, "the run completed" and "the
+ * result was written" would be all a capture says about itself, and writing
+ * a result proves nothing about whether its quotes exist. Pure — handed
+ * values, with no filesystem, clock or environment — so each rule is shown
+ * to decide alone, over inputs the harness never produces.
+ *
+ * - **Execution:** `completed` exactly when there is no error, whose name is
+ *   carried verbatim.
+ * - **Schema validity:** the stage's. `valid` once the record assembled valid
+ *   (`written`, and `write_failed`, whose record the filesystem refused after
+ *   it was valid); `invalid` for a role output refused at its seam or a record
+ *   the writer refused; `unassessed` for a refused world, and when
+ *   `runSubscriptionCommand` was never reached or threw.
+ * - **Evidence validity,** decided in this order. `withheld`, with no sets,
+ *   when either withhold fact holds, `resultWithheld` or `withheldBy`,
+ *   failing closed on either (a parent decision P-5c-3): a withheld run is
+ *   never measured, so it is never `passed`. Otherwise `unassessed`, with no
+ *   sets, unless the schema tier is `valid` and a written record and its
+ *   corpus were handed (P-5c-2): `checkResultEvidence` does not validate the
+ *   schema, and can say ok, or throw, over an invalid record. Otherwise
+ *   `checkResultEvidence`: no evidence set at all is `unassessed` with
+ *   `sets: []` — a halted, gap-bearing record, in which nothing failed,
+ *   which is not evidence found — every set ok is `passed`, and anything
+ *   else `failed`; for both, `sets` is every set it reports, passing ones
+ *   included, in its order (P-5c-2).
+ * - **Substantive correctness:** always `unassessed`.
+ *
+ * The measurement gates nothing: by the time it is taken, status, transcript
+ * and result are decided. No status and no method says "verified"; that rule
+ * binds the block's own vocabulary, and data carried verbatim — an error's
+ * name, and a failed set's problems, which quote the record's own text: a
+ * quote's first 80 characters; an absence term, a docId or an edgeId whole
+ * — is not rewritten (a parent decision P-5c-4).
+ */
+export function trustOf(inputs: TrustInputs): TrustBlock {
+  const schema: TrustBlock['schemaValidity']['status'] =
+    inputs.stage === 'written' || inputs.stage === 'write_failed' ? 'valid'
+    : inputs.stage === 'role_output_refused' || inputs.stage === 'result_invalid' ? 'invalid'
+    : 'unassessed';
+  return {
+    execution: { status: inputs.error === null ? 'completed' : 'failed', method: TRUST_METHODS.execution, error: inputs.error },
+    schemaValidity: { status: schema, method: TRUST_METHODS.schemaValidity },
+    evidenceValidity: evidenceTierOf(inputs, schema),
+    substantiveCorrectness: { status: 'unassessed', method: TRUST_METHODS.substantiveCorrectness },
+  };
+}
+
+/** The evidence tier, in `trustOf`'s order (Task 5c, parent decisions P-5c-2 and P-5c-3). */
+function evidenceTierOf(inputs: TrustInputs, schema: TrustBlock['schemaValidity']['status']): TrustBlock['evidenceValidity'] {
+  const method = TRUST_METHODS.evidenceValidity;
+  if (inputs.resultWithheld || inputs.withheldBy !== null) return { status: 'withheld', method, sets: null };
+  if (schema !== 'valid' || inputs.result === null || inputs.corpus === null) return { status: 'unassessed', method, sets: null };
+  const measured = checkResultEvidence(inputs.result, inputs.corpus);
+  if (measured.sets.length === 0) return { status: 'unassessed', method, sets: [] };
+  return { status: measured.ok ? 'passed' : 'failed', method, sets: measured.sets };
+}
+
 /**
  * `runRun` without `DEFAULT_ROLE_CONFIG`: the same production functions in
- * the same order, over `SUBSCRIPTION_ROLE_CONFIG`. See the header for why
- * this is composed here rather than reached through `dispatch`.
+ * the same order, over the configuration it is handed — the one for the
+ * adapter the runner speaks (`subscriptionRoleConfigFor`). See the header for
+ * why this is composed here rather than reached through `dispatch`.
+ *
+ * It returns the outcome `runRun` would report, word for word, with how far
+ * it got, the world it read and the record it wrote (Task 5c, a parent
+ * decision P-5c-6): the trust block needs all three, and none can be read
+ * back off the outcome. An error it throws today still propagates unchanged
+ * — an unmapped world error, every projection refusal, the usage stops — and
+ * the harness then has no stage. Exported so each stage is shown directly.
  */
-async function runSubscriptionCommand(
+export async function runSubscriptionCommand(
   packId: string,
   requirementId: string,
   paths: VerifyPaths,
+  config: RoleConfig,
   runner: AgentRunner,
   record: (transcript: RunTranscript) => void,
-): Promise<CliOutcome> {
+): Promise<SubscriptionCommand> {
   let world: CurrentWorld;
   let registry: ReturnType<typeof readRegistryOrFail>;
   try {
@@ -1018,7 +1765,7 @@ async function runSubscriptionCommand(
     registry = readRegistryOrFail(paths, packId);
   } catch (error) {
     const mapped = outcomeFor(error);
-    if (mapped !== null) return mapped;
+    if (mapped !== null) return { outcome: mapped, stage: 'world_refused', world: null, written: null };
     throw error;
   }
   const closure = EntitledClosure.forSources(world.corpus, world.sourceRegister, world.pack, sourceIdsOf(world.requirement));
@@ -1032,12 +1779,12 @@ async function runSubscriptionCommand(
       closure,
       corpus: world.corpus,
       prompts: loadPromptSet(),
-      config: SUBSCRIPTION_ROLE_CONFIG,
+      config,
       runner,
     });
   } catch (error) {
     if (error instanceof RoleOutputError) {
-      return { exitCode: EXIT_REFUSED, lines: ['REFUSED — a role output was refused at its own boundary.', `  - role_output: ${error.message}`, '  No verification result was written.'] };
+      return { outcome: { exitCode: EXIT_REFUSED, lines: ['REFUSED — a role output was refused at its own boundary.', `  - role_output: ${error.message}`, '  No verification result was written.'] }, stage: 'role_output_refused', world, written: null };
     }
     throw error;
   }
@@ -1053,23 +1800,45 @@ async function runSubscriptionCommand(
     destination: resultPath(paths, packId, requirementId),
   });
   if (written.status === 'invalid') {
-    return { exitCode: EXIT_REFUSED, lines: ['REFUSED — the run did not produce a verification result, so nothing was written.', ...written.error.message.split('\n').map((line) => `  - invalid_result: ${line.trim()}`)] };
+    return { outcome: { exitCode: EXIT_REFUSED, lines: ['REFUSED — the run did not produce a verification result, so nothing was written.', ...written.error.message.split('\n').map((line) => `  - invalid_result: ${line.trim()}`)] }, stage: 'result_invalid', world, written: null };
   }
   if (written.status === 'write_failed') {
-    return { exitCode: EXIT_INTEGRITY_FAILURE, lines: [`INTEGRITY FAILURE — the record was valid and the filesystem refused it at the ${written.stage} stage.`, `  ${written.error.message}`] };
+    return { outcome: { exitCode: EXIT_INTEGRITY_FAILURE, lines: [`INTEGRITY FAILURE — the record was valid and the filesystem refused it at the ${written.stage} stage.`, `  ${written.error.message}`] }, stage: 'write_failed', world, written: null };
   }
-  return { exitCode: EXIT_OK, lines: [`Wrote ${written.path}`, `  resultSha256 ${written.resultSha256}`, `  pipelineVersion ${written.result.pipelineVersion}`, `  gaps: ${written.result.gaps.length === 0 ? 'none' : written.result.gaps.length}`] };
+  return { outcome: { exitCode: EXIT_OK, lines: [`Wrote ${written.path}`, `  resultSha256 ${written.resultSha256}`, `  pipelineVersion ${written.result.pipelineVersion}`, `  gaps: ${written.result.gaps.length === 0 ? 'none' : written.result.gaps.length}`] }, stage: 'written', world, written };
 }
 
 async function captureSubscriptionRun(request: LiveCaptureRequest): Promise<LiveCaptureOutcome> {
   const sub = request.subscription ?? {};
   const config = subscriptionCaptureConfigFrom(request.env);
   assertLiveAgentsEnabled(request.env);
-  const adapter = request.adapter ?? CLAUDE_CODE_CLI_ADAPTER;
-  if (adapter.identity.id !== CLAUDE_CODE_CLI_IDENTITY.id || adapter.identity.version !== CLAUDE_CODE_CLI_IDENTITY.version) {
-    throw new SubscriptionRouteMismatchError(`the adapter handed in is ${adapter.identity.id}@${adapter.identity.version}`);
+  // `@2` unless another adapter is handed in; `@1` or `@2` by identity, and
+  // nothing else (plan 2026-09-25, D-1).
+  const adapter = request.adapter ?? CLAUDE_CODE_CLI_V2_ADAPTER;
+  const version = subscriptionVersionOf(adapter);
+  // D-6's usage facts, the in-flight stops and the backstop hold `@2` only:
+  // `@1`'s 2.1.226 streams report no fast-mode state and would trip the rules
+  // on every launch (Task 5b, a parent decision P-5b-8).
+  const includedUsage = version === '2';
+  // D-9's trust block is `@2`'s alone (Task 5c, a parent decision P-5c-1):
+  // `null` while the run is running, the four tiers once it has finished;
+  // `@1` files no such key in either summary.
+  const trustTiers = version === '2';
+  // D-1: `@1` never spawns the real executable. Without an injected launch
+  // this execution would, so it is refused here, before anything exists.
+  if (version === '1' && sub.launch === undefined) {
+    throw new SubscriptionRouteMismatchError(`${SUBSCRIPTION_V1_KEY} was handed in without an injected launch, so its execution would spawn the real executable; ${SUBSCRIPTION_V1_KEY} has none of ${SUBSCRIPTION_V2_KEY}'s included-usage, fast-mode or exact-model protections and runs over an injected launch only`);
   }
   if (request.transport !== undefined) throw new SubscriptionRouteMismatchError('an HTTP transport was handed in; the process transport is constructed here and only its launch function is injectable');
+  const profile = subscriptionProfileFor(adapter);
+  const roleConfig = subscriptionRoleConfigFor(adapter);
+  // D-5: `@2`'s launch budget is at most the run's own role launches, from
+  // the configuration. After the route, adapter, D-1 and transport refusals,
+  // and before anything is created. `@1`, which runs over injected launches
+  // only, is not capped.
+  if (version === '2' && config.budget.maxRunAttempts > maxRoleLaunchesFor(roleConfig)) {
+    throw new SubscriptionBudgetError(SUBSCRIPTION_V2_KEY, config.budget.maxRunAttempts, maxRoleLaunchesFor(roleConfig), roleConfig.prosecutorCount);
+  }
   // The inherited variables, from the handed environment unless injected —
   // checked before any directory exists, like every other gate.
   let inheritedEnv: InheritedEnv;
@@ -1079,22 +1848,56 @@ async function captureSubscriptionRun(request: LiveCaptureRequest): Promise<Live
     if (missing.length > 0) throw new SubscriptionCaptureConfigError(missing);
     inheritedEnv = { HOME: request.env['HOME']!, USER: request.env['USER']!, PATH: request.env['PATH']! };
   }
-  const executable: ExecutablePin = sub.executable ?? { path: resolvePinnedCliPath(inheritedEnv.HOME), sha256: PINNED_CLI.sha256, sizeBytes: PINNED_CLI.sizeBytes };
+  const executable: ExecutablePin = sub.executable ?? subscriptionExecutableFor(adapter, inheritedEnv.HOME);
   const fixtureRoot = resolve(request.fixtureRoot ?? DEFAULT_FIXTURE_ROOT);
   if (contains(fixtureRoot, request.executionRoot) || contains(request.executionRoot, fixtureRoot)) {
     throw new ExecutionRootError(resolve(request.executionRoot), fixtureRoot);
   }
   if (request.deadlineMs !== undefined) assertSupportedLifetime(request.deadlineMs);
+  // An injected time bound is held to the timer range as the deadline is,
+  // before anything exists (Task 5a review repair R10).
+  assertSupportedTimeout('launchTimeoutMs', sub.launchTimeoutMs);
+  assertSupportedTimeout('gateTimeoutMs', sub.gateTimeoutMs);
+
+  // The time bounds, from the profile unless a test injects one (D-2, D-5).
+  // `@1`'s profile sets neither: its launches keep the runner's default and
+  // its gate has no timer of its own, exactly as before.
+  const launchTimeoutMs = sub.launchTimeoutMs ?? profile.launchTimeoutMs;
+  const gateTimeoutMs = sub.gateTimeoutMs ?? profile.gateTimeoutMs;
+  const budgetsInjected = sub.launchTimeoutMs !== undefined || sub.gateTimeoutMs !== undefined;
+  const budgets = {
+    launchTimeoutMs: launchTimeoutMs ?? DEFAULT_TIMEOUT_MS,
+    gateTimeoutMs,
+    lifetimeMs: launchTimeoutMs === null || gateTimeoutMs === null ? null : subscriptionLifetimeMs(config.budget, { launchTimeoutMs, gateTimeoutMs }),
+    injected: budgetsInjected,
+  };
+  // What the profile asks each launch for. `@1`'s profile states no
+  // `--settings`, so its launches carry the transport's default, named as
+  // such rather than read off a profile field that is `null`.
+  const requested = {
+    pin: { version: profile.pin.version, sha256: profile.pin.sha256, sizeBytes: profile.pin.sizeBytes },
+    permittedModels: [...profile.permittedModels],
+    effort: profile.effort,
+    maxOutputTokens: profile.maxOutputTokens,
+    settings: profile.settings ?? DEFAULT_LAUNCH_SETTINGS,
+    settingsFrom: profile.settings === null ? 'transport default' : 'profile',
+  };
+  const unobserved = version === '1' ? SUBSCRIPTION_UNOBSERVED : SUBSCRIPTION_V2_UNOBSERVED;
 
   const now = request.now ?? (() => new Date());
   const startedAt = now();
   const executionId = request.executionId ?? `${stamp(startedAt)}-${randomBytes(3).toString('hex')}`;
+  // D-6: no execution, on either adapter, starts before the latest reset an
+  // earlier one under this root recorded. After every other refusal, at the
+  // instant it would start, and before anything exists (Task 5b, a parent
+  // decision P-5b-7).
+  assertNoResetPending(request.executionRoot, startedAt);
   const { executionDir, verificationDir } = prepareExecutionDir(request, executionId);
   const attemptsPath = join(executionDir, 'attempts.jsonl');
   const launchesPath = join(executionDir, 'launches.jsonl');
   const streamsDir = join(executionDir, 'streams');
   const summaryPath = join(executionDir, 'execution.json');
-  const synthetic = sub.launch !== undefined || sub.executable !== undefined;
+  const synthetic = sub.launch !== undefined || sub.executable !== undefined || budgetsInjected;
   const literals: SensitiveLiteral[] = [
     { name: 'HOME', value: inheritedEnv.HOME },
     { name: 'USER', value: inheritedEnv.USER },
@@ -1106,7 +1909,7 @@ async function captureSubscriptionRun(request: LiveCaptureRequest): Promise<Live
   let gate: GateResult | null = null;
   let drainedAt: string | null = null;
   /** The harness rule, if any, that withheld the run's outputs. */
-  let withheldBy: 'SensitiveOutputWithheldError' | 'TerminationUnconfirmed' | null = null;
+  let withheldBy: 'SensitiveOutputWithheldError' | 'TerminationUnconfirmed' | typeof INCLUDED_USAGE_UNCONFIRMED | null = null;
 
   const writeSummary = (fields: Record<string, unknown>): void => {
     const summary = {
@@ -1118,11 +1921,14 @@ async function captureSubscriptionRun(request: LiveCaptureRequest): Promise<Live
       adapter: `${adapter.identity.id}@${adapter.identity.version}`,
       transport: sub.launch === undefined ? 'spawn' : 'injected-launch',
       synthetic,
-      pin: { version: PINNED_CLI.version, sha256: executable.sha256, sizeBytes: executable.sizeBytes, injected: sub.executable !== undefined },
+      // The executable actually launched; `requested.pin` is what the profile pins.
+      pin: { version: profile.pin.version, sha256: executable.sha256, sizeBytes: executable.sizeBytes, injected: sub.executable !== undefined },
+      requested,
       budget: config.budget,
+      budgets,
       deadlineMs: request.deadlineMs ?? null,
       startedAt: startedAt.toISOString(),
-      unobserved: SUBSCRIPTION_UNOBSERVED,
+      unobserved,
       measured: SUBSCRIPTION_MEASURED,
       gate,
       interrupts,
@@ -1133,7 +1939,10 @@ async function captureSubscriptionRun(request: LiveCaptureRequest): Promise<Live
     };
     writeFileSync(summaryPath, `${JSON.stringify(summary, null, 2)}\n`, 'utf8');
   };
-  writeSummary({ status: 'running', runId: null, finishedAt: null, drainedAt: null, httpAttempts: null, launches: 0, gateLaunches: 0, unsentEvents: 0, recordsWritten: 0, cancelled: false, cancellationReason: null, terminationUnconfirmed: false, resultWithheld: false, cliObserved: null, ledger: null, exitCode: null, lines: [], error: null });
+  // `@2`'s usage stop is on file from the start, as none so far, and so is its
+  // trust block, as none yet (Task 5c, a parent decision P-5c-1); `@1` files
+  // neither key.
+  writeSummary({ status: 'running', runId: null, finishedAt: null, drainedAt: null, httpAttempts: null, launches: 0, gateLaunches: 0, unsentEvents: 0, recordsWritten: 0, cancelled: false, cancellationReason: null, terminationUnconfirmed: false, resultWithheld: false, cliObserved: null, ledger: null, exitCode: null, lines: [], error: null, ...(includedUsage ? { usageStop: null } : {}), ...(trustTiers ? { trust: null } : {}) });
 
   let unsentEvents = 0;
   let recordsWritten = 0;
@@ -1154,7 +1963,9 @@ async function captureSubscriptionRun(request: LiveCaptureRequest): Promise<Live
     const { kind, role, index, argv, envNames, streamsClosed, ...facts } = record;
     const parsed = parseStreamLines(stdout);
     const sanitised = sanitiseStream(parsed, literals);
-    const observed = kind === 'role' ? observeStream(parsed) : null;
+    // Filed, and read by every usage rule, redacted by key and by value under the literals the leak check below
+    // holds the line to (Task 5b review repairs R15 and N3, a parent decision P-5b-11, extended).
+    const observed = kind === 'role' ? redactObservation(observeStream(parsed), literals) : null;
     const name = kind === 'gate' ? `gate-launch${seq}` : `role-${role}[${index}]-launch${seq}`;
     const streamFile = `${name}.sanitised.jsonl`;
     const line: LaunchLine = {
@@ -1189,10 +2000,15 @@ async function captureSubscriptionRun(request: LiveCaptureRequest): Promise<Live
     }
   };
 
+  // Built from the profile (D-2): its controls and its gate's rules, and its
+  // `--settings` text where it states one, which the transport then holds
+  // every role launch's description to.
   const transport = createSpawnTransport({
     executable,
     inheritedEnv,
-    controls: LAUNCH_CONTROL_ENV,
+    controls: profile.controls,
+    gate: profile.gate,
+    ...(profile.settings === null ? {} : { settings: profile.settings }),
     onLaunch,
     ...(sub.launch === undefined ? {} : { launch: sub.launch }),
     ...(sub.tempRoot === undefined ? {} : { tempRoot: sub.tempRoot }),
@@ -1212,20 +2028,39 @@ async function captureSubscriptionRun(request: LiveCaptureRequest): Promise<Live
     observe,
     signal: lifetime.signal,
     maxAttempts: 1,
+    // The profile's launch timeout, or an injected one (D-5). Where neither
+    // exists (`@1`) none is passed, and the runner's own default applies.
+    ...(launchTimeoutMs === null ? {} : { timeoutMs: launchTimeoutMs }),
   }) as LiveAgentRunner;
   // The first failure ends the execution: the lifetime is aborted before the
   // rejection propagates, so nothing later is sent and any child still
-  // tracked is ended by the transport.
+  // tracked is ended by the transport. The invocation is forwarded, so
+  // orchestration compares the one the adapter declares with the
+  // configuration's (D-3). For `@2`, a launch the projection accepted is
+  // read again for the two usage facts no projection rule covers, and either
+  // stops the run in the same way, under its own reason (Task 5b, a parent
+  // decision P-5b-6); the attempt stays booked as the runner booked it.
   const runner: AgentRunner = {
     kind: inner.kind,
     adapter: inner.adapter,
+    invocation: inner.invocation,
     async run(roleRequest) {
+      let response: Awaited<ReturnType<AgentRunner['run']>>;
       try {
-        return await inner.run(roleRequest);
+        response = await inner.run(roleRequest);
       } catch (thrown) {
         if (!lifetime.signal.aborted) lifetime.abort(`role_failed:${roleRequest.role}[${roleRequest.index}]`);
         throw thrown;
       }
+      if (includedUsage) {
+        const facts = usageViolations(launchLines);
+        if (facts.some((fact) => IN_FLIGHT_STOP_KINDS.has(fact.kind))) {
+          const roleLines = launchLines.filter((line) => line.kind === 'role');
+          if (!lifetime.signal.aborted) lifetime.abort(`usage_stop:${roleRequest.role}[${roleRequest.index}]`);
+          throw new UsageStopError(usageStopOf(facts)!, { seq: roleLines[roleLines.length - 1]?.seq ?? null, role: roleRequest.role, index: roleRequest.index });
+        }
+      }
+      return response;
     },
   };
 
@@ -1245,18 +2080,76 @@ async function captureSubscriptionRun(request: LiveCaptureRequest): Promise<Live
   interruptSource.on('SIGINT', onSigint);
   interruptSource.on('SIGTERM', onSigterm);
 
+  // The gate, under its own controller where it has a timeout (D-5): the
+  // controller follows the lifetime, so a deadline or an operator's
+  // interrupt ends the gate as it always did and is accounted as it always
+  // was; and when the gate's own timer fires first, the lifetime is aborted
+  // for `gate_timeout`, the gate child, if one is running, is ended (its
+  // launch line still filed, since the transport reports a launch before it
+  // throws for an abort), and the transport's abort is filed as
+  // `GateTimeout` with no role dispatched — as is a timer that fires before
+  // the child is launched or after it has answered, each in its own words
+  // (Task 5a review repair N2). Without a gate timeout (`@1`) the gate runs
+  // under the lifetime alone, exactly as before.
+  const runGateUnderItsTimeout = async (): Promise<GateResult> => {
+    if (gateTimeoutMs === null) return transport.runGate(lifetime.signal);
+    const gateController = new AbortController();
+    const follow = (): void => gateController.abort(lifetime.signal.reason);
+    if (lifetime.signal.aborted) follow();
+    else lifetime.signal.addEventListener('abort', follow, { once: true });
+    // A lifetime already ended — by a deadline or an operator — has already
+    // ended the gate through `follow`, and aborting either controller again
+    // changes neither's reason, so it keeps its own account: nothing needs to
+    // be asked first (Task 5a review repair R3 removed a guard and a flag
+    // that no outcome could observe once the error was decided by reason).
+    const onGateTimeout = (): void => {
+      gateController.abort(GATE_TIMEOUT_REASON);
+      lifetime.abort(GATE_TIMEOUT_REASON);
+    };
+    const gateTimer = setTimeout(onGateTimeout, gateTimeoutMs);
+    try {
+      return await transport.runGate(gateController.signal);
+    } finally {
+      clearTimeout(gateTimer);
+      lifetime.signal.removeEventListener('abort', follow);
+    }
+  };
+
   const handed: { transcript: RunTranscript | null } = { transcript: null };
   let exitCode: number | null = null;
   let lines: string[] = [];
   let error: { name: string; message: string } | null = null;
+  // Which call an error came from: `GateTimeout` is decided for the gate
+  // call alone (`subscriptionErrorOf`, Task 5a review repair R3).
+  let phase: SubscriptionPhase = 'gate';
+  // What `runSubscriptionCommand` returned — its stage, world and written
+  // record, for the trust block — or `null` when it was never reached or
+  // threw (Task 5c, a parent decision P-5c-6).
+  let command: SubscriptionCommand | null = null;
   try {
-    gate = await transport.runGate(lifetime.signal);
-    if (!gate.pass) {
+    gate = await runGateUnderItsTimeout();
+    // The timer may have fired after the child answered but before the
+    // verdict was read: the lifetime is already over, and nothing is
+    // dispatched (`gateVerdictErrorOf`, Task 5a review repair N1).
+    const lateVerdict = gateVerdictErrorOf(lifetime.signal.reason, gateTimeoutMs);
+    if (lateVerdict !== null) {
+      error = lateVerdict;
+    } else if (!gate.pass) {
       error = { name: GATE_REFUSED_ERROR_NAME, message: `the authentication gate refused the execution before any role was dispatched: ${gate.reasons.join('; ')}` };
     } else {
-      const outcome = await runSubscriptionCommand(request.packId, request.requirementId, { ...request.paths, verificationDir }, runner, (transcript) => {
+      // Kept though no outcome through this function can observe it (Task 5a
+      // review repair N4): the gate's timer is cleared before any role is
+      // dispatched, so the lifetime is never aborted for `gate_timeout` once
+      // roles run, and a role's error reaches the catch below in the runner's
+      // own classes (an aborted launch as `ExecutionCancelledError`), never as
+      // the transport's abort. It is defence in depth for a runner that
+      // rethrew the transport's abort unchanged, and is shown only directly,
+      // in `subscriptionErrorOf`'s phase row.
+      phase = 'roles';
+      command = await runSubscriptionCommand(request.packId, request.requirementId, { ...request.paths, verificationDir }, roleConfig, runner, (transcript) => {
         handed.transcript = transcript;
       });
+      const outcome = command.outcome;
       exitCode = outcome.exitCode;
       lines = outcome.lines;
       if (outcome.exitCode !== EXIT_OK) {
@@ -1266,7 +2159,10 @@ async function captureSubscriptionRun(request: LiveCaptureRequest): Promise<Live
       }
     }
   } catch (thrown) {
-    error = describeError(thrown, '');
+    // An aborted gate throws the transport's `ProcessTransportError`; one the
+    // gate's own timer aborted is a gate timeout, and is filed as that.
+    // Anything else keeps its own name, saying so if the timer had fired.
+    error = subscriptionErrorOf(thrown, phase, lifetime.signal.reason, gateTimeoutMs);
   } finally {
     if (deadline !== null) clearTimeout(deadline);
     interruptSource.off('SIGINT', onSigint);
@@ -1291,6 +2187,16 @@ async function captureSubscriptionRun(request: LiveCaptureRequest): Promise<Live
     withheldBy = 'TerminationUnconfirmed';
     error = { name: 'TerminationUnconfirmed', message: `the run completed but its cleanup was not confirmed, so nothing it produced is published: ${unconfirmed.join('; ')}` };
   }
+  // D-6's facts over every launch line of a `@2` execution, completed or
+  // failed, independently of the error's name. The backstop: a run the
+  // projection let through, still completed here, with any fact is not
+  // published — failed under its own name, its result deleted below, as the
+  // TerminationUnconfirmed rule's is.
+  const usageFacts = includedUsage ? usageViolations(launchLines) : null;
+  if (usageFacts !== null && error === null && usageFacts.length > 0) {
+    withheldBy = INCLUDED_USAGE_UNCONFIRMED;
+    error = { name: INCLUDED_USAGE_UNCONFIRMED, message: `the run completed but its launches report included usage this route does not accept, so nothing it produced is published: ${describeUsageFacts(usageFacts)}` };
+  }
 
   const transcript: RunTranscript | null = error === null ? handed.transcript : null;
   let transcriptPath: string | null = null;
@@ -1304,6 +2210,16 @@ async function captureSubscriptionRun(request: LiveCaptureRequest): Promise<Live
     rmSync(resultCandidate);
     resultWithheld = true;
   }
+  // D-9's four tiers, for `@2` (Task 5c, a parent decision P-5c-1), taken
+  // here and nowhere earlier: after the TerminationUnconfirmed rule, the
+  // usage backstop and the deletion above, so `resultWithheld` and
+  // `withheldBy` are final and a withheld run's evidence tier is `withheld`,
+  // never `passed`. From what `runSubscriptionCommand` returned, each `null`
+  // when it was never reached or threw. Nothing below reads it but the
+  // summary: the measurement gates no status, transcript or result.
+  const trust = trustTiers
+    ? trustOf({ error: error?.name ?? null, stage: command?.stage ?? null, result: command?.written?.result ?? null, corpus: command?.world?.corpus ?? null, resultWithheld, withheldBy })
+    : null;
   const resultPathOut = transcript !== null && existsSync(resultCandidate) ? resultCandidate : null;
   const status: LiveCaptureOutcome['status'] = transcript !== null ? 'completed' : 'failed';
   const ledger = inner.ledger;
@@ -1339,6 +2255,8 @@ async function captureSubscriptionRun(request: LiveCaptureRequest): Promise<Live
     error,
     transcriptPath,
     resultPath: resultPathOut,
+    ...(usageFacts === null ? {} : { usageStop: usageStopOf(usageFacts) }),
+    ...(trustTiers ? { trust } : {}),
   });
 
   return {
@@ -1386,7 +2304,7 @@ export interface FirstLiveCaseOptions {
   /** Injected by offline tests only, subscription route. A genuine execution supplies none, and launches the pinned CLI. */
   subscription?: SubscriptionCaptureOptions;
   now?: () => Date;
-  /** Defaults to `executionLifetimeMs` of the stated budget on the route the environment selects. */
+  /** Defaults to the lifetime of the stated budget on the route the environment selects: `executionLifetimeMs` on HTTP, `subscriptionLifetimeMs` on the subscription route. */
   deadlineMs?: number;
 }
 
@@ -1412,14 +2330,16 @@ export async function runFirstLiveCase(options: FirstLiveCaseOptions): Promise<L
   // budget follow it, and `captureLiveRun` derives the same answer again.
   const route = captureRouteFor(options.env);
   const budget = route === 'http' ? liveCaptureConfigFrom(options.env).budget : subscriptionCaptureConfigFrom(options.env).budget;
-  const deadlineMs = options.deadlineMs ?? executionLifetimeMs(budget);
+  const deadlineMs = options.deadlineMs ?? (route === 'http' ? executionLifetimeMs(budget) : subscriptionLifetimeMs(budget));
   return captureLiveRun({
     packId: FIRST_LIVE_CASE.packId,
     requirementId: FIRST_LIVE_CASE.requirementId,
     paths: firstLiveCasePaths(),
     executionRoot: options.executionRoot,
     env: options.env,
-    adapter: route === 'http' ? ANTHROPIC_MESSAGES_ADAPTER : CLAUDE_CODE_CLI_ADAPTER,
+    // The subscription route runs `@2`: `@1` would spawn the real executable
+    // here, which D-1 refuses.
+    adapter: route === 'http' ? ANTHROPIC_MESSAGES_ADAPTER : CLAUDE_CODE_CLI_V2_ADAPTER,
     deadlineMs,
     ...(options.transport === undefined ? {} : { transport: options.transport }),
     ...(options.subscription === undefined ? {} : { subscription: options.subscription }),

@@ -82,7 +82,23 @@
  * and process handling, and reduces the answer to allowlisted display labels
  * — never the account's email or organisation identifiers — plus the
  * process facts. It is not a runner attempt: it is reported to `onLaunch`
- * with `kind: 'gate'`.
+ * with `kind: 'gate'`. Its rules are the profile's, handed in as `gate`:
+ * each executable reports its own set of keys, and an allowlist written for
+ * one would either block the other or be widened for both. Without `gate`,
+ * the rules are `@1`'s, as they always were.
+ *
+ * The launch description may carry a `--settings` text; it must be the text
+ * of one JSON object, or nothing is launched. Without one, the argv carries
+ * the setting `@1` has always launched with (`DEFAULT_LAUNCH_SETTINGS`).
+ * A transport handed its profile's `settings` text refuses a role launch
+ * whose effective `--settings` — the description's, or that default — is
+ * not exactly that text, before anything is launched or written
+ * (`LaunchSettingsMismatchError`; a parent decision in the Opus 5.5
+ * migration's Task 5a, closing HANDOVER-b's open decision 7 fail-closed).
+ * The profile is the authority on what a launch runs under, and a
+ * description built by another profile's adapter would otherwise launch
+ * under settings this profile never stated. Without `settings` nothing is
+ * compared, and every launch is exactly what it always was.
  *
  * Tracked children exist so an operator's second interrupt (`escalate`) can
  * reach every live child at once, and so a harness can `drain` — wait,
@@ -106,6 +122,7 @@ import {
   type ProviderHttpResponse,
   type ProviderTransport,
 } from './live-runner';
+import { CLAUDE_CODE_CLI_GATE_RULES, type CliGateRules } from './claude-code-cli';
 import type { ProviderHttpRequest } from './provider-adapter';
 
 // ---------------------------------------------------------------------------
@@ -124,20 +141,10 @@ export const PROMPT_FILE_NAME = 'system-prompt.txt';
 export const PROMPT_FILE_PLACEHOLDER = '<system-prompt-file>';
 /** The gate's argv. */
 export const GATE_ARGV: readonly string[] = ['auth', 'status', '--json'];
-/** Keys the gate's answer may carry; anything else blocks. */
-export const GATE_FIELD_ALLOWLIST: readonly string[] = [
-  'loggedIn',
-  'authMethod',
-  'apiProvider',
-  'apiKeySource',
-  'forcedLoginMethod',
-  'subscriptionType',
-  'email',
-  'orgId',
-  'orgName',
-];
-/** Allowlisted keys whose values are identifiers and are never reproduced. */
-const GATE_IDENTIFIER_FIELDS: ReadonlySet<string> = new Set(['email', 'orgId', 'orgName']);
+/** Keys `@1`'s gate answer may carry; anything else blocks. Defined once, in `@1`'s gate rules. */
+export const GATE_FIELD_ALLOWLIST: readonly string[] = CLAUDE_CODE_CLI_GATE_RULES.allowlist;
+/** The `--settings` text a launch description without one launches with: the setting `@1` has always run under. */
+export const DEFAULT_LAUNCH_SETTINGS = '{"switchModelsOnFlag":false}';
 
 /** The executable pin: absolute path, streaming SHA-256 and exact size. */
 export interface ExecutablePin {
@@ -205,6 +212,15 @@ export interface SpawnTransportOptions {
   controls: Readonly<Record<string, string>>;
   launch?: LaunchFunction;
   onLaunch?: (record: LaunchRecord, partialStdout: string) => void;
+  /** The gate's rules, from the profile being launched. Defaults to `@1`'s. */
+  gate?: CliGateRules;
+  /**
+   * The profile's `--settings` text, where it states one. Every role launch's
+   * effective `--settings` must then be exactly this text, or the launch is
+   * refused before anything is launched or written. Absent, nothing is
+   * compared.
+   */
+  settings?: string;
   tempRoot?: string;
   maxOutputBytes?: number;
   termGraceMs?: number;
@@ -239,6 +255,22 @@ export class LaunchSpecError extends Error {
   constructor(detail: string) {
     super(`request body is not a CLI launch description: ${detail}`);
     this.name = 'LaunchSpecError';
+    this.process = unstartedFacts();
+  }
+}
+
+/**
+ * The launch description's effective `--settings` is not the text the
+ * transport's profile states. Nothing launched, and nothing written: no
+ * launch directory, no prompt file. Both texts are named — they are launch
+ * configuration, never a credential — so the refusal says which side said
+ * what.
+ */
+export class LaunchSettingsMismatchError extends Error {
+  readonly process: ProcessFacts;
+  constructor(readonly described: string, readonly profiled: string) {
+    super(`the launch description's --settings ${JSON.stringify(described)} is not the transport's profile settings ${JSON.stringify(profiled)}: the launch description and the transport's profile disagree, so nothing was launched`);
+    this.name = 'LaunchSettingsMismatchError';
     this.process = unstartedFacts();
   }
 }
@@ -295,10 +327,27 @@ const launchSpecSchema = z
     userMessage: z.string(),
     jsonSchema: z.record(z.unknown()),
     effort: z.string().min(1),
+    settings: z.string().refine(isJsonObjectText, { message: 'must be the text of one JSON object' }).optional(),
     role: z.string().min(1).optional(),
     index: z.number().int().nonnegative().optional(),
   })
   .strict();
+
+/**
+ * `--settings` is handed to the CLI as one argument, and the CLI reads it
+ * as a settings object. Text that is not one — an array, `null`, a bare
+ * value, or not JSON at all — is refused before launch rather than left for
+ * the CLI to interpret, since what it would do with one is unobserved.
+ */
+function isJsonObjectText(text: string): boolean {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return false;
+  }
+  return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed);
+}
 
 type LaunchSpec = z.infer<typeof launchSpecSchema>;
 
@@ -333,7 +382,7 @@ function roleArgv(spec: LaunchSpec, promptPath: string): string[] {
     '--disable-slash-commands',
     '--no-session-persistence',
     '--settings',
-    '{"switchModelsOnFlag":false}',
+    spec.settings ?? DEFAULT_LAUNCH_SETTINGS,
     '--system-prompt-file',
     promptPath,
     '--json-schema',
@@ -395,11 +444,12 @@ function gateLabel(present: boolean, value: unknown, identifier: boolean): strin
 }
 
 /**
- * Reduces the gate's stdout and process facts to a verdict. Every rule adds
- * its own reason, so a blocked gate says everything that blocked it; fields
- * are labels, and an identifier field's label says only whether it was there.
+ * Reduces the gate's stdout and process facts to a verdict under one
+ * profile's rules (`@1`'s unless others are given). Every rule adds its own
+ * reason, so a blocked gate says everything that blocked it; fields are
+ * labels, and an identifier field's label says only whether it was there.
  */
-export function evaluateGateOutput(stdout: string, facts: ProcessFacts): Omit<GateResult, 'process'> {
+export function evaluateGateOutput(stdout: string, facts: ProcessFacts, rules: CliGateRules = CLAUDE_CODE_CLI_GATE_RULES): Omit<GateResult, 'process'> {
   const reasons: string[] = [];
   const fields: Record<string, string> = {};
   if (facts.exitCode !== 0 || facts.signal !== null || facts.termination !== null) {
@@ -421,19 +471,15 @@ export function evaluateGateOutput(stdout: string, facts: ProcessFacts): Omit<Ga
     return { pass: false, reasons, fields };
   }
   for (const key of Object.keys(answer)) {
-    if (!GATE_FIELD_ALLOWLIST.includes(key)) reasons.push(`unexpected key: ${key}`);
+    if (!rules.allowlist.includes(key)) reasons.push(`unexpected key: ${key}`);
   }
-  for (const key of GATE_FIELD_ALLOWLIST) {
-    fields[key] = gateLabel(Object.hasOwn(answer, key), answer[key], GATE_IDENTIFIER_FIELDS.has(key));
+  for (const key of rules.allowlist) {
+    fields[key] = gateLabel(Object.hasOwn(answer, key), answer[key], rules.identifierFields.includes(key));
   }
-  const expectEquals = (key: string, expected: unknown): void => {
+  for (const [key, expected] of rules.required) {
     if (answer[key] !== expected) reasons.push(`${key} is ${fields[key]}, required ${JSON.stringify(expected)}`);
-  };
-  expectEquals('loggedIn', true);
-  expectEquals('authMethod', 'claude.ai');
-  expectEquals('apiProvider', 'firstParty');
-  expectEquals('subscriptionType', 'max');
-  for (const key of ['apiKeySource', 'forcedLoginMethod']) {
+  }
+  for (const key of rules.requiredAbsent) {
     if (Object.hasOwn(answer, key)) reasons.push(`${key} present (${fields[key]}), required absent`);
   }
   return { pass: reasons.length === 0, reasons, fields };
@@ -554,6 +600,7 @@ export function createSpawnTransport(options: SpawnTransportOptions): SpawnTrans
   const maxOutputBytes = options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
   const termGraceMs = options.termGraceMs ?? DEFAULT_GRACE_MS;
   const killGraceMs = options.killGraceMs ?? DEFAULT_GRACE_MS;
+  const gateRules = options.gate ?? CLAUDE_CODE_CLI_GATE_RULES;
   const env: Record<string, string> = {
     HOME: options.inheritedEnv.HOME,
     USER: options.inheritedEnv.USER,
@@ -883,6 +930,11 @@ export function createSpawnTransport(options: SpawnTransportOptions): SpawnTrans
   const transport = async (request: ProviderHttpRequest, signal: AbortSignal): Promise<ProviderHttpResponse> => {
     if (request.url !== CLI_TRANSPORT_URL) throw new WrongTransportError(request.url);
     const spec = parseLaunchSpec(request.body);
+    // The profile's settings, where it states them, are the only ones a role
+    // launches under: compared before the pin, the directory and the prompt
+    // file, so a refusal leaves nothing behind (a parent decision, Task 5a).
+    const effectiveSettings = spec.settings ?? DEFAULT_LAUNCH_SETTINGS;
+    if (options.settings !== undefined && effectiveSettings !== options.settings) throw new LaunchSettingsMismatchError(effectiveSettings, options.settings);
     await assertPin();
     if (signal.aborted) throw new ProcessTransportError('aborted before launch', unstartedFacts());
 
@@ -934,7 +986,7 @@ export function createSpawnTransport(options: SpawnTransportOptions): SpawnTrans
       promptFileBytes: null,
     };
     const { facts, stdout, leftover, streamsClosed } = await runPlanned(plan, signal);
-    const verdict = evaluateGateOutput(stdout, facts);
+    const verdict = evaluateGateOutput(stdout, facts, gateRules);
     // A gate that left a process behind, or whose pipes were still held when
     // it was given up on, blocks under its own name beside whatever the
     // process facts already said: the facts were recorded, and the verdict

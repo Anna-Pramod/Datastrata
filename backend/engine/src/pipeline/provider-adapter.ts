@@ -134,6 +134,190 @@ export function assertValidProviderAdapterIdentity(identity: ProviderAdapterIden
 }
 
 /**
+ * The efforts a registered adapter passes, and therefore the only ones an
+ * invocation may declare.
+ *
+ * Declared here, beside the rule that reads it, so that orchestration can
+ * validate an invocation without importing any particular adapter: the
+ * pipeline core names no provider. It lists what registered adapters actually
+ * pass — today `claude-code-cli@2`'s `high` — and grows only by a reviewed
+ * change made beside the adapter that needs the new value. Anything else is
+ * refused before it is hashed, because an effort no adapter passes (`HIGH`,
+ * `medium`) would be the identity of a pipeline nothing can run.
+ */
+export const INVOCATION_EFFORTS: readonly string[] = Object.freeze(['high']);
+
+/**
+ * Which declaration of an invocation was refused: the configuration's, which a
+ * pipeline identity is derived over, or the execution capability's, which a
+ * run compares against it.
+ */
+export type InvocationSide = 'configuration' | 'capability';
+
+/** What a refusal calls the declaration it refuses. */
+function invalidInvocationSubject(side: InvocationSide | null): string {
+  switch (side) {
+    case 'configuration':
+      return 'the invocation the configuration declares';
+    case 'capability':
+      return 'the invocation the execution capability declares';
+    default:
+      return 'the invocation identity';
+  }
+}
+
+/**
+ * A declared invocation that is not usable as one.
+ *
+ * `side` names whose declaration it was, because the repair differs: a
+ * configuration declaring an unusable invocation is edited, a capability
+ * declaring one is given the adapter that declares a usable one. The same
+ * problems on the two sides are two different refusals. `null` when the caller
+ * named no side, as a direct call does.
+ */
+export class InvalidInvocationIdentityError extends Error {
+  readonly side: InvocationSide | null;
+
+  constructor(
+    readonly problems: readonly string[],
+    side: InvocationSide | null,
+  ) {
+    super(`${invalidInvocationSubject(side)} is not usable:\n - ${problems.join('\n - ')}`);
+    this.side = side;
+    this.name = 'InvalidInvocationIdentityError';
+  }
+}
+
+/** A value as a problem message shows it: strings quoted, so `'64000'` and `64000` read differently. */
+function shown(value: unknown): string {
+  return typeof value === 'string' ? JSON.stringify(value) : String(value);
+}
+
+/**
+ * Rejects an invocation that would make the pipeline identity ambiguous, or
+ * that no registered adapter makes.
+ *
+ * **Checked at runtime, whatever the static type says.** A configuration is a
+ * value that may have been read from anywhere, and the type `InvocationIdentity`
+ * protects nothing that arrived as JSON. Every problem is collected, and each
+ * names its field.
+ *
+ * - `effort` is one of `INVOCATION_EFFORTS`.
+ * - `maxOutputTokens` is a positive safe integer: a rounded or overflowed
+ *   ceiling is not the one a launch is configured with.
+ * - `executable.version` is refused, never trimmed, when it is empty or carries
+ *   whitespace, for the reason the adapter identity's fields are.
+ * - `executable.sha256` is 64 **lowercase** hex characters, so that two
+ *   spellings of one digest cannot be two pipelines.
+ *
+ * `side` is carried onto the refusal. Which inputs are refused, and the
+ * problems named, do not depend on it.
+ */
+export function assertValidInvocationIdentity(
+  value: unknown,
+  side: InvocationSide | null = null,
+): asserts value is InvocationIdentity {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new InvalidInvocationIdentityError(['invocation is not an object'], side);
+  }
+  const record = value as Record<string, unknown>;
+  const problems: string[] = [];
+
+  const effort = record['effort'];
+  if (typeof effort !== 'string') problems.push('effort is not a string');
+  else if (!INVOCATION_EFFORTS.includes(effort)) {
+    problems.push(`effort ${shown(effort)} is not one a registered adapter passes (${INVOCATION_EFFORTS.join(', ')})`);
+  }
+
+  const maxOutputTokens = record['maxOutputTokens'];
+  if (!Number.isSafeInteger(maxOutputTokens) || (maxOutputTokens as number) <= 0) {
+    problems.push(`maxOutputTokens ${shown(maxOutputTokens)} is not a positive safe integer`);
+  }
+
+  const executable = record['executable'];
+  if (typeof executable !== 'object' || executable === null || Array.isArray(executable)) {
+    problems.push('executable is not an object');
+  } else {
+    const { version, sha256 } = executable as Record<string, unknown>;
+    if (typeof version !== 'string') problems.push('executable.version is not a string');
+    else if (version.length === 0) problems.push('executable.version is empty');
+    else if (version.trim().length !== version.length) problems.push('executable.version has surrounding whitespace');
+    else if (/\s/.test(version)) problems.push('executable.version contains whitespace');
+    if (typeof sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(sha256)) {
+      problems.push(`executable.sha256 ${shown(sha256)} is not 64 lowercase hex characters`);
+    }
+  }
+
+  if (problems.length > 0) throw new InvalidInvocationIdentityError(problems, side);
+}
+
+/**
+ * The fields two declared invocations differ in, in a fixed order, compared
+ * with `===` one by one. The one comparison orchestration makes and
+ * `InvocationMismatchError` reports, so the check and its message cannot
+ * disagree about what differed.
+ */
+export function invocationDifferences(configured: InvocationIdentity, actual: InvocationIdentity): string[] {
+  const fields: string[] = [];
+  if (configured.effort !== actual.effort) fields.push('effort');
+  if (configured.maxOutputTokens !== actual.maxOutputTokens) fields.push('maxOutputTokens');
+  if (configured.executable.version !== actual.executable.version) fields.push('executable.version');
+  if (configured.executable.sha256 !== actual.executable.sha256) fields.push('executable.sha256');
+  return fields;
+}
+
+/** One field's value, for a mismatch message. */
+function invocationField(invocation: InvocationIdentity, field: string): string {
+  switch (field) {
+    case 'effort':
+      return shown(invocation.effort);
+    case 'maxOutputTokens':
+      return shown(invocation.maxOutputTokens);
+    case 'executable.version':
+      return shown(invocation.executable.version);
+    default:
+      return shown(invocation.executable.sha256);
+  }
+}
+
+/** An invocation, in full, for a mismatch message. */
+function describeInvocation(invocation: InvocationIdentity): string {
+  return `{effort ${shown(invocation.effort)}, maxOutputTokens ${shown(invocation.maxOutputTokens)}, executable ${shown(invocation.executable.version)} sha256 ${shown(invocation.executable.sha256)}}`;
+}
+
+/**
+ * The invocation a run makes is not the one its identity claims.
+ *
+ * Either side may be absent. `fields` lists the differing fields only when
+ * both sides declare an invocation; when one side declares none it is empty,
+ * and the message says which side that is, because the repair differs: a
+ * configuration missing its invocation is edited, a capability missing one is
+ * given the adapter that declares it.
+ */
+export class InvocationMismatchError extends Error {
+  readonly fields: readonly string[];
+
+  constructor(
+    readonly configured: InvocationIdentity | undefined,
+    readonly actual: InvocationIdentity | undefined,
+  ) {
+    const consequence = 'the recorded identity would describe a pipeline that did not run';
+    const fields = configured !== undefined && actual !== undefined ? invocationDifferences(configured, actual) : [];
+    super(
+      configured === undefined
+        ? `the execution capability declares invocation ${actual === undefined ? 'none' : describeInvocation(actual)}, but the configuration this run's pipelineVersion is derived over declares none: ${consequence}`
+        : actual === undefined
+          ? `this run's pipelineVersion is derived over invocation ${describeInvocation(configured)}, but the execution capability declares none: ${consequence}`
+          : `this run's pipelineVersion is derived over an invocation the execution capability does not make: ${fields
+              .map((field) => `${field} configured ${invocationField(configured, field)}, actual ${invocationField(actual, field)}`)
+              .join('; ')}: ${consequence}`,
+    );
+    this.fields = fields;
+    this.name = 'InvocationMismatchError';
+  }
+}
+
+/**
  * The identity a run declares when no provider has been chosen.
  *
  * Not `undefined` and not optional. Every run has an adapter identity, because
@@ -210,8 +394,42 @@ export interface ProviderUsage {
   cacheReadInputTokens: number | null;
 }
 
+/**
+ * How an adapter invokes the model, where that is not already implied by the
+ * adapter's identity and the role configuration.
+ *
+ * On the HTTP route every request parameter is written by the adapter, so its
+ * identity covers them. On a route that launches a pinned executable, three
+ * things that decide what the model is asked to do are settings of the launch
+ * rather than bytes the adapter writes: the effort, the output ceiling (which
+ * thinking also counts toward) and the executable itself. A run that changed
+ * any of them could answer differently under the same adapter identity, so
+ * they are declared here, as data, for the pipeline identity to carry.
+ *
+ * Every field is required when the object is present. An adapter that has
+ * nothing to declare leaves `invocation` off entirely — never `null`, never
+ * `{}` — so that an identity computed without it is unchanged.
+ */
+export interface InvocationIdentity {
+  /** The effort the launch requests, exactly as the adapter passes it. */
+  readonly effort: string;
+  /** The output-token ceiling the launch is configured with. */
+  readonly maxOutputTokens: number;
+  /** The pinned executable, by version and SHA-256 — not by path, which is deployment. */
+  readonly executable: {
+    readonly version: string;
+    readonly sha256: string;
+  };
+}
+
 export interface ProviderAdapter {
   readonly identity: ProviderAdapterIdentity;
+  /**
+   * The invocation this adapter declares, when its identity does not already
+   * imply it. Absent means the adapter declares none; see `InvocationIdentity`.
+   * Declared, never inferred from a response, for the reason `channel` is.
+   */
+  readonly invocation?: InvocationIdentity;
   /**
    * How the runner reaches this provider: over HTTP, or by launching a local
    * process that reaches it on the runner's behalf. Absent means `http`.

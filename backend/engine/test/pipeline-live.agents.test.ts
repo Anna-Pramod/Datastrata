@@ -41,6 +41,7 @@ import {
   SUBSCRIPTION_CAPTURE_TOKEN,
   subscriptionCaptureConfigFrom,
   subscriptionCaptureSelected,
+  subscriptionLifetimeMs,
 } from './live-capture';
 
 /**
@@ -206,10 +207,10 @@ describe('capturing a subscription run', () => {
     expect(captureRouteFor({ [SUBSCRIPTION_CAPTURE_ENV]: SUBSCRIPTION_CAPTURE_TOKEN })).toBe('subscription');
   });
 
-  const subscriptionLifetimeMs = (() => {
+  const subscriptionTestTimeoutMs = (() => {
     if (!subscriptionAuthorised) return 0;
     try {
-      const derived = executionLifetimeMs(subscriptionCaptureConfigFrom(process.env).budget);
+      const derived = subscriptionLifetimeMs(subscriptionCaptureConfigFrom(process.env).budget);
       assertSupportedLifetime(derived);
       return derived;
     } catch {
@@ -238,6 +239,6 @@ describe('capturing a subscription run', () => {
       expect(outcome.transcriptPath).toContain(outcome.runId);
       expect(outcome.resultPath).not.toBeNull();
     },
-    subscriptionLifetimeMs + LIFETIME_MARGIN_MS,
+    subscriptionTestTimeoutMs + LIFETIME_MARGIN_MS,
   );
 });
