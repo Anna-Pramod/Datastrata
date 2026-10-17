@@ -157,11 +157,15 @@
  *   (`<pack>/<requirement>/<execution>/`) is read — across every pack and
  *   requirement under that root (production uses the one fixed root,
  *   `LIVE_EXECUTION_ROOT`), not every root on the machine (Task 5b review
- *   repair M5) — and a start before the latest `usageStop.resetsAt` any of
- *   them recorded is refused (`UsageResetPendingError`), as is a finished
+ *   repair M5) — and a start before the latest reset any of them recorded,
+ *   its `usageStop.resetsAt` or a later reset of one of its exhausted or
+ *   overage facts, is refused (`UsageResetPendingError`), as is a finished
  *   record whose stop recorded an exhaustion or overage that reported no
  *   reset time as a number, which holds until an operator reviews it (Task
- *   5b review repair M4, a parent decision P-5b-14), a record that cannot be
+ *   5b review repair M4, a parent decision P-5b-14), and one any of whose
+ *   exhausted or overage facts reports no usable reset (a safe integer of
+ *   epoch seconds greater than 0), whatever its aggregate says (the
+ *   reset-hold repair), a record that cannot be
  *   read, a record of an execution that never finished, a symbolic link at
  *   any level of the walk, the execution root included, which is neither
  *   followed nor passed over, and a root or an entry the walk cannot list or
@@ -1377,13 +1381,18 @@ export const SUBSCRIPTION_UNOBSERVED = Object.freeze({
  * D-6). The ceiling and catalog statements are the pinned 2.1.295's, read
  * statically by the parent's recheck
  * (`parent-static-recheck-summary.20261015T073247Z.log`) when the pin moved
- * from 2.1.280 on 2026-10-15.
+ * from 2.1.280 on 2026-10-15. The extra-usage statement is the parent's
+ * later static reading of the same bytes
+ * (`parent-bytes-findings.20261015T135500Z.md`, D2): the build reports
+ * `overageEnabled` only on some `allowed_warning` events, behind a gate, so
+ * a stream without it says nothing about extra usage.
  */
 export const SUBSCRIPTION_V2_UNOBSERVED = Object.freeze({
   outputCeiling: 'configured CLAUDE_CODE_MAX_OUTPUT_TOKENS=64000, which 2.1.295 honours statically up to the model\'s own limit; wire-level max_tokens unobserved',
   effort: 'effort high passed as --effort; its application unobserved',
   thinking: 'always on for claude-opus-5-5, and counted toward the 64000 ceiling; not asserted',
   modelCatalog: 'not pinned by the executable hash: the embedded catalog expires at 2026-10-15T05:28:34Z, and a remote catalog is assumed blocked by CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC, unverified',
+  extraUsage: 'overageEnabled is reported only on some allowed_warning events (2.1.295, statically); its absence is not read as extra usage off, and extra usage being off remains the user-confirmed precondition of D-6',
 });
 export const SUBSCRIPTION_MEASURED = Object.freeze({
   admittedLaunchInputBytes: 'UTF-8 length of the JSON launch description; upper bound on prompt-file + stdin bytes; not the provider request size',
@@ -1515,6 +1524,17 @@ function recordStatsOf(file: string, named: string): Stats | null {
   }
 }
 
+/**
+ * A reset time the reset-pending check can hold a start to (the reset-hold repair): a safe integer of epoch seconds
+ * greater than 0, as 2.1.295's schema types `resetsAt`. Anything else — `null`, a string (a numeric one included), a
+ * boolean, an object, `0`, a negative number, a fraction — is unknown. Its own definition, not `included-usage.ts`'s:
+ * the check reads records `usageStopOf` may not have written, and must not agree with a defect there.
+ */
+const isUsableResetTime = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
+
+/** A recorded value for a refusal: absent, or its JSON. */
+const asRecorded = (value: unknown): string => (value === undefined ? 'absent' : JSON.stringify(value));
+
 /** An epoch-seconds instant as ISO text, or a note when it lies outside the Date range. */
 function isoOfSeconds(seconds: number): string {
   const date = new Date(seconds * 1000);
@@ -1524,13 +1544,26 @@ function isoOfSeconds(seconds: number): string {
 /**
  * D-6's reset-pending check, over the clock the execution would start at:
  * every `<executionRoot>/<packId>/<requirementId>/<executionId>/execution.json`
- * at exactly depth three, any pack, any requirement. A start before the
- * latest finite `usageStop.resetsAt` any of them recorded is refused, naming
- * it and the execution that recorded it; a start at or after it proceeds.
- * This check fails closed, refusing by name:
+ * at exactly depth three, any pack, any requirement. Each record holds until
+ * the latest of its `usageStop.resetsAt` and the reset of every exhausted or
+ * overage fact in its `usageStop.facts`, so its aggregate cannot shorten the
+ * hold (the reset-hold repair). A start before the latest such time any of
+ * them recorded is refused, naming it, where it was recorded and the
+ * execution that recorded it; a start at or after it proceeds. A usable
+ * reset is a safe integer of epoch seconds greater than 0. This check fails
+ * closed, refusing by name:
  * - a record that is not a JSON object, or whose `usageStop` is neither
  *   `null` nor an object, or whose `usageStop.resetsAt` is present and
- *   neither `null` nor a finite number;
+ *   neither `null` nor a usable reset (`0`, a negative number and a fraction
+ *   among them, since the reset-hold repair);
+ * - a finished record whose stop has an exhausted or overage fact and whose
+ *   `usageStop.resetsAt` is `null` (Task 5b review repair M4, a parent
+ *   decision P-5b-14), and a finished record any of whose exhausted or
+ *   overage facts has a `resetsAt` that is absent or not a usable reset,
+ *   naming the fact by its position, name and kind and the value as
+ *   recorded, whatever the aggregate says and whatever the clock (the
+ *   reset-hold repair): an operator must review either before any new
+ *   subscription execution starts;
  * - a record whose `status` is neither "completed" nor "failed" (Task 5b
  *   review repair R9, a parent decision P-5b-9): a crashed or still-running
  *   execution never wrote its usage stop, and its `launches.jsonl` may record
@@ -1543,7 +1576,8 @@ function isoOfSeconds(seconds: number): string {
  *   N5, a parent decision P-5b-10, extended).
  * An absent root holds no earlier execution, and an execution directory
  * without a record holds no usage stop. A regular file where the walk
- * expects a directory is no execution and is passed over.
+ * expects a directory is no execution and is passed over. The check only
+ * reads: it never writes, renames or deletes a record.
  */
 function assertNoResetPending(namedRoot: string, startedAt: Date): void {
   // The root as resolved (Task 5b review repair O2): POSIX lstat follows a link named with a trailing separator, and
@@ -1559,7 +1593,7 @@ function assertNoResetPending(namedRoot: string, startedAt: Date): void {
   // The root is held to the rule every level below it is (Task 5b review repair N5, a parent decision P-5b-10,
   // extended): `lstat` reports its last component only, so a link above it (macOS's /var) is not one here.
   if (rootStats.isSymbolicLink()) throw new UsageResetPendingError('the execution root is a symbolic link, which this check neither follows nor passes over');
-  let latest: { resetsAt: number; recordedBy: string } | null = null;
+  let latest: { resetsAt: number; source: string; recordedBy: string } | null = null;
   for (const packId of directoriesUnder(executionRoot, '')) {
     for (const requirementId of directoriesUnder(executionRoot, packId)) {
       for (const executionId of directoriesUnder(executionRoot, join(packId, requirementId))) {
@@ -1579,7 +1613,7 @@ function assertNoResetPending(namedRoot: string, startedAt: Date): void {
         const usageStop = Object.hasOwn(summary, 'usageStop') ? summary['usageStop'] : null;
         if (usageStop !== null && !isJsonObject(usageStop)) throw new UsageResetPendingError(`the earlier execution record ${named} under the execution root carries a usageStop that is neither null nor an object`);
         const resetsAt = usageStop === null || !Object.hasOwn(usageStop, 'resetsAt') ? null : usageStop['resetsAt'];
-        if (resetsAt !== null && (typeof resetsAt !== 'number' || !Number.isFinite(resetsAt))) throw new UsageResetPendingError(`the earlier execution record ${named} under the execution root carries usageStop.resetsAt ${JSON.stringify(resetsAt)}, which is neither null nor a finite number of epoch seconds`);
+        if (resetsAt !== null && !isUsableResetTime(resetsAt)) throw new UsageResetPendingError(`the earlier execution record ${named} under the execution root carries usageStop.resetsAt ${JSON.stringify(resetsAt)}, which is neither null nor a usable reset time (a safe integer of epoch seconds greater than 0)`);
         // A stop's facts are read to see what it recorded, so a shape other than an array of objects fails closed
         // (Task 5b review repair M4, a parent decision P-5b-14).
         const facts = usageStop === null ? [] : Object.hasOwn(usageStop, 'facts') ? usageStop['facts'] : undefined;
@@ -1592,8 +1626,9 @@ function assertNoResetPending(namedRoot: string, startedAt: Date): void {
             `the earlier execution record ${named} under the execution root has status ${status === undefined ? 'absent' : JSON.stringify(status)}, neither "completed" nor "failed": a crashed or still-running execution, whose usage stop, if any, was never written and whose launches.jsonl may record a rejected window, so an operator must review it before any new subscription execution starts`,
           );
         }
-        // An exhaustion or overage whose reset time was not a finite number holds until reviewed (Task 5b review repair
-        // M4, a parent decision P-5b-14): usageStopOf files resetsAt null for it, and a null would let the next start at once.
+        // An exhaustion or overage whose reset time was not usable holds until reviewed (Task 5b review repair M4, a parent
+        // decision P-5b-14): usageStopOf files resetsAt null for it (since the reset-hold repair, whatever reset another
+        // fact reports), and a null would let the next start at once. The words are unchanged from M4's.
         if (resetsAt === null && facts.some((fact) => fact['kind'] === 'exhausted' || fact['kind'] === 'overage')) {
           throw new UsageResetPendingError(
             `the earlier execution record ${named} under the execution root recorded an exhaustion or overage that reported no reset time as a number (usageStop.resetsAt null), so an operator must review it before any new subscription execution starts`,
@@ -1601,13 +1636,32 @@ function assertNoResetPending(namedRoot: string, startedAt: Date): void {
             recordedBy,
           );
         }
-        if (typeof resetsAt === 'number' && (latest === null || resetsAt > latest.resetsAt)) latest = { resetsAt, recordedBy };
+        // Every exhausted or overage fact is read itself (the reset-hold repair), so the check does not rely on
+        // usageStopOf having written the aggregate: a record written before the repair can file a usable aggregate
+        // beside a fact that reported no usable reset, which holds until an operator reviews it, whatever the clock.
+        let holds: { resetsAt: number; source: string } | null = typeof resetsAt === 'number' ? { resetsAt, source: 'usageStop.resetsAt' } : null;
+        for (let position = 0; position < facts.length; position += 1) {
+          const fact = facts[position]!;
+          const kind = fact['kind'];
+          if (kind !== 'exhausted' && kind !== 'overage') continue;
+          const factResetsAt = Object.hasOwn(fact, 'resetsAt') ? fact['resetsAt'] : undefined;
+          if (!isUsableResetTime(factResetsAt)) {
+            throw new UsageResetPendingError(
+              `the earlier execution record ${named} under the execution root recorded, at usageStop.facts[${position}], the ${kind} fact ${asRecorded(fact['fact'])} with resetsAt ${asRecorded(factResetsAt)}, which is not a usable reset time (a safe integer of epoch seconds greater than 0), so an operator must review it before any new subscription execution starts`,
+              null,
+              recordedBy,
+            );
+          }
+          // The aggregate cannot shorten the hold: a fact's later reset holds instead.
+          if (holds === null || factResetsAt > holds.resetsAt) holds = { resetsAt: factResetsAt, source: `usageStop.facts[${position}].resetsAt` };
+        }
+        if (holds !== null && (latest === null || holds.resetsAt > latest.resetsAt)) latest = { ...holds, recordedBy };
       }
     }
   }
   if (latest !== null && startedAt.getTime() < latest.resetsAt * 1000) {
     throw new UsageResetPendingError(
-      `the execution ${latest.recordedBy} under the execution root stopped for included usage until ${isoOfSeconds(latest.resetsAt)} (usageStop.resetsAt ${latest.resetsAt}, epoch seconds), the latest any earlier execution recorded, and this one would start at ${startedAt.toISOString()}, before it`,
+      `the execution ${latest.recordedBy} under the execution root stopped for included usage until ${isoOfSeconds(latest.resetsAt)} (${latest.source} ${latest.resetsAt}, epoch seconds), the latest any earlier execution recorded, and this one would start at ${startedAt.toISOString()}, before it`,
       latest.resetsAt,
       latest.recordedBy,
     );

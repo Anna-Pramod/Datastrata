@@ -41,6 +41,12 @@ const RECOGNISED_STATUSES: ReadonlySet<unknown> = new Set(['allowed', 'allowed_w
 const CREDIT_KINDS: ReadonlySet<string> = new Set(['model_requires_usage_credits', 'long_context_credits_required', 'consent_unanswered']);
 /** The top-level fields an API-error kind may sit in, in the order read (review repairs R2 and S7). */
 const API_ERROR_KIND_FIELDS = ['error', 'apiError', 'api_error'] as const;
+/** The API-error kind that reports included usage exhausted (the spend controls' D3). */
+const USAGE_LIMIT_REACHED = 'usage_limit_reached';
+/** The fields an API-error carrier's params may sit in, in the order read: 2.1.295's `apiErrorParams`, then the SDK schema's `api_error_params`. */
+const API_ERROR_PARAMS_FIELDS = ['apiErrorParams', 'api_error_params'] as const;
+/** The fields of a carrier's own `rate_limit_info` a reading copies, each only where present. */
+const API_ERROR_RATE_LIMIT_FIELDS = ['status', 'rateLimitType', 'resetsAt'] as const;
 /** D-6's own overage fields: inside a window their names are not refused as names, only their values (review repair U1). */
 const OVERAGE_FIELD_NAMES: ReadonlySet<string> = new Set(['isUsingOverage', 'overageInUse', 'overageStatus']);
 /** The `rate_limit_info` fields a reading copies, each only where present. */
@@ -51,6 +57,7 @@ const RATE_LIMIT_FIELDS = [
   'isUsingOverage',
   'overageInUse',
   'overageStatus',
+  'overageEnabled',
   'rateLimitGraceActive',
   'utilization',
   'errorCode',
@@ -102,9 +109,11 @@ export const USAGE_STOP_NOTE = 'a resume is a new, separately approved execution
  *   `rate_limit_rejected` reports it. The projection refuses a launch with no
  *   event at all (D-8 step 6). A `unifiedWindows` entry that is not an object
  *   is a `rate_limit_unobserved` fact of its own, and every object inside it
- *   (an array entry's) is still held to facts 1-8 at its own path, as the
- *   projection's `windowObjectsOf` reads it (Task 5b review repair R1); the
- *   projection refuses such an entry by its shape.
+ *   (an array entry's) is still held to the per-field rate-limit facts
+ *   (`rate_limit_rejected` to `rate_limit_error_code` in the fixed order,
+ *   `usage_limit_reached` and the top-level `overage_enabled` apart) at its
+ *   own path, as the projection's `windowObjectsOf` reads it (Task 5b review
+ *   repair R1); the projection refuses such an entry by its shape.
  * - Fast mode and the betas are read at every init and every result event,
  *   one entry per event (Task 5b review repair R4): the projection's rules 8
  *   and 4 read every such line in classification, before its walk and its
@@ -114,6 +123,26 @@ export const USAGE_STOP_NOTE = 'a resume is a new, separately approved execution
  *   refuses both streams by lifecycle.
  * - `credits_required` is one fact per credit kind a carrier reports, not the
  *   first.
+ * - `overage_enabled` (the spend controls' D2) reads `overageEnabled` on the
+ *   top-level `rate_limit_info` only: present and not exactly `false` is a
+ *   fact, kind `overage` when exactly `true` and `unobserved` otherwise, as
+ *   the projection's rule 1 and its allowlist read it there. The projection's
+ *   rule 1 also reads `true` inside a window; here, as there by its window
+ *   allowlist, a window's `overageEnabled` key is a name naming overage,
+ *   `rate_limit_type_not_included` of kind `overage` whatever its value: the
+ *   same kind, under another fact.
+ * - `usage_limit_reached` (the spend controls' D3) is one fact per API-error
+ *   carrier carrying the kind, in any of the three kind fields; the
+ *   projection's rule 2 names only the first line carrying it or a rejected
+ *   window. Its `resetsAt` is the carrier's own params' (`apiErrorParams`,
+ *   else `api_error_params`, the first holding an object `rate_limit_info`),
+ *   as reported, and `null` where they report none, never borrowed from
+ *   another line, as the projection carries it; `usageStopOf` then files the
+ *   stop's `resetsAt` as `null`, whatever usable reset another exhausted or
+ *   overage fact reports (the reset-hold repair: the latest usable one alone
+ *   let a resume start once it passed, while this exhaustion's reset was
+ *   unknown), and the reset-pending check holds every later execution until
+ *   an operator reviews the stop.
  * - `long_context_route` mirrors D-7 rule 4 (Task 5b, a parent decision
  *   P-5b-2): the plan's fifteen facts did not name it, and the [1m] route is
  *   paid.
@@ -154,7 +183,8 @@ export const USAGE_STOP_NOTE = 'a resume is a new, separately approved execution
  *   parent comment-only edit): a reading inside a launch that straddles a
  *   window's reset is therefore judged after that reset, so an unnatural
  *   reset reported there makes no fact; this direction fails open.
- * - A rate-limit fact's `resetsAt` (facts 1-8) is the reading's own, else its
+ * - A per-field rate-limit fact's `resetsAt` (`rate_limit_rejected` to
+ *   `rate_limit_error_code`, `usage_limit_reached` apart) is the reading's own, else its
  *   event's, a null counting as no report (U2). A name found in a window
  *   takes the reset time of the innermost object holding it, else its
  *   event's, and a string no object holds, in an array entry, its event's
@@ -291,6 +321,14 @@ export interface ApiErrorReading {
   line: number;
   where: string;
   kinds: string[];
+  /**
+   * The carrier's own `rate_limit_info`, where its params carry one: from the
+   * first of `apiErrorParams` and `api_error_params` that is an object holding
+   * an object `rate_limit_info`, a copy of that object's `status`,
+   * `rateLimitType` and `resetsAt`, each only where present, as reported
+   * (the spend controls' D3). Absent where no params field holds one.
+   */
+  rateLimitInfo?: Rec;
 }
 
 /**
@@ -321,6 +359,12 @@ const isRecord = (value: unknown): value is Rec => typeof value === 'object' && 
 const hasOwn = (value: Rec, key: string): boolean => Object.hasOwn(value, key);
 const isCount = (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value) && value >= 0;
 const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
+/**
+ * A reset a usage stop can be held to (the reset-hold repair): a safe integer of epoch seconds greater than 0, as
+ * 2.1.295's schema types `resetsAt`. Anything else — absent, `null`, a string (a numeric one included), a boolean, an
+ * object, `0`, a negative number, a fraction — is an unknown reset.
+ */
+const isUsableReset = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
 
 /** What a value is, when it is not an object. */
 function whatItIs(value: unknown): string {
@@ -438,7 +482,12 @@ export function observeUsage(parsed: readonly UsageStreamLine[]): UsageObservati
     let kinds: string[] = [];
     if (onApiError || (type === 'system' && subtype === 'api_error')) {
       kinds = API_ERROR_KIND_FIELDS.map((field) => event[field]).filter((value): value is string => typeof value === 'string');
-      apiErrors.push({ line, where: onApiError ? 'assistant API-error item' : 'system api_error', kinds });
+      // The carrier's own rate_limit_info, from the first params field holding one as an object (D3).
+      const params = API_ERROR_PARAMS_FIELDS.map((field) => event[field]).find((value): value is Rec => isRecord(value) && isRecord(value['rate_limit_info']));
+      const own = params === undefined ? null : (params['rate_limit_info'] as Rec);
+      const copied: Rec = {};
+      if (own !== null) for (const field of API_ERROR_RATE_LIMIT_FIELDS) if (hasOwn(own, field)) copied[field] = own[field];
+      apiErrors.push({ line, where: onApiError ? 'assistant API-error item' : 'system api_error', kinds, ...(own === null ? {} : { rateLimitInfo: copied }) });
     }
     const safetyBlocked = kinds.includes('safety_monitor_blocked');
     const refusalCategory = (): Rec => (hasOwn(event, 'apiRefusalCategory') ? { apiRefusalCategory: event['apiRefusalCategory'] } : {});
@@ -487,12 +536,19 @@ export function observeUsage(parsed: readonly UsageStreamLine[]): UsageObservati
 export type UsageStopKind = 'overage' | 'exhausted' | 'unnatural_reset' | 'credits' | 'long_context_route' | 'long_context_boundary' | 'fast_mode' | 'unobserved';
 export const USAGE_STOP_KINDS: readonly UsageStopKind[] = ['overage', 'exhausted', 'unnatural_reset', 'credits', 'long_context_route', 'long_context_boundary', 'fast_mode', 'unobserved'];
 
-/** The sixteen facts, in their fixed order: D-6's fifteen as the plan names them, and the long-context route (P-5b-2). */
+/**
+ * The eighteen facts, in their fixed order: D-6's fifteen as the plan names
+ * them, the long-context route (P-5b-2), and the spend controls' two —
+ * `usage_limit_reached` (D3), after `rate_limit_rejected`, and
+ * `overage_enabled` (D2), after `overage_status_not_rejected`.
+ */
 export const USAGE_FACTS = [
   'rate_limit_rejected',
+  'usage_limit_reached',
   'is_using_overage',
   'overage_in_use',
   'overage_status_not_rejected',
+  'overage_enabled',
   'rate_limit_type_not_included',
   'grace_active',
   'utilization_over_1',
@@ -516,7 +572,7 @@ export interface UsageFact {
   role: string | null;
   index: number | null;
   detail: string;
-  /** A rate-limit fact's reading's `resetsAt`, as reported (its own, else its event's; U2); for a name found in a window, the innermost holding object's, else its event's (Task 5b review repair N2); for `unnatural_reset`, the reading's own only (Task 5b review repair R2); `null` for any other fact, or none reported. */
+  /** A rate-limit fact's reading's `resetsAt`, as reported (its own, else its event's; U2); for a name found in a window, the innermost holding object's, else its event's (Task 5b review repair N2); for `unnatural_reset`, the reading's own only (Task 5b review repair R2); for `usage_limit_reached`, the carrier's own params' (D3); `null` for any other fact, or none reported. */
   resetsAt: unknown;
 }
 
@@ -636,6 +692,11 @@ function objectFacts(o: Rec, path: string, top: boolean, resetsAt: unknown, at: 
   if (top ? !has('overageStatus') || o['overageStatus'] !== 'rejected' : has('overageStatus') && o['overageStatus'] !== 'rejected') {
     add(line, 'overage_status_not_rejected', has('overageStatus') ? 'overage' : 'unobserved', field('overageStatus'), resetsAt);
   }
+  // The spend controls' D2, at the top level only: `true` says extra usage is enabled, any other value but `false` is
+  // unread, and absence says nothing either way. Inside a window the name rule reads the key instead.
+  if (top && has('overageEnabled') && o['overageEnabled'] !== false) {
+    add(line, 'overage_enabled', o['overageEnabled'] === true ? 'overage' : 'unobserved', field('overageEnabled'), resetsAt);
+  }
   if (top ? !INCLUDED_RATE_LIMIT_TYPES.has(o['rateLimitType']) : has('rateLimitType') && !INCLUDED_RATE_LIMIT_TYPES.has(o['rateLimitType'])) {
     add(line, 'rate_limit_type_not_included', namesOverage(o['rateLimitType']) ? 'overage' : 'unobserved', field('rateLimitType'), resetsAt);
   }
@@ -664,7 +725,7 @@ export function usageViolations(lines: readonly UsageLine[]): UsageFact[] {
     };
     const launchTime = Date.parse(line.at);
 
-    // 1-9, and 16: each rate-limit event.
+    // The per-field rate-limit facts, rate_limit_unobserved's per-event forms, and unnatural_reset: each rate-limit event.
     for (const reading of observed.rateLimits) {
       const at = `rate_limit_event at line ${reading.line}`;
       if (reading.info === null) {
@@ -704,7 +765,7 @@ export function usageViolations(lines: readonly UsageLine[]): UsageFact[] {
           }
         }
       }
-      // 16: every reading of a named window in this event against the window's state as it stood before the event,
+      // unnatural_reset: every reading of a named window in this event against the window's state as it stood before the event,
       // while the launch is before the reset time the window last reported itself (Task 5b review repairs R2, R3, N1):
       // a reset time is compared only with one the window reported, and never with another reading of this event.
       for (const current of windowReadings) {
@@ -739,12 +800,12 @@ export function usageViolations(lines: readonly UsageLine[]): UsageFact[] {
         });
       }
     }
-    // 9, per launch: no event said, in a status this route understands, what the window is.
+    // rate_limit_unobserved, per launch: no event said, in a status this route understands, what the window is.
     if (!observed.rateLimits.some((reading) => reading.info !== null && RECOGNISED_STATUSES.has(reading.info['status']))) {
       add(Number.POSITIVE_INFINITY, 'rate_limit_unobserved', 'unobserved', 'no rate_limit_event carried an object rate_limit_info whose status is "allowed", "allowed_warning" or "rejected"');
     }
 
-    // 10, 11: fast mode is exactly "off" at every init and every result event (Task 2's R4; Task 5b review repair R4).
+    // fast_mode_init, fast_mode_result: fast mode is exactly "off" at every init and every result event (Task 2's R4; Task 5b review repair R4).
     const { init, result, speeds } = observed.fastMode;
     for (const reading of init) {
       if (reading.fields['fast_mode_state'] !== 'off') add(reading.line, 'fast_mode_init', 'fast_mode', `init at line ${reading.line}: fast_mode_state ${shown(reading.fields['fast_mode_state'])}`);
@@ -752,18 +813,23 @@ export function usageViolations(lines: readonly UsageLine[]): UsageFact[] {
     for (const reading of result) {
       if (reading.fields['fast_mode_state'] !== 'off') add(reading.line, 'fast_mode_result', 'fast_mode', `result at line ${reading.line}: fast_mode_state ${shown(reading.fields['fast_mode_state'])}`);
     }
-    // 12: every reported speed but standard; null only on an API-error item's usage (R1).
+    // speed_not_standard: every reported speed but standard; null only on an API-error item's usage (R1).
     for (const speed of speeds) {
       if (speed.speed === 'standard' || (speed.speed === null && speed.onApiError)) continue;
       add(speed.line, 'speed_not_standard', 'fast_mode', `${speed.where} at line ${speed.line}: speed ${shown(speed.speed)}`);
     }
-    // 13: a credit kind on either carrier (R2, S7).
+    // usage_limit_reached and credits_required: the kinds on either carrier (R2, S7). The first is one fact per carrier
+    // carrying the kind, on the carrier's own reset time where its params report one, else none (D3).
     for (const apiError of observed.apiErrors) {
+      if (apiError.kinds.includes(USAGE_LIMIT_REACHED)) {
+        const own = apiError.rateLimitInfo;
+        add(apiError.line, 'usage_limit_reached', 'exhausted', `${apiError.where} at line ${apiError.line}: API-error kind ${JSON.stringify(USAGE_LIMIT_REACHED)}`, own !== undefined && hasOwn(own, 'resetsAt') ? own['resetsAt'] : null);
+      }
       for (const kind of apiError.kinds) {
         if (CREDIT_KINDS.has(kind)) add(apiError.line, 'credits_required', 'credits', `${apiError.where} at line ${apiError.line}: API-error kind ${JSON.stringify(kind)}`);
       }
     }
-    // 14: the paid long-context route, wherever a model is reported or in any init event's betas (P-5b-2; Task 5b review repair R4).
+    // long_context_route: the paid long-context route, wherever a model is reported or in any init event's betas (P-5b-2; Task 5b review repair R4).
     for (const model of observed.reportedModels) {
       if (typeof model.model === 'string' && /\[1m\]$/i.test(model.model)) add(model.line, 'long_context_route', 'long_context_route', `${model.where} at line ${model.line}: ${JSON.stringify(model.model)}`);
     }
@@ -773,7 +839,7 @@ export function usageViolations(lines: readonly UsageLine[]): UsageFact[] {
         if (typeof beta === 'string' && /context-1m/i.test(beta)) add(initLine, 'long_context_route', 'long_context_route', `init.betas at line ${initLine}: ${JSON.stringify(beta)}`);
       }
     }
-    // 15: the per-request context above D-5's ceiling.
+    // long_context_boundary: the per-request context above D-5's ceiling.
     if (observed.reportedContextTokens !== null && observed.reportedContextTokens > CONTEXT_CEILING_TOKENS) {
       add(Number.POSITIVE_INFINITY, 'long_context_boundary', 'long_context_boundary', `reportedContextTokens ${observed.reportedContextTokens}, above the per-request ceiling of ${CONTEXT_CEILING_TOKENS} (the plan's proposed value, for the user to confirm)`);
     }
@@ -795,7 +861,11 @@ export interface UsageStop {
   seq: number;
   role: string | null;
   index: number | null;
-  /** The latest finite `resetsAt` among the exhausted and overage facts, epoch seconds; `null` when none reports one. */
+  /**
+   * The latest `resetsAt` among the exhausted and overage facts, epoch seconds, when every one of them reports a
+   * usable reset (a safe integer greater than 0); `null` when any one of them reports none, or there is none — the
+   * unresolved hold, which the reset-pending check holds until an operator reviews it (the reset-hold repair).
+   */
   resetsAt: number | null;
   note: string;
 }
@@ -804,14 +874,19 @@ export interface UsageStop {
  * The stop the facts make, or `null` when there is none. The kind comes from
  * the facts, never from an error's name: a launch ended at its timeout whose
  * partial stream reports `rejected` is exhausted, though its error is a
- * timeout. Pure.
+ * timeout. Its `resetsAt` is the latest of the exhausted and overage facts'
+ * resets when every one of them is usable, and `null` when any one is not:
+ * an exhaustion reporting no reset beside one reporting a time is not over at
+ * that time (the reset-hold repair). Every fact is carried as given, its own
+ * `resetsAt` as reported, in order. Pure.
  */
 export function usageStopOf(facts: readonly UsageFact[]): UsageStop | null {
   if (facts.length === 0) return null;
   const kind = USAGE_STOP_KINDS.find((candidate) => facts.some((fact) => fact.kind === candidate)) ?? facts[0]!.kind;
   const first = facts.find((fact) => fact.kind === kind)!;
-  const resets = facts.filter((fact) => (fact.kind === 'exhausted' || fact.kind === 'overage') && isFiniteNumber(fact.resetsAt)).map((fact) => fact.resetsAt as number);
-  return { kind, facts: [...facts], seq: first.seq, role: first.role, index: first.index, resetsAt: resets.length === 0 ? null : Math.max(...resets), note: USAGE_STOP_NOTE };
+  const relevant = facts.filter((fact) => fact.kind === 'exhausted' || fact.kind === 'overage');
+  const resetsAt = relevant.length === 0 || !relevant.every((fact) => isUsableReset(fact.resetsAt)) ? null : Math.max(...relevant.map((fact) => fact.resetsAt as number));
+  return { kind, facts: [...facts], seq: first.seq, role: first.role, index: first.index, resetsAt, note: USAGE_STOP_NOTE };
 }
 
 /** Every fact, named with its launch, for an error message. */

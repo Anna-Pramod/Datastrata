@@ -2194,11 +2194,11 @@ describe('the subscription route runs claude-code-cli@2 from its profile, and @1
   // agree with any change made to it.
   const V2_SETTINGS = '{"switchModelsOnFlag":false,"fastMode":false,"autoContinueAtUsageLimit":false}';
   const V1_SETTINGS = '{"switchModelsOnFlag":false}';
-  const V2_PIPELINE_VERSION = 'pipeline-v3-68c4d29bd770f9e7bc78f24cb2da97892a9da8f7c0bcabb499dff5301806a19a';
+  const V2_PIPELINE_VERSION = 'pipeline-v3-737f8d5015ea4249eef93cfa66c0b1b9bbb323fd633e7d5a71c26f453f8ce90e';
   const V1_PIPELINE_VERSION = 'pipeline-v3-fd3ed34d558145c09ef7105506c76767d1dc335ce2d82d57fbc6e2c148509ae5';
   const V2_SHA256 = '494870c9763b5ea370b6165e7e04af589a7b2472bf0de18ffb25477f8230bdf6';
   const V1_SHA256 = '013a1cf17df5ff1dcc189d5d6fd3fdd5f097ddc3cd41aa9992e99805574febbe';
-  /** `@2`'s eleven launch controls. */
+  /** `@2`'s thirteen launch controls. */
   const V2_CONTROLS = {
     CLAUDE_CODE_MAX_RETRIES: '0',
     MAX_STRUCTURED_OUTPUT_RETRIES: '0',
@@ -2211,6 +2211,8 @@ describe('the subscription route runs claude-code-cli@2 from its profile, and @1
     DISABLE_AUTOUPDATER: '1',
     CLAUDE_CODE_NO_MODEL_FALLBACK: '1',
     CLAUDE_CODE_DISABLE_FAST_MODE: '1',
+    CLAUDE_CODE_DISABLE_REFUSAL_RETRY: '1',
+    CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS: '1',
   };
   /** `@1`'s nine, as they always were. */
   const V1_CONTROLS = {
@@ -2229,6 +2231,7 @@ describe('the subscription route runs claude-code-cli@2 from its profile, and @1
     effort: 'effort high passed as --effort; its application unobserved',
     thinking: 'always on for claude-opus-5-5, and counted toward the 64000 ceiling; not asserted',
     modelCatalog: 'not pinned by the executable hash: the embedded catalog expires at 2026-10-15T05:28:34Z, and a remote catalog is assumed blocked by CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC, unverified',
+    extraUsage: 'overageEnabled is reported only on some allowed_warning events (2.1.295, statically); its absence is not read as extra usage off, and extra usage being off remains the user-confirmed precondition of D-6',
   };
   const INHERITED_ENV = { HOME: INHERITED.HOME, USER: INHERITED.USER, PATH: INHERITED.PATH };
   /** The reader's full recorded argv under `@2`: every element a literal but the role's schema. */
@@ -2323,7 +2326,7 @@ describe('the subscription route runs claude-code-cli@2 from its profile, and @1
     expect(outcome.runId).not.toBe(http.runId);
   }, 20_000);
 
-  it('V2-E2 — every @2 role launch ran under exactly the eleven controls at @2\'s values beside the three inherited variables, and the reader under the full argv @2 describes', async () => {
+  it('V2-E2 — every @2 role launch ran under exactly the thirteen controls at @2\'s values beside the three inherited variables, and the reader under the full argv @2 describes', async () => {
     const pin = writeCaptureDummy({ variant: 'v2' });
     const outcome = await captureV2(pin);
     expect(roleLaunchCount()).toBe(9);
@@ -2339,7 +2342,7 @@ describe('the subscription route runs claude-code-cli@2 from its profile, and @1
     expect(launches[1]!.argv[17]).toBe('--json-schema');
     expect(createHash('sha256').update(launches[1]!.argv[18]!, 'utf8').digest('hex'), 'sha256 of the reader\'s --json-schema text').toBe('ca1406ec0b32b8d6d42736a3128ba5439a0860ea8ce27dc3b9a10fcb92d85cfd');
     for (const line of launches.slice(1)) {
-      expect(line.envNames).toEqual(['CLAUDE_CODE_DISABLE_FAST_MODE', 'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC', 'CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK', 'CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK', 'CLAUDE_CODE_MAX_OUTPUT_TOKENS', 'CLAUDE_CODE_MAX_RETRIES', 'CLAUDE_CODE_NO_MODEL_FALLBACK', 'DISABLE_AUTOUPDATER', 'DISABLE_ERROR_REPORTING', 'DISABLE_TELEMETRY', 'HOME', 'MAX_STRUCTURED_OUTPUT_RETRIES', 'PATH', 'USER']);
+      expect(line.envNames).toEqual(['CLAUDE_CODE_DISABLE_FAST_MODE', 'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC', 'CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK', 'CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK', 'CLAUDE_CODE_DISABLE_REFUSAL_RETRY', 'CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS', 'CLAUDE_CODE_MAX_OUTPUT_TOKENS', 'CLAUDE_CODE_MAX_RETRIES', 'CLAUDE_CODE_NO_MODEL_FALLBACK', 'DISABLE_AUTOUPDATER', 'DISABLE_ERROR_REPORTING', 'DISABLE_TELEMETRY', 'HOME', 'MAX_STRUCTURED_OUTPUT_RETRIES', 'PATH', 'USER']);
       expect(line.argv[14]).toBe(V2_SETTINGS);
     }
     // The trust block the completed run filed (Task 5c review repair R5).
@@ -3363,7 +3366,8 @@ describe('included usage on the @2 route: the usage stop, the in-flight stops, t
       ['{"status": "failed", "usageStop": {"resetsAt": 17', 'cannot be read as JSON'],
       ['[1, 2]', 'is not a JSON object'],
       ['{"usageStop": "exhausted"}', 'carries a usageStop that is neither null nor an object'],
-      ['{"usageStop": {"resetsAt": "1790075400"}}', 'carries usageStop.resetsAt "1790075400", which is neither null nor a finite number of epoch seconds'],
+      // The reset-hold repair widened this rule to every value that is not a usable reset, so its words changed (V2-U19).
+      ['{"usageStop": {"resetsAt": "1790075400"}}', 'carries usageStop.resetsAt "1790075400", which is neither null nor a usable reset time (a safe integer of epoch seconds greater than 0)'],
     ];
     for (const [content, words] of unreadable) {
       writeFileSync(join(handwritten, 'execution.json'), content);
@@ -3456,6 +3460,233 @@ describe('included usage on the @2 route: the usage stop, the in-flight stops, t
     expect(gateLaunchCount()).toBe(gates);
     // The trust block the stopped run filed: refused in the roles, nothing assessed (Task 5c review repair R5).
     expectTrust(stopped.summaryPath, trustBlock('failed', 'CliIncludedUsageExhaustedError', 'unassessed', 'unassessed', null));
+  }, 30_000);
+
+  // The spend controls' D3: an API-error item of kind usage_limit_reached, in 2.1.295's shape on a 429 by the parent's
+  // static reading (the coarse kind in error, the kind in apiError, params from the response headers).
+  const usageLimitItem = (params: Ev | null): Ev => ({ ...apiErrorItem('rate_limit'), apiError: 'usage_limit_reached', ...(params === null ? {} : { apiErrorParams: params }) });
+
+  it('V2-U14 — usage_limit_reached at the reader, reporting no reset: CliIncludedUsageExhaustedError after exactly one role launch, no later role launched, a stop of kind exhausted whose resetsAt is null; a following execution under the same root, years later, is refused for an operator\'s review, creating nothing (the spend controls\' D3)', async () => {
+    const { text, events } = streamWith(1, (ev) => { ev.splice(lineOf(ev, isType('rate_limit_event')) - 1, 0, usageLimitItem(null)); });
+    const line = lineOf(events, (event) => event['is_api_error_message'] === true);
+    const stopped = await captureV2(writeCaptureDummy({ variant: 'v2', streams: { 1: text } }), { executionId: 'stopped' });
+    const caseDir = join(root(), 'csrd', 'CSRD-S-002');
+    expect(readdirSync(caseDir)).toEqual(['stopped']);
+    const gates = gateLaunchCount();
+    const caught = await settled(captureV2(writeCaptureDummy({ variant: 'v2' }), { executionId: 'after', now: () => new Date('2030-01-01T00:00:00.000Z') }));
+    const message = caught instanceof Error ? caught.message : `not refused: the capture returned status ${String((caught as { status?: unknown }).status)}`;
+    // Soft, and before the stop is asserted, so a defect that files the wrong stop shows the following execution's
+    // fate too, not only the first assertion it breaks.
+    expect.soft(caught, 'the following execution').toBeInstanceOf(UsageResetPendingError);
+    expect.soft(message).toContain(`the earlier execution record ${join('csrd', 'CSRD-S-002', 'stopped', 'execution.json')} under the execution root ${NO_RESET_TIME}`);
+    expect.soft(readdirSync(caseDir)).toEqual(['stopped']);
+    expect.soft(gateLaunchCount()).toBe(gates);
+    expectStopped(stopped, {
+      error: 'CliIncludedUsageExhaustedError',
+      fragment: `the CLI reported API error "usage_limit_reached" on an assistant API-error item at line ${line} (it reports no rate_limit_info in its params, so no rateLimitType and no reset time are carried)`,
+      usageStop: {
+        kind: 'exhausted',
+        facts: [{ fact: 'usage_limit_reached', kind: 'exhausted', seq: 2, role: 'reader', index: 0, detail: `assistant API-error item at line ${line}: API-error kind "usage_limit_reached"`, resetsAt: null }],
+        seq: 2,
+        role: 'reader',
+        index: 0,
+        resetsAt: null,
+        note: NOTE,
+      },
+      roleLaunches: 1,
+      stoppedSeq: 2,
+      outcomes: ['reader[0] projection_refused'],
+    });
+  }, 30_000);
+
+  it('V2-U15 — usage_limit_reached at the reader whose params report a finite reset: a stop of kind exhausted holding that reset, and a following start before it refused, naming that time (the spend controls\' D3)', async () => {
+    const { text, events } = streamWith(1, (ev) => { ev.splice(lineOf(ev, isType('rate_limit_event')) - 1, 0, usageLimitItem({ rate_limit_info: { status: 'rejected', rateLimitType: 'five_hour', resetsAt: 1790089800 } })); });
+    const line = lineOf(events, (event) => event['is_api_error_message'] === true);
+    const stopped = await captureV2(writeCaptureDummy({ variant: 'v2', streams: { 1: text } }), { executionId: 'stopped' });
+    const caseDir = join(root(), 'csrd', 'CSRD-S-002');
+    const gates = gateLaunchCount();
+    const caught = await settled(captureV2(writeCaptureDummy({ variant: 'v2' }), { executionId: 'refused', now: () => new Date(BEFORE_RESET) }));
+    const message = caught instanceof Error ? caught.message : `not refused: the capture returned status ${String((caught as { status?: unknown }).status)}`;
+    // Soft, and before the stop is asserted, as in V2-U14.
+    expect.soft(caught, 'the following start').toBeInstanceOf(UsageResetPendingError);
+    expect.soft(message).toContain(`the execution ${join('csrd', 'CSRD-S-002', 'stopped')} under the execution root stopped for included usage until 2026-09-22T15:10:00.000Z (usageStop.resetsAt 1790089800, epoch seconds)`);
+    expect.soft(message).toContain('this one would start at 2026-09-22T10:00:00.000Z, before it');
+    expect.soft(readdirSync(caseDir)).toEqual(['stopped']);
+    expect.soft(gateLaunchCount()).toBe(gates);
+    expectStopped(stopped, {
+      error: 'CliIncludedUsageExhaustedError',
+      fragment: `the CLI reported API error "usage_limit_reached" on an assistant API-error item at line ${line} (rateLimitType "five_hour", resetsAt 1790089800)`,
+      usageStop: {
+        kind: 'exhausted',
+        facts: [{ fact: 'usage_limit_reached', kind: 'exhausted', seq: 2, role: 'reader', index: 0, detail: `assistant API-error item at line ${line}: API-error kind "usage_limit_reached"`, resetsAt: 1790089800 }],
+        seq: 2,
+        role: 'reader',
+        index: 0,
+        resetsAt: 1790089800,
+        note: NOTE,
+      },
+      roleLaunches: 1,
+      stoppedSeq: 2,
+      outcomes: ['reader[0] projection_refused'],
+    });
+  }, 30_000);
+
+  // The reset-hold repair. An exhaustion reporting no usable reset beside one reporting a time holds every later
+  // execution until an operator reviews it, by two protections that each hold alone: usageStopOf files the stop's
+  // resetsAt as null (V2-U16), and the reset-pending check reads each exhausted and overage fact itself, so a record
+  // written before the repair, a usable aggregate beside an unknown fact, holds too (V2-U17), and its aggregate cannot
+  // shorten the hold (V2-U18). A usable reset is a safe integer of epoch seconds greater than 0 (V2-U17, V2-U19).
+  /** The words both protections' refusals end in. */
+  const OPERATOR_REVIEW = 'so an operator must review it before any new subscription execution starts';
+  /** The usable reset the clean stream's rate_limit_event reports: 2026-09-22T11:10:00Z. */
+  const KNOWN_RESET = 1790075400;
+  /** What a capture threw, as its message, or that it was not refused. */
+  const refusalOf = (caught: unknown): string => (caught instanceof Error ? `${caught.name}: ${caught.message}` : `not refused: the capture returned status ${String((caught as { status?: unknown }).status)}`);
+
+  it.each([
+    [
+      '(a) the carrier first, its params missing, then the rejected rate_limit_event',
+      (ev: Ev[]) => { rateInfoOf(ev)['status'] = 'rejected'; ev.splice(lineOf(ev, isType('rate_limit_event')) - 1, 0, usageLimitItem(null)); },
+      true,
+      null,
+    ],
+    [
+      '(b) the rejected rate_limit_event first, then the carrier, its params\' resetsAt "soon"',
+      (ev: Ev[]) => { rateInfoOf(ev)['status'] = 'rejected'; ev.splice(lineOf(ev, isType('rate_limit_event')), 0, usageLimitItem({ rate_limit_info: { status: 'rejected', rateLimitType: 'five_hour', resetsAt: 'soon' } })); },
+      false,
+      'soon',
+    ],
+  ] as const)('V2-U16 — end to end, the user\'s reproducer, %s: the projection refuses the reader as exhausted; the filed stop is exhausted, resetsAt null, both facts with their own resets; a following execution under the same root one second after the known reset is refused for an operator\'s review, creating nothing and launching no gate (the reset-hold repair)', async (_order, change, carrierFirst, carriedReset) => {
+    const { text, events } = streamWith(1, change);
+    const eventLine = lineOf(events, isType('rate_limit_event'));
+    const carrierLine = lineOf(events, (event) => event['is_api_error_message'] === true);
+    expect(carrierLine < eventLine, 'the order the row names').toBe(carrierFirst);
+    const stopped = await captureV2(writeCaptureDummy({ variant: 'v2', streams: { 1: text } }), { executionId: 'stopped' });
+    const caseDir = join(root(), 'csrd', 'CSRD-S-002');
+    expect(readdirSync(caseDir)).toEqual(['stopped']);
+    const gates = gateLaunchCount();
+    const caught = await settled(captureV2(writeCaptureDummy({ variant: 'v2' }), { executionId: 'after', now: () => new Date((KNOWN_RESET + 1) * 1000) }));
+    const message = refusalOf(caught);
+    // Soft, and before the stop is asserted, as in V2-U14: a defect in either protection shows the following
+    // execution's fate and the filed stop together. Either protection's refusal names the record and asks for review.
+    expect.soft(caught, 'the following execution').toBeInstanceOf(UsageResetPendingError);
+    expect.soft(message).toContain(`the earlier execution record ${join('csrd', 'CSRD-S-002', 'stopped', 'execution.json')} under the execution root `);
+    expect.soft(message).toContain(OPERATOR_REVIEW);
+    expect.soft(readdirSync(caseDir), 'the case directory after the following execution').toEqual(['stopped']);
+    expect.soft(gateLaunchCount(), 'gate launches after the following execution').toBe(gates);
+    const carrierFact = { fact: 'usage_limit_reached', kind: 'exhausted', seq: 2, role: 'reader', index: 0, detail: `assistant API-error item at line ${carrierLine}: API-error kind "usage_limit_reached"`, resetsAt: carriedReset };
+    const eventFact = { fact: 'rate_limit_rejected', kind: 'exhausted', seq: 2, role: 'reader', index: 0, detail: `rate_limit_event at line ${eventLine}: rate_limit_info.status "rejected"`, resetsAt: 1790075400 };
+    expectStopped(stopped, {
+      error: 'CliIncludedUsageExhaustedError',
+      fragment: carrierFirst
+        ? `the CLI reported API error "usage_limit_reached" on an assistant API-error item at line ${carrierLine} (it reports no rate_limit_info in its params, so no rateLimitType and no reset time are carried)`
+        : `the rate_limit_event at line ${eventLine} reports status "rejected" (rateLimitType "five_hour", resetsAt 1790075400)`,
+      usageStop: { kind: 'exhausted', facts: carrierFirst ? [carrierFact, eventFact] : [eventFact, carrierFact], seq: 2, role: 'reader', index: 0, resetsAt: null, note: NOTE },
+      roleLaunches: 1,
+      stoppedSeq: 2,
+      outcomes: ['reader[0] projection_refused'],
+    });
+  }, 30_000);
+
+  /** A finished record a stop written before the repair could leave: an exhausted aggregate at the known reset beside `facts`. */
+  const heldUntilKnownReset = (facts: unknown[]) => ({ status: 'failed', usageStop: { kind: 'exhausted', facts, seq: 2, role: 'reader', index: 0, resetsAt: KNOWN_RESET, note: NOTE } });
+  /** A usage_limit_reached fact as filed, its resetsAt the row's value, or left out altogether when the row gives none (absent). */
+  const limitFact = (unknown: readonly unknown[]) => ({ fact: 'usage_limit_reached', kind: 'exhausted', seq: 2, role: 'reader', index: 0, detail: 'a hand-written fact', ...(unknown.length === 0 ? {} : { resetsAt: unknown[0] }) });
+  /** The unknown resets, each with the words a refusal shows it in; the fraction lies before the known reset, so only the rule refuses it. */
+  const UNKNOWN_RESETS = [
+    ['absent', [], 'absent'],
+    ['null', [null], 'null'],
+    ['a string', ['soon'], '"soon"'],
+    ['0', [0], '0'],
+    ['a negative', [-1], '-1'],
+    ['a fraction', [1790075399.5], '1790075399.5'],
+  ] as const;
+
+  it.each(UNKNOWN_RESETS.flatMap(([what, unknown, shown]) => [
+    [`${what}, the unknown fact second`, [filedFact('rate_limit_rejected', 'exhausted', KNOWN_RESET), limitFact(unknown)], 1, shown],
+    [`${what}, the unknown fact first`, [limitFact(unknown), filedFact('rate_limit_rejected', 'exhausted', KNOWN_RESET)], 0, shown],
+  ] as const))('V2-U17 — the guard alone, over a hand-written finished record with a usable aggregate (1790075400) beside rate_limit_rejected at 1790075400 and usage_limit_reached whose resetsAt is %s: a start one second after the aggregate is refused, naming the fact, creating nothing and launching no gate (the reset-hold repair)', async (_what, facts, position, shown) => {
+    const pin = writeCaptureDummy({ variant: 'v2' });
+    const executionRoot = join(scratch, 'mixed-root');
+    const recorded = join('csrd', 'CSRD-S-002', 'recorded');
+    writeRecord(executionRoot, recorded, heldUntilKnownReset([...facts]));
+    const written = readFileSync(join(executionRoot, recorded, 'execution.json'), 'utf8');
+    const caught = await settled(captureV2(pin, { executionRoot, executionId: 'after-recorded', now: () => new Date((KNOWN_RESET + 1) * 1000) }));
+    const message = refusalOf(caught);
+    expect(caught, message).toBeInstanceOf(UsageResetPendingError);
+    expect(message).toContain(`the earlier execution record ${join(recorded, 'execution.json')} under the execution root recorded, at usageStop.facts[${position}], the exhausted fact "usage_limit_reached" with resetsAt ${shown}, which is not a usable reset time (a safe integer of epoch seconds greater than 0), ${OPERATOR_REVIEW}`);
+    expect([(caught as UsageResetPendingError).resetsAt, (caught as UsageResetPendingError).recordedBy]).toEqual([null, recorded]);
+    expect(readdirSync(join(executionRoot, 'csrd', 'CSRD-S-002'))).toEqual(['recorded']);
+    // The check only reads: the record it refused on is left byte for byte as it was, for the operator to review.
+    expect(readFileSync(join(executionRoot, recorded, 'execution.json'), 'utf8'), 'the record after the check').toBe(written);
+    expect(gateLaunchCount()).toBe(0);
+  }, 30_000);
+
+  it('V2-U18 — the aggregate cannot shorten the hold: a finished record whose usageStop.resetsAt 1790075400 is earlier than its overage fact\'s usable 1790079000 refuses a start between the two, naming the later and where it was recorded, creating nothing; a start exactly at the later proceeds and completes (the reset-hold repair)', async () => {
+    const pin = writeCaptureDummy({ variant: 'v2' });
+    const executionRoot = join(scratch, 'shorter-root');
+    const recorded = join('csrd', 'CSRD-S-002', 'recorded');
+    writeRecord(executionRoot, recorded, { status: 'failed', usageStop: { kind: 'overage', facts: [filedFact('rate_limit_rejected', 'exhausted', 1790075400), filedFact('overage_in_use', 'overage', 1790079000)], seq: 2, role: 'reader', index: 0, resetsAt: 1790075400, note: NOTE } });
+    const caught = await settled(captureV2(pin, { executionRoot, executionId: 'between', now: () => new Date(1790077000 * 1000) }));
+    const message = refusalOf(caught);
+    expect(caught, message).toBeInstanceOf(UsageResetPendingError);
+    expect(message).toContain(`the execution ${recorded} under the execution root stopped for included usage until 2026-09-22T12:10:00.000Z (usageStop.facts[1].resetsAt 1790079000, epoch seconds), the latest any earlier execution recorded`);
+    expect(message).toContain('this one would start at 2026-09-22T11:36:40.000Z, before it');
+    expect([(caught as UsageResetPendingError).resetsAt, (caught as UsageResetPendingError).recordedBy]).toEqual([1790079000, recorded]);
+    expect(readdirSync(join(executionRoot, 'csrd', 'CSRD-S-002'))).toEqual(['recorded']);
+    expect(gateLaunchCount()).toBe(0);
+    // Positive control: exactly at the later reset, the same request proceeds and completes.
+    const atLater = await settled(captureV2(pin, { executionRoot, executionId: 'at-later', now: () => new Date(1790079000 * 1000) }));
+    expect(atLater, refusalOf(atLater)).not.toBeInstanceOf(UsageResetPendingError);
+    expect((atLater as Awaited<ReturnType<typeof captureV2>>).status).toBe('completed');
+    expect(gateLaunchCount()).toBe(1);
+    expect(readdirSync(join(executionRoot, 'csrd', 'CSRD-S-002')).sort()).toEqual(['at-later', 'recorded']);
+    expectTrust((atLater as Awaited<ReturnType<typeof captureV2>>).summaryPath, trustBlock('completed', null, 'valid', 'passed', CLEAN_SETS));
+  }, 30_000);
+
+  it.each([
+    ['0', 0, '0'],
+    ['a negative', -1, '-1'],
+    ['a fraction', 1790075400.5, '1790075400.5'],
+  ] as const)('V2-U19 — a present usageStop.resetsAt that is neither null nor usable, %s, is refused by name whatever the clock, creating nothing and launching no gate; a string is V2-U9\'s row (the reset-hold repair)', async (_what, aggregate, shown) => {
+    const pin = writeCaptureDummy({ variant: 'v2' });
+    const executionRoot = join(scratch, 'unusable-aggregate-root');
+    const recorded = join('csrd', 'CSRD-S-002', 'recorded');
+    writeRecord(executionRoot, recorded, exhaustedUntil(aggregate));
+    const caught = await settled(captureV2(pin, { executionRoot, executionId: 'after-recorded', now: () => new Date('2030-01-01T00:00:00.000Z') }));
+    const message = refusalOf(caught);
+    expect(caught, message).toBeInstanceOf(UsageResetPendingError);
+    expect(message).toContain(`the earlier execution record ${join(recorded, 'execution.json')} under the execution root carries usageStop.resetsAt ${shown}, which is neither null nor a usable reset time (a safe integer of epoch seconds greater than 0)`);
+    expect(readdirSync(join(executionRoot, 'csrd', 'CSRD-S-002'))).toEqual(['recorded']);
+    expect(gateLaunchCount()).toBe(0);
+  }, 30_000);
+
+  it('V2-U20 — the positive control: a finished record whose aggregate 1790079000 and every exhausted and overage fact report usable resets, beside facts of other kinds whose resets are unknown and not read, refuses a start one second before the latest, naming it, and a start exactly at it proceeds and completes (the reset-hold repair; V2-U9 holds a filed stop exactly at its reset, V2-U9b the latest across records)', async () => {
+    const pin = writeCaptureDummy({ variant: 'v2' });
+    const executionRoot = join(scratch, 'usable-root');
+    const recorded = join('csrd', 'CSRD-S-002', 'recorded');
+    const facts = [
+      filedFact('rate_limit_rejected', 'exhausted', 1790075400),
+      filedFact('fast_mode_init', 'fast_mode'),
+      filedFact('overage_in_use', 'overage', 1790079000),
+      filedFact('unnatural_reset', 'unnatural_reset', 'soon'),
+    ];
+    writeRecord(executionRoot, recorded, { status: 'failed', usageStop: { kind: 'overage', facts, seq: 2, role: 'reader', index: 0, resetsAt: 1790079000, note: NOTE } });
+    const caught = await settled(captureV2(pin, { executionRoot, executionId: 'before-latest', now: () => new Date(1790078999 * 1000) }));
+    const message = refusalOf(caught);
+    expect(caught, message).toBeInstanceOf(UsageResetPendingError);
+    expect(message).toContain(`the execution ${recorded} under the execution root stopped for included usage until 2026-09-22T12:10:00.000Z (usageStop.resetsAt 1790079000, epoch seconds), the latest any earlier execution recorded`);
+    expect(message).toContain('this one would start at 2026-09-22T12:09:59.000Z, before it');
+    expect([(caught as UsageResetPendingError).resetsAt, (caught as UsageResetPendingError).recordedBy]).toEqual([1790079000, recorded]);
+    expect(readdirSync(join(executionRoot, 'csrd', 'CSRD-S-002'))).toEqual(['recorded']);
+    expect(gateLaunchCount()).toBe(0);
+    // Exactly at the latest, the same request proceeds and completes.
+    const atLatest = await settled(captureV2(pin, { executionRoot, executionId: 'at-latest', now: () => new Date(1790079000 * 1000) }));
+    expect(atLatest, refusalOf(atLatest)).not.toBeInstanceOf(UsageResetPendingError);
+    expect((atLatest as Awaited<ReturnType<typeof captureV2>>).status).toBe('completed');
+    expect(gateLaunchCount()).toBe(1);
+    expect(readdirSync(join(executionRoot, 'csrd', 'CSRD-S-002')).sort()).toEqual(['at-latest', 'recorded']);
+    expectTrust((atLatest as Awaited<ReturnType<typeof captureV2>>).summaryPath, trustBlock('completed', null, 'valid', 'passed', CLEAN_SETS));
   }, 30_000);
 
   it('V2-U9b — the latest reset any earlier execution recorded holds, whichever directory holds it: two finished records under one root at 1790075400 and 1790079000, and the same two values swapped, under a clock at 1790077000 between them (Task 5b review repair R6)', async () => {

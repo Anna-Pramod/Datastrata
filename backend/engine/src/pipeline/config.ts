@@ -78,7 +78,8 @@ export interface RoleConfig {
   /**
    * How the model is invoked, where the adapter's identity does not already
    * imply it: the effort, the output ceiling and the pinned executable of a
-   * route that launches one (`InvocationIdentity`). A `pipelineVersion` input.
+   * route that launches one, and the launch controls it runs under
+   * (`InvocationIdentity`). A `pipelineVersion` input.
    *
    * Configuration for the reason `providerAdapter` is: replay reproduces the
    * identity from here and launches nothing. Absent on `DEFAULT_ROLE_CONFIG`

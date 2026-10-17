@@ -492,6 +492,8 @@ step 1. Blocker 5 blocks plan §4 step 3, not every live step.
 4. **A newer build.** Whether to replace the pin again before a probe if a
    newer build is installed meanwhile.
 
+D2, D3 and D4 are taken up in `CHECKPOINT-opus55-spend-controls.md`.
+
 The migration checkpoint's other open decisions stand. Its decision 1 (the
 pin) is now taken (reported by the parent, from the user's instruction of
 2026-10-15). The grounds of its decision 2 (the 64,000 ceiling and the 200K

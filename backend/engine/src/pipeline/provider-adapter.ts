@@ -147,6 +147,9 @@ export function assertValidProviderAdapterIdentity(identity: ProviderAdapterIden
  */
 export const INVOCATION_EFFORTS: readonly string[] = Object.freeze(['high']);
 
+/** What a launch-control name must look like: an environment variable name, upper case, as every control is. */
+const CONTROL_NAME = /^[A-Z][A-Z0-9_]*$/;
+
 /**
  * Which declaration of an invocation was refused: the configuration's, which a
  * pipeline identity is derived over, or the execution capability's, which a
@@ -209,6 +212,11 @@ function shown(value: unknown): string {
  *   whitespace, for the reason the adapter identity's fields are.
  * - `executable.sha256` is 64 **lowercase** hex characters, so that two
  *   spellings of one digest cannot be two pipelines.
+ * - `controls`, when defined (`null` is defined), is an object that is not an
+ *   array, holding at least one entry; every key is an environment variable
+ *   name (`CONTROL_NAME`), and every value a string, as an environment
+ *   carries them. An empty map would hash differently from an absent one
+ *   while declaring the same launch.
  *
  * `side` is carried onto the refusal. Which inputs are refused, and the
  * problems named, do not depend on it.
@@ -248,14 +256,46 @@ export function assertValidInvocationIdentity(
     }
   }
 
+  const controls = record['controls'];
+  if (controls !== undefined) {
+    if (typeof controls !== 'object' || controls === null || Array.isArray(controls)) {
+      problems.push('controls is not an object');
+    } else {
+      const entries = Object.entries(controls as Record<string, unknown>);
+      if (entries.length === 0) problems.push('controls is empty');
+      for (const [name, value] of entries) {
+        if (!CONTROL_NAME.test(name)) problems.push(`controls key ${JSON.stringify(name)} is not an environment variable name (${CONTROL_NAME.source})`);
+        if (typeof value !== 'string') problems.push(`controls[${JSON.stringify(name)}] ${shown(value)} is not a string`);
+      }
+    }
+  }
+
   if (problems.length > 0) throw new InvalidInvocationIdentityError(problems, side);
 }
 
 /**
+ * A declared control map in one comparable form: its entries sorted by name,
+ * so two declarations of one map in different key orders compare equal, as
+ * the canonical serialiser hashes them equal. `null` for an absent map.
+ */
+function controlsKey(controls: Readonly<Record<string, string>> | undefined): string | null {
+  if (controls === undefined) return null;
+  return JSON.stringify(Object.keys(controls).sort().map((name) => [name, controls[name]]));
+}
+
+/** A declared control map for a message: `NAME=value`, sorted by name, or `none`. */
+function controlsShown(controls: Readonly<Record<string, string>> | undefined): string {
+  if (controls === undefined) return 'none';
+  return `[${Object.keys(controls).sort().map((name) => `${name}=${controls[name]}`).join(', ')}]`;
+}
+
+/**
  * The fields two declared invocations differ in, in a fixed order, compared
- * with `===` one by one. The one comparison orchestration makes and
- * `InvocationMismatchError` reports, so the check and its message cannot
- * disagree about what differed.
+ * with `===` one by one, and then the launch controls, compared as maps:
+ * two differ when their entries sorted by name differ, and a map declared
+ * on one side only differs from the other side's absence. The one
+ * comparison orchestration makes and `InvocationMismatchError` reports, so
+ * the check and its message cannot disagree about what differed.
  */
 export function invocationDifferences(configured: InvocationIdentity, actual: InvocationIdentity): string[] {
   const fields: string[] = [];
@@ -263,6 +303,7 @@ export function invocationDifferences(configured: InvocationIdentity, actual: In
   if (configured.maxOutputTokens !== actual.maxOutputTokens) fields.push('maxOutputTokens');
   if (configured.executable.version !== actual.executable.version) fields.push('executable.version');
   if (configured.executable.sha256 !== actual.executable.sha256) fields.push('executable.sha256');
+  if (controlsKey(configured.controls) !== controlsKey(actual.controls)) fields.push('controls');
   return fields;
 }
 
@@ -275,14 +316,17 @@ function invocationField(invocation: InvocationIdentity, field: string): string 
       return shown(invocation.maxOutputTokens);
     case 'executable.version':
       return shown(invocation.executable.version);
+    case 'controls':
+      return controlsShown(invocation.controls);
     default:
       return shown(invocation.executable.sha256);
   }
 }
 
-/** An invocation, in full, for a mismatch message. */
+/** An invocation, in full, for a mismatch message: its controls too, sorted, where it declares them. */
 function describeInvocation(invocation: InvocationIdentity): string {
-  return `{effort ${shown(invocation.effort)}, maxOutputTokens ${shown(invocation.maxOutputTokens)}, executable ${shown(invocation.executable.version)} sha256 ${shown(invocation.executable.sha256)}}`;
+  const controls = invocation.controls === undefined ? '' : `, controls ${controlsShown(invocation.controls)}`;
+  return `{effort ${shown(invocation.effort)}, maxOutputTokens ${shown(invocation.maxOutputTokens)}, executable ${shown(invocation.executable.version)} sha256 ${shown(invocation.executable.sha256)}${controls}}`;
 }
 
 /**
@@ -404,11 +448,17 @@ export interface ProviderUsage {
  * rather than bytes the adapter writes: the effort, the output ceiling (which
  * thinking also counts toward) and the executable itself. A run that changed
  * any of them could answer differently under the same adapter identity, so
- * they are declared here, as data, for the pipeline identity to carry.
+ * they are declared here, as data, for the pipeline identity to carry. So is
+ * the launch-control environment the executable runs under, where an adapter
+ * declares it: the controls change what the executable does (whether it
+ * retries a refusal, whether it asks for native structured output), so a run
+ * under other controls is not the run the identity names.
  *
- * Every field is required when the object is present. An adapter that has
- * nothing to declare leaves `invocation` off entirely — never `null`, never
- * `{}` — so that an identity computed without it is unchanged.
+ * Every field but `controls` is required when the object is present. An
+ * adapter that has nothing to declare leaves `invocation` off entirely —
+ * never `null`, never `{}` — so that an identity computed without it is
+ * unchanged; and an invocation that declares no controls leaves `controls`
+ * off, for the same reason.
  */
 export interface InvocationIdentity {
   /** The effort the launch requests, exactly as the adapter passes it. */
@@ -420,6 +470,12 @@ export interface InvocationIdentity {
     readonly version: string;
     readonly sha256: string;
   };
+  /**
+   * The launch-control environment the executable runs under, variable name
+   * to value, exactly as the adapter's profile declares it. Absent where the
+   * adapter declares none; never empty when present.
+   */
+  readonly controls?: Readonly<Record<string, string>>;
 }
 
 export interface ProviderAdapter {

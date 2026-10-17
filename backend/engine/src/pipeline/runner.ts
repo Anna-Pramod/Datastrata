@@ -108,14 +108,14 @@ export interface AgentRunner {
   /**
    * The invocation this capability makes, where its adapter declares one
    * (`InvocationIdentity`): the effort, output ceiling and pinned executable
-   * of a route that launches one.
+   * of a route that launches one, and the launch controls it runs under.
    *
    * Absent where the adapter declares none, and on replay, which launches
    * nothing. The configured invocation (`RoleConfig.invocation`) is what the
    * identity carries; for a live capability orchestration compares this with
    * it, as it compares `adapter` with `RoleConfig.providerAdapter`, so a
-   * capability cannot launch one effort, ceiling or executable while the
-   * record claims another.
+   * capability cannot launch one effort, ceiling, executable or set of
+   * controls while the record claims another.
    */
   readonly invocation?: InvocationIdentity | undefined;
   /** Called once, before any role runs. Throwing refuses the whole run. */

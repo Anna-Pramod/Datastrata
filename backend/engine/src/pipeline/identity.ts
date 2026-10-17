@@ -108,7 +108,8 @@ export interface PipelineIdentityInput {
   providerAdapter: ProviderAdapterIdentity;
   /**
    * The invocation the adapter declares, where its identity does not imply it
-   * (`InvocationIdentity`): effort, output ceiling and pinned executable.
+   * (`InvocationIdentity`): effort, output ceiling and pinned executable, and
+   * the launch controls where it declares them.
    *
    * Absent for every adapter that declares none, and then absent from the
    * payload as well, so the identities derived without it — the HTTP route's,
@@ -179,6 +180,17 @@ function identityPayload(input: PipelineIdentityInput): unknown {
               version: input.invocation.executable.version,
               sha256: input.invocation.executable.sha256,
             },
+            // The launch controls, only when declared, for the reason the
+            // invocation itself is: absent is no key at all, never `null` or
+            // `{}`, so every identity derived over an invocation without
+            // controls (the present-invocation golden among them) is
+            // unchanged. When declared, every entry is hashed — the map is
+            // the declaration — copied into a new object whose keys
+            // `canonicalJson` orders, so two orders of one map are one
+            // pipeline.
+            ...(input.invocation.controls === undefined
+              ? {}
+              : { controls: Object.fromEntries(Object.entries(input.invocation.controls)) }),
           },
         }),
   };

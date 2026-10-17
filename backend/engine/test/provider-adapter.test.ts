@@ -135,7 +135,30 @@ const INVOCATION_V2: InvocationIdentity = {
   effort: 'high',
   maxOutputTokens: 64000,
   executable: { version: '2.1.295', sha256: '494870c9763b5ea370b6165e7e04af589a7b2472bf0de18ffb25477f8230bdf6' },
+  // The thirteen launch controls, keys sorted (the spend controls' identity extension).
+  controls: {
+    CLAUDE_CODE_DISABLE_FAST_MODE: '1',
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+    CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK: '1',
+    CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK: '1',
+    CLAUDE_CODE_DISABLE_REFUSAL_RETRY: '1',
+    CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS: '1',
+    CLAUDE_CODE_MAX_OUTPUT_TOKENS: '64000',
+    CLAUDE_CODE_MAX_RETRIES: '0',
+    CLAUDE_CODE_NO_MODEL_FALLBACK: '1',
+    DISABLE_AUTOUPDATER: '1',
+    DISABLE_ERROR_REPORTING: '1',
+    DISABLE_TELEMETRY: '1',
+    MAX_STRUCTURED_OUTPUT_RETRIES: '0',
+  },
 };
+
+/** `INVOCATION_V2`'s controls as a mismatch message shows them: `NAME=value`, sorted, written out. */
+const INVOCATION_V2_CONTROLS_SHOWN =
+  '[CLAUDE_CODE_DISABLE_FAST_MODE=1, CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1, CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK=1, ' +
+  'CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK=1, CLAUDE_CODE_DISABLE_REFUSAL_RETRY=1, CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS=1, ' +
+  'CLAUDE_CODE_MAX_OUTPUT_TOKENS=64000, CLAUDE_CODE_MAX_RETRIES=0, CLAUDE_CODE_NO_MODEL_FALLBACK=1, DISABLE_AUTOUPDATER=1, ' +
+  'DISABLE_ERROR_REPORTING=1, DISABLE_TELEMETRY=1, MAX_STRUCTURED_OUTPUT_RETRIES=0]';
 
 /**
  * The invocation `GOLDEN_IDENTITY_WITH_INVOCATION` was taken over: `@2`'s as
@@ -172,21 +195,28 @@ const GOLDEN_IDENTITY_WITH_INVOCATION =
  * Nothing here calls `identityPayload`, `canonicalJson` or `sha256Hex`, so a
  * defect in any of them (a key emitted as `null`, a field left out, the
  * declared object spread wholesale) cannot be reproduced here by agreement.
- * Only the four declared invocation fields are written, which is the rule the
- * builder is held to.
+ * Only the four declared invocation fields are written, and the launch
+ * controls where the invocation declares them, which is the rule the
+ * builder is held to. The controls go first inside the invocation
+ * ("controls" sorts before "effort"), each entry in the literal's own key
+ * order: nothing here sorts them, so a literal is written with its keys
+ * sorted by hand.
  */
 function handWrittenIdentity(input: PipelineIdentityInput): string {
   const q = (value: string): string => JSON.stringify(value);
   const list = (values: readonly string[]): string => `[${values.map(q).join(',')}]`;
   const policy = input.closurePolicy;
   const invocation = input.invocation;
+  const controls = invocation?.controls;
   const json =
     `{"closurePolicy":{"expansion":${q(policy.expansion)},"referenceDepth":${policy.referenceDepth},` +
     `"referenceKinds":${list(policy.referenceKinds)},"structuralKinds":${list(policy.structuralKinds)}},` +
     `"closureRendererVersion":${q(input.closureRendererVersion)},` +
     (invocation === undefined
       ? ''
-      : `"invocation":{"effort":${q(invocation.effort)},"executable":{"sha256":${q(invocation.executable.sha256)},` +
+      : '"invocation":{' +
+        (controls === undefined ? '' : `"controls":{${Object.entries(controls).map(([name, value]) => `${q(name)}:${q(value)}`).join(',')}},`) +
+        `"effort":${q(invocation.effort)},"executable":{"sha256":${q(invocation.executable.sha256)},` +
         `"version":${q(invocation.executable.version)}},"maxOutputTokens":${invocation.maxOutputTokens}},`) +
     `"models":{"adjudicator":${q(input.models.adjudicator)},"prosecutor":${q(input.models.prosecutor)},"reader":${q(input.models.reader)}},` +
     `"prompts":{"adjudicator":${q(input.promptSha256.adjudicator)},"prosecutor":${q(input.promptSha256.prosecutor)},"reader":${q(input.promptSha256.reader)}},` +
@@ -534,9 +564,19 @@ describe('a declared invocation must be usable as one', () => {
   const UPPER_SHA = '862DB5F39398606ACD531777565505E14C792B9DA72FD31DF0B309B8EB55406E';
   const NON_HEX_SHA = '862db5f39398606acd531777565505e14c792b9da72fd31df0b309b8eb55406g';
   const withExecutable = (executable: unknown): unknown => ({ ...INVOCATION_V2, executable });
+  const withControls = (controls: unknown): unknown => ({ ...INVOCATION_V2, controls });
 
   it('accepts the @2 literal', () => {
     expect(() => assertValidInvocationIdentity(INVOCATION_V2)).not.toThrow();
+  });
+
+  it('accepts a valid control map, and an invocation declaring none at all or declaring it undefined (the positive controls for the controls rows below)', () => {
+    // The @2 literal above carries the thirteen; one entry, digits and underscores in the name, and an empty value are valid too.
+    expect(() => assertValidInvocationIdentity(withControls({ CLAUDE_CODE_MAX_RETRIES: '0', A1_B: '' }))).not.toThrow();
+    const { controls: _removed, ...none } = INVOCATION_V2;
+    expect('controls' in none).toBe(false);
+    expect(() => assertValidInvocationIdentity(none)).not.toThrow();
+    expect(() => assertValidInvocationIdentity(withControls(undefined))).not.toThrow();
   });
 
   it('accepts the invocation the @2 adapter actually declares', () => {
@@ -595,6 +635,17 @@ describe('a declared invocation must be usable as one', () => {
       ['effort is not a string', 'maxOutputTokens undefined is not a positive safe integer', 'executable is not an object'],
     ],
     ['an array', [], ['invocation is not an object']],
+    // The launch controls (the spend controls' identity extension), checked only when defined.
+    ['controls null', withControls(null), ['controls is not an object']],
+    ['controls an array', withControls([['CLAUDE_CODE_MAX_RETRIES', '0']]), ['controls is not an object']],
+    ['controls a string', withControls('CLAUDE_CODE_MAX_RETRIES=0'), ['controls is not an object']],
+    ['an empty control map', withControls({}), ['controls is empty']],
+    ['a control named in lower case', withControls({ claude_code_max_retries: '0' }), ['controls key "claude_code_max_retries" is not an environment variable name (^[A-Z][A-Z0-9_]*$)']],
+    ['a control name starting with a digit', withControls({ '1CLAUDE': '0' }), ['controls key "1CLAUDE" is not an environment variable name (^[A-Z][A-Z0-9_]*$)']],
+    ['a control name carrying "="', withControls({ 'CLAUDE_CODE_MAX_RETRIES=0': '0' }), ['controls key "CLAUDE_CODE_MAX_RETRIES=0" is not an environment variable name (^[A-Z][A-Z0-9_]*$)']],
+    ['a control value written as a number', withControls({ CLAUDE_CODE_MAX_RETRIES: 0 }), ['controls["CLAUDE_CODE_MAX_RETRIES"] 0 is not a string']],
+    ['a control value that is null', withControls({ CLAUDE_CODE_MAX_RETRIES: null }), ['controls["CLAUDE_CODE_MAX_RETRIES"] null is not a string']],
+    ['a control value that is a boolean', withControls({ CLAUDE_CODE_DISABLE_FAST_MODE: true }), ['controls["CLAUDE_CODE_DISABLE_FAST_MODE"] true is not a string']],
   ] as const)('refuses %s, naming the field', (_name, value, problems) => {
     const error = thrownBy(() => assertValidInvocationIdentity(value));
     expect(error).toBeInstanceOf(InvalidInvocationIdentityError);
@@ -642,6 +693,14 @@ describe('a declared invocation must be usable as one', () => {
       expect((error as Error).message).toContain(
         `the invocation the configuration declares is not usable:\n - executable.sha256 "${UPPER_SHA}" is not 64 lowercase hex characters`,
       );
+    });
+
+    it('refuses an invalid control map as the configuration\'s, before anything is hashed', () => {
+      const error = thrownBy(() => pipelineVersionFor({ prompts, config: configured({ ...INVOCATION_V2, controls: {} }), closure: closure() }));
+      expect(error).toBeInstanceOf(InvalidInvocationIdentityError);
+      expect((error as InvalidInvocationIdentityError).problems).toEqual(['controls is empty']);
+      expect((error as InvalidInvocationIdentityError).side).toBe('configuration');
+      expect((error as Error).message).toContain('the invocation the configuration declares is not usable:\n - controls is empty');
     });
 
     it('positive control: the valid invocation derives an identity, and a different one from none', () => {
@@ -1092,6 +1151,7 @@ describe('the capability must make the invocation the identity was derived over'
       effort: 'high',
       maxOutputTokens: 64000,
       executable: { version: '2.1.296', sha256: '494870c9763b5ea370b6165e7e04af589a7b2472bf0de18ffb25477f8230bdf6' },
+      controls: { ...INVOCATION_V2.controls },
     };
     const { runner, asked, bound } = capability('live', { adapter: SYNTHETIC_ADAPTER_V1.identity, invocation: other });
     const { error, network } = await attempt(CONFIGURED, runner);
@@ -1104,6 +1164,57 @@ describe('the capability must make the invocation the identity was derived over'
     expect(asked()).toBe(0);
     expect(bound()).toBe(0);
     expect(network).toEqual([]);
+  });
+
+  // The launch controls (the spend controls' identity extension): a capability whose declared controls differ from the
+  // configuration's, by one value or by declaring none, runs under a launch the identity does not name.
+  it.each([
+    [
+      'one control value differing (CLAUDE_CODE_DISABLE_REFUSAL_RETRY "0")',
+      { ...INVOCATION_V2, controls: { ...INVOCATION_V2.controls, CLAUDE_CODE_DISABLE_REFUSAL_RETRY: '0' } },
+      `controls configured ${INVOCATION_V2_CONTROLS_SHOWN}, actual ${INVOCATION_V2_CONTROLS_SHOWN.replace('CLAUDE_CODE_DISABLE_REFUSAL_RETRY=1', 'CLAUDE_CODE_DISABLE_REFUSAL_RETRY=0')}`,
+    ],
+    [
+      'no controls at all, beside an invocation otherwise equal',
+      { effort: 'high', maxOutputTokens: 64000, executable: { version: '2.1.295', sha256: '494870c9763b5ea370b6165e7e04af589a7b2472bf0de18ffb25477f8230bdf6' } },
+      `controls configured ${INVOCATION_V2_CONTROLS_SHOWN}, actual none`,
+    ],
+  ] as const)('refuses a live capability declaring %s, naming only controls', async (_what, other, fragment) => {
+    const { runner, asked, bound } = capability('live', { adapter: SYNTHETIC_ADAPTER_V1.identity, invocation: other });
+    const { error, network } = await attempt(CONFIGURED, runner);
+
+    expect(error).toBeInstanceOf(InvocationMismatchError);
+    expect((error as InvocationMismatchError).fields).toEqual(['controls']);
+    expect((error as InvocationMismatchError).configured).toEqual(INVOCATION_V2);
+    expect((error as InvocationMismatchError).actual).toEqual(other);
+    expect((error as Error).message).toContain(fragment);
+    expect(asked()).toBe(0);
+    expect(bound()).toBe(0);
+    expect(network).toEqual([]);
+  });
+
+  it('refuses a live capability declaring the controls where the configuration\'s invocation declares none, naming only controls', async () => {
+    const { controls: _removed, ...configuredWithout } = INVOCATION_V2;
+    const { runner, asked, bound } = capability('live', { adapter: SYNTHETIC_ADAPTER_V1.identity, invocation: INVOCATION_V2 });
+    const { error, network } = await attempt({ ...CONFIGURED, invocation: configuredWithout }, runner);
+
+    expect(error).toBeInstanceOf(InvocationMismatchError);
+    expect((error as InvocationMismatchError).fields).toEqual(['controls']);
+    expect((error as Error).message).toContain(`controls configured none, actual ${INVOCATION_V2_CONTROLS_SHOWN}`);
+    expect(asked()).toBe(0);
+    expect(bound()).toBe(0);
+    expect(network).toEqual([]);
+  });
+
+  it('the comparison reads two orders of one control map as no difference, and a mismatch described in full shows the controls sorted', () => {
+    const reordered = { ...INVOCATION_V2, controls: Object.fromEntries(Object.entries(INVOCATION_V2.controls!).reverse()) };
+    // Positive control: the key order really differs.
+    expect(Object.keys(reordered.controls)).not.toEqual(Object.keys(INVOCATION_V2.controls!));
+    expect(invocationDifferences(INVOCATION_V2, reordered)).toEqual([]);
+    // The absent side: a mismatch where the capability declares no invocation describes the configured one, controls and all.
+    expect(new InvocationMismatchError(reordered, undefined).message).toContain(
+      `this run's pipelineVersion is derived over invocation {effort "high", maxOutputTokens 64000, executable "2.1.295" sha256 "494870c9763b5ea370b6165e7e04af589a7b2472bf0de18ffb25477f8230bdf6", controls ${INVOCATION_V2_CONTROLS_SHOWN}}, but the execution capability declares none`,
+    );
   });
 
   // Effort is the one field whose difference cannot reach the comparison
@@ -1226,9 +1337,11 @@ describe('the capability must make the invocation the identity was derived over'
       effort: 'high',
       maxOutputTokens: 64000,
       executable: { version: '2.1.295', sha256: '494870c9763b5ea370b6165e7e04af589a7b2472bf0de18ffb25477f8230bdf6' },
+      controls: { ...INVOCATION_V2.controls },
     };
     expect(equal).not.toBe(INVOCATION_V2);
     expect(equal.executable).not.toBe(INVOCATION_V2.executable);
+    expect(equal.controls).not.toBe(INVOCATION_V2.controls);
     const { runner, asked, bound } = capability('live', { adapter: SYNTHETIC_ADAPTER_V1.identity, invocation: equal });
     const { error, network } = await attempt(CONFIGURED, runner);
 
@@ -1238,10 +1351,11 @@ describe('the capability must make the invocation the identity was derived over'
     expect(network).toEqual([]);
   });
 
-  it('positive control: keys the identity does not hash move nothing, beside the four fields or inside the executable', async () => {
-    // The comparison is over the four fields the identity hashes, as the
-    // emission is: a key the digest cannot see — a path, which is deployment,
-    // or one beside the four — can move neither the identity nor the check.
+  it('positive control: keys the identity does not hash move nothing, beside the declared fields or inside the executable', async () => {
+    // The comparison is over the fields the identity hashes, as the emission
+    // is: a key the digest cannot see — a path, which is deployment, or one
+    // beside the four fields and the controls — can move neither the identity
+    // nor the check.
     const withExtras = {
       ...INVOCATION_V2,
       executable: { ...INVOCATION_V2.executable, path: '/x' },

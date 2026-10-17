@@ -503,10 +503,31 @@ describe('the identities the @2 migration must not move', () => {
    * adapter.
    */
   describe('the @2 subscription identity, which the invocation moves', () => {
+    /**
+     * `@2`'s thirteen launch controls, written out with their keys sorted, as
+     * the hand-written derivation below emits them in this order (the spend
+     * controls' identity extension).
+     */
+    const CONTROLS_V2: Readonly<Record<string, string>> = {
+      CLAUDE_CODE_DISABLE_FAST_MODE: '1',
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+      CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK: '1',
+      CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK: '1',
+      CLAUDE_CODE_DISABLE_REFUSAL_RETRY: '1',
+      CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS: '1',
+      CLAUDE_CODE_MAX_OUTPUT_TOKENS: '64000',
+      CLAUDE_CODE_MAX_RETRIES: '0',
+      CLAUDE_CODE_NO_MODEL_FALLBACK: '1',
+      DISABLE_AUTOUPDATER: '1',
+      DISABLE_ERROR_REPORTING: '1',
+      DISABLE_TELEMETRY: '1',
+      MAX_STRUCTURED_OUTPUT_RETRIES: '0',
+    };
     const INVOCATION_V2: InvocationIdentity = {
       effort: 'high',
       maxOutputTokens: 64000,
       executable: { version: '2.1.295', sha256: '494870c9763b5ea370b6165e7e04af589a7b2472bf0de18ffb25477f8230bdf6' },
+      controls: CONTROLS_V2,
     };
     const OPUS_5_5 = { reader: 'claude-opus-5-5', prosecutor: 'claude-opus-5-5', adjudicator: 'claude-opus-5-5' };
     const subscriptionV2Config: RoleConfig = {
@@ -519,16 +540,29 @@ describe('the identities the @2 migration must not move', () => {
     /**
      * What `pipelineVersionFor` returned for the configuration above, over the
      * real prompts and S-002's closure, taken from this code on 2026-10-15 by
-     * a placeholder run when the pin moved from 2.1.280 to 2.1.295 (the
-     * 2.1.280 value, taken the same way on 2026-09-25, was
-     * `pipeline-v3-e0570a08…f690`). Corroborated by the hand-written
-     * derivation below, which reaches the same string without the builder and
-     * reproduces both literals above.
+     * a placeholder run when the launch controls joined the invocation
+     * (`impl-placeholder-identity.20261015T141601Z.log` in
+     * `pilot-evidence/2026-10-15-opus55-spend-controls/`). It replaces
+     * `pipeline-v3-68c4d29b…a19a`, taken the same way earlier that day when
+     * the pin moved from 2.1.280 to 2.1.295, which the configuration without
+     * its controls still derives (below); the 2.1.280 value, taken on
+     * 2026-09-25, was `pipeline-v3-e0570a08…f690`. Corroborated by the
+     * hand-written derivation below, which reaches the same string without
+     * the builder and reproduces both literals above.
      */
-    const SUBSCRIPTION_V2_PIPELINE_VERSION = 'pipeline-v3-68c4d29bd770f9e7bc78f24cb2da97892a9da8f7c0bcabb499dff5301806a19a';
+    const SUBSCRIPTION_V2_PIPELINE_VERSION = 'pipeline-v3-737f8d5015ea4249eef93cfa66c0b1b9bbb323fd633e7d5a71c26f453f8ce90e';
 
     const versionOf = (config: RoleConfig): string =>
       pipelineVersionFor({ prompts: loadPromptSet(), config, closure: s002Closure() });
+
+    /**
+     * What `pipelineVersionFor` returned for the configuration above before
+     * the launch controls joined the invocation: the 2.1.295 identity this
+     * file pinned on 2026-10-15 (`CHECKPOINT-opus55-pin-2.1.295.md`). The
+     * same configuration with its controls removed must still derive it,
+     * which shows the controls are the only change the extension made.
+     */
+    const SUBSCRIPTION_V2_PIPELINE_VERSION_WITHOUT_CONTROLS = 'pipeline-v3-68c4d29bd770f9e7bc78f24cb2da97892a9da8f7c0bcabb499dff5301806a19a';
 
     /**
      * SHA-256 of each prompt file's bytes, read and hashed here: the files
@@ -549,6 +583,12 @@ describe('the identities the @2 migration must not move', () => {
      * `DEFAULT_ROLE_CONFIG`, result schema 1.3.0, closure renderer 1.1.0, and
      * `CLOSURE_POLICY_V1`, the policy `forSources` builds S-002's closure
      * under.
+     *
+     * The launch controls, where the invocation declares them, are written
+     * first inside it ("controls" sorts before "effort"), each entry in the
+     * literal's own key order: nothing here sorts them, so the literal is
+     * written with its keys sorted by hand, and a literal out of order would
+     * derive another string rather than agree by the builder's own sort.
      */
     function handWrittenIdentity(values: {
       models: { reader: string; prosecutor: string; adjudicator: string };
@@ -557,13 +597,16 @@ describe('the identities the @2 migration must not move', () => {
     }): string {
       const prompt = promptFileSha256();
       const invocation = values.invocation;
+      const controls = invocation?.controls;
       const json =
         '{"closurePolicy":{"expansion":"served_sources_in_force","referenceDepth":1,"referenceKinds":["references"],' +
         '"structuralKinds":["amends","amendedBy","consolidates","definesTermsFor"]},' +
         '"closureRendererVersion":"1.1.0",' +
         (invocation === undefined
           ? ''
-          : `"invocation":{"effort":"${invocation.effort}","executable":{"sha256":"${invocation.executable.sha256}",` +
+          : '"invocation":{' +
+            (controls === undefined ? '' : `"controls":{${Object.entries(controls).map(([name, value]) => `"${name}":"${value}"`).join(',')}},`) +
+            `"effort":"${invocation.effort}","executable":{"sha256":"${invocation.executable.sha256}",` +
             `"version":"${invocation.executable.version}"},"maxOutputTokens":${invocation.maxOutputTokens}},`) +
         `"models":{"adjudicator":"${values.models.adjudicator}","prosecutor":"${values.models.prosecutor}","reader":"${values.models.reader}"},` +
         `"prompts":{"adjudicator":"${prompt.adjudicator}","prosecutor":"${prompt.prosecutor}","reader":"${prompt.reader}"},` +
@@ -632,6 +675,39 @@ describe('the identities the @2 migration must not move', () => {
       const { invocation: _removed, ...withoutInvocation } = subscriptionV2Config;
       expect('invocation' in withoutInvocation).toBe(false);
       expect(versionOf(withoutInvocation)).not.toBe(versionOf(subscriptionV2Config));
+    });
+
+    // The launch controls (the spend controls' identity extension): the positive control that they are the only change,
+    // then each way one map can differ from another, and the one way it cannot.
+    it('the same configuration with its controls removed derives exactly the identity pinned before the controls joined it', () => {
+      const { controls: _removed, ...withoutControls } = INVOCATION_V2;
+      expect('controls' in withoutControls).toBe(false);
+      expect(versionOf({ ...subscriptionV2Config, invocation: withoutControls })).toBe(SUBSCRIPTION_V2_PIPELINE_VERSION_WITHOUT_CONTROLS);
+      expect(handWrittenIdentity({ models: OPUS_5_5, providerAdapter: { id: 'claude-code-cli', version: '2' }, invocation: withoutControls })).toBe(
+        SUBSCRIPTION_V2_PIPELINE_VERSION_WITHOUT_CONTROLS,
+      );
+    });
+
+    const { CLAUDE_CODE_DISABLE_REFUSAL_RETRY: _dropped, ...ONE_REMOVED } = CONTROLS_V2;
+    it.each([
+      ['one value changes (CLAUDE_CODE_MAX_RETRIES "1")', { ...CONTROLS_V2, CLAUDE_CODE_MAX_RETRIES: '1' }],
+      ['one entry is added (CLAUDE_CODE_DISABLE_1M_CONTEXT "1")', { ...CONTROLS_V2, CLAUDE_CODE_DISABLE_1M_CONTEXT: '1' }],
+      ['one entry is removed (CLAUDE_CODE_DISABLE_REFUSAL_RETRY)', ONE_REMOVED],
+    ] as const)('the identity moves when %s', (_what, controls) => {
+      // Against the builder's own digest of the unmoved configuration, not only the literal: a builder that dropped the
+      // controls would derive one digest for every map, all different from the literal.
+      const moved = versionOf({ ...subscriptionV2Config, invocation: { ...INVOCATION_V2, controls } });
+      expect(moved).toMatch(/^pipeline-v3-[0-9a-f]{64}$/);
+      expect(moved).not.toBe(versionOf(subscriptionV2Config));
+      expect(moved).not.toBe(SUBSCRIPTION_V2_PIPELINE_VERSION);
+    });
+
+    it('the identity does not move when only the order of the controls\' keys does', () => {
+      const reordered = Object.fromEntries(Object.entries(CONTROLS_V2).reverse());
+      // Positive control: the order really differs, and the entries do not.
+      expect(Object.keys(reordered)).not.toEqual(Object.keys(CONTROLS_V2));
+      expect(reordered).toEqual(CONTROLS_V2);
+      expect(versionOf({ ...subscriptionV2Config, invocation: { ...INVOCATION_V2, controls: reordered } })).toBe(SUBSCRIPTION_V2_PIPELINE_VERSION);
     });
 
     it('differs from both identities the migration must not move', () => {

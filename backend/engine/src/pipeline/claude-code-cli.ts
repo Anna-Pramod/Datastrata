@@ -114,7 +114,8 @@
  * pins that can disagree. `@1`'s profile references the constants `@1` has
  * always exported; `@2`'s is new. `@2` refuses a model outside its list before
  * anything is described, and declares its invocation (effort, ceiling,
- * executable) so the pipeline identity moves when any of them does. `@1`
+ * executable, launch controls) so the pipeline identity moves when any of
+ * them does. `@1`
  * declares none and refuses no model: it answers exactly as it always has.
  *
  * **`@2` names the costliest fact first, then refuses the rest as `@1` does.**
@@ -136,11 +137,13 @@
  * own class, or in its own words under the same class) rather than accept:
  *
  * - the rate-limit allowlist (`rateLimitProblems`) re-reads the status and
- *   overage fields rules 1 and 2 classify on the event (T09, T11);
+ *   overage fields rules 1 and 2 classify on the event (T09, T11), and
+ *   `overageEnabled`, whose `true` rule 1 classifies and which the allowlist
+ *   refuses unless absent or exactly `false` (the spend controls' tooth C1);
  * - inside `unifiedWindows`, the window allowlist (`windowFieldProblems`,
  *   and the refusal of names containing "overage", which also covers rule
- *   1's `rateLimitType` "overage") re-reads what rules 1 and 2 read there
- *   (SS3, SX1);
+ *   1's `rateLimitType` "overage" and its `overageEnabled` `true`) re-reads
+ *   what rules 1 and 2 read there (SS3, SX1, C1);
  * - the result's `fast_mode_state` of exactly "off" re-reads rule 8's "on"
  *   and "cooldown" (T17);
  * - the assistant item's stop-reason allowlist re-reads rules 6 and 7's
@@ -183,7 +186,11 @@
  * recheck of 2.1.295 (the same log) read its bytes and executed nothing: it
  * found the ten facts it rechecked (summary items 1-10) still stated, and
  * seven differences (D1 to D7), recorded there and in the repository's
- * `docs/superpowers/CHECKPOINT-opus55-pin-2.1.295.md`, not acted on here.
+ * `docs/superpowers/CHECKPOINT-opus55-pin-2.1.295.md`. D2, D3 and D4 are
+ * acted on here, from the parent's later reading of the bytes
+ * (`docs/superpowers/CHECKPOINT-opus55-spend-controls.md`): rule 1 reads
+ * `overageEnabled`, rule 2 reads the API-error kind `usage_limit_reached`,
+ * and the profile carries two more launch controls. The others are not.
  * 2.1.280's unforced-StructuredOutput fact (`--json-schema` becomes a tool
  * with `toolChoice` undefined, a forced tool demoted to auto when thinking is
  * on) was not rechecked
@@ -390,7 +397,46 @@ const V2_MAX_OUTPUT_TOKENS = 64000;
  *
  * The controls are `@1`'s nine with the ceiling raised to `@2`'s own, plus
  * no model fallback and no fast mode: either would change which model, or
- * which billing, answered without the stream having to say so. The
+ * which billing, answered without the stream having to say so. Two more,
+ * thirteen in all, were added when the pin moved to 2.1.295 (D4 of
+ * `docs/superpowers/CHECKPOINT-opus55-pin-2.1.295.md`, taken up in
+ * `CHECKPOINT-opus55-spend-controls.md`). What each does in 2.1.295 is the
+ * parent's static reading of its bytes
+ * (`parent-bytes-findings.20261015T135500Z.md` and the `bytes-*` logs it
+ * names, in `pilot-evidence/2026-10-15-opus55-spend-controls/`); none of it
+ * is observed at runtime:
+ *
+ * - `CLAUDE_CODE_DISABLE_REFUSAL_RETRY` stops the same-model refusal retry.
+ *   With it unset, the build's query loop withholds a refused API-error item
+ *   and the `model_refusal_no_fallback` event from the stream and sends a
+ *   second request on the same model, nudged to continue
+ *   (`bytes-02`, `bytes-15`, `bytes-16`). With it set, a refusal stays in the
+ *   stream, where rule 6 classifies it, and no second request is spent; the
+ *   refusal-fallback lane then offers no fallback model, because the two
+ *   fallback controls above make its gate false (`bytes-17`).
+ * - `CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS` makes the build's native
+ *   structured-output gate false, so no request the launch makes carries a
+ *   native output format or the structured-outputs beta, whatever the
+ *   build's flags (`bytes-18` to `bytes-20`). `--json-schema` remains the
+ *   `StructuredOutput` tool (`bytes-22` to `bytes-24`, `bytes-27`), whose
+ *   contract and every check on it here are unchanged. Whether the tool is
+ *   forced stays a runtime unknown.
+ * - `CLAUDE_CODE_DISABLE_1M_CONTEXT` is deliberately not set. For a model
+ *   whose catalog row is natively 1M, as `claude-opus-5-5`'s is, the build
+ *   itself says the 200K limit is not enforced under it; its only
+ *   enforcement is auto-compaction at a window, a further request whose
+ *   compact boundary `@2` would refuse (`bytes-28` to `bytes-30`). So it does
+ *   not establish "no request over the 200K boundary". What stands against
+ *   the long-context route already: `@2` requests the bare model, rule 4
+ *   refuses a `[1m]` model or a context-1M beta, rule 3 classifies the
+ *   server's `long_context_credits_required`, and the harness stops at its
+ *   190,000-token per-request ceiling (D-5).
+ *
+ * Each is read by the build as a boolean, true for `'1'` (`bytes-03` to
+ * `bytes-05`); the object every reader consults was not located in the
+ * bytes, so that the readers see `process.env` is inferred, as it is for the
+ * controls above. The controls are part of the declared invocation
+ * (`invocationOf`), so the pipeline identity moves with them. The
  * `--settings` text keeps `@1`'s `switchModelsOnFlag: false` and also turns
  * off fast mode and continuing automatically at the usage limit, which the
  * pinned build does by default (2.1.280's strings showed it, and the
@@ -416,6 +462,8 @@ export const CLAUDE_CODE_CLI_V2_PROFILE = frozen({
     CLAUDE_CODE_MAX_OUTPUT_TOKENS: String(V2_MAX_OUTPUT_TOKENS),
     CLAUDE_CODE_NO_MODEL_FALLBACK: '1',
     CLAUDE_CODE_DISABLE_FAST_MODE: '1',
+    CLAUDE_CODE_DISABLE_REFUSAL_RETRY: '1',
+    CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS: '1',
   },
   settings: '{"switchModelsOnFlag":false,"fastMode":false,"autoContinueAtUsageLimit":false}',
   launchTimeoutMs: 1_800_000,
@@ -423,12 +471,19 @@ export const CLAUDE_CODE_CLI_V2_PROFILE = frozen({
   gate: CLAUDE_CODE_CLI_V2_GATE_RULES,
 } satisfies CliProfile);
 
-/** The invocation a profile makes, as the adapter declares it: read from the profile, never restated. */
+/**
+ * The invocation a profile makes, as the adapter declares it: read from the
+ * profile, never restated. The launch controls are part of it, exactly as
+ * the profile declares them, because they change what the launched
+ * executable does: a run under other controls is not the run this identity
+ * names.
+ */
 function invocationOf(profile: CliProfile): InvocationIdentity {
   return frozen({
     effort: profile.effort,
     maxOutputTokens: profile.maxOutputTokens,
     executable: { version: profile.pin.version, sha256: profile.pin.sha256 },
+    controls: profile.controls,
   });
 }
 
@@ -715,10 +770,32 @@ export class CliOutputTruncatedError extends ProviderOutputTruncatedError {
  * it reports itself, and the event's own otherwise, a null counting as no
  * report, so the hold has a time whenever the event reports one (review
  * repair U2, a parent decision).
+ *
+ * The same refusal answers an API-error carrier of kind
+ * `usage_limit_reached` (the spend controls' D3), so whatever recognises
+ * exhaustion recognises it too. There `where` names the carrier, and
+ * `rateLimitType` and `resetsAt` are the carrier's own params' as reported,
+ * or none when it reports none (`apiError` is then the kind and whether the
+ * carrier reported a `rate_limit_info` at all); its message says which.
  */
 export class CliIncludedUsageExhaustedError extends Error {
-  constructor(request: RoleRequest, readonly line: number, readonly rateLimitType: unknown, readonly resetsAt: unknown, readonly where: string | null = null) {
-    super(`${label(request)}: included usage is exhausted — the rate_limit_event at line ${line} reports status "rejected"${where === null ? '' : ` at ${where}`} (rateLimitType ${shown(rateLimitType)}, resetsAt ${shown(resetsAt)}); one rejected window anywhere in the stream is refused, whatever follows it`);
+  constructor(
+    request: RoleRequest,
+    readonly line: number,
+    readonly rateLimitType: unknown,
+    readonly resetsAt: unknown,
+    readonly where: string | null = null,
+    readonly apiError: { readonly kind: string; readonly reportsRateLimitInfo: boolean } | null = null,
+  ) {
+    super(
+      apiError === null
+        ? `${label(request)}: included usage is exhausted — the rate_limit_event at line ${line} reports status "rejected"${where === null ? '' : ` at ${where}`} (rateLimitType ${shown(rateLimitType)}, resetsAt ${shown(resetsAt)}); one rejected window anywhere in the stream is refused, whatever follows it`
+        : `${label(request)}: included usage is exhausted — the CLI reported API error ${JSON.stringify(apiError.kind)} on ${where ?? 'an API-error carrier'} at line ${line} ${
+            apiError.reportsRateLimitInfo
+              ? `(rateLimitType ${shown(rateLimitType)}, resetsAt ${shown(resetsAt)})`
+              : '(it reports no rate_limit_info in its params, so no rateLimitType and no reset time are carried)'
+          }; a usage limit reported reached anywhere in the stream is refused, whatever follows it`,
+    );
     this.name = 'CliIncludedUsageExhaustedError';
   }
 }
@@ -1359,6 +1436,39 @@ const hasKind = (event: Rec, kinds: ReadonlySet<string>): { where: string; kind:
   return api === null || kind === undefined ? null : { where: api.where, kind };
 };
 
+/**
+ * The API-error kind that reports included usage exhausted (the spend
+ * controls' D3). 2.1.295 writes it on a 429, beside `error: "rate_limit"`
+ * (`bytes-31-overage-enabled.20261015T135254Z.log`, the parent's static
+ * reading; nothing observed). An item whose only kind is `rate_limit` is
+ * not read as exhaustion: the build writes that coarse kind for any 429,
+ * and which 429s a `-p` run reports that way is a runtime question.
+ */
+const EXHAUSTION_KINDS: ReadonlySet<string> = new Set(['usage_limit_reached']);
+
+/**
+ * The params an API-error carrier may report beside its kind, in the order
+ * read: 2.1.295's internal `apiErrorParams`, and the SDK schema's
+ * `api_error_params` (the same two spellings as the kind's fields; which one
+ * a `-p` `stream-json` run serialises is a runtime unknown).
+ */
+const API_ERROR_PARAMS_FIELDS = ['apiErrorParams', 'api_error_params'] as const;
+
+/**
+ * The carrier's own `rate_limit_info`: from the first of its params fields
+ * that is an object holding an object `rate_limit_info`, or `null` when none
+ * does. The build fills it from the 429's rate-limit headers, `resetsAt` in
+ * integer unix seconds (`bytes-31`, `bytes-32`, static). Never borrowed from
+ * another line, never defaulted.
+ */
+function apiErrorRateLimitInfoOf(event: Rec): Rec | null {
+  for (const field of API_ERROR_PARAMS_FIELDS) {
+    const params = event[field];
+    if (isRecord(params) && isRecord(params['rate_limit_info'])) return params['rate_limit_info'];
+  }
+  return null;
+}
+
 const CREDIT_KINDS: ReadonlySet<string> = new Set(['model_requires_usage_credits', 'long_context_credits_required', 'consent_unanswered']);
 const SUBSTITUTION_KINDS: ReadonlySet<string> = new Set(['model_substitution_disabled', 'no_allowed_fallback']);
 const SUBSTITUTION_SUBTYPES: ReadonlySet<string> = new Set(['model_fallback', 'model_refusal_fallback', 'model_consent_fallback']);
@@ -1467,13 +1577,23 @@ function windowObjectsOf(info: Rec): { where: string; object: Rec }[] {
   return (windowEntries(info['unifiedWindows']) ?? []).flatMap(([key, window]) => objectsIn(window, `unifiedWindows${key}`));
 }
 
-/** The overage facts D-6 names, on one object: a `rate_limit_info` itself (no prefix), or an object inside its `unifiedWindows` (prefixed with its path). */
+/**
+ * The overage facts D-6 names, on one object: a `rate_limit_info` itself (no
+ * prefix), or an object inside its `unifiedWindows` (prefixed with its path).
+ * `overageEnabled` exactly `true` is one too (the spend controls' D2): 2.1.295
+ * reports it, on some `allowed_warning` events only, from the account's
+ * cached `hasExtraUsageEnabled`, so `true` says extra usage is enabled, which
+ * D-6's precondition forbids (`bytes-31`, `bytes-32`, the parent's static
+ * reading). The build writes it at the top level only; it is read inside a
+ * window too, as every fact here is.
+ */
 function overageFacts(info: Rec, prefix: string): string[] {
   const facts: string[] = [];
   if (info['rateLimitType'] === 'overage') facts.push(`${prefix}rateLimitType "overage"`);
   if (info['isUsingOverage'] === true) facts.push(`${prefix}isUsingOverage true`);
   if (info['overageInUse'] === true) facts.push(`${prefix}overageInUse true`);
   if (info['overageStatus'] === 'allowed' || info['overageStatus'] === 'allowed_warning') facts.push(`${prefix}overageStatus ${shown(info['overageStatus'])}`);
+  if (info['overageEnabled'] === true) facts.push(`${prefix}overageEnabled true`);
   return facts;
 }
 
@@ -1493,8 +1613,22 @@ const overageRule: Rule = (lines, request) => firstHit(rateLimitLines(lines), (e
  * counting as no report: the reset-pending hold then has a time whenever the
  * event reports one (review repair U2, a parent decision). Where a window
  * reports its reset, if it does, is a probe question.
+ *
+ * Also any API-error carrier (as `apiErrorOf` reads them) one of whose kind
+ * candidates is `usage_limit_reached` (the spend controls' D3). Its
+ * `rateLimitType` and `resetsAt` are its own params' (`apiErrorRateLimitInfoOf`),
+ * as reported, and none when it reports none: nothing is borrowed from
+ * another line, so the harness's reset-pending check holds such a stop until
+ * an operator reviews it. The rule names the first line in stream order that
+ * carries either fact.
  */
-const exhaustionRule: Rule = (lines, request) => firstHit(rateLimitLines(lines), (event, line) => {
+const exhaustionRule: Rule = (lines, request) => firstHit(lines, (event, line) => {
+  const exhausted = hasKind(event, EXHAUSTION_KINDS);
+  if (exhausted !== null) {
+    const reported = apiErrorRateLimitInfoOf(event);
+    return new CliIncludedUsageExhaustedError(request, line, reported?.['rateLimitType'], reported?.['resetsAt'], exhausted.where, { kind: exhausted.kind, reportsRateLimitInfo: reported !== null });
+  }
+  if (event['type'] !== 'rate_limit_event') return null;
   const info = rateLimitInfoOf(event);
   if (info === null) return null;
   if (info['status'] === 'rejected') return new CliIncludedUsageExhaustedError(request, line, info['rateLimitType'], info['resetsAt']);
@@ -1986,6 +2120,8 @@ function windowFieldProblems(o: Rec, where: string): string[] {
  * values to the allowlist and rule 1 classifies their overage values, so
  * their names are not refused as names: a window carrying them at their
  * allowed values stays accepted (review repair U1, a parent decision).
+ * `overageEnabled` is not one of them (2.1.295 writes it at the top level
+ * only), so inside a window its name is refused whatever its value.
  */
 const V2_OVERAGE_FIELDS: ReadonlySet<string> = new Set(['isUsingOverage', 'overageInUse', 'overageStatus']);
 
@@ -2018,7 +2154,8 @@ function overageNamesIn(value: unknown, where: string): string[] {
  * decision).
  *
  * This step deliberately re-checks the fields rules 1 and 2 classify
- * (`status`, `isUsingOverage`, `overageInUse`, `overageStatus`): D-6 states
+ * (`status`, `isUsingOverage`, `overageInUse`, `overageStatus`, and, since
+ * the spend controls' D2, `overageEnabled`): D-6 states
  * them as allowlist values ("present and false", "`rejected`"), and D-8 ends
  * "unknown means refused". The overlap fails closed. Overage and `rejected`
  * never reach here while classification runs first, so it changes no
@@ -2041,6 +2178,10 @@ function rateLimitProblems(info: unknown): string[] {
   if (has('overageInUse') && info['overageInUse'] !== false) problems.push(`overageInUse ${shown(info['overageInUse'])} (must be absent or false)`);
   if (!has('overageStatus')) problems.push('overageStatus absent (must be "rejected"; absence is refused until a probe settles what it means)');
   if (has('overageStatus') && info['overageStatus'] !== 'rejected') problems.push(`overageStatus ${shown(info['overageStatus'])} (must be "rejected")`);
+  // The spend controls' D2: `false` says extra usage is disabled, and absence says nothing either way (2.1.295 reports
+  // the field on some allowed_warning events only, behind a gate, from a cached value); any other value is unread.
+  // `true` reaches here only if rule 1 is broken, and is refused too: the overlap fails closed.
+  if (has('overageEnabled') && info['overageEnabled'] !== false) problems.push(`overageEnabled ${shown(info['overageEnabled'])} (must be absent or false; absence is not read as extra usage off)`);
   if (has('rateLimitGraceActive')) problems.push(`rateLimitGraceActive ${shown(info['rateLimitGraceActive'])} (must be absent)`);
   if (has('errorCode')) problems.push(`errorCode ${shown(info['errorCode'])} (must be absent)`);
   if (has('utilization')) {
@@ -2213,7 +2354,8 @@ export const CLAUDE_CODE_CLI_ADAPTER: ProviderAdapter = {
 
 /**
  * `claude-code-cli@2`. Its invocation is declared from its profile, so the
- * pipeline identity moves with the effort, the ceiling or the executable. Its
+ * pipeline identity moves with the effort, the ceiling, the executable or the
+ * launch controls. Its
  * projection is its own (`projectResponseV2`), never `@1`'s, which was proved
  * against another executable's stream. `readUsage` is `@1`'s: reading
  * `result.usage` is the same act on either executable, and it is diagnostic

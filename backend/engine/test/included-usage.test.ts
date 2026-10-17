@@ -3,7 +3,7 @@
  * D-5, D-6; Task 5b).
  *
  * Why a file of its own: `included-usage.ts` is the backstop to the `@2`
- * projection, and each of its sixteen facts has to be seen to decide alone —
+ * projection, and each of its eighteen facts has to be seen to decide alone —
  * one stream differing from a clean one in exactly one respect, and the whole
  * fact list compared, so a rule that fires too often is caught as surely as
  * one that never fires. Every `@2` value below is a literal written here: the
@@ -21,7 +21,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
-import { observeUsage, usageStopOf, usageViolations, type UsageFact, type UsageLine } from './included-usage';
+import { observeUsage, USAGE_FACTS, usageStopOf, usageViolations, type UsageFact, type UsageLine } from './included-usage';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -229,7 +229,7 @@ describe('a clean @2 stream observes what it reports, and makes no fact and no s
 });
 
 // ---------------------------------------------------------------------------
-// Each of the sixteen facts, alone
+// Each of the eighteen facts, alone
 // ---------------------------------------------------------------------------
 
 interface Row {
@@ -241,12 +241,28 @@ interface Row {
 const RL = 'rate_limit_event at line 12';
 const EVENT_RESET = 1790075400;
 
+/** The rate_limit_info 2.1.295 builds into a 429's API-error params (the spend controls' D3), as a fresh literal. */
+const LIMIT_INFO = (over: Ev = {}): Ev => ({ status: 'rejected', rateLimitType: 'five_hour', resetsAt: 1760000000, ...over });
+/** The detail of a usage_limit_reached fact on the carrier inserted before the rate-limit event, at line 12. */
+const LIMIT_DETAIL = (where: string): string => `${where} at line 12: API-error kind "usage_limit_reached"`;
+
 const LONE: Record<string, Row[]> = {
   rate_limit_rejected: [
     { trigger: 'top status "rejected"', mutate: (ev) => { rateInfo(ev)['status'] = 'rejected'; }, expected: [fact('rate_limit_rejected', 'exhausted', `${RL}: rate_limit_info.status "rejected"`, EVENT_RESET)] },
     { trigger: 'a window one level down, its own resetsAt', mutate: (ev) => { rateInfo(ev)['unifiedWindows'] = [{ status: 'rejected', rateLimitType: 'seven_day', resetsAt: 1790500000 }]; }, expected: [fact('rate_limit_rejected', 'exhausted', `${RL}: rate_limit_info.unifiedWindows[0].status "rejected"`, 1790500000)] },
     { trigger: 'a window deeper, through an object and an array, the event\'s resetsAt', mutate: (ev) => { rateInfo(ev)['unifiedWindows'] = { seven_day: { limits: [{ status: 'rejected' }] } }; }, expected: [fact('rate_limit_rejected', 'exhausted', `${RL}: rate_limit_info.unifiedWindows["seven_day"].limits[0].status "rejected"`, EVENT_RESET)] },
     { trigger: 'a window whose resetsAt is null, which counts as no report (U2)', mutate: (ev) => { rateInfo(ev)['unifiedWindows'] = [{ status: 'rejected', resetsAt: null }]; }, expected: [fact('rate_limit_rejected', 'exhausted', `${RL}: rate_limit_info.unifiedWindows[0].status "rejected"`, EVENT_RESET)] },
+  ],
+  // The spend controls' D3: one fact per API-error carrier carrying the kind, on its own params' reset time, else none.
+  usage_limit_reached: [
+    { trigger: 'the kind in an assistant item\'s apiError beside error "rate_limit", params in apiErrorParams', mutate: (ev) => beforeRateLimit(ev, apiErrorItem({ error: 'rate_limit', apiError: 'usage_limit_reached', apiErrorParams: { rate_limit_info: LIMIT_INFO() } })), expected: [fact('usage_limit_reached', 'exhausted', LIMIT_DETAIL('assistant API-error item'), 1760000000)] },
+    { trigger: 'the kind in an assistant item\'s api_error, params in api_error_params', mutate: (ev) => beforeRateLimit(ev, apiErrorItem({ api_error: 'usage_limit_reached', api_error_params: { rate_limit_info: LIMIT_INFO({ resetsAt: 1760100000 }) } })), expected: [fact('usage_limit_reached', 'exhausted', LIMIT_DETAIL('assistant API-error item'), 1760100000)] },
+    { trigger: 'the kind in a system api_error event\'s apiError', mutate: (ev) => beforeRateLimit(ev, { type: 'system', subtype: 'api_error', error: 'rate_limit', apiError: 'usage_limit_reached', apiErrorParams: { rate_limit_info: LIMIT_INFO() }, ...META }), expected: [fact('usage_limit_reached', 'exhausted', LIMIT_DETAIL('system api_error'), 1760000000)] },
+    { trigger: 'the kind in error itself, which is still one fact for the carrier', mutate: (ev) => beforeRateLimit(ev, apiErrorItem({ error: 'usage_limit_reached', apiError: 'usage_limit_reached' })), expected: [fact('usage_limit_reached', 'exhausted', LIMIT_DETAIL('assistant API-error item'))] },
+    { trigger: 'no params: no reset time, never the event\'s 1790075400', mutate: (ev) => beforeRateLimit(ev, apiErrorItem({ error: 'rate_limit', apiError: 'usage_limit_reached' })), expected: [fact('usage_limit_reached', 'exhausted', LIMIT_DETAIL('assistant API-error item'))] },
+    { trigger: 'params whose rate_limit_info reports no resetsAt: none', mutate: (ev) => beforeRateLimit(ev, apiErrorItem({ apiError: 'usage_limit_reached', apiErrorParams: { rate_limit_info: { status: 'rejected' } } })), expected: [fact('usage_limit_reached', 'exhausted', LIMIT_DETAIL('assistant API-error item'))] },
+    { trigger: 'both spellings, disagreeing: apiErrorParams\' reset', mutate: (ev) => beforeRateLimit(ev, apiErrorItem({ apiError: 'usage_limit_reached', apiErrorParams: { rate_limit_info: LIMIT_INFO() }, api_error_params: { rate_limit_info: LIMIT_INFO({ resetsAt: 1769999999 }) } })), expected: [fact('usage_limit_reached', 'exhausted', LIMIT_DETAIL('assistant API-error item'), 1760000000)] },
+    { trigger: 'apiErrorParams holding no object rate_limit_info: api_error_params\' reset', mutate: (ev) => beforeRateLimit(ev, apiErrorItem({ apiError: 'usage_limit_reached', apiErrorParams: { rate_limit_info: 'x' }, api_error_params: { rate_limit_info: LIMIT_INFO({ resetsAt: 1769999999 }) } })), expected: [fact('usage_limit_reached', 'exhausted', LIMIT_DETAIL('assistant API-error item'), 1769999999)] },
   ],
   is_using_overage: [
     { trigger: 'top absent', mutate: (ev) => { delete rateInfo(ev)['isUsingOverage']; }, expected: [fact('is_using_overage', 'unobserved', `${RL}: rate_limit_info.isUsingOverage absent`, EVENT_RESET)] },
@@ -266,6 +282,15 @@ const LONE: Record<string, Row[]> = {
     { trigger: 'top "allowed_warning"', mutate: (ev) => { rateInfo(ev)['overageStatus'] = 'allowed_warning'; }, expected: [fact('overage_status_not_rejected', 'overage', `${RL}: rate_limit_info.overageStatus "allowed_warning"`, EVENT_RESET)] },
     { trigger: 'a window, "allowed"', mutate: (ev) => { rateInfo(ev)['unifiedWindows'] = [{ overageStatus: 'allowed' }]; }, expected: [fact('overage_status_not_rejected', 'overage', `${RL}: rate_limit_info.unifiedWindows[0].overageStatus "allowed"`, EVENT_RESET)] },
     { trigger: 'a window deeper, through an array, "allowed_warning"', mutate: (ev) => { rateInfo(ev)['unifiedWindows'] = [{ nested: [{ overageStatus: 'allowed_warning' }] }]; }, expected: [fact('overage_status_not_rejected', 'overage', `${RL}: rate_limit_info.unifiedWindows[0].nested[0].overageStatus "allowed_warning"`, EVENT_RESET)] },
+  ],
+  // The spend controls' D2, on the top-level rate_limit_info only: true is overage, any other value but false unobserved.
+  overage_enabled: [
+    { trigger: 'top true', mutate: (ev) => { rateInfo(ev)['overageEnabled'] = true; }, expected: [fact('overage_enabled', 'overage', `${RL}: rate_limit_info.overageEnabled true`, EVENT_RESET)] },
+    ...([['"false"', 'false'], ['"true"', 'true'], ['0', 0], ['1', 1], ['null', null], ['{}', {}]] as const).map(([shown, value]): Row => ({
+      trigger: `top ${shown}`,
+      mutate: (ev) => { rateInfo(ev)['overageEnabled'] = value; },
+      expected: [fact('overage_enabled', 'unobserved', `${RL}: rate_limit_info.overageEnabled ${shown}`, EVENT_RESET)],
+    })),
   ],
   rate_limit_type_not_included: [
     { trigger: 'top absent', mutate: (ev) => { delete rateInfo(ev)['rateLimitType']; }, expected: [fact('rate_limit_type_not_included', 'unobserved', `${RL}: rate_limit_info.rateLimitType absent`, EVENT_RESET)] },
@@ -360,13 +385,15 @@ const LONE: Record<string, Row[]> = {
   ],
 };
 
-describe('each of the sixteen facts alone: one role line whose stream differs from the clean control in one respect makes exactly that fact', () => {
-  it('U-F0 — the table names the sixteen facts, each with at least one row', () => {
+describe('each of the eighteen facts alone: one role line whose stream differs from the clean control in one respect makes exactly that fact', () => {
+  it('U-F0 — the table names the eighteen facts, each with at least one row', () => {
     expect(Object.keys(LONE)).toEqual([
       'rate_limit_rejected',
+      'usage_limit_reached',
       'is_using_overage',
       'overage_in_use',
       'overage_status_not_rejected',
+      'overage_enabled',
       'rate_limit_type_not_included',
       'grace_active',
       'utilization_over_1',
@@ -381,6 +408,9 @@ describe('each of the sixteen facts alone: one role line whose stream differs fr
       'unnatural_reset',
     ]);
     for (const rows of Object.values(LONE)) expect(rows.length).toBeGreaterThan(0);
+    // The module's fixed order is the table's: the spend controls' usage_limit_reached right after rate_limit_rejected,
+    // and overage_enabled right after overage_status_not_rejected.
+    expect([...USAGE_FACTS]).toEqual(Object.keys(LONE));
   });
 
   for (const [name, rows] of Object.entries(LONE)) {
@@ -424,6 +454,56 @@ describe('what makes no fact, beside what makes one', () => {
     expect(factsOf(window('status', 'paused')).map((f) => f.fact)).toEqual(['rate_limit_unobserved']);
     expect(factsOf(top('rateLimitType', 'monthly')).map((f) => f.fact)).toEqual(['rate_limit_type_not_included']);
     expect(factsOf(window('rateLimitType', 'monthly')).map((f) => f.fact)).toEqual(['rate_limit_type_not_included']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The spend controls' two facts: what makes none, what each reads, and the stop each makes
+// ---------------------------------------------------------------------------
+
+describe('overageEnabled and usage_limit_reached: what makes no fact, what is read, and the stop each makes (the spend controls\' D2 and D3)', () => {
+  const withOverageEnabled = (value: unknown): Ev[] => mutated((ev) => { rateInfo(ev)['overageEnabled'] = value; });
+
+  it('U-D1 — overageEnabled false makes no fact, and the clean stream, without it, none; beside true, which makes exactly overage_enabled (the positive control); inside a window, false is the name rule\'s fact, unchanged (a characterisation)', () => {
+    expect(factsOf(withOverageEnabled(false))).toStrictEqual([]);
+    expect(Object.hasOwn(rateInfo(clean()), 'overageEnabled')).toBe(false);
+    expect(factsOf(clean())).toStrictEqual([]);
+    expect(factsOf(withOverageEnabled(true))).toStrictEqual([fact('overage_enabled', 'overage', `${RL}: rate_limit_info.overageEnabled true`, EVENT_RESET)]);
+    expect(factsOf(mutated((ev) => { rateInfo(ev)['unifiedWindows'] = [{ overageEnabled: false }]; }))).toStrictEqual([
+      fact('rate_limit_type_not_included', 'overage', `${RL}: rate_limit_info.unifiedWindows[0] key "overageEnabled"`, EVENT_RESET),
+    ]);
+  });
+
+  it('U-D2 — the reading copies overageEnabled as reported, false included, and leaves it out where the event does not report it', () => {
+    expect(observed(withOverageEnabled(false)).rateLimits[0]?.info).toStrictEqual({ status: 'allowed', rateLimitType: 'five_hour', isUsingOverage: false, overageStatus: 'rejected', overageEnabled: false, resetsAt: 1790075400 });
+    expect(Object.hasOwn(observed(clean()).rateLimits[0]?.info ?? {}, 'overageEnabled')).toBe(false);
+  });
+
+  it('U-D3 — the stop over overageEnabled true is overage, holding the event\'s finite reset; where the event reports no reset, none', () => {
+    const facts = factsOf(withOverageEnabled(true));
+    expect(usageStopOf(facts)).toStrictEqual({ kind: 'overage', facts, seq: 2, role: 'reader', index: 0, resetsAt: EVENT_RESET, note: NOTE });
+    const unreset = factsOf(mutated((ev) => { rateInfo(ev)['overageEnabled'] = true; delete rateInfo(ev)['resetsAt']; }));
+    expect(unreset).toStrictEqual([fact('overage_enabled', 'overage', `${RL}: rate_limit_info.overageEnabled true`)]);
+    expect(usageStopOf(unreset)).toStrictEqual({ kind: 'overage', facts: unreset, seq: 2, role: 'reader', index: 0, resetsAt: null, note: NOTE });
+  });
+
+  it('U-D4 — the API-error reading copies its params\' rate_limit_info status, rateLimitType and resetsAt only, each where present, and carries none where no params field holds one', () => {
+    const reading = observed(mutated((ev) => beforeRateLimit(ev, apiErrorItem({ error: 'rate_limit', apiError: 'usage_limit_reached', apiErrorParams: { rate_limit_info: { status: 'rejected', resetsAt: 1760000000, utilization: 1, overageEnabled: true } } }))));
+    expect(reading.apiErrors).toStrictEqual([{ line: 12, where: 'assistant API-error item', kinds: ['rate_limit', 'usage_limit_reached'], rateLimitInfo: { status: 'rejected', resetsAt: 1760000000 } }]);
+    const bare = observed(mutated((ev) => beforeRateLimit(ev, apiErrorItem({ error: 'rate_limit', apiError: 'usage_limit_reached' }))));
+    expect(bare.apiErrors).toStrictEqual([{ line: 12, where: 'assistant API-error item', kinds: ['rate_limit', 'usage_limit_reached'] }]);
+  });
+
+  it('U-D5 — the stop over usage_limit_reached is exhausted, holding the carrier\'s finite reset; without params, none: nothing invents a reset time', () => {
+    const facts = factsOf(mutated((ev) => beforeRateLimit(ev, apiErrorItem({ error: 'rate_limit', apiError: 'usage_limit_reached', apiErrorParams: { rate_limit_info: LIMIT_INFO() } }))));
+    expect(usageStopOf(facts)).toStrictEqual({ kind: 'exhausted', facts, seq: 2, role: 'reader', index: 0, resetsAt: 1760000000, note: NOTE });
+    const unreset = factsOf(mutated((ev) => beforeRateLimit(ev, apiErrorItem({ error: 'rate_limit', apiError: 'usage_limit_reached' }))));
+    expect(unreset).toStrictEqual([fact('usage_limit_reached', 'exhausted', LIMIT_DETAIL('assistant API-error item'))]);
+    expect(usageStopOf(unreset)).toStrictEqual({ kind: 'exhausted', facts: unreset, seq: 2, role: 'reader', index: 0, resetsAt: null, note: NOTE });
+  });
+
+  it('U-D6 — error "rate_limit" alone, with params, is no fact: the kind decides (beside U-D5\'s same carrier with the kind, one fact)', () => {
+    expect(factsOf(mutated((ev) => beforeRateLimit(ev, apiErrorItem({ error: 'rate_limit', apiErrorParams: { rate_limit_info: LIMIT_INFO() } }))))).toStrictEqual([]);
   });
 });
 
@@ -757,17 +837,20 @@ describe('facts are ordered by launch, then line, then the fixed fact order; the
     }
   });
 
-  it('U-S3 — resetsAt is the latest finite one among the exhausted and overage facts, a later fact with an earlier time included; another kind\'s and a non-number are not read', () => {
-    const facts = [
+  // Rewritten by the reset-hold repair: it pinned the gap, an exhausted fact whose reset was the string '1790400000'
+  // beside finite ones and a stop holding the finite maximum. That fact is now unknown and moves to U-S6 to U-S10, where
+  // it makes the stop's resetsAt null; the maximum is kept here over facts whose resets are all usable.
+  it('U-S3 — when every exhausted and overage fact reports a usable reset, resetsAt is the latest of them, a later fact with an earlier time included; another kind\'s reset, and a fact of another kind whose reset is unknown, are not read', () => {
+    const facts = (): UsageFact[] => [
       made('overage', 3, 1790000000),
       made('exhausted', 4, 1790099999),
       made('overage', 5, 1790050000),
       made('unobserved', 6, 1790300000),
       made('unnatural_reset', 7, 1790200000),
-      made('exhausted', 8, '1790400000'),
+      made('credits', 8, '1790400000'),
     ];
-    expect(usageStopOf(facts)?.resetsAt).toBe(1790099999);
-    expect(usageStopOf([made('fast_mode', 3), made('unobserved', 4, 1790300000)])?.resetsAt).toBeNull();
+    expect(usageStopOf(facts())).toStrictEqual({ kind: 'overage', facts: facts(), seq: 3, role: 'prosecutor', index: 0, resetsAt: 1790099999, note: NOTE });
+    expect(usageStopOf([made('fast_mode', 3), made('unobserved', 4, 1790300000)])).toStrictEqual({ kind: 'fast_mode', facts: [made('fast_mode', 3), made('unobserved', 4, 1790300000)], seq: 3, role: 'prosecutor', index: 0, resetsAt: null, note: NOTE });
   });
 
   it('U-S4 — no fact is no stop; any fact is a stop carrying every fact and the note, word for word', () => {
@@ -778,7 +861,8 @@ describe('facts are ordered by launch, then line, then the fixed fact order; the
 
   // Characterisations of the gap the reset-pending check closes (Task 5b review repair M4, a parent decision P-5b-14):
   // an exhaustion whose reset time is not a finite number is a stop of kind exhausted whose resetsAt is null, and the
-  // harness then holds the next execution until an operator reviews it. usageStopOf itself is unchanged.
+  // harness then holds the next execution until an operator reviews it. Each is the stop's only exhausted fact; one
+  // beside another reporting a usable reset is the reset-hold repair's, in U-S6 to U-S10.
   it.each([
     ['(a) top status "rejected" with resetsAt a string', (ev: Ev[]) => { Object.assign(rateInfo(ev), { status: 'rejected', resetsAt: '2026-09-27T18:00:00Z' }); }],
     ['(b) top status "rejected" with resetsAt absent, a window reporting its own finite resetsAt but no status', (ev: Ev[]) => { const info = rateInfo(ev); info['status'] = 'rejected'; delete info['resetsAt']; info['unifiedWindows'] = [{ rateLimitType: 'seven_day', resetsAt: 1790500000 }]; }],
@@ -789,6 +873,79 @@ describe('facts are ordered by launch, then line, then the fixed fact order; the
     const stop = usageStopOf(facts);
     expect(stop?.kind).toBe('exhausted');
     expect(stop?.resetsAt).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The reset hold
+// ---------------------------------------------------------------------------
+
+describe('a stop holds to its latest reset only when every exhausted and overage fact reports a usable one, and is otherwise unresolved, resetsAt null (the reset-hold repair)', () => {
+  /**
+   * A hand-made fact with a real name, at launch `seq` (prosecutor[seq - 3]). Its `resetsAt` is the fourth argument
+   * when one is given, and left out altogether when none is: the absent case. Each call builds a fresh object, so a
+   * stop compared with a second call's facts shows they were carried unchanged, not merely the same objects.
+   */
+  const filed = (fact: string, kind: string, seq: number, ...resetsAt: unknown[]): UsageFact =>
+    ({ fact, kind, seq, role: 'prosecutor', index: seq - 3, detail: `filed ${fact} at ${seq}`, ...(resetsAt.length === 0 ? {} : { resetsAt: resetsAt[0] }) }) as UsageFact;
+  /** A launch's carrier of usage_limit_reached reporting no params, as 2.1.295's shape carries it on a 429. */
+  const carrier = (): Ev => apiErrorItem({ error: 'rate_limit', apiError: 'usage_limit_reached' });
+  /** Inserts events just after the first rate_limit_event. */
+  const afterRateLimit = (events: Ev[], ...inserted: Ev[]): void => {
+    events.splice(events.findIndex(isType('rate_limit_event')) + 1, 0, ...inserted);
+  };
+
+  it.each([
+    ['(a) usage_limit_reached reporting no reset first, then rate_limit_rejected at 1790075400', () => [filed('usage_limit_reached', 'exhausted', 3, null), filed('rate_limit_rejected', 'exhausted', 4, 1790075400)]],
+    ['(b) rate_limit_rejected at 1790075400 first, then usage_limit_reached reporting no reset', () => [filed('rate_limit_rejected', 'exhausted', 3, 1790075400), filed('usage_limit_reached', 'exhausted', 4, null)]],
+  ] as const)('U-S6 — the user\'s reproducer, %s: the stop is exhausted at the first, its resetsAt null, both facts carried in order with their own resets', (_order, facts) => {
+    expect(usageStopOf(facts())).toStrictEqual({ kind: 'exhausted', facts: facts(), seq: 3, role: 'prosecutor', index: 0, resetsAt: null, note: NOTE });
+  });
+
+  it.each([
+    ['(a) overage_in_use reporting no reset first, then rate_limit_rejected at 1790075400', () => [filed('overage_in_use', 'overage', 3, null), filed('rate_limit_rejected', 'exhausted', 4, 1790075400)], 3, 0],
+    ['(b) rate_limit_rejected at 1790075400 first, then overage_in_use reporting no reset', () => [filed('rate_limit_rejected', 'exhausted', 3, 1790075400), filed('overage_in_use', 'overage', 4, null)], 4, 1],
+  ] as const)('U-S7 — the unknown one an overage fact, %s: the stop is overage at the overage fact, its resetsAt null, both facts carried in order', (_order, facts, seq, index) => {
+    expect(usageStopOf(facts())).toStrictEqual({ kind: 'overage', facts: facts(), seq, role: 'prosecutor', index, resetsAt: null, note: NOTE });
+  });
+
+  it.each([
+    ['absent', []],
+    ['null', [null]],
+    ['a string', ['soon']],
+    ['a numeric string', ['1790079000']],
+    ['0', [0]],
+    ['a negative', [-1]],
+    ['a fraction', [1790079000.5]],
+    ['a boolean', [true]],
+    ['an object', [{ resetsAt: 1790079000 }]],
+  ] as const)('U-S8 — an unknown reset, %s, on usage_limit_reached beside rate_limit_rejected at 1790075400: resetsAt null, the unknown value carried as reported', (_what, unknown) => {
+    const facts = (): UsageFact[] => [filed('rate_limit_rejected', 'exhausted', 3, 1790075400), filed('usage_limit_reached', 'exhausted', 4, ...unknown)];
+    expect(usageStopOf(facts())).toStrictEqual({ kind: 'exhausted', facts: facts(), seq: 3, role: 'prosecutor', index: 0, resetsAt: null, note: NOTE });
+  });
+
+  it('U-S9 — the positive control: every exhausted and overage reset usable, the stop holds to the latest, in either order, an earlier-positioned later time included', () => {
+    const later = (): UsageFact[] => [filed('rate_limit_rejected', 'exhausted', 3, 1790079000), filed('usage_limit_reached', 'exhausted', 4, 1790075400), filed('overage_in_use', 'overage', 5, 1790077000)];
+    expect(usageStopOf(later())).toStrictEqual({ kind: 'overage', facts: later(), seq: 5, role: 'prosecutor', index: 2, resetsAt: 1790079000, note: NOTE });
+    const earlier = (): UsageFact[] => [filed('usage_limit_reached', 'exhausted', 3, 1790075400), filed('rate_limit_rejected', 'exhausted', 4, 1790079000)];
+    expect(usageStopOf(earlier())).toStrictEqual({ kind: 'exhausted', facts: earlier(), seq: 3, role: 'prosecutor', index: 0, resetsAt: 1790079000, note: NOTE });
+  });
+
+  it.each([
+    [
+      '(a) the carrier at line 12, then the rejected event at line 13',
+      (ev: Ev[]) => { rateInfo(ev)['status'] = 'rejected'; beforeRateLimit(ev, carrier()); },
+      [fact('usage_limit_reached', 'exhausted', 'assistant API-error item at line 12: API-error kind "usage_limit_reached"'), fact('rate_limit_rejected', 'exhausted', 'rate_limit_event at line 13: rate_limit_info.status "rejected"', 1790075400)],
+    ],
+    [
+      '(b) the rejected event at line 12, then the carrier at line 13',
+      (ev: Ev[]) => { rateInfo(ev)['status'] = 'rejected'; afterRateLimit(ev, carrier()); },
+      [fact('rate_limit_rejected', 'exhausted', 'rate_limit_event at line 12: rate_limit_info.status "rejected"', 1790075400), fact('usage_limit_reached', 'exhausted', 'assistant API-error item at line 13: API-error kind "usage_limit_reached"')],
+    ],
+  ] as const)('U-S10 — from a stream, through observeUsage and usageViolations: a usage_limit_reached carrier without params and a rate_limit_event "rejected" at 1790075400, %s: both facts, and a stop whose resetsAt is null', (_order, mutate, expected) => {
+    const facts = factsOf(mutated(mutate));
+    expect(facts).toStrictEqual(expected);
+    expect(usageStopOf(facts)).toStrictEqual({ kind: 'exhausted', facts: expected, seq: 2, role: 'reader', index: 0, resetsAt: null, note: NOTE });
   });
 });
 

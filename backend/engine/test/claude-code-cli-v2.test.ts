@@ -492,6 +492,21 @@ const INFO_CASES: InfoCase[] = [
   { name: 'overageStatus "allowed_warning"', mutate: (i) => { i['overageStatus'] = 'allowed_warning'; }, expected: overage('overageStatus "allowed_warning"') },
   { name: 'overageStatus absent', mutate: (i) => { delete i['overageStatus']; }, expected: unobserved('overageStatus absent (must be "rejected"') },
   { name: 'overageStatus "disabled"', mutate: (i) => { i['overageStatus'] = 'disabled'; }, expected: unobserved('overageStatus "disabled" (must be "rejected")') },
+  // overageEnabled (the spend controls' D2): 2.1.295 reports it on some allowed_warning events only, from the account's
+  // cached hasExtraUsageEnabled. true is overage, at the top level and on any object inside unifiedWindows; false and
+  // absence are accepted, absence read as nothing; any other value is unobserved at the top level; inside a window its
+  // name is refused whatever its value.
+  { name: 'overageEnabled absent (the builder)', mutate: () => {}, expected: 'accepted' },
+  { name: 'overageEnabled false', mutate: (i) => { i['overageEnabled'] = false; }, expected: 'accepted' },
+  { name: 'overageEnabled true', mutate: (i) => { i['overageEnabled'] = true; }, expected: overage('overageEnabled true') },
+  { name: 'overageEnabled true on an object inside unifiedWindows', mutate: (i) => { i['unifiedWindows'] = { five_hour: { utilization: 0.2, overageEnabled: true } }; }, expected: overage('unifiedWindows["five_hour"].overageEnabled true') },
+  { name: 'overageEnabled "false", a string', mutate: (i) => { i['overageEnabled'] = 'false'; }, expected: unobserved('overageEnabled "false" (must be absent or false; absence is not read as extra usage off)') },
+  { name: 'overageEnabled "true", a string', mutate: (i) => { i['overageEnabled'] = 'true'; }, expected: unobserved('overageEnabled "true" (must be absent or false; absence is not read as extra usage off)') },
+  { name: 'overageEnabled 0', mutate: (i) => { i['overageEnabled'] = 0; }, expected: unobserved('overageEnabled 0 (must be absent or false; absence is not read as extra usage off)') },
+  { name: 'overageEnabled 1', mutate: (i) => { i['overageEnabled'] = 1; }, expected: unobserved('overageEnabled 1 (must be absent or false; absence is not read as extra usage off)') },
+  { name: 'overageEnabled null', mutate: (i) => { i['overageEnabled'] = null; }, expected: unobserved('overageEnabled null (must be absent or false; absence is not read as extra usage off)') },
+  { name: 'overageEnabled {}', mutate: (i) => { i['overageEnabled'] = {}; }, expected: unobserved('overageEnabled {} (must be absent or false; absence is not read as extra usage off)') },
+  { name: 'overageEnabled false inside unifiedWindows (the window name rule, a characterisation)', mutate: (i) => { i['unifiedWindows'] = { five_hour: { utilization: 0.2, overageEnabled: false } }; }, expected: unobserved('unifiedWindows["five_hour"] key "overageEnabled" (a window named for overage is refused until a probe explains it)') },
   // several overage facts at once are all named
   { name: 'isUsingOverage true and overageStatus "allowed" together', mutate: (i) => { i['isUsingOverage'] = true; i['overageStatus'] = 'allowed'; }, expected: overage('isUsingOverage true, overageStatus "allowed"') },
   // rateLimitGraceActive and errorCode: absent only
@@ -952,6 +967,124 @@ describe('claude-code-cli@2 — D-7: every API-error kind', () => {
       expect((error as CliCreditsRequiredError).kind).toBe('model_requires_usage_credits');
     });
   }
+});
+
+// ---------------------------------------------------------------------------
+// D-7 rule 2 on an API-error carrier: usage_limit_reached (the spend controls' D3)
+// ---------------------------------------------------------------------------
+
+describe('claude-code-cli@2 — D-7 rule 2: an API-error carrier of kind usage_limit_reached is exhaustion, carrying its own params\' rate_limit_info', () => {
+  /** 2.1.295's shape on a 429, by the parent's static reading: the coarse kind in `error`, the kind in `apiError`, and params built from the headers. */
+  const RATE_LIMIT_INFO = { status: 'rejected', rateLimitType: 'five_hour', resetsAt: 1760000000 };
+  const limitItem = (fields: Ev = { error: 'rate_limit', apiError: 'usage_limit_reached', apiErrorParams: { rate_limit_info: RATE_LIMIT_INFO } }): Ev => apiErrorItem(fields);
+  const itemLine = (events: Ev[]): number => lineOf(events, isType('assistant'), 1);
+  const exhaustedBy = (error: unknown, fragment: string): CliIncludedUsageExhaustedError => {
+    expectRefused(error, CliIncludedUsageExhaustedError, 'CliIncludedUsageExhaustedError', fragment);
+    return error as CliIncludedUsageExhaustedError;
+  };
+
+  it('V-X1 — the kind in apiError, params in apiErrorParams: exhaustion naming the kind, the carrier, the line, "five_hour" and 1760000000, at exit 0 and at exit 1', () => {
+    for (const exitCode of [0, 1]) {
+      const events = build();
+      beforeRateLimit(events, limitItem());
+      const line = itemLine(events);
+      const error = exhaustedBy(refusalOf(events, { exitCode }), `included usage is exhausted — the CLI reported API error "usage_limit_reached" on an assistant API-error item at line ${line} (rateLimitType "five_hour", resetsAt 1760000000)`);
+      expect([error.line, error.rateLimitType, error.resetsAt, error.where], `exit ${exitCode}`).toEqual([line, 'five_hour', 1760000000, 'an assistant API-error item']);
+      expect(error.apiError).toEqual({ kind: 'usage_limit_reached', reportsRateLimitInfo: true });
+    }
+  });
+
+  it('V-X2 — the snake_case spelling, api_error and api_error_params: the same exhaustion', () => {
+    const events = build();
+    beforeRateLimit(events, limitItem({ error: 'rate_limit', api_error: 'usage_limit_reached', api_error_params: { rate_limit_info: { status: 'rejected', rateLimitType: 'seven_day', resetsAt: 1760100000 } } }));
+    const error = exhaustedBy(refusalOf(events), `the CLI reported API error "usage_limit_reached" on an assistant API-error item at line ${itemLine(events)} (rateLimitType "seven_day", resetsAt 1760100000)`);
+    expect([error.rateLimitType, error.resetsAt]).toEqual(['seven_day', 1760100000]);
+  });
+
+  it('V-X3 — on a system api_error event: the same exhaustion, naming that carrier and its line, at exit 0 and at exit 1', () => {
+    for (const exitCode of [0, 1]) {
+      const events = build();
+      afterStatus(events, systemEvent('api_error', { error: 'rate_limit', apiError: 'usage_limit_reached', apiErrorParams: { rate_limit_info: RATE_LIMIT_INFO } }));
+      const error = exhaustedBy(refusalOf(events, { exitCode }), 'the CLI reported API error "usage_limit_reached" on a system api_error event at line 3 (rateLimitType "five_hour", resetsAt 1760000000)');
+      expect([error.line, error.where, error.resetsAt], `exit ${exitCode}`).toEqual([3, 'a system api_error event', 1760000000]);
+    }
+  });
+
+  it('V-X4 — without params, or with params holding no object rate_limit_info, exhaustion carrying no reset: nothing is borrowed from the stream\'s own rate_limit_event, whose resetsAt is 1790075400', () => {
+    for (const fields of [{ error: 'rate_limit', apiError: 'usage_limit_reached' }, { error: 'rate_limit', apiError: 'usage_limit_reached', apiErrorParams: { rate_limit_info: null } }, { apiError: 'usage_limit_reached', apiErrorParams: 'rejected' }]) {
+      const events = build();
+      beforeRateLimit(events, limitItem(fields));
+      // Positive control for the absence below: the stream's rate-limit event does report a reset of its own.
+      expect(rateInfo(events)['resetsAt']).toBe(1790075400);
+      const error = exhaustedBy(refusalOf(events), `the CLI reported API error "usage_limit_reached" on an assistant API-error item at line ${itemLine(events)} (it reports no rate_limit_info in its params, so no rateLimitType and no reset time are carried)`);
+      expect([error.rateLimitType, error.resetsAt], JSON.stringify(fields)).toEqual([undefined, undefined]);
+      expect(error.apiError).toEqual({ kind: 'usage_limit_reached', reportsRateLimitInfo: false });
+    }
+  });
+
+  it('V-X5 — each fact as reported, never validated or defaulted: params whose rate_limit_info reports neither field carry neither, and a string reset is carried as the string', () => {
+    const neither = build();
+    beforeRateLimit(neither, limitItem({ error: 'rate_limit', apiError: 'usage_limit_reached', apiErrorParams: { rate_limit_info: { status: 'rejected' } } }));
+    const none = exhaustedBy(refusalOf(neither), `at line ${itemLine(neither)} (rateLimitType undefined, resetsAt undefined)`);
+    expect([none.rateLimitType, none.resetsAt]).toEqual([undefined, undefined]);
+    const text = build();
+    beforeRateLimit(text, limitItem({ error: 'rate_limit', apiError: 'usage_limit_reached', apiErrorParams: { rate_limit_info: { rateLimitType: 'monthly', resetsAt: 'soon' } } }));
+    const asReported = exhaustedBy(refusalOf(text), '(rateLimitType "monthly", resetsAt "soon")');
+    expect([asReported.rateLimitType, asReported.resetsAt]).toEqual(['monthly', 'soon']);
+  });
+
+  it('V-X6 — the carrier\'s own params, apiErrorParams first: where both spellings hold one and disagree, apiErrorParams\' is carried; where apiErrorParams holds none, api_error_params\' is', () => {
+    const both = build();
+    beforeRateLimit(both, limitItem({ apiError: 'usage_limit_reached', apiErrorParams: { rate_limit_info: { rateLimitType: 'five_hour', resetsAt: 1760000000 } }, api_error_params: { rate_limit_info: { rateLimitType: 'seven_day', resetsAt: 1769999999 } } }));
+    const first = exhaustedBy(refusalOf(both), '(rateLimitType "five_hour", resetsAt 1760000000)');
+    expect([first.rateLimitType, first.resetsAt]).toEqual(['five_hour', 1760000000]);
+    const fallback = build();
+    beforeRateLimit(fallback, limitItem({ apiError: 'usage_limit_reached', apiErrorParams: { other: 1 }, api_error_params: { rate_limit_info: { rateLimitType: 'seven_day', resetsAt: 1769999999 } } }));
+    const second = exhaustedBy(refusalOf(fallback), '(rateLimitType "seven_day", resetsAt 1769999999)');
+    expect([second.rateLimitType, second.resetsAt]).toEqual(['seven_day', 1769999999]);
+  });
+
+  it('V-X7 — error "rate_limit" alone is not exhaustion, whatever its params say: on an item it falls through (CliResultError at exit 0, CliExitError at exit 1), and on a system api_error event the walk refuses the subtype; the kind decides', () => {
+    const coarse = build();
+    beforeRateLimit(coarse, limitItem({ error: 'rate_limit', apiErrorParams: { rate_limit_info: RATE_LIMIT_INFO } }));
+    expectRefused(refusalOf(coarse), CliResultError, 'CliResultError', `the assistant item at line ${itemLine(coarse)} is an API error (error "rate_limit", apiError undefined, api_error undefined) although the result at line ${lineOf(coarse, isType('result'))} reports success`);
+    expectRefused(refusalOf(coarse, { exitCode: 1 }), CliExitError, 'CliExitError', 'exitCode 1, signal null, 0 stderr bytes');
+    const system = build();
+    afterStatus(system, systemEvent('api_error', { error: 'rate_limit', apiErrorParams: { rate_limit_info: RATE_LIMIT_INFO } }));
+    expectRefused(refusalOf(system), CliStreamLifecycleError, 'CliStreamLifecycleError', 'line 3 — system subtype "api_error" is not one this adapter reads');
+    // Positive control: the same item with the kind added beside the coarse one is exhaustion.
+    const control = build();
+    beforeRateLimit(control, limitItem({ error: 'rate_limit', apiError: 'usage_limit_reached', apiErrorParams: { rate_limit_info: RATE_LIMIT_INFO } }));
+    exhaustedBy(refusalOf(control), `on an assistant API-error item at line ${itemLine(control)}`);
+  });
+
+  it('V-X8 — priority: overage on a later line outranks it (CliOverageError); it outranks a credits kind on an earlier line (rule 2 before rule 3)', () => {
+    const overageLater = build();
+    afterStatus(overageLater, limitItem());
+    rateInfo(overageLater)['overageStatus'] = 'allowed';
+    expect(lineOf(overageLater, isType('assistant'))).toBeLessThan(lineOf(overageLater, isType('rate_limit_event')));
+    expectRefused(refusalOf(overageLater), CliOverageError, 'CliOverageError', `the rate_limit_event at line ${lineOf(overageLater, isType('rate_limit_event'))} reports overage: overageStatus "allowed"`);
+    const creditsEarlier = build();
+    afterStatus(creditsEarlier, apiErrorItem({ error: 'model_requires_usage_credits' }));
+    beforeRateLimit(creditsEarlier, limitItem());
+    const line = lineOf(creditsEarlier, isType('assistant'), 2);
+    expect(lineOf(creditsEarlier, isType('assistant'))).toBeLessThan(line);
+    exhaustedBy(refusalOf(creditsEarlier), `the CLI reported API error "usage_limit_reached" on an assistant API-error item at line ${line}`);
+  });
+
+  it('V-X9 — within the rule, the first line in stream order carrying either fact is named: the carrier before a rejected event, and a rejected event before the carrier', () => {
+    const carrierFirst = build();
+    afterStatus(carrierFirst, limitItem());
+    rateInfo(carrierFirst)['status'] = 'rejected';
+    exhaustedBy(refusalOf(carrierFirst), 'the CLI reported API error "usage_limit_reached" on an assistant API-error item at line 3 (rateLimitType "five_hour", resetsAt 1760000000)');
+    const eventFirst = build();
+    afterStatus(eventFirst, rateLimitEvent(compliantInfo({ status: 'rejected', resetsAt: 1790089800 })));
+    // The carrier goes just before the builder's own (second) rate-limit event, after the message has closed.
+    eventFirst.splice(at(eventFirst, isType('rate_limit_event'), 1), 0, limitItem());
+    expect(lineOf(eventFirst, isType('rate_limit_event'))).toBe(3);
+    expect(lineOf(eventFirst, isType('assistant'), 1)).toBeGreaterThan(3);
+    exhaustedBy(refusalOf(eventFirst), 'the rate_limit_event at line 3 reports status "rejected" (rateLimitType "five_hour", resetsAt 1790089800)');
+  });
 });
 
 // ---------------------------------------------------------------------------

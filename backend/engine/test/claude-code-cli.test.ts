@@ -1121,12 +1121,12 @@ describe('claude-code-cli@2 — the profile', () => {
     expect(CLAUDE_CODE_CLI_V2_PROFILE.maxOutputTokens).not.toBe(MAX_OUTPUT_TOKENS);
     // Nothing beyond the fields above, and nothing that can be edited in place.
     expect(Object.keys(CLAUDE_CODE_CLI_V2_PROFILE).sort()).toEqual(['controls', 'effort', 'gate', 'gateTimeoutMs', 'identity', 'launchTimeoutMs', 'maxOutputTokens', 'permittedModels', 'pin', 'settings']);
-    for (const part of [CLAUDE_CODE_CLI_V2_PROFILE, CLAUDE_CODE_CLI_V2_PROFILE.pin, CLAUDE_CODE_CLI_V2_PROFILE.identity, CLAUDE_CODE_CLI_V2_PROFILE.permittedModels, CLAUDE_CODE_CLI_V2_ADAPTER.invocation!, CLAUDE_CODE_CLI_V2_ADAPTER.invocation!.executable]) {
+    for (const part of [CLAUDE_CODE_CLI_V2_PROFILE, CLAUDE_CODE_CLI_V2_PROFILE.pin, CLAUDE_CODE_CLI_V2_PROFILE.identity, CLAUDE_CODE_CLI_V2_PROFILE.permittedModels, CLAUDE_CODE_CLI_V2_ADAPTER.invocation!, CLAUDE_CODE_CLI_V2_ADAPTER.invocation!.executable, CLAUDE_CODE_CLI_V2_ADAPTER.invocation!.controls!]) {
       expect(Object.isFrozen(part)).toBe(true);
     }
   });
 
-  it('C2-v2 — the launch controls are @1\'s nine with the ceiling at 64000, plus no model fallback and no fast mode: eleven, frozen', () => {
+  it('C2-v2 — the launch controls are @1\'s nine with the ceiling at 64000, plus no model fallback, no fast mode, no refusal retry and no native structured output: thirteen, frozen, and no 1M-context control', () => {
     expect(CLAUDE_CODE_CLI_V2_PROFILE.controls).toEqual({
       CLAUDE_CODE_MAX_RETRIES: '0',
       MAX_STRUCTURED_OUTPUT_RETRIES: '0',
@@ -1139,8 +1139,13 @@ describe('claude-code-cli@2 — the profile', () => {
       DISABLE_AUTOUPDATER: '1',
       CLAUDE_CODE_NO_MODEL_FALLBACK: '1',
       CLAUDE_CODE_DISABLE_FAST_MODE: '1',
+      CLAUDE_CODE_DISABLE_REFUSAL_RETRY: '1',
+      CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS: '1',
     });
-    expect(Object.keys(CLAUDE_CODE_CLI_V2_PROFILE.controls)).toHaveLength(11);
+    expect(Object.keys(CLAUDE_CODE_CLI_V2_PROFILE.controls)).toHaveLength(13);
+    // Deliberately not set (the spend controls' D4 c): under it the pinned build does not enforce the 200K limit for a
+    // natively 1M model. Named here so that adding it reds on its name as well as on the literal above.
+    expect(Object.hasOwn(CLAUDE_CODE_CLI_V2_PROFILE.controls, 'CLAUDE_CODE_DISABLE_1M_CONTEXT'), 'CLAUDE_CODE_DISABLE_1M_CONTEXT is among @2\'s controls').toBe(false);
     expect(Object.isFrozen(CLAUDE_CODE_CLI_V2_PROFILE.controls)).toBe(true);
     // @1's are not moved by the derivation: still nine, still 16000.
     expect(Object.keys(LAUNCH_CONTROL_ENV)).toHaveLength(9);
@@ -1186,10 +1191,27 @@ describe('claude-code-cli@2 — the profile', () => {
     // In its own case rather than after C1-v2's pin literal, so a changed pin
     // reds here too: that is what shows the invocation is read from the
     // profile, not restated beside it.
+    // The thirteen controls are part of it, written out here (the spend controls' identity extension): a run under
+    // other controls is not the run the identity names.
     expect(CLAUDE_CODE_CLI_V2_ADAPTER.invocation).toEqual({
       effort: 'high',
       maxOutputTokens: 64000,
       executable: { version: '2.1.295', sha256: '494870c9763b5ea370b6165e7e04af589a7b2472bf0de18ffb25477f8230bdf6' },
+      controls: {
+        CLAUDE_CODE_DISABLE_FAST_MODE: '1',
+        CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+        CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK: '1',
+        CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK: '1',
+        CLAUDE_CODE_DISABLE_REFUSAL_RETRY: '1',
+        CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS: '1',
+        CLAUDE_CODE_MAX_OUTPUT_TOKENS: '64000',
+        CLAUDE_CODE_MAX_RETRIES: '0',
+        CLAUDE_CODE_NO_MODEL_FALLBACK: '1',
+        DISABLE_AUTOUPDATER: '1',
+        DISABLE_ERROR_REPORTING: '1',
+        DISABLE_TELEMETRY: '1',
+        MAX_STRUCTURED_OUTPUT_RETRIES: '0',
+      },
     });
   });
 
