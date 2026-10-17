@@ -37,7 +37,7 @@ import {
   type InvocationIdentity,
   type ProviderAdapterIdentity,
 } from '../src/pipeline/provider-adapter';
-import { CLAUDE_CODE_CLI_ADAPTER, CLAUDE_CODE_CLI_V2_ADAPTER } from '../src/pipeline/claude-code-cli';
+import { CLAUDE_CODE_CLI_ADAPTER, CLAUDE_CODE_CLI_V2_ADAPTER, CLAUDE_CODE_CLI_V3_ADAPTER } from '../src/pipeline/claude-code-cli';
 import type { RoleConfig } from '../src/pipeline/config';
 import { RoleOutputError, RoleTransportError } from '../src/pipeline/roles';
 import type { AgentRunner } from '../src/pipeline/runner';
@@ -152,6 +152,9 @@ const INVOCATION_V2: InvocationIdentity = {
     MAX_STRUCTURED_OUTPUT_RETRIES: '0',
   },
 };
+
+/** `claude-code-cli@3`'s invocation, written out: `@2`'s above and the permission mode it requests. */
+const INVOCATION_V3: InvocationIdentity = { ...INVOCATION_V2, permissionMode: 'default' };
 
 /** `INVOCATION_V2`'s controls as a mismatch message shows them: `NAME=value`, sorted, written out. */
 const INVOCATION_V2_CONTROLS_SHOWN =
@@ -586,6 +589,15 @@ describe('a declared invocation must be usable as one', () => {
     expect(() => assertValidInvocationIdentity(CLAUDE_CODE_CLI_V2_ADAPTER.invocation)).not.toThrow();
   });
 
+  it('accepts a permission mode of exactly "default", and the invocation the @3 adapter actually declares (the positive controls for the permission-mode rows below)', () => {
+    expect(() => assertValidInvocationIdentity(INVOCATION_V3)).not.toThrow();
+    expect(CLAUDE_CODE_CLI_V3_ADAPTER.invocation).toEqual(INVOCATION_V3);
+    expect(() => assertValidInvocationIdentity(CLAUDE_CODE_CLI_V3_ADAPTER.invocation)).not.toThrow();
+    // Absent, as @2 declares it, is accepted too: the mode is checked only when defined.
+    expect('permissionMode' in INVOCATION_V2).toBe(false);
+    expect(() => assertValidInvocationIdentity({ ...INVOCATION_V2, permissionMode: undefined })).not.toThrow();
+  });
+
   it('the effort set is exactly the one effort a registered adapter passes, and cannot be edited in place', () => {
     // When a second effort is registered, the orchestration effort row must
     // return as an InvocationMismatchError case (see 'refuses a live
@@ -646,6 +658,12 @@ describe('a declared invocation must be usable as one', () => {
     ['a control value written as a number', withControls({ CLAUDE_CODE_MAX_RETRIES: 0 }), ['controls["CLAUDE_CODE_MAX_RETRIES"] 0 is not a string']],
     ['a control value that is null', withControls({ CLAUDE_CODE_MAX_RETRIES: null }), ['controls["CLAUDE_CODE_MAX_RETRIES"] null is not a string']],
     ['a control value that is a boolean', withControls({ CLAUDE_CODE_DISABLE_FAST_MODE: true }), ['controls["CLAUDE_CODE_DISABLE_FAST_MODE"] true is not a string']],
+    // The permission mode (claude-code-cli@3), checked only when defined: exactly "default".
+    ['the permission mode "auto"', { ...INVOCATION_V2, permissionMode: 'auto' }, ['permissionMode "auto" is not "default", the only mode a registered adapter requests']],
+    ['the permission mode "Default"', { ...INVOCATION_V2, permissionMode: 'Default' }, ['permissionMode "Default" is not "default", the only mode a registered adapter requests']],
+    ['an empty permission mode', { ...INVOCATION_V2, permissionMode: '' }, ['permissionMode "" is not "default", the only mode a registered adapter requests']],
+    ['a permission mode written as a number', { ...INVOCATION_V2, permissionMode: 1 }, ['permissionMode 1 is not "default", the only mode a registered adapter requests']],
+    ['a null permission mode', { ...INVOCATION_V2, permissionMode: null }, ['permissionMode null is not "default", the only mode a registered adapter requests']],
   ] as const)('refuses %s, naming the field', (_name, value, problems) => {
     const error = thrownBy(() => assertValidInvocationIdentity(value));
     expect(error).toBeInstanceOf(InvalidInvocationIdentityError);
@@ -1204,6 +1222,52 @@ describe('the capability must make the invocation the identity was derived over'
     expect(asked()).toBe(0);
     expect(bound()).toBe(0);
     expect(network).toEqual([]);
+  });
+
+  // The permission mode (claude-code-cli@3): a capability declaring no mode where the configuration requests one, or
+  // one where the configuration requests none, runs under a launch the identity does not name.
+  it('refuses a live capability declaring no permission mode where the configuration\'s invocation requests "default", naming only permissionMode', async () => {
+    const { runner, asked, bound } = capability('live', { adapter: SYNTHETIC_ADAPTER_V1.identity, invocation: INVOCATION_V2 });
+    const { error, network } = await attempt({ ...CONFIGURED, invocation: INVOCATION_V3 }, runner);
+
+    expect(error).toBeInstanceOf(InvocationMismatchError);
+    expect((error as InvocationMismatchError).fields).toEqual(['permissionMode']);
+    expect((error as InvocationMismatchError).configured).toEqual(INVOCATION_V3);
+    expect((error as InvocationMismatchError).actual).toEqual(INVOCATION_V2);
+    expect((error as Error).message).toContain('permissionMode configured "default", actual none');
+    expect(asked()).toBe(0);
+    expect(bound()).toBe(0);
+    expect(network).toEqual([]);
+  });
+
+  it('refuses the reverse: a live capability requesting "default" where the configuration\'s invocation declares no mode, naming only permissionMode', async () => {
+    const { runner, asked, bound } = capability('live', { adapter: SYNTHETIC_ADAPTER_V1.identity, invocation: INVOCATION_V3 });
+    const { error, network } = await attempt(CONFIGURED, runner);
+
+    expect(error).toBeInstanceOf(InvocationMismatchError);
+    expect((error as InvocationMismatchError).fields).toEqual(['permissionMode']);
+    expect((error as InvocationMismatchError).configured).toEqual(INVOCATION_V2);
+    expect((error as InvocationMismatchError).actual).toEqual(INVOCATION_V3);
+    expect((error as Error).message).toContain('permissionMode configured none, actual "default"');
+    expect(asked()).toBe(0);
+    expect(bound()).toBe(0);
+    expect(network).toEqual([]);
+  });
+
+  it('positive control for both: a live capability making exactly the configured @3 invocation, as a distinct object, runs and binds once; a mismatch described in full shows the mode', async () => {
+    const equal: InvocationIdentity = { ...INVOCATION_V3, executable: { ...INVOCATION_V3.executable }, controls: { ...INVOCATION_V3.controls } };
+    expect(equal).not.toBe(INVOCATION_V3);
+    expect(invocationDifferences(INVOCATION_V3, equal)).toEqual([]);
+    const { runner, asked, bound } = capability('live', { adapter: SYNTHETIC_ADAPTER_V1.identity, invocation: equal });
+    const { error, network } = await attempt({ ...CONFIGURED, invocation: INVOCATION_V3 }, runner);
+
+    expect(error).toBe(undefined);
+    expect(asked()).toBeGreaterThan(0);
+    expect(bound()).toBe(1);
+    expect(network).toEqual([]);
+    expect(new InvocationMismatchError(INVOCATION_V3, undefined).message).toContain(
+      `this run's pipelineVersion is derived over invocation {effort "high", maxOutputTokens 64000, executable "2.1.295" sha256 "494870c9763b5ea370b6165e7e04af589a7b2472bf0de18ffb25477f8230bdf6", controls ${INVOCATION_V2_CONTROLS_SHOWN}, permissionMode "default"}, but the execution capability declares none`,
+    );
   });
 
   it('the comparison reads two orders of one control map as no difference, and a mismatch described in full shows the controls sorted', () => {

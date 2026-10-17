@@ -39,6 +39,7 @@ import {
   evaluateGateOutput,
   ExecutablePinMismatchError,
   GATE_FIELD_ALLOWLIST,
+  LaunchPermissionModeMismatchError,
   LaunchSettingsMismatchError,
   WrongTransportError,
   type GateResult,
@@ -51,7 +52,7 @@ import { EvidenceObservationFailedError, ProcessTransportError, TransportFailure
 import type { ProviderHttpRequest } from '../src/pipeline/provider-adapter';
 import { allowDummyDir } from './setup/process-guard';
 import { roleOutputJsonSchema } from '../src/pipeline/anthropic-messages';
-import { CLAUDE_CODE_CLI_ADAPTER, CLAUDE_CODE_CLI_GATE_RULES, CLAUDE_CODE_CLI_V2_ADAPTER, CLAUDE_CODE_CLI_V2_GATE_RULES } from '../src/pipeline/claude-code-cli';
+import { CLAUDE_CODE_CLI_ADAPTER, CLAUDE_CODE_CLI_GATE_RULES, CLAUDE_CODE_CLI_V2_ADAPTER, CLAUDE_CODE_CLI_V2_GATE_RULES, CLAUDE_CODE_CLI_V3_ADAPTER } from '../src/pipeline/claude-code-cli';
 import type { RoleRequest } from '../src/pipeline/roles';
 
 // ---------------------------------------------------------------------------
@@ -1450,5 +1451,127 @@ describe('a transport holding its profile\'s --settings text', () => {
       ['--settings', DEFAULT_SETTINGS],
       ['--settings', V2_SETTINGS],
     ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// claude-code-cli@3: the permission mode, from the description to the argv
+// ---------------------------------------------------------------------------
+
+describe('claude-code-cli@3 through the transport', () => {
+  /** `@2`'s settings text, which `@3` launches with too, written out: never read off a profile. */
+  const V2_SETTINGS = '{"switchModelsOnFlag":false,"fastMode":false,"autoContinueAtUsageLimit":false}';
+  const DISAGREE = 'the launch description and the transport\'s profile disagree';
+
+  it('V3-A1 — @3\'s request, built by its adapter, reaches the child as exactly @2\'s argv with --permission-mode default right after --no-session-persistence, once', async () => {
+    const pin = writeDummy('v3-answer', 'printf %s "ok"');
+    const built = CLAUDE_CODE_CLI_V3_ADAPTER.buildRequest(adapterRoleRequest('claude-opus-5-5'), { endpoint: '', apiKey: '' });
+
+    await transportFor(pin)(built, never());
+
+    const expected = [
+      '-p',
+      '--model',
+      'claude-opus-5-5',
+      '--effort',
+      'high',
+      '--safe-mode',
+      '--tools',
+      '',
+      '--strict-mcp-config',
+      '--setting-sources',
+      '',
+      '--disable-slash-commands',
+      '--no-session-persistence',
+      '--permission-mode',
+      'default',
+      '--settings',
+      V2_SETTINGS,
+      '--system-prompt-file',
+      '<system-prompt-file>',
+      '--json-schema',
+      JSON.stringify(roleOutputJsonSchema('reader')),
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--include-partial-messages',
+    ];
+    expect(records).toHaveLength(1);
+    expectArgv(records[0]!.record.argv, expected);
+    const argv = records[0]!.record.argv;
+    expect(argv.filter((element) => element === '--permission-mode')).toHaveLength(1);
+    expect(argv[argv.indexOf('--permission-mode') + 1]).toBe('default');
+    // What the child saw: the same, with the real prompt path in the one variable position.
+    const seen = nulSeparated('argv.bin');
+    expect(seen[18]).toBe(join(launches[0]!.options.cwd, 'system-prompt.txt'));
+    expectArgv(seen, expected.map((element, i) => (i === 18 ? seen[18]! : element)));
+  });
+
+  it('V3-A2 — the control for V3-A1: a description without the key launches with no --permission-mode at all, the argv it always had', async () => {
+    const pin = writeDummy('v3-no-key', 'printf %s "ok"');
+
+    await transportFor(pin)(roleRequest(), never());
+
+    expect(records).toHaveLength(1);
+    expect(records[0]!.record.argv).not.toContain('--permission-mode');
+    expectArgv(records[0]!.record.argv, expectedRoleArgv('<system-prompt-file>'));
+  });
+
+  it.each([['auto'], ['bypassPermissions'], ['plan'], ['dontAsk'], ['manual'], [''], ['Default'], [null], [1]])(
+    'V3-S1 — a description carrying permissionMode %j is refused as a LaunchSpecError naming permissionMode, before the pin, with nothing launched',
+    async (permissionMode) => {
+      const pin = writeDummy('unused', 'exit 0');
+      // A pin that cannot match: a body that got past the schema would be refused by the pin instead, under another name.
+      const transport = transportFor({ ...pin, sha256: 'f'.repeat(64) });
+      const error = await settleWith(transport(roleRequest({ permissionMode }), never()), Error);
+      expect(error.name).toBe('LaunchSpecError');
+      expect(error.message).toBe('request body is not a CLI launch description: permissionMode: Invalid literal value, expected "default"');
+      expect((error as { process?: ProcessFacts }).process?.started).toBe(false);
+      expect(launches).toHaveLength(0);
+      expect(existsSync(join(recordDir, 'marker'))).toBe(false);
+    },
+  );
+
+  it('V3-H1 — a transport holding the profile\'s mode refuses a description without it, as @2\'s adapter builds it, before the pin: nothing launched, no directory, no prompt file', async () => {
+    const pin = writeDummy('unused', 'exit 0');
+    // A pin that cannot match: a description that got past the comparison would be refused by the pin instead, as ExecutablePinMismatchError.
+    const transport = transportFor({ ...pin, sha256: 'f'.repeat(64) }, { settings: V2_SETTINGS, permissionMode: 'default' });
+    const built = CLAUDE_CODE_CLI_V2_ADAPTER.buildRequest(adapterRoleRequest('claude-opus-5-5'), { endpoint: '', apiKey: '' });
+    expect(JSON.parse(built.body)).not.toHaveProperty('permissionMode');
+
+    const error = await settleWith(transport(built, never()), Error);
+
+    expect(error.name).toBe('LaunchPermissionModeMismatchError');
+    expect(error).toBeInstanceOf(LaunchPermissionModeMismatchError);
+    expect(error).not.toBeInstanceOf(ExecutablePinMismatchError);
+    expect(error.message).toBe(`the launch description's --permission-mode is absent, and the transport's profile permission mode is "default": ${DISAGREE}, so nothing was launched`);
+    expect((error as { process?: ProcessFacts }).process?.started).toBe(false);
+    expect(launches).toHaveLength(0);
+    expect(records).toHaveLength(0);
+    expect(readdirSync(tempRoot)).toEqual([]);
+    expect(existsSync(join(recordDir, 'marker'))).toBe(false);
+  });
+
+  it('V3-H2 — positive control for V3-H1: under the same options @3\'s description launches once, the pair in its place', async () => {
+    const pin = writeDummy('v3-agree', 'printf %s "ok"');
+    const built = CLAUDE_CODE_CLI_V3_ADAPTER.buildRequest(adapterRoleRequest('claude-opus-5-5'), { endpoint: '', apiKey: '' });
+
+    const response = await transportFor(pin, { settings: V2_SETTINGS, permissionMode: 'default' })(built, never());
+
+    expect(response.process?.started).toBe(true);
+    expect(launches).toHaveLength(1);
+    expect(records[0]!.record.argv.slice(12, 17)).toEqual(['--no-session-persistence', '--permission-mode', 'default', '--settings', V2_SETTINGS]);
+    expect(nulSeparated('argv.bin').slice(13, 15)).toEqual(['--permission-mode', 'default']);
+  });
+
+  it('V3-H3 — without the option nothing is compared, as before: @2\'s description launches without the flag and @3\'s with it', async () => {
+    const pin = writeDummy('v3-unset', 'printf %s "ok"');
+    const transport = transportFor(pin);
+    await transport(CLAUDE_CODE_CLI_V2_ADAPTER.buildRequest(adapterRoleRequest('claude-opus-5-5'), { endpoint: '', apiKey: '' }), never());
+    await transport(CLAUDE_CODE_CLI_V3_ADAPTER.buildRequest(adapterRoleRequest('claude-opus-5-5'), { endpoint: '', apiKey: '' }), never());
+
+    expect(launches).toHaveLength(2);
+    expect(records[0]!.record.argv).not.toContain('--permission-mode');
+    expect(records[1]!.record.argv.slice(13, 15)).toEqual(['--permission-mode', 'default']);
   });
 });

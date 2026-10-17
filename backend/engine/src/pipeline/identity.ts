@@ -109,7 +109,7 @@ export interface PipelineIdentityInput {
   /**
    * The invocation the adapter declares, where its identity does not imply it
    * (`InvocationIdentity`): effort, output ceiling and pinned executable, and
-   * the launch controls where it declares them.
+   * the launch controls and the permission mode where it declares them.
    *
    * Absent for every adapter that declares none, and then absent from the
    * payload as well, so the identities derived without it — the HTTP route's,
@@ -191,6 +191,10 @@ function identityPayload(input: PipelineIdentityInput): unknown {
             ...(input.invocation.controls === undefined
               ? {}
               : { controls: Object.fromEntries(Object.entries(input.invocation.controls)) }),
+            // The permission mode, only when declared, for the same reason:
+            // absent is no key at all, so every identity derived over an
+            // invocation without one (`@2`'s among them) is unchanged.
+            ...(input.invocation.permissionMode === undefined ? {} : { permissionMode: input.invocation.permissionMode }),
           },
         }),
   };

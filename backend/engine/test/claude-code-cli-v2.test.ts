@@ -36,6 +36,7 @@ import { describe, expect, it } from 'vitest';
 import { ProviderOutputTruncatedError, ProviderRefusalError } from '../src/pipeline/anthropic-messages';
 import {
   CLAUDE_CODE_CLI_V2_ADAPTER,
+  CLAUDE_CODE_CLI_V3_ADAPTER,
   CliCreditsRequiredError,
   CliEffortRefusedError,
   CliExitError,
@@ -1277,6 +1278,17 @@ describe('claude-code-cli@2 — D-8 launch context', () => {
   const cases: readonly [string, Ev, string][] = [
     ['permissionMode "acceptEdits"', { permissionMode: 'acceptEdits' }, 'permissionMode "acceptEdits" (must be "default") (init at line 1)'],
     ['permissionMode absent', { permissionMode: undefined }, 'permissionMode undefined (must be "default") (init at line 1)'],
+    // The other modes the pinned build knows (claude-code-cli@3, plan 2026-10-17). "auto" is what the one 2.1.295
+    // probe's init reported. "manual" is, read statically, the build's own alias for default, refused because the check
+    // compares the exact string requested; a case variant and null are near misses. @3 shares this check, the same
+    // function (claude-code-cli.test.ts C5-v3).
+    ['permissionMode "auto"', { permissionMode: 'auto' }, 'permissionMode "auto" (must be "default") (init at line 1)'],
+    ['permissionMode "bypassPermissions"', { permissionMode: 'bypassPermissions' }, 'permissionMode "bypassPermissions" (must be "default") (init at line 1)'],
+    ['permissionMode "plan"', { permissionMode: 'plan' }, 'permissionMode "plan" (must be "default") (init at line 1)'],
+    ['permissionMode "dontAsk"', { permissionMode: 'dontAsk' }, 'permissionMode "dontAsk" (must be "default") (init at line 1)'],
+    ['permissionMode "manual"', { permissionMode: 'manual' }, 'permissionMode "manual" (must be "default") (init at line 1)'],
+    ['permissionMode "Default"', { permissionMode: 'Default' }, 'permissionMode "Default" (must be "default") (init at line 1)'],
+    ['permissionMode null', { permissionMode: null }, 'permissionMode null (must be "default") (init at line 1)'],
     ['another CLI version (2.1.226, @1\'s pin)', { claude_code_version: '2.1.226' }, 'claude_code_version "2.1.226" (must be "2.1.295", the pin\'s) (init at line 1)'],
     ['another CLI version (2.1.281)', { claude_code_version: '2.1.281' }, 'claude_code_version "2.1.281" (must be "2.1.295", the pin\'s) (init at line 1)'],
     // Since the pin moved to 2.1.295 (2026-10-15), every version above sorts below it. These three do not: a newer
@@ -2031,5 +2043,50 @@ describe('claude-code-cli@2 — the projection module stays pure', () => {
     const sources = importSources(source('claude-code-cli-transport.ts'));
     expect(sources).toContain('node:child_process');
     expect(sources).toContain('./claude-code-cli');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The one 2.1.295 probe's role stream, derived and normalised (claude-code-cli@3, plan 2026-10-17, Task 6)
+// ---------------------------------------------------------------------------
+
+describe('claude-code-cli@2 and @3 — the 2.1.295 probe\'s role stream, derived and normalised (test/fixtures/claude-code-cli/README.md records what changed and why)', () => {
+  const NAME = 'probe-2.1.295-permission-auto.derived.stream.jsonl';
+  /** The run's own refusal, as its execution filed it. */
+  const REFUSAL = 'reader[0]: the CLI\'s init event describes a launch this adapter did not request — permissionMode "auto" (must be "default") (init at line 1)';
+  const ADAPTERS = [['@2', CLAUDE_CODE_CLI_V2_ADAPTER], ['@3', CLAUDE_CODE_CLI_V3_ADAPTER]] as const;
+  /** The fixture's text with one exact change, refused unless the old text occurs exactly once. */
+  const changed = (text: string, from: string, to: string): string => {
+    expect(occurrences(text, from), `occurrences of ${from}`).toBe(1);
+    return text.replace(from, to);
+  };
+
+  it('V-P0 — the fixture is the derived file the README names: 7574 bytes, its sha256, 16 lines, and the init\'s "auto" still in it', () => {
+    const bytes = readFileSync(join(here, 'fixtures', 'claude-code-cli', NAME));
+    expect(bytes.length).toBe(7574);
+    expect(sha256(bytes)).toBe('08223ed4ddb27824e94fac6f19842c014f86296ea1276d809bf5cc0835d4f0da');
+    expect(bytes.toString('utf8').trim().split('\n')).toHaveLength(16);
+    expect(occurrences(bytes.toString('utf8'), '"permissionMode":"auto"')).toBe(1);
+  });
+
+  it.each(ADAPTERS)('V-P1 — as derived, %s refuses it for its init alone, a stream whose result reports success, with exactly the run\'s message', (_name, adapter) => {
+    const error = thrownBy(() => adapter.projectResponse(wrap(fixture(NAME)), request()));
+    expectRefused(error, CliLaunchContextError, 'CliLaunchContextError', 'permissionMode "auto"');
+    expect((error as Error).message).toBe(REFUSAL);
+  });
+
+  it.each(ADAPTERS)('V-P2 — COUNTERFACTUAL, only permissionMode changed to "default" in this test: %s\'s later checks run on the pinned build\'s stream shape and return its deltas. This is the projection\'s handling of such a stream, not evidence that the flag works live', (_name, adapter) => {
+    const counterfactual = changed(fixture(NAME), '"permissionMode":"auto"', '"permissionMode":"default"');
+    expect(adapter.projectResponse(wrap(counterfactual), request())).toBe('{"probe": "minimal-shape-ok"}');
+  });
+
+  it.each(ADAPTERS)('V-P3 — V-P2\'s sibling: the same counterfactual with isUsingOverage removed is refused by %s\'s rate-limit allowlist, so the later checks do run on the fixture', (_name, adapter) => {
+    const counterfactual = changed(changed(fixture(NAME), '"permissionMode":"auto"', '"permissionMode":"default"'), '"isUsingOverage":false,', '');
+    expectRefused(
+      thrownBy(() => adapter.projectResponse(wrap(counterfactual), request())),
+      CliUsageUnobservedError,
+      'CliUsageUnobservedError',
+      'the rate_limit_event at line 15: isUsingOverage absent (must be present and false)',
+    );
   });
 });

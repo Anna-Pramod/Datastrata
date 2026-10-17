@@ -44,11 +44,11 @@
  * identity has no implementation is refused rather than defaulted.
  *
  * **The subscription route is registered and refused (B-CLI-ADAPTER).**
- * `claude-code-cli@1` and `claude-code-cli@2` reach Claude through a pinned
- * Claude Code CLI on a subscription. Both are in the registry because the
- * capture harness resolves them from here, and both are refused here by
- * name — before any prerequisite variable is read — because an ordinary
- * `verify run` is not the place either may run: only the capture harness's
+ * `claude-code-cli@1`, `claude-code-cli@2` and `claude-code-cli@3` reach
+ * Claude through a pinned Claude Code CLI on a subscription. All three are
+ * in the registry because the capture harness resolves them from here, and
+ * all are refused here by name — before any prerequisite variable is read —
+ * because an ordinary `verify run` is not the place any may run: only the capture harness's
  * subscription path (`test/live-capture.ts`) constructs their runners,
  * behind an execution-scoped authentication gate. The refusal matches the
  * identity's id, not its version (Opus 5.5 migration, Task 5a), so a later
@@ -62,7 +62,7 @@
 
 import type { RunCapabilities } from './run';
 import { ANTHROPIC_MESSAGES_ADAPTER } from '../pipeline/anthropic-messages';
-import { CLAUDE_CODE_CLI_ADAPTER, CLAUDE_CODE_CLI_IDENTITY, CLAUDE_CODE_CLI_V2_ADAPTER } from '../pipeline/claude-code-cli';
+import { CLAUDE_CODE_CLI_ADAPTER, CLAUDE_CODE_CLI_IDENTITY, CLAUDE_CODE_CLI_V2_ADAPTER, CLAUDE_CODE_CLI_V3_ADAPTER } from '../pipeline/claude-code-cli';
 import type { RoleConfig } from '../pipeline/config';
 import {
   AgentCapabilityError,
@@ -90,14 +90,18 @@ export const LIVE_MAX_ATTEMPTS_ENV = 'DATASTRATA_AGENT_MAX_ATTEMPTS';
 export const LIVE_MAX_INPUT_BYTES_ENV = 'DATASTRATA_AGENT_MAX_INPUT_BYTES';
 
 /**
- * Every adapter production may resolve, keyed by identity. Three: the HTTP
- * adapter, which `verify run` may execute, and the two subscription-route
- * adapters, `claude-code-cli@1` and `@2`, which it may not
- * (`SubscriptionRouteCaptureOnlyError`).
+ * Every adapter production may resolve, keyed by identity. Four: the HTTP
+ * adapter, which `verify run` may execute, and the three subscription-route
+ * adapters, `claude-code-cli@1`, `@2` and `@3`, which it may not
+ * (`SubscriptionRouteCaptureOnlyError`). A version registered nowhere is
+ * refused by the registry (`UnknownProviderAdapterError`), never defaulted.
  */
 export const PRODUCTION_ADAPTERS: ProviderAdapterRegistry = registerProviderAdapter(
-  registerProviderAdapter(registerProviderAdapter(new Map(), ANTHROPIC_MESSAGES_ADAPTER), CLAUDE_CODE_CLI_ADAPTER),
-  CLAUDE_CODE_CLI_V2_ADAPTER,
+  registerProviderAdapter(
+    registerProviderAdapter(registerProviderAdapter(new Map(), ANTHROPIC_MESSAGES_ADAPTER), CLAUDE_CODE_CLI_ADAPTER),
+    CLAUDE_CODE_CLI_V2_ADAPTER,
+  ),
+  CLAUDE_CODE_CLI_V3_ADAPTER,
 );
 
 /**

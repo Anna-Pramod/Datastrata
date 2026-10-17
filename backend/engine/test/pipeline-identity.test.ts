@@ -44,13 +44,13 @@ import { verificationResultSchema } from '../src/verification/result';
 import { CLOSURE_RENDERER_VERSION } from '../src/pipeline/entitlement';
 import { EntitledClosure } from '../src/pipeline/entitlement';
 import { pipelineVersionFor } from '../src/pipeline/orchestrate';
-import { CLAUDE_CODE_CLI_ADAPTER, CLAUDE_CODE_CLI_IDENTITY, CLAUDE_CODE_CLI_V2_ADAPTER } from '../src/pipeline/claude-code-cli';
+import { CLAUDE_CODE_CLI_ADAPTER, CLAUDE_CODE_CLI_IDENTITY, CLAUDE_CODE_CLI_V2_ADAPTER, CLAUDE_CODE_CLI_V3_ADAPTER } from '../src/pipeline/claude-code-cli';
 import type { RoleConfig } from '../src/pipeline/config';
 import type { InvocationIdentity } from '../src/pipeline/provider-adapter';
 import { readWorld, type VerifyPaths } from '../src/cli/sign';
 import { sourceIdsOf } from '../src/knowledge/provenance';
 import { engineRoot } from './replay-fixtures';
-import { SUBSCRIPTION_ROLE_CONFIG, SUBSCRIPTION_ROLE_CONFIG_V1, subscriptionRoleConfigFor, SubscriptionRouteMismatchError } from './live-capture';
+import { SUBSCRIPTION_ROLE_CONFIG, SUBSCRIPTION_ROLE_CONFIG_V1, SUBSCRIPTION_ROLE_CONFIG_V3, subscriptionRoleConfigFor, SubscriptionRouteMismatchError } from './live-capture';
 
 const prompts = loadPromptSet();
 
@@ -607,7 +607,10 @@ describe('the identities the @2 migration must not move', () => {
           : '"invocation":{' +
             (controls === undefined ? '' : `"controls":{${Object.entries(controls).map(([name, value]) => `"${name}":"${value}"`).join(',')}},`) +
             `"effort":"${invocation.effort}","executable":{"sha256":"${invocation.executable.sha256}",` +
-            `"version":"${invocation.executable.version}"},"maxOutputTokens":${invocation.maxOutputTokens}},`) +
+            `"version":"${invocation.executable.version}"},"maxOutputTokens":${invocation.maxOutputTokens}` +
+            // The permission mode, where declared (`@3`): "permissionMode" sorts last inside the invocation.
+            (invocation.permissionMode === undefined ? '' : `,"permissionMode":"${invocation.permissionMode}"`) +
+            '},') +
         `"models":{"adjudicator":"${values.models.adjudicator}","prosecutor":"${values.models.prosecutor}","reader":"${values.models.reader}"},` +
         `"prompts":{"adjudicator":"${prompt.adjudicator}","prosecutor":"${prompt.prosecutor}","reader":"${prompt.reader}"},` +
         `"providerAdapter":{"id":"${values.providerAdapter.id}","version":"${values.providerAdapter.version}"},` +
@@ -646,9 +649,13 @@ describe('the identities the @2 migration must not move', () => {
       // By identity, not by object: a bare identity of each version is answered the same way.
       expect(subscriptionRoleConfigFor({ identity: { id: 'claude-code-cli', version: '2' } })).toEqual(subscriptionV2Config);
       expect(subscriptionRoleConfigFor({ identity: { id: 'claude-code-cli', version: '1' } })).toEqual(subscriptionV1Config);
+      // `@3` has its own entry (plan 2026-10-17): its configuration, never `@2`'s.
+      expect(subscriptionRoleConfigFor(CLAUDE_CODE_CLI_V3_ADAPTER)).toBe(SUBSCRIPTION_ROLE_CONFIG_V3);
+      expect(subscriptionRoleConfigFor({ identity: { id: 'claude-code-cli', version: '3' } })).toBe(SUBSCRIPTION_ROLE_CONFIG_V3);
+      expect(subscriptionRoleConfigFor({ identity: { id: 'claude-code-cli', version: '3' } })).not.toEqual(subscriptionV2Config);
       for (const [identity, key] of [
         [{ id: 'anthropic-messages', version: '1' }, 'anthropic-messages@1'],
-        [{ id: 'claude-code-cli', version: '3' }, 'claude-code-cli@3'],
+        [{ id: 'claude-code-cli', version: '4' }, 'claude-code-cli@4'],
       ] as const) {
         expect(() => subscriptionRoleConfigFor({ identity }), key).toThrow(SubscriptionRouteMismatchError);
         expect(() => subscriptionRoleConfigFor({ identity }), key).toThrow(`the adapter handed in is ${key}`);
@@ -717,6 +724,76 @@ describe('the identities the @2 migration must not move', () => {
       // carry the evidence that the invocation moves the identity.
       expect(SUBSCRIPTION_V2_PIPELINE_VERSION).not.toBe(HTTP_PIPELINE_VERSION);
       expect(SUBSCRIPTION_V2_PIPELINE_VERSION).not.toBe(SUBSCRIPTION_V1_PIPELINE_VERSION);
+    });
+
+    /**
+     * `claude-code-cli@3`: `@2` requesting `--permission-mode default`. Its
+     * identity differs from `@2`'s in the adapter's version and in the
+     * invocation's permission mode, and in nothing else. Every value is a
+     * literal written here.
+     */
+    describe('the @3 subscription identity, which the version and the permission mode move', () => {
+      /** `@3`'s invocation: `@2`'s, written out above, and the permission mode it requests. */
+      const INVOCATION_V3: InvocationIdentity = { ...INVOCATION_V2, permissionMode: 'default' };
+      const subscriptionV3Config: RoleConfig = {
+        ...subscriptionV2Config,
+        providerAdapter: { id: 'claude-code-cli', version: '3' },
+        invocation: INVOCATION_V3,
+      };
+      /**
+       * What `pipelineVersionFor` returned for the configuration above, over
+       * the real prompts and S-002's closure. It was taken from this code on
+       * 2026-10-17 by a placeholder run
+       * (`task4-placeholder-identity.20261017T165440Z.log` in
+       * `pilot-evidence/2026-10-17-opus55-cli-v3-permission-mode/`). There
+       * the builder over this configuration, the builder over the harness's
+       * export and the hand-written derivation all received this value.
+       */
+      const SUBSCRIPTION_V3_PIPELINE_VERSION = 'pipeline-v3-ecb06a30764aff78ecf25bde4a8c3e25fcf4d827ce336a5cd757863ae8eb332d';
+
+      it('the @3 identity over the real prompts and the S-002 closure is the literal', () => {
+        expect(versionOf(subscriptionV3Config)).toBe(SUBSCRIPTION_V3_PIPELINE_VERSION);
+      });
+
+      it('SUBSCRIPTION_ROLE_CONFIG_V3, as the capture harness exports it, gives the @3 literal and is the configuration written out above; @3\'s adapter declares that invocation', () => {
+        expect(versionOf(SUBSCRIPTION_ROLE_CONFIG_V3)).toBe(SUBSCRIPTION_V3_PIPELINE_VERSION);
+        expect(SUBSCRIPTION_ROLE_CONFIG_V3).toEqual(subscriptionV3Config);
+        expect(CLAUDE_CODE_CLI_V3_ADAPTER.invocation).toEqual(INVOCATION_V3);
+      });
+
+      it('and the hand-written derivation, independent of the builder, is the same literal', () => {
+        expect(handWrittenIdentity({ models: OPUS_5_5, providerAdapter: { id: 'claude-code-cli', version: '3' }, invocation: INVOCATION_V3 })).toBe(
+          SUBSCRIPTION_V3_PIPELINE_VERSION,
+        );
+      });
+
+      it('control (i): the exported @3 configuration with version "2" and no permission mode derives exactly @2\'s literal, so the version and the mode are its only differences', () => {
+        const { permissionMode: _removed, ...withoutMode } = SUBSCRIPTION_ROLE_CONFIG_V3.invocation!;
+        expect('permissionMode' in withoutMode).toBe(false);
+        expect(versionOf({ ...SUBSCRIPTION_ROLE_CONFIG_V3, providerAdapter: { id: 'claude-code-cli', version: '2' }, invocation: withoutMode })).toBe(
+          SUBSCRIPTION_V2_PIPELINE_VERSION,
+        );
+      });
+
+      it('control (ii): each difference moves the identity on its own: the version without the mode, and the mode without the version, are two further pipelines', () => {
+        const { permissionMode: _removed, ...withoutMode } = INVOCATION_V3;
+        const versionOnly = versionOf({ ...subscriptionV3Config, invocation: withoutMode });
+        const modeOnly = versionOf({ ...subscriptionV3Config, providerAdapter: { id: 'claude-code-cli', version: '2' } });
+        for (const moved of [versionOnly, modeOnly]) {
+          expect(moved).toMatch(/^pipeline-v3-[0-9a-f]{64}$/);
+          expect(moved).not.toBe(SUBSCRIPTION_V2_PIPELINE_VERSION);
+          expect(moved).not.toBe(SUBSCRIPTION_V3_PIPELINE_VERSION);
+        }
+        expect(versionOnly).not.toBe(modeOnly);
+        // The hand-writer reaches both without the builder.
+        expect(handWrittenIdentity({ models: OPUS_5_5, providerAdapter: { id: 'claude-code-cli', version: '3' }, invocation: withoutMode })).toBe(versionOnly);
+        expect(handWrittenIdentity({ models: OPUS_5_5, providerAdapter: { id: 'claude-code-cli', version: '2' }, invocation: INVOCATION_V3 })).toBe(modeOnly);
+      });
+
+      it('control (iii): @2\'s configuration, as the harness exports it, still derives @2\'s literal, and @2\'s adapter declares no permission mode', () => {
+        expect(versionOf(SUBSCRIPTION_ROLE_CONFIG)).toBe(SUBSCRIPTION_V2_PIPELINE_VERSION);
+        expect('permissionMode' in CLAUDE_CODE_CLI_V2_ADAPTER.invocation!, "@2's invocation declares a permission mode").toBe(false);
+      });
     });
   });
 });

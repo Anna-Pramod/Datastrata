@@ -45,6 +45,8 @@ import {
   CLAUDE_CODE_CLI_V2_ADAPTER,
   CLAUDE_CODE_CLI_V2_GATE_RULES,
   CLAUDE_CODE_CLI_V2_PROFILE,
+  CLAUDE_CODE_CLI_V3_ADAPTER,
+  CLAUDE_CODE_CLI_V3_PROFILE,
   CLI_LAUNCH_URL,
   CliEnvelopeMalformedError,
   CliExitError,
@@ -1362,6 +1364,133 @@ describe('claude-code-cli@2 — buildRequest', () => {
       expect(error, `settings ${JSON.stringify(settings)} was not refused`).toBeInstanceOf(CliLaunchSpecMalformedError);
       expect((error as Error).message).toMatch(/^the request body is not a CliLaunchSpec — settings: Expected string/);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// claude-code-cli@3: the profile, the adapter and the request
+// ---------------------------------------------------------------------------
+
+describe('claude-code-cli@3 — the profile, the adapter and the request', () => {
+  /** `@2`'s settings text, which `@3` carries too, written out: never read off a profile. */
+  const V2_SETTINGS = '{"switchModelsOnFlag":false,"fastMode":false,"autoContinueAtUsageLimit":false}';
+  const BASE_SPEC = { model: 'claude-opus-5-5', systemPrompt: '', userMessage: '', jsonSchema: {}, effort: 'high', role: 'reader', index: 0 };
+
+  it('C1-v3 — identity, pin, models, effort, settings, permission mode, timeouts and ceiling are exactly as recorded', () => {
+    expect(CLAUDE_CODE_CLI_V3_PROFILE.identity).toEqual({ id: 'claude-code-cli', version: '3' });
+    expect(() => assertValidProviderAdapterIdentity(CLAUDE_CODE_CLI_V3_PROFILE.identity)).not.toThrow();
+    expect(CLAUDE_CODE_CLI_V3_PROFILE.pin).toEqual({
+      path: '~/.local/share/datastrata/claude-code/2.1.295/9d6405864fdc/claude.app/Contents/MacOS/claude',
+      version: '2.1.295',
+      sha256: '494870c9763b5ea370b6165e7e04af589a7b2472bf0de18ffb25477f8230bdf6',
+      sizeBytes: 239695888,
+    });
+    expect(CLAUDE_CODE_CLI_V3_PROFILE.permittedModels).toEqual(['claude-opus-5-5']);
+    expect(CLAUDE_CODE_CLI_V3_PROFILE.effort).toBe('high');
+    expect(CLAUDE_CODE_CLI_V3_PROFILE.settings).toBe(V2_SETTINGS);
+    expect(CLAUDE_CODE_CLI_V3_PROFILE.permissionMode).toBe('default');
+    expect(CLAUDE_CODE_CLI_V3_PROFILE.launchTimeoutMs).toBe(1800000);
+    expect(CLAUDE_CODE_CLI_V3_PROFILE.gateTimeoutMs).toBe(60000);
+    expect(CLAUDE_CODE_CLI_V3_PROFILE.maxOutputTokens).toBe(64000);
+    expect(Object.keys(CLAUDE_CODE_CLI_V3_PROFILE).sort()).toEqual(['controls', 'effort', 'gate', 'gateTimeoutMs', 'identity', 'launchTimeoutMs', 'maxOutputTokens', 'permissionMode', 'permittedModels', 'pin', 'settings']);
+    for (const part of [CLAUDE_CODE_CLI_V3_PROFILE, CLAUDE_CODE_CLI_V3_PROFILE.identity, CLAUDE_CODE_CLI_V3_PROFILE.pin, CLAUDE_CODE_CLI_V3_PROFILE.controls]) expect(Object.isFrozen(part)).toBe(true);
+  });
+
+  it('C2-v3 — every field but the identity and the mode is @2\'s own value, the same object; @1\'s and @2\'s profiles carry no permissionMode key', () => {
+    const shared = Object.keys(CLAUDE_CODE_CLI_V2_PROFILE).filter((key) => key !== 'identity') as (keyof typeof CLAUDE_CODE_CLI_V2_PROFILE)[];
+    expect(shared.sort()).toEqual(['controls', 'effort', 'gate', 'gateTimeoutMs', 'launchTimeoutMs', 'maxOutputTokens', 'permittedModels', 'pin', 'settings']);
+    for (const key of shared) expect(CLAUDE_CODE_CLI_V3_PROFILE[key], `@3's ${key}`).toBe(CLAUDE_CODE_CLI_V2_PROFILE[key]);
+    expect(CLAUDE_CODE_CLI_V3_PROFILE.identity).not.toEqual(CLAUDE_CODE_CLI_V2_PROFILE.identity);
+    expect(Object.hasOwn(CLAUDE_CODE_CLI_V2_PROFILE, 'permissionMode'), "@2's profile states a permission mode").toBe(false);
+    expect(Object.hasOwn(CLAUDE_CODE_CLI_PROFILE, 'permissionMode'), "@1's profile states a permission mode").toBe(false);
+  });
+
+  it('C5-v3 — @3\'s adapter shares @2\'s projection and usage reader, the same functions: the init check that refused the probe is the one @3 answers to', () => {
+    expect(CLAUDE_CODE_CLI_V3_ADAPTER.identity).toEqual({ id: 'claude-code-cli', version: '3' });
+    expect(CLAUDE_CODE_CLI_V3_ADAPTER.channel).toBe('process');
+    expect(Object.keys(CLAUDE_CODE_CLI_V3_ADAPTER).sort()).toEqual(['buildRequest', 'channel', 'identity', 'invocation', 'projectResponse', 'readUsage']);
+    expect(CLAUDE_CODE_CLI_V3_ADAPTER.projectResponse).toBe(CLAUDE_CODE_CLI_V2_ADAPTER.projectResponse);
+    expect(CLAUDE_CODE_CLI_V3_ADAPTER.readUsage).toBe(CLAUDE_CODE_CLI_V2_ADAPTER.readUsage);
+    // Its request is its own: the one thing it launches differently.
+    expect(CLAUDE_CODE_CLI_V3_ADAPTER.buildRequest).not.toBe(CLAUDE_CODE_CLI_V2_ADAPTER.buildRequest);
+  });
+
+  it('C6-v3 — @3 declares its invocation: @2\'s four inputs, written out, and permissionMode "default"; @2\'s declares no mode', () => {
+    expect(CLAUDE_CODE_CLI_V3_ADAPTER.invocation).toStrictEqual({
+      effort: 'high',
+      maxOutputTokens: 64000,
+      executable: { version: '2.1.295', sha256: '494870c9763b5ea370b6165e7e04af589a7b2472bf0de18ffb25477f8230bdf6' },
+      controls: {
+        CLAUDE_CODE_MAX_RETRIES: '0',
+        MAX_STRUCTURED_OUTPUT_RETRIES: '0',
+        CLAUDE_CODE_MAX_OUTPUT_TOKENS: '64000',
+        CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK: '1',
+        CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK: '1',
+        CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+        DISABLE_TELEMETRY: '1',
+        DISABLE_ERROR_REPORTING: '1',
+        DISABLE_AUTOUPDATER: '1',
+        CLAUDE_CODE_NO_MODEL_FALLBACK: '1',
+        CLAUDE_CODE_DISABLE_FAST_MODE: '1',
+        CLAUDE_CODE_DISABLE_REFUSAL_RETRY: '1',
+        CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS: '1',
+      },
+      permissionMode: 'default',
+    });
+    expect(Object.isFrozen(CLAUDE_CODE_CLI_V3_ADAPTER.invocation)).toBe(true);
+    expect(Object.hasOwn(CLAUDE_CODE_CLI_V2_ADAPTER.invocation!, 'permissionMode'), "@2's invocation declares a permission mode").toBe(false);
+  });
+
+  it('R1-v3 — describes @2\'s SPAWN with permissionMode "default" right after settings, in a fixed key order', () => {
+    const built = CLAUDE_CODE_CLI_V3_ADAPTER.buildRequest(request('reader', 0, 'claude-opus-5-5'), NO_KEY);
+    const expectedBody = JSON.stringify({
+      model: 'claude-opus-5-5',
+      systemPrompt: PROMPT,
+      userMessage: INPUT,
+      jsonSchema: roleOutputJsonSchema('reader'),
+      effort: 'high',
+      settings: V2_SETTINGS,
+      permissionMode: 'default',
+      role: 'reader',
+      index: 0,
+    });
+    expect(built).toEqual({ url: 'claude-code-cli:pinned', method: 'SPAWN', headers: {}, body: expectedBody });
+    expect(Object.keys(JSON.parse(built.body))).toEqual(['model', 'systemPrompt', 'userMessage', 'jsonSchema', 'effort', 'settings', 'permissionMode', 'role', 'index']);
+    expect(built.body.split('"permissionMode"')).toHaveLength(2);
+    expect(parseCliLaunchSpec(built.body).permissionMode).toBe('default');
+  });
+
+  it('R2-v3 — for every role, @3\'s description is @2\'s but for the one key; @2\'s and @1\'s carry no permissionMode key', () => {
+    for (const [role, index] of [['reader', 0], ['prosecutor', 3], ['adjudicator', 0]] as const) {
+      const v2 = JSON.parse(CLAUDE_CODE_CLI_V2_ADAPTER.buildRequest(request(role, index, 'claude-opus-5-5'), NO_KEY).body) as Record<string, unknown>;
+      const v3 = JSON.parse(CLAUDE_CODE_CLI_V3_ADAPTER.buildRequest(request(role, index, 'claude-opus-5-5'), NO_KEY).body) as Record<string, unknown>;
+      const { permissionMode, ...rest } = v3;
+      expect(permissionMode).toBe('default');
+      expect(rest).toEqual(v2);
+      expect(Object.keys(rest)).toEqual(Object.keys(v2));
+      expect(Object.hasOwn(v2, 'permissionMode'), `@2's ${role} description carries permissionMode`).toBe(false);
+    }
+    expect(Object.hasOwn(JSON.parse(CLAUDE_CODE_CLI_ADAPTER.buildRequest(request(), NO_KEY).body) as object, 'permissionMode')).toBe(false);
+  });
+
+  it('R4-v3 — a model outside @3\'s list is refused naming claude-code-cli@3, before anything is described', () => {
+    const error = thrownBy(() => CLAUDE_CODE_CLI_V3_ADAPTER.buildRequest(request('reader', 0, 'claude-opus-5'), NO_KEY));
+    expect(error, 'claude-opus-5 was not refused').toBeInstanceOf(CliModelNotAllowedError);
+    expect((error as Error).message).toBe('reader[0]: model "claude-opus-5" is not permitted for claude-code-cli@3, which permits ["claude-opus-5-5"]; nothing was launched');
+  });
+
+  it.each([['auto'], ['bypassPermissions'], ['plan'], ['dontAsk'], ['manual'], [''], ['Default'], [null], [1], [{}]])(
+    'R6-v3 — parseCliLaunchSpec refuses permissionMode %j, naming it: only "default" or absent',
+    (permissionMode) => {
+      const error = thrownBy(() => parseCliLaunchSpec(JSON.stringify({ ...BASE_SPEC, permissionMode })));
+      expect(error, `${JSON.stringify(permissionMode)} was not refused`).toBeInstanceOf(CliLaunchSpecMalformedError);
+      expect((error as Error).message).toBe('the request body is not a CliLaunchSpec — permissionMode: Invalid literal value, expected "default"');
+    },
+  );
+
+  it('R7-v3 — positive control for R6-v3: "default" parses, and a description without the key parses without it', () => {
+    expect(parseCliLaunchSpec(JSON.stringify({ ...BASE_SPEC, permissionMode: 'default' }))).toEqual({ ...BASE_SPEC, permissionMode: 'default' });
+    expect(Object.hasOwn(parseCliLaunchSpec(JSON.stringify(BASE_SPEC)), 'permissionMode')).toBe(false);
   });
 });
 

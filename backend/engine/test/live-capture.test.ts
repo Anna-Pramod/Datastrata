@@ -50,7 +50,7 @@ import { join, resolve } from 'node:path';
 import type { VerifyPaths } from '../src/cli/sign';
 import { LIVE_API_KEY_ENV, LIVE_ENDPOINT_ENV, LIVE_MAX_ATTEMPTS_ENV, LIVE_MAX_INPUT_BYTES_ENV } from '../src/cli/live-wiring';
 import { ANTHROPIC_MESSAGES_ADAPTER, ANTHROPIC_MESSAGES_IDENTITY, roleOutputJsonSchema } from '../src/pipeline/anthropic-messages';
-import { CLAUDE_CODE_CLI_ADAPTER, CLAUDE_CODE_CLI_IDENTITY, CLAUDE_CODE_CLI_V2_ADAPTER, CliOverageError, STRUCTURED_OUTPUT_TOOL } from '../src/pipeline/claude-code-cli';
+import { CLAUDE_CODE_CLI_ADAPTER, CLAUDE_CODE_CLI_IDENTITY, CLAUDE_CODE_CLI_V2_ADAPTER, CLAUDE_CODE_CLI_V3_ADAPTER, CliOverageError, STRUCTURED_OUTPUT_TOOL } from '../src/pipeline/claude-code-cli';
 import { ExecutablePinMismatchError, type LaunchFunction } from '../src/pipeline/claude-code-cli-transport';
 import { DEFAULT_ROLE_CONFIG } from '../src/pipeline/config';
 import { EvidenceObservationFailedError, LIVE_AGENTS_ENV, LIVE_AGENTS_TOKEN, ProcessTransportError, type ProcessFacts, type ProviderHttpResponse, type ProviderTransport } from '../src/pipeline/live-runner';
@@ -91,7 +91,10 @@ import {
   subscriptionCaptureSelected,
   SUBSCRIPTION_FORBIDDEN_ENV_NAMES,
   SUBSCRIPTION_FORBIDDEN_ENV_PREFIXES,
+  SUBSCRIPTION_ROLE_CONFIG,
   SUBSCRIPTION_ROLE_CONFIG_V1,
+  SUBSCRIPTION_ROLE_CONFIG_V3,
+  subscriptionRoleConfigFor,
   SubscriptionBudgetError,
   SubscriptionCaptureConfigError,
   SubscriptionEnvironmentError,
@@ -820,7 +823,7 @@ type SubOver = NonNullable<Parameters<typeof captureLiveRun>[0]['subscription']>
 
 /**
  * One subscription capture over the given dummy. `@1` is passed explicitly —
- * the route defaults to `@2` — and before `over`, so a case can hand in
+ * the route defaults to `@3` — and before `over`, so a case can hand in
  * another adapter, or none to take the route's default.
  */
 function captureSubscription(pin: { path: string; sha256: string; sizeBytes: number }, over: CaptureOver = {}, sub: SubOver = {}) {
@@ -2168,12 +2171,14 @@ describe('the stream sanitiser, rule by rule', () => {
 });
 
 describe('the first subscription case, the function the agents suite calls', () => {
-  it('F1 — runs the first live case over the subscription route, on @2, with a lifetime derived from the launch budget by D-5\'s formula, and refuses a forbidden environment before anything exists', async () => {
+  it('F1 — runs the first live case over the subscription route, on @3 with its permission mode requested, with a lifetime derived from the launch budget by D-5\'s formula, and refuses a forbidden environment before anything exists', async () => {
     const pin = writeCaptureDummy({ variant: 'v2' });
     const outcome = await runFirstSubscriptionCase({ env: SUB_ENV_V2, executionRoot: root(), subscription: { executable: pin, launch: recordingLaunch, inheritedEnv: { ...INHERITED }, interrupts: new EventEmitter(), termGraceMs: 300, killGraceMs: 300, tempRoot } });
     expect(outcome.status, JSON.stringify(outcome.error)).toBe('completed');
     expect(outcome.route).toBe('subscription');
-    expect(summaryOf(outcome.summaryPath)['adapter']).toBe('claude-code-cli@2');
+    expect(summaryOf(outcome.summaryPath)['adapter']).toBe('claude-code-cli@3');
+    expect(summaryOf(outcome.summaryPath)['requested']).toMatchObject({ permissionMode: 'default' });
+    expect(launchLinesOf(outcome.launchesPath!)[1]!.argv.slice(13, 15)).toEqual(['--permission-mode', 'default']);
     // D-5's lifetime for a budget of 9, hand-computed: 9 × 1,815,000 + 60,000 + 15,000 + 60,000.
     expect(summaryOf(outcome.summaryPath)['deadlineMs']).toBe(16_470_000);
     expect(summaryOf(outcome.summaryPath)['deadlineMs']).toBe(subscriptionLifetimeMs({ maxRunAttempts: 9 }));
@@ -2260,11 +2265,11 @@ describe('the subscription route runs claude-code-cli@2 from its profile, and @1
     '--verbose',
     '--include-partial-messages',
   ];
-  /** Runs one capture on the route's default adapter, `@2`, under `@2`'s budget of 9. */
+  /** Runs one capture on `@2`, handed in explicitly (the route's default is `@3`), under `@2`'s budget of 9. */
   const captureV2 = (pin: { path: string; sha256: string; sizeBytes: number }, over: CaptureOver = {}, sub: SubOver = {}) =>
-    captureSubscription(pin, { env: SUB_ENV_V2, adapter: undefined, ...over }, sub);
+    captureSubscription(pin, { env: SUB_ENV_V2, adapter: CLAUDE_CODE_CLI_V2_ADAPTER, ...over }, sub);
 
-  it('V2-E1 — nine role launches through a @2 dummy on the default adapter complete: the @2 identity, the requested pin, unobserved, budgets and gate on file, the profile\'s two timeouts reaching their timers, and a runId apart from @1\'s and the HTTP route\'s', async () => {
+  it('V2-E1 — nine role launches through a @2 dummy, @2 handed in explicitly, complete: the @2 identity, the requested pin, unobserved, budgets and gate on file, the profile\'s two timeouts reaching their timers, and a runId apart from @1\'s and the HTTP route\'s', async () => {
     const pin = writeCaptureDummy({ variant: 'v2' });
     // Every timer the capture registers, observed for its duration only (Task 5a review repair R8): the
     // profile's launch timeout must reach the runner, which arms it once per role launch, and its gate
@@ -2382,7 +2387,7 @@ describe('the subscription route runs claude-code-cli@2 from its profile, and @1
     expect(caught).toBeInstanceOf(SubscriptionRouteMismatchError);
     expect((caught as Error).message).toContain('claude-code-cli@1 was handed in without an injected launch');
     // The refusal's prefix states the route as D-1 left it (Task 5a review repair R6).
-    expect((caught as Error).message).toContain('the subscription route runs claude-code-cli@2, or claude-code-cli@1 over an injected launch only');
+    expect((caught as Error).message).toContain('the subscription route runs claude-code-cli@3 or claude-code-cli@2, or claude-code-cli@1 over an injected launch only');
     expect(existsSync(root())).toBe(false);
     expect(gateLaunchCount()).toBe(0);
     // By identity, not by object: a copy of @1 is @1 — refused under the same class, with the same words (Task 5a review repair R11).
@@ -2743,7 +2748,7 @@ describe('the subscription route runs claude-code-cli@2 from its profile, and @1
     expectTrust(outcome!.summaryPath, trustBlock('failed', 'ProcessTransportError', 'unassessed', 'unassessed', null));
   }, 20_000);
 
-  /** One uninjected `@2` capture: no launch, no executable, only the nonexistent inherited HOME and the harness's small graces. */
+  /** One uninjected `@2` capture, `@2` handed in explicitly (the route's default is `@3`): no launch, no executable, only the nonexistent inherited HOME and the harness's small graces. */
   const captureUninjected = (executionId: string, sub: SubOver = {}) =>
     captureLiveRun({
       packId: FIRST_LIVE_CASE.packId,
@@ -2752,6 +2757,7 @@ describe('the subscription route runs claude-code-cli@2 from its profile, and @1
       executionRoot: root(),
       env: SUB_ENV_V2,
       route: 'subscription',
+      adapter: CLAUDE_CODE_CLI_V2_ADAPTER,
       executionId,
       subscription: { inheritedEnv: { ...INHERITED }, interrupts: new EventEmitter(), termGraceMs: 300, killGraceMs: 300, tempRoot, ...sub },
     });
@@ -3052,9 +3058,9 @@ describe('included usage on the @2 route: the usage stop, the in-flight stops, t
   /** The clean stream's window resets at 1790075400, 2026-09-22T11:10:00Z; this instant is before it. */
   const BEFORE_RESET = '2026-09-22T10:00:00.000Z';
   const BOUNDARY = "reportedContextTokens 190001, above the per-request ceiling of 190000 (the plan's proposed value, for the user to confirm)";
-  /** Runs one capture on the route's default adapter, `@2`, under `@2`'s budget of 9. */
+  /** Runs one capture on `@2`, handed in explicitly (the route's default is `@3`), under `@2`'s budget of 9. */
   const captureV2 = (pin: { path: string; sha256: string; sizeBytes: number }, over: CaptureOver = {}, sub: SubOver = {}) =>
-    captureSubscription(pin, { env: SUB_ENV_V2, adapter: undefined, ...over }, sub);
+    captureSubscription(pin, { env: SUB_ENV_V2, adapter: CLAUDE_CODE_CLI_V2_ADAPTER, ...over }, sub);
 
   type Ev = Record<string, unknown>;
   const LENSES = DEFAULT_ROLE_CONFIG.lenses;
@@ -4139,6 +4145,104 @@ describe('included usage on the @2 route: the usage stop, the in-flight stops, t
     expect(Object.hasOwn(filedWindows, '__proto__'), 'the filed observation holds "__proto__" as its own entry').toBe(true);
     expect(Object.getOwnPropertyDescriptor(filedWindows, '__proto__')?.value).toStrictEqual({ status: 'rejected', resetsAt: 1790500000 });
   }, 20_000);
+
+  // claude-code-cli@3 on the same route (plan 2026-10-17, Task 5, sites 6 and 7): the same stop, the same hold from an
+  // earlier record, its own stop holding the next, and the running record, each beside its negative control.
+  describe('and claude-code-cli@3, held to every one of them', () => {
+    /** Runs one capture on `@3`, handed in, under its budget of 9; the `v2` dummy serves it and records its argv. */
+    const captureV3 = (pin: { path: string; sha256: string; sizeBytes: number }, over: CaptureOver = {}, sub: SubOver = {}) =>
+      captureSubscription(pin, { env: SUB_ENV_V2, adapter: CLAUDE_CODE_CLI_V3_ADAPTER, ...over }, sub);
+
+    it('V3-U1 — exhausted at prosecutor[0] (launch 3) on @3: CliIncludedUsageExhaustedError and the usage stop @2 files; the negative control, a clean @3 run, files a usage stop of none and completes', async () => {
+      const { text, events } = streamWith(2, (ev) => { rateInfoOf(ev)['status'] = 'rejected'; });
+      const line = lineOf(events, isType('rate_limit_event'));
+      const outcome = await captureV3(writeCaptureDummy({ variant: 'v2', streams: { 2: text } }));
+      expect(summaryOf(outcome.summaryPath)['adapter']).toBe('claude-code-cli@3');
+      expectStopped(outcome, {
+        error: 'CliIncludedUsageExhaustedError',
+        fragment: `the rate_limit_event at line ${line} reports status "rejected" (rateLimitType "five_hour", resetsAt 1790075400)`,
+        usageStop: {
+          kind: 'exhausted',
+          facts: [{ fact: 'rate_limit_rejected', kind: 'exhausted', seq: 3, role: 'prosecutor', index: 0, detail: `rate_limit_event at line ${line}: rate_limit_info.status "rejected"`, resetsAt: 1790075400 }],
+          seq: 3,
+          role: 'prosecutor',
+          index: 0,
+          resetsAt: 1790075400,
+          note: NOTE,
+        },
+        roleLaunches: 2,
+        stoppedSeq: 3,
+        outcomes: ['reader[0] completed', 'prosecutor[0] projection_refused'],
+      });
+      // The stop's reset is long past by the real clock, so it holds nothing here.
+      const clean = await captureV3(writeCaptureDummy({ variant: 'v2' }), { executionId: 'clean' });
+      expect(clean.status, JSON.stringify(clean.error)).toBe('completed');
+      expect(summaryOf(clean.summaryPath)).toMatchObject({ adapter: 'claude-code-cli@3', usageStop: null });
+    }, 30_000);
+
+    it('V3-U2 — a reset pending under the root holds @3 too: after a @2 stop whose reset is ahead of the clock, an @3 start is refused before anything is created; the negative control, exactly at the reset, proceeds', async () => {
+      const { text } = streamWith(2, (ev) => { rateInfoOf(ev)['status'] = 'rejected'; });
+      const stopped = await captureV2(writeCaptureDummy({ variant: 'v2', streams: { 2: text } }), { executionId: 'stopped' });
+      expect(summaryOf(stopped.summaryPath)['usageStop']).toMatchObject({ kind: 'exhausted', resetsAt: 1790075400 });
+      const caseDir = join(root(), 'csrd', 'CSRD-S-002');
+      const gates = gateLaunchCount();
+      const caught = await settled(captureV3(writeCaptureDummy({ variant: 'v2' }), { executionId: 'refused', now: () => new Date(BEFORE_RESET) }));
+      const message = caught instanceof Error ? caught.message : `not refused: the capture returned status ${String((caught as { status?: unknown }).status)}`;
+      expect(caught, message).toBeInstanceOf(UsageResetPendingError);
+      expect(message).toContain(`the execution ${join('csrd', 'CSRD-S-002', 'stopped')} under the execution root stopped for included usage until 2026-09-22T11:10:00.000Z (usageStop.resetsAt 1790075400, epoch seconds)`);
+      expect(message).toContain('this one would start at 2026-09-22T10:00:00.000Z, before it');
+      expect(readdirSync(caseDir)).toEqual(['stopped']);
+      expect(gateLaunchCount()).toBe(gates);
+      const atReset = await captureV3(writeCaptureDummy({ variant: 'v2' }), { executionId: 'at-reset', now: () => new Date(1790075400 * 1000) });
+      expect(atReset.status, JSON.stringify(atReset.error)).toBe('completed');
+      expect(summaryOf(atReset.summaryPath)['adapter']).toBe('claude-code-cli@3');
+      expect(readdirSync(caseDir).sort()).toEqual(['at-reset', 'stopped']);
+    }, 30_000);
+
+    it('V3-U2b — the record the 2026-10-17 @2 probe filed, failed with a usage stop of null, holds nothing: an @3 start under its root proceeds; the same record with an exhausted stop whose reset is ahead holds the next @3 start there, so the root is read', async () => {
+      const executionRoot = join(scratch, 'probe-record-root');
+      const probeRecord = join('synthetic-probe', 'opus55-minimal-shape', 'failed-no-stop');
+      writeRecord(executionRoot, probeRecord, { status: 'failed', adapter: 'claude-code-cli@2', usageStop: null });
+      const proceeds = await captureV3(writeCaptureDummy({ variant: 'v2' }), { executionRoot, executionId: 'after-probe', now: () => new Date(BEFORE_RESET) });
+      expect(proceeds.status, JSON.stringify(proceeds.error)).toBe('completed');
+      expect(summaryOf(proceeds.summaryPath)).toMatchObject({ adapter: 'claude-code-cli@3', usageStop: null });
+      // The sibling: the same record, now stopped until a reset ahead of the clock, holds the next start before anything exists.
+      writeRecord(executionRoot, probeRecord, exhaustedUntil(1790079000));
+      const caught = await settled(captureV3(writeCaptureDummy({ variant: 'v2' }), { executionRoot, executionId: 'held', now: () => new Date(BEFORE_RESET) }));
+      expect(caught).toBeInstanceOf(UsageResetPendingError);
+      expect((caught as Error).message).toContain(`the execution ${probeRecord} under the execution root stopped for included usage until 2026-09-22T12:10:00.000Z`);
+      expect(readdirSync(join(executionRoot, 'csrd', 'CSRD-S-002'))).toEqual(['after-probe']);
+    }, 30_000);
+
+    it('V3-U3 — @3\'s own stop holds the next execution under its root (usage_limit_reached at the reader with a finite reset, then a following start before it refused); the same start under another root is not held there, the hold binding only its own root', async () => {
+      const { text } = streamWith(1, (ev) => { ev.splice(lineOf(ev, isType('rate_limit_event')) - 1, 0, usageLimitItem({ rate_limit_info: { status: 'rejected', rateLimitType: 'five_hour', resetsAt: 1790089800 } })); });
+      const stopped = await captureV3(writeCaptureDummy({ variant: 'v2', streams: { 1: text } }), { executionId: 'stopped' });
+      expect(stopped.status).toBe('failed');
+      expect(summaryOf(stopped.summaryPath)).toMatchObject({ adapter: 'claude-code-cli@3', usageStop: { kind: 'exhausted', resetsAt: 1790089800 } });
+      const caseDir = join(root(), 'csrd', 'CSRD-S-002');
+      const following = await settled(captureV2(writeCaptureDummy({ variant: 'v2' }), { executionId: 'held', now: () => new Date(BEFORE_RESET) }));
+      const message = following instanceof Error ? following.message : `not refused: the capture returned status ${String((following as { status?: unknown }).status)}`;
+      expect(following, message).toBeInstanceOf(UsageResetPendingError);
+      expect(message).toContain(`the execution ${join('csrd', 'CSRD-S-002', 'stopped')} under the execution root stopped for included usage until 2026-09-22T15:10:00.000Z (usageStop.resetsAt 1790089800, epoch seconds)`);
+      expect(readdirSync(caseDir)).toEqual(['stopped']);
+      const elsewhere = await captureV3(writeCaptureDummy({ variant: 'v2' }), { executionRoot: join(scratch, 'another-root'), executionId: 'elsewhere', now: () => new Date(BEFORE_RESET) });
+      expect(elsewhere.status, JSON.stringify(elsewhere.error)).toBe('completed');
+    }, 30_000);
+
+    it('V3-U4 — while an @3 launch runs, execution.json says running with a trust key of null and a usage stop of none; the launch ended at its timeout with one rejected partial line files the stop (the in-flight stop, on @3)', async () => {
+      const partial = `${JSON.stringify({ type: 'rate_limit_event', rate_limit_info: { status: 'rejected', rateLimitType: 'five_hour', isUsingOverage: false, overageStatus: 'rejected', resetsAt: 1790079000 }, session_id: SESSION_ID, uuid: UUID })}\n`;
+      const pin = writeCaptureDummy({ variant: 'v2', partialThenStallAt: { launch: 1, stdout: partial } });
+      const pending = captureV3(pin, { deadlineMs: 5_000, executionId: 'partial' }, { launchTimeoutMs: 1_000 });
+      await awaitReady();
+      const running = summaryOf(join(root(), 'csrd', 'CSRD-S-002', 'partial', 'execution.json'));
+      const outcome = await pending;
+      expect(running).toMatchObject({ status: 'running', adapter: 'claude-code-cli@3', usageStop: null });
+      expect(Object.hasOwn(running, 'trust'), '@3\'s running execution.json carries a trust key').toBe(true);
+      expect(running['trust']).toBeNull();
+      expect(outcome.error?.name).toBe('ProviderTimeoutError');
+      expect(summaryOf(outcome.summaryPath)['usageStop']).toMatchObject({ kind: 'exhausted', seq: 2, role: 'reader', index: 0, resetsAt: 1790079000 });
+    }, 20_000);
+  });
 });
 
 // ===========================================================================
@@ -4148,9 +4252,9 @@ describe('included usage on the @2 route: the usage stop, the in-flight stops, t
 describe('the trust block on the @2 route: four tiers, each a status and its method, taken after every withhold decision (plan 2026-09-25, D-9; Task 5c)', () => {
   // Every expectation is a literal written in this file — the methods, the sets, the statuses — never read off the
   // harness, the `@2` profile or `evidenceSetsOf`.
-  /** Runs one capture on the route's default adapter, `@2`, under `@2`'s budget of 9. */
+  /** Runs one capture on `@2`, handed in explicitly (the route's default is `@3`), under `@2`'s budget of 9. */
   const captureV2 = (pin: { path: string; sha256: string; sizeBytes: number }, over: CaptureOver = {}, sub: SubOver = {}) =>
-    captureSubscription(pin, { env: SUB_ENV_V2, adapter: undefined, ...over }, sub);
+    captureSubscription(pin, { env: SUB_ENV_V2, adapter: CLAUDE_CODE_CLI_V2_ADAPTER, ...over }, sub);
   /** A `@2` dummy whose reader serves `output`, in a stream `@2`'s projection accepts; every other role serves its fixture. */
   const readerServes = (output: unknown) => writeCaptureDummy({ variant: 'v2', streams: { 1: syntheticStreamV2(output, 'req_v2_reader') } });
   /** A verification directory of its own under the scratch root, holding the pack's real registry, as an execution's does. */
@@ -4460,4 +4564,170 @@ describe('the trust block on the @2 route: four tiers, each a status and its met
     expect(existsSync(resultFileOf(outcome.executionDir))).toBe(false);
     expectTrust(outcome.summaryPath, trustBlock('failed', 'SensitiveOutputWithheldError', 'unassessed', 'withheld', null));
   }, 20_000);
+});
+
+// ===========================================================================
+// claude-code-cli@3 on the subscription route (plan 2026-10-17, Task 5)
+// ===========================================================================
+
+describe('the subscription route runs claude-code-cli@3 by default: --permission-mode default requested, and every protection @2 has, each beside its negative control', () => {
+  // Every `@3` value below is a literal written here, never read off the `@3` profile or adapter.
+  const V2_SETTINGS = '{"switchModelsOnFlag":false,"fastMode":false,"autoContinueAtUsageLimit":false}';
+  const V3_PIPELINE_VERSION = 'pipeline-v3-ecb06a30764aff78ecf25bde4a8c3e25fcf4d827ce336a5cd757863ae8eb332d';
+  const V2_PIPELINE_VERSION = 'pipeline-v3-737f8d5015ea4249eef93cfa66c0b1b9bbb323fd633e7d5a71c26f453f8ce90e';
+  const V2_SHA256 = '494870c9763b5ea370b6165e7e04af589a7b2472bf0de18ffb25477f8230bdf6';
+  /** `@3`'s thirteen launch controls: `@2`'s. */
+  const V3_CONTROLS = {
+    CLAUDE_CODE_MAX_RETRIES: '0',
+    MAX_STRUCTURED_OUTPUT_RETRIES: '0',
+    CLAUDE_CODE_MAX_OUTPUT_TOKENS: '64000',
+    CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK: '1',
+    CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK: '1',
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+    DISABLE_TELEMETRY: '1',
+    DISABLE_ERROR_REPORTING: '1',
+    DISABLE_AUTOUPDATER: '1',
+    CLAUDE_CODE_NO_MODEL_FALLBACK: '1',
+    CLAUDE_CODE_DISABLE_FAST_MODE: '1',
+    CLAUDE_CODE_DISABLE_REFUSAL_RETRY: '1',
+    CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS: '1',
+  };
+  const V2_UNOBSERVED = {
+    outputCeiling: 'configured CLAUDE_CODE_MAX_OUTPUT_TOKENS=64000, which 2.1.295 honours statically up to the model\'s own limit; wire-level max_tokens unobserved',
+    effort: 'effort high passed as --effort; its application unobserved',
+    thinking: 'always on for claude-opus-5-5, and counted toward the 64000 ceiling; not asserted',
+    modelCatalog: 'not pinned by the executable hash: the embedded catalog expires at 2026-10-15T05:28:34Z, and a remote catalog is assumed blocked by CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC, unverified',
+    extraUsage: 'overageEnabled is reported only on some allowed_warning events (2.1.295, statically); its absence is not read as extra usage off, and extra usage being off remains the user-confirmed precondition of D-6',
+  };
+  const V3_UNOBSERVED = {
+    ...V2_UNOBSERVED,
+    permissionMode: '--permission-mode default requested, and the init event held to exactly "default"; that 2.1.295 applies the flag is a static reading of its bytes only, and why the 2026-10-17 @2 probe reported "auto" with no flag supplied is unknown',
+  };
+  const INHERITED_ENV = { HOME: INHERITED.HOME, USER: INHERITED.USER, PATH: INHERITED.PATH };
+  /** The reader's full recorded argv under `@3`: `@2`'s, with the one pair after --no-session-persistence. */
+  const V3_READER_ARGV = [
+    '-p',
+    '--model',
+    'claude-opus-5-5',
+    '--effort',
+    'high',
+    '--safe-mode',
+    '--tools',
+    '',
+    '--strict-mcp-config',
+    '--setting-sources',
+    '',
+    '--disable-slash-commands',
+    '--no-session-persistence',
+    '--permission-mode',
+    'default',
+    '--settings',
+    V2_SETTINGS,
+    '--system-prompt-file',
+    '<system-prompt-file>',
+    '--json-schema',
+    JSON.stringify(roleOutputJsonSchema('reader')),
+    '--output-format',
+    'stream-json',
+    '--verbose',
+    '--include-partial-messages',
+  ];
+  const settledOf = (pending: Promise<unknown>): Promise<unknown> => pending.then((outcome) => outcome, (error: unknown) => error);
+  /** One capture with no adapter handed in, so the route's default runs, under a budget of 9. */
+  const captureDefault = (pin: { path: string; sha256: string; sizeBytes: number }, over: CaptureOver = {}, sub: SubOver = {}) =>
+    captureSubscription(pin, { env: SUB_ENV_V2, adapter: undefined, ...over }, sub);
+
+  it('V3-E1 — with no adapter handed in, the route runs @3: nine role launches complete under @3\'s identity, pin, controls, permission mode, unobserved statements, budgets, gate, trust and a usage stop of none; @2 handed in and @1 are the negative controls', async () => {
+    const pin = writeCaptureDummy({ variant: 'v2' });
+    const outcome = await captureDefault(pin);
+    expect(outcome.status, JSON.stringify(outcome.error)).toBe('completed');
+    expect(gateLaunchCount()).toBe(1);
+    expect(roleLaunchCount()).toBe(9);
+    for (let n = 1; n <= 9; n += 1) expect(roleEnvOf(n), `the environment role launch ${n} saw`).toEqual({ ...V3_CONTROLS, ...INHERITED_ENV });
+    // Configuration and profile selection, reached end to end: @3's identity on the transcript.
+    const transcript = parseRunTranscript(readFileSync(outcome.transcriptPath!, 'utf8'), outcome.transcriptPath!);
+    expect(transcript.pipelineVersion).toBe(V3_PIPELINE_VERSION);
+    const summary = summaryOf(outcome.summaryPath);
+    expect(summary).toMatchObject({ status: 'completed', route: 'subscription', attemptUnit: 'cli_launch', adapter: 'claude-code-cli@3', launches: 9, gateLaunches: 1, error: null, runId: outcome.runId });
+    expect(summary['requested']).toEqual({ pin: { version: '2.1.295', sha256: V2_SHA256, sizeBytes: 239695888 }, permittedModels: ['claude-opus-5-5'], effort: 'high', maxOutputTokens: 64000, settings: V2_SETTINGS, settingsFrom: 'profile', permissionMode: 'default' });
+    expect(summary['unobserved']).toEqual(V3_UNOBSERVED);
+    expect(summary['budgets']).toEqual({ launchTimeoutMs: 1_800_000, gateTimeoutMs: 60_000, lifetimeMs: 16_470_000, injected: false });
+    expect(summary['ledger']).toMatchObject({ maxRunAttempts: 9, attemptsUsed: 9, attemptsRemaining: 0, launchesStarted: 9 });
+    expect(summary['usageStop']).toBeNull();
+    expectTrust(outcome.summaryPath, trustBlock('completed', null, 'valid', 'passed', CLEAN_SETS));
+    const launches = launchLinesOf(outcome.launchesPath!);
+    expect(launches[1]!.argv).toEqual(V3_READER_ARGV);
+    for (const line of launches.slice(1)) expect(line.argv.slice(12, 15)).toEqual(['--no-session-persistence', '--permission-mode', 'default']);
+
+    // Negative control: @2 handed in runs as it always did, its identity, no mode requested, recorded or stated.
+    const v2 = await captureSubscription(writeCaptureDummy({ variant: 'v2' }), { env: SUB_ENV_V2, adapter: CLAUDE_CODE_CLI_V2_ADAPTER, executionId: 'v2-control' });
+    expect(v2.status, JSON.stringify(v2.error)).toBe('completed');
+    const v2Summary = summaryOf(v2.summaryPath);
+    expect(v2Summary['adapter']).toBe('claude-code-cli@2');
+    expect(parseRunTranscript(readFileSync(v2.transcriptPath!, 'utf8'), v2.transcriptPath!).pipelineVersion).toBe(V2_PIPELINE_VERSION);
+    expect(Object.hasOwn(v2Summary['requested'] as object, 'permissionMode'), '@2\'s requested carries a permission mode').toBe(false);
+    expect(v2Summary['unobserved']).toEqual(V2_UNOBSERVED);
+    for (const line of launchLinesOf(v2.launchesPath!).slice(1)) expect(line.argv).not.toContain('--permission-mode');
+    expect(v2.runId).not.toBe(outcome.runId);
+    // Negative control for the trust protection: @1 files no trust key at all, nor any permission mode.
+    const v1 = await captureSubscription(writeCaptureDummy(), { executionId: 'v1-control' });
+    expect(v1.status, JSON.stringify(v1.error)).toBe('completed');
+    expect(Object.hasOwn(summaryOf(v1.summaryPath), 'trust'), '@1\'s execution.json carries a trust key').toBe(false);
+    expect(Object.hasOwn(summaryOf(v1.summaryPath)['requested'] as object, 'permissionMode')).toBe(false);
+  }, 30_000);
+
+  it('V3-R1 — an identity no entry knows, claude-code-cli@4, is refused by name before anything exists, as the adapter handed in and in each lookup; @3 is answered by its own entries, and @2 by its own', async () => {
+    const pin = writeCaptureDummy({ variant: 'v2' });
+    const v4 = { ...CLAUDE_CODE_CLI_V3_ADAPTER, identity: { id: 'claude-code-cli', version: '4' } };
+    const caught = await settledOf(captureSubscription(pin, { env: SUB_ENV_V2, adapter: v4 }));
+    expect(caught).toBeInstanceOf(SubscriptionRouteMismatchError);
+    expect((caught as Error).message).toContain('the adapter handed in is claude-code-cli@4');
+    expect(existsSync(root())).toBe(false);
+    expect(gateLaunchCount()).toBe(0);
+    expect(() => subscriptionRoleConfigFor({ identity: { id: 'claude-code-cli', version: '4' } })).toThrow('the adapter handed in is claude-code-cli@4');
+    expect(() => subscriptionExecutableFor({ identity: { id: 'claude-code-cli', version: '4' } }, '/Users/someone')).toThrow(SubscriptionRouteMismatchError);
+    expect(subscriptionRoleConfigFor(CLAUDE_CODE_CLI_V3_ADAPTER)).toBe(SUBSCRIPTION_ROLE_CONFIG_V3);
+    expect(subscriptionRoleConfigFor({ identity: { id: 'claude-code-cli', version: '3' } })).toBe(SUBSCRIPTION_ROLE_CONFIG_V3);
+    expect(subscriptionRoleConfigFor(CLAUDE_CODE_CLI_V2_ADAPTER)).toBe(SUBSCRIPTION_ROLE_CONFIG);
+    expect(SUBSCRIPTION_ROLE_CONFIG_V3).not.toBe(SUBSCRIPTION_ROLE_CONFIG);
+    expect(subscriptionExecutableFor(CLAUDE_CODE_CLI_V3_ADAPTER, '/Users/someone')).toEqual({
+      path: '/Users/someone/.local/share/datastrata/claude-code/2.1.295/9d6405864fdc/claude.app/Contents/MacOS/claude',
+      sha256: V2_SHA256,
+      sizeBytes: 239695888,
+    });
+  });
+
+  it('V3-B1 — an @3 launch budget of 10, above the nine role launches, is refused by name, naming claude-code-cli@3, before anything exists; nine is the positive control (V3-E1)', async () => {
+    const env10 = { ...SUB_ENV, [LIVE_MAX_ATTEMPTS_ENV]: '10' };
+    const caught = await settledOf(captureDefault(writeCaptureDummy({ variant: 'v2' }), { env: env10 }));
+    expect(caught).toBeInstanceOf(SubscriptionBudgetError);
+    expect((caught as Error).message).toContain('claude-code-cli@3 admits a launch budget of at most 9');
+    expect((caught as Error).message).toContain('DATASTRATA_AGENT_MAX_ATTEMPTS states 10');
+    expect(existsSync(root())).toBe(false);
+    expect(gateLaunchCount()).toBe(0);
+    expect(roleLaunchCount()).toBe(0);
+  });
+
+  it('V3-H1 — @3\'s transport handed a description without the permission mode (an adapter with @3\'s identity whose request drops the key) launches no role child: refused by the mode, the gate only having run; @3 itself launches (V3-E1)', async () => {
+    const pin = writeCaptureDummy({ variant: 'v2' });
+    const dropped = {
+      ...CLAUDE_CODE_CLI_V3_ADAPTER,
+      buildRequest: (request: RoleRequest, config: Parameters<typeof CLAUDE_CODE_CLI_V3_ADAPTER.buildRequest>[1]) => {
+        const built = CLAUDE_CODE_CLI_V3_ADAPTER.buildRequest(request, config);
+        const { permissionMode: _dropped, ...spec } = JSON.parse(built.body) as Record<string, unknown>;
+        return { ...built, body: JSON.stringify(spec) };
+      },
+    };
+    const outcome = await captureSubscription(pin, { env: SUB_ENV_V2, adapter: dropped });
+    expect(roleLaunchCount(), 'role children launched for a description without the profile\'s mode').toBe(0);
+    expect(outcome.status).toBe('failed');
+    // The runner books a refusal it cannot classify as ambiguous; the refusal's own name and words ride in the message.
+    expect(outcome.error?.name).toBe('ProviderAmbiguousFailureError');
+    expect(outcome.error?.message).toContain('LaunchPermissionModeMismatchError');
+    expect(outcome.error?.message).toContain('the launch description\'s --permission-mode is absent, and the transport\'s profile permission mode is "default"');
+    expect(outcome.launches).toBe(0);
+    expect(gateLaunchCount()).toBe(1);
+    expect(launchLinesOf(outcome.launchesPath!).filter((line) => line.kind === 'role')).toEqual([]);
+    expect(readdirSync(tempRoot)).toEqual([]);
+  });
 });

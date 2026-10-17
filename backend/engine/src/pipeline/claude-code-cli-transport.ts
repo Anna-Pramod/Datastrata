@@ -100,6 +100,17 @@
  * under settings this profile never stated. Without `settings` nothing is
  * compared, and every launch is exactly what it always was.
  *
+ * The permission mode is held the same way.
+ * - A launch description may carry `permissionMode`, exactly `"default"`. It
+ *   is `@3`'s alone, and any other value launches nothing.
+ * - It reaches the argv as `--permission-mode default`, right after
+ *   `--no-session-persistence`. A description without it launches the argv
+ *   it always did.
+ * - A transport handed its profile's `permissionMode` refuses a role launch
+ *   whose description does not carry exactly that mode, absent included. The
+ *   refusal is `LaunchPermissionModeMismatchError`, before anything is
+ *   launched or written. Without the option nothing is compared.
+ *
  * Tracked children exist so an operator's second interrupt (`escalate`) can
  * reach every live child at once, and so a harness can `drain` — wait,
  * bounded, for every launch to finish — before it writes a final status.
@@ -221,6 +232,13 @@ export interface SpawnTransportOptions {
    * compared.
    */
   settings?: string;
+  /**
+   * The profile's permission mode, where it states one (`@3`'s `'default'`).
+   * Every role launch's description must then carry exactly this mode, or
+   * the launch is refused before anything is launched or written. Absent,
+   * nothing is compared.
+   */
+  permissionMode?: 'default';
   tempRoot?: string;
   maxOutputBytes?: number;
   termGraceMs?: number;
@@ -271,6 +289,21 @@ export class LaunchSettingsMismatchError extends Error {
   constructor(readonly described: string, readonly profiled: string) {
     super(`the launch description's --settings ${JSON.stringify(described)} is not the transport's profile settings ${JSON.stringify(profiled)}: the launch description and the transport's profile disagree, so nothing was launched`);
     this.name = 'LaunchSettingsMismatchError';
+    this.process = unstartedFacts();
+  }
+}
+
+/**
+ * The launch description's permission mode is not the one the transport's
+ * profile states, absent included. Nothing launched and nothing written: no
+ * launch directory, no prompt file. Both sides are named, as the settings
+ * refusal names both texts.
+ */
+export class LaunchPermissionModeMismatchError extends Error {
+  readonly process: ProcessFacts;
+  constructor(readonly described: string | null, readonly profiled: string) {
+    super(`the launch description's --permission-mode ${described === null ? 'is absent' : JSON.stringify(described)}, and the transport's profile permission mode is ${JSON.stringify(profiled)}: the launch description and the transport's profile disagree, so nothing was launched`);
+    this.name = 'LaunchPermissionModeMismatchError';
     this.process = unstartedFacts();
   }
 }
@@ -328,6 +361,7 @@ const launchSpecSchema = z
     jsonSchema: z.record(z.unknown()),
     effort: z.string().min(1),
     settings: z.string().refine(isJsonObjectText, { message: 'must be the text of one JSON object' }).optional(),
+    permissionMode: z.literal('default').optional(),
     role: z.string().min(1).optional(),
     index: z.number().int().nonnegative().optional(),
   })
@@ -381,6 +415,7 @@ function roleArgv(spec: LaunchSpec, promptPath: string): string[] {
     '',
     '--disable-slash-commands',
     '--no-session-persistence',
+    ...(spec.permissionMode === undefined ? [] : ['--permission-mode', spec.permissionMode]),
     '--settings',
     spec.settings ?? DEFAULT_LAUNCH_SETTINGS,
     '--system-prompt-file',
@@ -935,6 +970,8 @@ export function createSpawnTransport(options: SpawnTransportOptions): SpawnTrans
     // file, so a refusal leaves nothing behind (a parent decision, Task 5a).
     const effectiveSettings = spec.settings ?? DEFAULT_LAUNCH_SETTINGS;
     if (options.settings !== undefined && effectiveSettings !== options.settings) throw new LaunchSettingsMismatchError(effectiveSettings, options.settings);
+    // The profile's permission mode, where it states one, likewise: compared before the pin, so a refusal leaves nothing.
+    if (options.permissionMode !== undefined && spec.permissionMode !== options.permissionMode) throw new LaunchPermissionModeMismatchError(spec.permissionMode ?? null, options.permissionMode);
     await assertPin();
     if (signal.aborted) throw new ProcessTransportError('aborted before launch', unstartedFacts());
 

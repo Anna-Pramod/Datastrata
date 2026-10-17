@@ -343,6 +343,9 @@ import {
   CLAUDE_CODE_CLI_V2_ADAPTER,
   CLAUDE_CODE_CLI_V2_IDENTITY,
   CLAUDE_CODE_CLI_V2_PROFILE,
+  CLAUDE_CODE_CLI_V3_ADAPTER,
+  CLAUDE_CODE_CLI_V3_IDENTITY,
+  CLAUDE_CODE_CLI_V3_PROFILE,
   CLI_LAUNCH_URL,
   resolvePinPath,
   type CliProfile,
@@ -425,13 +428,14 @@ export interface SubscriptionTimeouts {
  * gateTimeoutMs + (termGrace + killGrace + termGrace) + 60,000`. The cleanup
  * bound is the transport's drain bound (TERM grace, KILL grace, then the
  * bounded wait for the pipes) at its default graces, which production never
- * overrides. The timeouts default to `@2`'s profile, so a budget of 9 is
+ * overrides. The timeouts default to the profile of the adapter the route
+ * runs by default, `@3`'s (equal to `@2`'s), so a budget of 9 is
  * 16,470,000 ms. Like `executionLifetimeMs`, an enforced bound on wall time
  * derived from enforced bounds; not a latency estimate.
  */
 export function subscriptionLifetimeMs(
   budget: Pick<RunBudget, 'maxRunAttempts'>,
-  timeouts: SubscriptionTimeouts = { launchTimeoutMs: CLAUDE_CODE_CLI_V2_PROFILE.launchTimeoutMs, gateTimeoutMs: CLAUDE_CODE_CLI_V2_PROFILE.gateTimeoutMs },
+  timeouts: SubscriptionTimeouts = { launchTimeoutMs: CLAUDE_CODE_CLI_V3_PROFILE.launchTimeoutMs, gateTimeoutMs: CLAUDE_CODE_CLI_V3_PROFILE.gateTimeoutMs },
 ): number {
   const cleanupMs = DEFAULT_GRACE_MS + DEFAULT_GRACE_MS + DEFAULT_GRACE_MS;
   return budget.maxRunAttempts * (timeouts.launchTimeoutMs + cleanupMs) + timeouts.gateTimeoutMs + cleanupMs + 60_000;
@@ -622,7 +626,7 @@ export class SubscriptionCaptureConfigError extends Error {
  */
 export class SubscriptionRouteMismatchError extends Error {
   constructor(detail: string) {
-    super(`the subscription route runs claude-code-cli@2, or claude-code-cli@1 over an injected launch only, over the process transport and nothing else: ${detail}`);
+    super(`the subscription route runs claude-code-cli@3 or claude-code-cli@2, or claude-code-cli@1 over an injected launch only, over the process transport and nothing else: ${detail}`);
     this.name = 'SubscriptionRouteMismatchError';
   }
 }
@@ -666,12 +670,12 @@ export function subscriptionCaptureConfigFrom(env: NodeJS.ProcessEnv): Subscript
 }
 
 /**
- * The role configuration the subscription route runs under by default,
- * `claude-code-cli@2`'s (plan 2026-09-25, D-3): the default's roles, lenses
- * and order, every role on the `@2` profile's permitted model, the `@2`
- * adapter identity, and the invocation the `@2` adapter declares. A
- * different `pipelineVersion` and a different `runId` from the HTTP route's
- * and from `@1`'s, by design.
+ * `claude-code-cli@2`'s role configuration (plan 2026-09-25, D-3): the
+ * default's roles, lenses and order, every role on the `@2` profile's
+ * permitted model, the `@2` adapter identity, and the invocation the `@2`
+ * adapter declares. A different `pipelineVersion` and a different `runId`
+ * from the HTTP route's and from `@1`'s, by design. The route ran it by
+ * default until `@3`; it runs it now when `@2` is handed in.
  */
 export const SUBSCRIPTION_ROLE_CONFIG: RoleConfig = {
   ...DEFAULT_ROLE_CONFIG,
@@ -685,6 +689,23 @@ export const SUBSCRIPTION_ROLE_CONFIG: RoleConfig = {
 };
 
 /**
+ * The role configuration the subscription route runs under by default,
+ * `claude-code-cli@3`'s: `@2`'s with `@3`'s adapter identity and the
+ * invocation `@3` declares, which names its permission mode. The models are
+ * `@3`'s profile's permitted one, the same as `@2`'s.
+ */
+export const SUBSCRIPTION_ROLE_CONFIG_V3: RoleConfig = {
+  ...SUBSCRIPTION_ROLE_CONFIG,
+  models: {
+    reader: CLAUDE_CODE_CLI_V3_PROFILE.permittedModels[0]!,
+    prosecutor: CLAUDE_CODE_CLI_V3_PROFILE.permittedModels[0]!,
+    adjudicator: CLAUDE_CODE_CLI_V3_PROFILE.permittedModels[0]!,
+  },
+  providerAdapter: CLAUDE_CODE_CLI_V3_IDENTITY,
+  invocation: CLAUDE_CODE_CLI_V3_ADAPTER.invocation,
+};
+
+/**
  * `claude-code-cli@1`'s configuration, as the route ran it before the
  * migration: the default in every field but the adapter identity, and no
  * invocation at all, so `@1`'s identity does not move.
@@ -693,26 +714,79 @@ export const SUBSCRIPTION_ROLE_CONFIG_V1: RoleConfig = { ...DEFAULT_ROLE_CONFIG,
 
 const SUBSCRIPTION_V1_KEY = providerAdapterKey(CLAUDE_CODE_CLI_IDENTITY);
 const SUBSCRIPTION_V2_KEY = providerAdapterKey(CLAUDE_CODE_CLI_V2_IDENTITY);
+const SUBSCRIPTION_V3_KEY = providerAdapterKey(CLAUDE_CODE_CLI_V3_IDENTITY);
+
+/** The subscription adapter versions the route knows. Every lookup keyed on one has an entry for each, and no default. */
+type SubscriptionVersion = '1' | '2' | '3';
 
 /**
  * Which subscription adapter this is, by identity — never by object, so a
- * copy of an adapter is the adapter it copies — or a refusal naming it.
+ * copy of an adapter is the adapter it copies — or a refusal naming it. A
+ * version with no entry here is refused by name before anything exists, so
+ * no lookup below is ever asked about it.
  */
-function subscriptionVersionOf(adapter: Pick<ProviderAdapter, 'identity'>): '1' | '2' {
+function subscriptionVersionOf(adapter: Pick<ProviderAdapter, 'identity'>): SubscriptionVersion {
   const key = providerAdapterKey(adapter.identity);
   if (key === SUBSCRIPTION_V1_KEY) return '1';
   if (key === SUBSCRIPTION_V2_KEY) return '2';
+  if (key === SUBSCRIPTION_V3_KEY) return '3';
   throw new SubscriptionRouteMismatchError(`the adapter handed in is ${key}`);
 }
 
-/** The configuration the subscription route runs a given adapter under, matched by identity; any other adapter is refused by name. */
+/**
+ * The configuration the subscription route runs a given adapter under,
+ * matched by identity; any other adapter is refused by name. One explicit
+ * entry per version: a new version answered by another version's entry
+ * would run under an identity that does not name it.
+ */
 export function subscriptionRoleConfigFor(adapter: Pick<ProviderAdapter, 'identity'>): RoleConfig {
-  return subscriptionVersionOf(adapter) === '1' ? SUBSCRIPTION_ROLE_CONFIG_V1 : SUBSCRIPTION_ROLE_CONFIG;
+  switch (subscriptionVersionOf(adapter)) {
+    case '1':
+      return SUBSCRIPTION_ROLE_CONFIG_V1;
+    case '2':
+      return SUBSCRIPTION_ROLE_CONFIG;
+    case '3':
+      return SUBSCRIPTION_ROLE_CONFIG_V3;
+  }
 }
 
-/** The profile an adapter launches under. The adapter carries no link to it, so the identity selects it here. */
+/** The profile an adapter launches under. The adapter carries no link to it, so the identity selects it here, one explicit entry per version. */
 function subscriptionProfileFor(adapter: Pick<ProviderAdapter, 'identity'>): CliProfile {
-  return subscriptionVersionOf(adapter) === '1' ? CLAUDE_CODE_CLI_PROFILE : CLAUDE_CODE_CLI_V2_PROFILE;
+  switch (subscriptionVersionOf(adapter)) {
+    case '1':
+      return CLAUDE_CODE_CLI_PROFILE;
+    case '2':
+      return CLAUDE_CODE_CLI_V2_PROFILE;
+    case '3':
+      return CLAUDE_CODE_CLI_V3_PROFILE;
+  }
+}
+
+/**
+ * What each version is held to, one explicit entry per version. A protection
+ * is off only for `@1`, which runs over injected launches only (D-1); `@2`
+ * and `@3` are held to every one of them:
+ * - D-6's included-usage facts, in-flight stops and backstop;
+ * - D-9's trust block;
+ * - D-5's launch budget.
+ *
+ * Each also files its own unobserved statements. No version is ever handed
+ * another's weaker answer by a default.
+ */
+function subscriptionProtectionsFor(version: SubscriptionVersion): {
+  includedUsage: boolean;
+  trustTiers: boolean;
+  launchBudget: boolean;
+  unobserved: Readonly<Record<string, string>>;
+} {
+  switch (version) {
+    case '1':
+      return { includedUsage: false, trustTiers: false, launchBudget: false, unobserved: SUBSCRIPTION_UNOBSERVED };
+    case '2':
+      return { includedUsage: true, trustTiers: true, launchBudget: true, unobserved: SUBSCRIPTION_V2_UNOBSERVED };
+    case '3':
+      return { includedUsage: true, trustTiers: true, launchBudget: true, unobserved: SUBSCRIPTION_V3_UNOBSERVED };
+  }
 }
 
 /**
@@ -1394,6 +1468,18 @@ export const SUBSCRIPTION_V2_UNOBSERVED = Object.freeze({
   modelCatalog: 'not pinned by the executable hash: the embedded catalog expires at 2026-10-15T05:28:34Z, and a remote catalog is assumed blocked by CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC, unverified',
   extraUsage: 'overageEnabled is reported only on some allowed_warning events (2.1.295, statically); its absence is not read as extra usage off, and extra usage being off remains the user-confirmed precondition of D-6',
 });
+/**
+ * `@3`'s: `@2`'s five statements, and what is and is not known of the
+ * permission mode it requests. That 2.1.295 applies the flag is the parent's
+ * static reading of the pinned bytes (`pilot-evidence/2026-10-17-opus55-post-probe/`),
+ * read and never executed. The init check observes what the build reports.
+ * Why the one `@2` probe's launch reported `auto` with no flag supplied is
+ * unknown.
+ */
+export const SUBSCRIPTION_V3_UNOBSERVED = Object.freeze({
+  ...SUBSCRIPTION_V2_UNOBSERVED,
+  permissionMode: '--permission-mode default requested, and the init event held to exactly "default"; that 2.1.295 applies the flag is a static reading of its bytes only, and why the 2026-10-17 @2 probe reported "auto" with no flag supplied is unknown',
+});
 export const SUBSCRIPTION_MEASURED = Object.freeze({
   admittedLaunchInputBytes: 'UTF-8 length of the JSON launch description; upper bound on prompt-file + stdin bytes; not the provider request size',
 });
@@ -1870,18 +1956,19 @@ async function captureSubscriptionRun(request: LiveCaptureRequest): Promise<Live
   const sub = request.subscription ?? {};
   const config = subscriptionCaptureConfigFrom(request.env);
   assertLiveAgentsEnabled(request.env);
-  // `@2` unless another adapter is handed in; `@1` or `@2` by identity, and
-  // nothing else (plan 2026-09-25, D-1).
-  const adapter = request.adapter ?? CLAUDE_CODE_CLI_V2_ADAPTER;
+  // `@3` unless another adapter is handed in; `@1`, `@2` or `@3` by identity,
+  // and nothing else (plan 2026-09-25, D-1; plan 2026-10-17, `@3`).
+  const adapter = request.adapter ?? CLAUDE_CODE_CLI_V3_ADAPTER;
   const version = subscriptionVersionOf(adapter);
-  // D-6's usage facts, the in-flight stops and the backstop hold `@2` only:
-  // `@1`'s 2.1.226 streams report no fast-mode state and would trip the rules
-  // on every launch (Task 5b, a parent decision P-5b-8).
-  const includedUsage = version === '2';
-  // D-9's trust block is `@2`'s alone (Task 5c, a parent decision P-5c-1):
+  const protections = subscriptionProtectionsFor(version);
+  // D-6's usage facts, the in-flight stops and the backstop hold `@2` and `@3`,
+  // never `@1`: `@1`'s 2.1.226 streams report no fast-mode state and would trip
+  // the rules on every launch (Task 5b, a parent decision P-5b-8).
+  const includedUsage = protections.includedUsage;
+  // D-9's trust block is `@2`'s and `@3`'s (Task 5c, a parent decision P-5c-1):
   // `null` while the run is running, the four tiers once it has finished;
   // `@1` files no such key in either summary.
-  const trustTiers = version === '2';
+  const trustTiers = protections.trustTiers;
   // D-1: `@1` never spawns the real executable. Without an injected launch
   // this execution would, so it is refused here, before anything exists.
   if (version === '1' && sub.launch === undefined) {
@@ -1890,12 +1977,12 @@ async function captureSubscriptionRun(request: LiveCaptureRequest): Promise<Live
   if (request.transport !== undefined) throw new SubscriptionRouteMismatchError('an HTTP transport was handed in; the process transport is constructed here and only its launch function is injectable');
   const profile = subscriptionProfileFor(adapter);
   const roleConfig = subscriptionRoleConfigFor(adapter);
-  // D-5: `@2`'s launch budget is at most the run's own role launches, from
-  // the configuration. After the route, adapter, D-1 and transport refusals,
-  // and before anything is created. `@1`, which runs over injected launches
-  // only, is not capped.
-  if (version === '2' && config.budget.maxRunAttempts > maxRoleLaunchesFor(roleConfig)) {
-    throw new SubscriptionBudgetError(SUBSCRIPTION_V2_KEY, config.budget.maxRunAttempts, maxRoleLaunchesFor(roleConfig), roleConfig.prosecutorCount);
+  // D-5: `@2`'s and `@3`'s launch budget is at most the run's own role
+  // launches, from the configuration. After the route, adapter, D-1 and
+  // transport refusals, and before anything is created. `@1`, which runs over
+  // injected launches only, is not capped.
+  if (protections.launchBudget && config.budget.maxRunAttempts > maxRoleLaunchesFor(roleConfig)) {
+    throw new SubscriptionBudgetError(providerAdapterKey(adapter.identity), config.budget.maxRunAttempts, maxRoleLaunchesFor(roleConfig), roleConfig.prosecutorCount);
   }
   // The inherited variables, from the handed environment unless injected —
   // checked before any directory exists, like every other gate.
@@ -1939,8 +2026,10 @@ async function captureSubscriptionRun(request: LiveCaptureRequest): Promise<Live
     maxOutputTokens: profile.maxOutputTokens,
     settings: profile.settings ?? DEFAULT_LAUNCH_SETTINGS,
     settingsFrom: profile.settings === null ? 'transport default' : 'profile',
+    // The permission mode, only where the profile requests one (`@3`), so `@1`'s and `@2`'s records are unchanged.
+    ...(profile.permissionMode === undefined ? {} : { permissionMode: profile.permissionMode }),
   };
-  const unobserved = version === '1' ? SUBSCRIPTION_UNOBSERVED : SUBSCRIPTION_V2_UNOBSERVED;
+  const unobserved = protections.unobserved;
 
   const now = request.now ?? (() => new Date());
   const startedAt = now();
@@ -2059,14 +2148,15 @@ async function captureSubscriptionRun(request: LiveCaptureRequest): Promise<Live
   };
 
   // Built from the profile (D-2): its controls and its gate's rules, and its
-  // `--settings` text where it states one, which the transport then holds
-  // every role launch's description to.
+  // `--settings` text and permission mode where it states them, which the
+  // transport then holds every role launch's description to.
   const transport = createSpawnTransport({
     executable,
     inheritedEnv,
     controls: profile.controls,
     gate: profile.gate,
     ...(profile.settings === null ? {} : { settings: profile.settings }),
+    ...(profile.permissionMode === undefined ? {} : { permissionMode: profile.permissionMode }),
     onLaunch,
     ...(sub.launch === undefined ? {} : { launch: sub.launch }),
     ...(sub.tempRoot === undefined ? {} : { tempRoot: sub.tempRoot }),
@@ -2395,9 +2485,9 @@ export async function runFirstLiveCase(options: FirstLiveCaseOptions): Promise<L
     paths: firstLiveCasePaths(),
     executionRoot: options.executionRoot,
     env: options.env,
-    // The subscription route runs `@2`: `@1` would spawn the real executable
-    // here, which D-1 refuses.
-    adapter: route === 'http' ? ANTHROPIC_MESSAGES_ADAPTER : CLAUDE_CODE_CLI_V2_ADAPTER,
+    // The subscription route runs `@3`: `@1` would spawn the real executable
+    // here, which D-1 refuses, and `@2` requests no permission mode.
+    adapter: route === 'http' ? ANTHROPIC_MESSAGES_ADAPTER : CLAUDE_CODE_CLI_V3_ADAPTER,
     deadlineMs,
     ...(options.transport === undefined ? {} : { transport: options.transport }),
     ...(options.subscription === undefined ? {} : { subscription: options.subscription }),

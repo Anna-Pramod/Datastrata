@@ -118,6 +118,17 @@
  * them does. `@1`
  * declares none and refuses no model: it answers exactly as it always has.
  *
+ * **`@3` is `@2` with one flag requested.** The one `@2` probe (2026-10-17)
+ * was refused at its launch context: its init event reported
+ * `permissionMode "auto"` while no permission flag was supplied, and why the
+ * build selected `auto` is unknown. `@3` requests `--permission-mode default`
+ * and keeps `@2`'s strict, default-only init check by sharing `@2`'s
+ * projection and usage reader, the same functions. Its profile is `@2`'s with
+ * that mode and its own identity, and its invocation names the mode. It is a
+ * new version rather than a change to `@2`, so the one `@2` execution on file
+ * keeps naming code that exists unchanged
+ * (`docs/superpowers/CHECKPOINT-opus55-minimal-probe.md`).
+ *
  * **`@2` names the costliest fact first, then refuses the rest as `@1` does.**
  * On the subscription route the worst outcomes are the ones that spend
  * outside included usage — overage, an exhausted window continued past,
@@ -305,6 +316,12 @@ export interface CliProfile {
   readonly controls: Readonly<Record<string, string>>;
   /** The `--settings` text the launch spec carries, or `null` when it carries none and the transport's own default applies. */
   readonly settings: string | null;
+  /**
+   * The permission mode the launch requests by `--permission-mode`, where the
+   * profile states one. Only `@3`'s does; `@1`'s and `@2`'s profiles have no
+   * such key, so their launches carry no such flag, as they never did.
+   */
+  readonly permissionMode?: 'default';
   /** The bound on one role launch, or `null` where the profile sets none of its own. */
   readonly launchTimeoutMs: number | null;
   /** The bound on the gate launch, or `null` where the profile sets none of its own. */
@@ -471,12 +488,41 @@ export const CLAUDE_CODE_CLI_V2_PROFILE = frozen({
   gate: CLAUDE_CODE_CLI_V2_GATE_RULES,
 } satisfies CliProfile);
 
+export const CLAUDE_CODE_CLI_V3_IDENTITY: ProviderAdapterIdentity = frozen({ id: 'claude-code-cli', version: '3' });
+
+/**
+ * `@3`: `@2`'s profile with two differences, its identity and the permission
+ * mode it requests. Every other field is `@2`'s own value, the same objects:
+ * the pin, the permitted models, the effort, the ceiling, the thirteen
+ * controls, the `--settings` text, both timeouts and the gate's rules.
+ *
+ * The mode is `default`: the 2.1.295 probe's init event reported `"auto"`
+ * while no permission flag was supplied, and `@2`'s init check refused it.
+ * The parent's static reading of the pinned bytes, read and never executed
+ * (`pilot-evidence/2026-10-17-opus55-post-probe/`), finds three things:
+ * - the main command accepts `--permission-mode default`;
+ * - its start-up resolver takes an explicit mode before the fallback that
+ *   can choose `auto`;
+ * - nothing the transport passes drops the flag.
+ *
+ * None of that is observed at runtime. So the request guarantees nothing on
+ * its own: the init check, shared with `@2` and unchanged, still refuses any
+ * mode but exactly `"default"`.
+ */
+export const CLAUDE_CODE_CLI_V3_PROFILE = frozen({
+  ...CLAUDE_CODE_CLI_V2_PROFILE,
+  identity: CLAUDE_CODE_CLI_V3_IDENTITY,
+  permissionMode: 'default',
+} satisfies CliProfile);
+
 /**
  * The invocation a profile makes, as the adapter declares it: read from the
  * profile, never restated. The launch controls are part of it, exactly as
  * the profile declares them, because they change what the launched
  * executable does: a run under other controls is not the run this identity
- * names.
+ * names. So is the permission mode, where the profile states one (`@3`),
+ * for the same reason. Where it states none (`@2`), the key is absent, and
+ * that identity is unchanged.
  */
 function invocationOf(profile: CliProfile): InvocationIdentity {
   return frozen({
@@ -484,6 +530,7 @@ function invocationOf(profile: CliProfile): InvocationIdentity {
     maxOutputTokens: profile.maxOutputTokens,
     executable: { version: profile.pin.version, sha256: profile.pin.sha256 },
     controls: profile.controls,
+    ...(profile.permissionMode === undefined ? {} : { permissionMode: profile.permissionMode }),
   });
 }
 
@@ -508,6 +555,12 @@ export interface CliLaunchSpec {
    * applies; `@2`'s always does, after `effort`.
    */
   settings?: string;
+  /**
+   * The `--permission-mode` the launch requests, from the profile. Only `@3`'s
+   * spec carries the key, after `settings`. `@1`'s and `@2`'s never do, so
+   * their bodies are the ones they always were. Exactly `"default"` or absent.
+   */
+  permissionMode?: 'default';
   /** The role and index the launch is for, last, so the transport can name the launch in its record without reading the prompt. */
   role: string;
   index: number;
@@ -520,6 +573,7 @@ const launchSpecSchema = z.object({
   jsonSchema: z.record(z.unknown()),
   effort: z.literal('high'),
   settings: z.string().optional(),
+  permissionMode: z.literal('default').optional(),
   role: z.string().min(1),
   index: z.number().int().nonnegative(),
 }).strict();
@@ -910,6 +964,31 @@ function buildRequestV2(request: RoleRequest, config: ProviderEndpointConfig): P
     jsonSchema: roleOutputJsonSchema(request.role),
     effort: profile.effort,
     settings: profile.settings,
+    role: request.role,
+    index: request.index,
+  };
+  return { url: CLI_LAUNCH_URL, method: 'SPAWN', headers: {}, body: JSON.stringify(spec) };
+}
+
+/**
+ * `@3`'s launch description: `@2`'s construction applied to `@3`'s profile,
+ * and the profile's permission mode after `--settings`, in the spec's fixed
+ * key order. It is a function of its own rather than a parameter of `@2`'s,
+ * so `@2`'s description stays byte-identical by construction. A test holds
+ * the two descriptions equal but for this one key.
+ */
+function buildRequestV3(request: RoleRequest, config: ProviderEndpointConfig): ProviderHttpRequest {
+  const profile = CLAUDE_CODE_CLI_V3_PROFILE;
+  const { systemPrompt, userMessage } = roleMessages(request, config);
+  if (!profile.permittedModels.includes(request.model)) throw new CliModelNotAllowedError(request, profile.identity, profile.permittedModels);
+  const spec: CliLaunchSpec = {
+    model: request.model,
+    systemPrompt,
+    userMessage,
+    jsonSchema: roleOutputJsonSchema(request.role),
+    effort: profile.effort,
+    settings: profile.settings,
+    permissionMode: profile.permissionMode,
     role: request.role,
     index: request.index,
   };
@@ -2366,6 +2445,24 @@ export const CLAUDE_CODE_CLI_V2_ADAPTER: ProviderAdapter = {
   channel: 'process',
   invocation: invocationOf(CLAUDE_CODE_CLI_V2_PROFILE),
   buildRequest: buildRequestV2,
+  projectResponse: projectResponseV2,
+  readUsage,
+};
+
+/**
+ * `claude-code-cli@3`: `@2` requesting `--permission-mode default`.
+ * - Its description carries the mode.
+ * - Its invocation is declared from its profile, so the pipeline identity
+ *   names the mode as well as `@2`'s four inputs.
+ * - Its projection and usage reader are `@2`'s own functions. So the launch
+ *   context is held to exactly `"default"` by the same check that refused the
+ *   probe, and every later check is `@2`'s.
+ */
+export const CLAUDE_CODE_CLI_V3_ADAPTER: ProviderAdapter = {
+  identity: CLAUDE_CODE_CLI_V3_PROFILE.identity,
+  channel: 'process',
+  invocation: invocationOf(CLAUDE_CODE_CLI_V3_PROFILE),
+  buildRequest: buildRequestV3,
   projectResponse: projectResponseV2,
   readUsage,
 };

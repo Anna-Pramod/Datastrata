@@ -37,7 +37,7 @@ import { EXIT_OK, EXIT_REFUSED } from '../src/cli/exit-codes';
 import { DEFAULT_ROLE_CONFIG } from '../src/pipeline/config';
 import { LIVE_AGENTS_ENV, LIVE_AGENTS_TOKEN, type AttemptRecord, type LiveAgentRunner } from '../src/pipeline/live-runner';
 import { ANTHROPIC_MESSAGES_ADAPTER, ANTHROPIC_MESSAGES_IDENTITY } from '../src/pipeline/anthropic-messages';
-import { CLAUDE_CODE_CLI_ADAPTER, CLAUDE_CODE_CLI_IDENTITY, CLAUDE_CODE_CLI_V2_ADAPTER } from '../src/pipeline/claude-code-cli';
+import { CLAUDE_CODE_CLI_ADAPTER, CLAUDE_CODE_CLI_IDENTITY, CLAUDE_CODE_CLI_V2_ADAPTER, CLAUDE_CODE_CLI_V3_ADAPTER } from '../src/pipeline/claude-code-cli';
 import { UNSELECTED_PROVIDER_ADAPTER, UnknownProviderAdapterError, providerAdapterKey, resolveProviderAdapter } from '../src/pipeline/provider-adapter';
 import type { RunTranscript } from '../src/pipeline/transcript';
 import { installNetworkTrap } from './helpers';
@@ -70,12 +70,19 @@ afterEach(() => {
 const paths = (): VerifyPaths => ({ packDir: join(engineRoot, 'knowledge', PACK_ID), corpusDir: join(engineRoot, 'corpus'), verificationDir: scratch });
 
 describe('the registry', () => {
-  it('W0 — registers the Anthropic Messages adapter under the identity the default configuration selects, and the two CLI adapters beside it', () => {
-    expect([...PRODUCTION_ADAPTERS.keys()]).toEqual([providerAdapterKey(ANTHROPIC_MESSAGES_IDENTITY), providerAdapterKey(CLAUDE_CODE_CLI_IDENTITY), 'claude-code-cli@2']);
+  it('W0 — registers the Anthropic Messages adapter under the identity the default configuration selects, and the three CLI adapters beside it', () => {
+    expect([...PRODUCTION_ADAPTERS.keys()]).toEqual([providerAdapterKey(ANTHROPIC_MESSAGES_IDENTITY), providerAdapterKey(CLAUDE_CODE_CLI_IDENTITY), 'claude-code-cli@2', 'claude-code-cli@3']);
     expect(DEFAULT_ROLE_CONFIG.providerAdapter).toEqual(ANTHROPIC_MESSAGES_IDENTITY);
     expect(resolveProviderAdapter(PRODUCTION_ADAPTERS, ANTHROPIC_MESSAGES_IDENTITY)).toBe(ANTHROPIC_MESSAGES_ADAPTER);
     expect(resolveProviderAdapter(PRODUCTION_ADAPTERS, CLAUDE_CODE_CLI_IDENTITY)).toBe(CLAUDE_CODE_CLI_ADAPTER);
     expect(resolveProviderAdapter(PRODUCTION_ADAPTERS, { id: 'claude-code-cli', version: '2' })).toBe(CLAUDE_CODE_CLI_V2_ADAPTER);
+    expect(resolveProviderAdapter(PRODUCTION_ADAPTERS, { id: 'claude-code-cli', version: '3' })).toBe(CLAUDE_CODE_CLI_V3_ADAPTER);
+  });
+
+  it('W0b — the negative control for W0: a CLI version registered nowhere, claude-code-cli@4, is refused by name, never defaulted to another', () => {
+    const attempt = () => resolveProviderAdapter(PRODUCTION_ADAPTERS, { id: 'claude-code-cli', version: '4' });
+    expect(attempt).toThrow(UnknownProviderAdapterError);
+    expect(attempt).toThrow(/no provider adapter is registered as claude-code-cli@4/);
   });
 });
 
@@ -111,7 +118,8 @@ describe('the subscription route is capture-only', () => {
     for (const [label, refused, words] of [
       ['@2, no environment', () => liveCapabilityFrom({ env: {}, config: CLI_CONFIG_V2 }), /the claude-code-cli@2 route is capture-only/],
       ['@2, injected transport', () => liveCapabilityFrom({ env: LIVE_ENV, config: CLI_CONFIG_V2, transport: cannedAnthropicTransport() }), /the claude-code-cli@2 route is capture-only/],
-      ['@3, unregistered', () => liveCapabilityFrom({ env: LIVE_ENV, config: { ...DEFAULT_ROLE_CONFIG, providerAdapter: { id: 'claude-code-cli', version: '3' } } }), /the claude-code-cli@3 route is capture-only/],
+      ['@3, registered', () => liveCapabilityFrom({ env: LIVE_ENV, config: { ...DEFAULT_ROLE_CONFIG, providerAdapter: { id: 'claude-code-cli', version: '3' } } }), /the claude-code-cli@3 route is capture-only/],
+      ['@4, unregistered', () => liveCapabilityFrom({ env: LIVE_ENV, config: { ...DEFAULT_ROLE_CONFIG, providerAdapter: { id: 'claude-code-cli', version: '4' } } }), /the claude-code-cli@4 route is capture-only/],
     ] as const) {
       expect(refused, label).toThrow(SubscriptionRouteCaptureOnlyError);
       expect(refused, label).toThrow(words);

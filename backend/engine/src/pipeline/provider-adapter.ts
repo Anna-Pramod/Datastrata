@@ -217,6 +217,8 @@ function shown(value: unknown): string {
  *   name (`CONTROL_NAME`), and every value a string, as an environment
  *   carries them. An empty map would hash differently from an absent one
  *   while declaring the same launch.
+ * - `permissionMode`, when defined (`null` is defined), is exactly
+ *   `"default"`, the only mode a registered adapter requests.
  *
  * `side` is carried onto the refusal. Which inputs are refused, and the
  * problems named, do not depend on it.
@@ -270,6 +272,11 @@ export function assertValidInvocationIdentity(
     }
   }
 
+  const permissionMode = record['permissionMode'];
+  if (permissionMode !== undefined && permissionMode !== 'default') {
+    problems.push(`permissionMode ${shown(permissionMode)} is not "default", the only mode a registered adapter requests`);
+  }
+
   if (problems.length > 0) throw new InvalidInvocationIdentityError(problems, side);
 }
 
@@ -290,12 +297,15 @@ function controlsShown(controls: Readonly<Record<string, string>> | undefined): 
 }
 
 /**
- * The fields two declared invocations differ in, in a fixed order, compared
- * with `===` one by one, and then the launch controls, compared as maps:
- * two differ when their entries sorted by name differ, and a map declared
- * on one side only differs from the other side's absence. The one
- * comparison orchestration makes and `InvocationMismatchError` reports, so
- * the check and its message cannot disagree about what differed.
+ * The fields two declared invocations differ in, in a fixed order. They are
+ * compared with `===` one by one, then the launch controls as maps, then the
+ * permission mode.
+ * - Two control maps differ when their entries sorted by name differ.
+ * - A map or a mode declared on one side only differs from the other side's
+ *   absence.
+ *
+ * This is the one comparison orchestration makes and `InvocationMismatchError`
+ * reports, so the check and its message cannot disagree about what differed.
  */
 export function invocationDifferences(configured: InvocationIdentity, actual: InvocationIdentity): string[] {
   const fields: string[] = [];
@@ -304,6 +314,7 @@ export function invocationDifferences(configured: InvocationIdentity, actual: In
   if (configured.executable.version !== actual.executable.version) fields.push('executable.version');
   if (configured.executable.sha256 !== actual.executable.sha256) fields.push('executable.sha256');
   if (controlsKey(configured.controls) !== controlsKey(actual.controls)) fields.push('controls');
+  if (configured.permissionMode !== actual.permissionMode) fields.push('permissionMode');
   return fields;
 }
 
@@ -318,15 +329,18 @@ function invocationField(invocation: InvocationIdentity, field: string): string 
       return shown(invocation.executable.version);
     case 'controls':
       return controlsShown(invocation.controls);
+    case 'permissionMode':
+      return invocation.permissionMode === undefined ? 'none' : shown(invocation.permissionMode);
     default:
       return shown(invocation.executable.sha256);
   }
 }
 
-/** An invocation, in full, for a mismatch message: its controls too, sorted, where it declares them. */
+/** An invocation, in full, for a mismatch message: its controls too, sorted, and its permission mode, where it declares them. */
 function describeInvocation(invocation: InvocationIdentity): string {
   const controls = invocation.controls === undefined ? '' : `, controls ${controlsShown(invocation.controls)}`;
-  return `{effort ${shown(invocation.effort)}, maxOutputTokens ${shown(invocation.maxOutputTokens)}, executable ${shown(invocation.executable.version)} sha256 ${shown(invocation.executable.sha256)}${controls}}`;
+  const permissionMode = invocation.permissionMode === undefined ? '' : `, permissionMode ${shown(invocation.permissionMode)}`;
+  return `{effort ${shown(invocation.effort)}, maxOutputTokens ${shown(invocation.maxOutputTokens)}, executable ${shown(invocation.executable.version)} sha256 ${shown(invocation.executable.sha256)}${controls}${permissionMode}}`;
 }
 
 /**
@@ -476,6 +490,15 @@ export interface InvocationIdentity {
    * adapter declares none; never empty when present.
    */
   readonly controls?: Readonly<Record<string, string>>;
+  /**
+   * The permission mode the launch requests (`--permission-mode`), where the
+   * adapter's profile states one: exactly `'default'`, `claude-code-cli@3`'s.
+   * It is part of the identity because it changes what the launched
+   * executable is asked to run under, as the controls do. Absent where the
+   * adapter requests none, so every identity derived without it is
+   * unchanged.
+   */
+  readonly permissionMode?: 'default';
 }
 
 export interface ProviderAdapter {
