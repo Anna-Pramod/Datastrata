@@ -303,10 +303,16 @@ everything in 3a predates the v2 guidance.
   Article 29a(1) in the closure. Nothing offline can steer which of the two
   the role does; that is the one thing a prompt edit could add, at the cost
   of re-recording every transcript.
-- **Identity**: `requirementInputSha256`, the closure pin, the `runId`
-  derivation and the `pipelineVersion` are unchanged. The reader's input
-  for S-002 now says `v4`, and a future result records `requirementVersion
-  4` against the registry's new entry.
+- **Identity**: `requirementInputSha256` and the closure pin are unchanged.
+  The `pipelineVersion` and the derived `runId` are **not**: the v2 prompt
+  set is an identity input, so at `b7b8a1e` the @3 identity is
+  `pipeline-v3-3d7265b7…` (r1's was `…ecb06a30…`) and S-002's `runId` is
+  `run-v1-3d4759bf…` (r1's was `…30e176ef…`), as the r2 capture package
+  measured and its pre-flight printed. Historical recordings replay under
+  the preserved v1 prompts without re-recording. The reader's input for
+  S-002 now says `v4`, and a future result records `requirementVersion 4`
+  against the registry's new entry. (Corrected after the r2 capture; the
+  earlier wording predated the v2 prompts.)
 
 ## 5. Binding, and commit
 
