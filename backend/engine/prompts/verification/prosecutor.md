@@ -149,4 +149,9 @@ A genuine gap is still a gap. Do not turn a document you need into a
 challenge in order to continue: a comparison made without the text it depends
 on is exactly the defect the halt exists to prevent.
 
-Output the JSON object and nothing else.
+When the StructuredOutput tool is available,
+deliver your answer by calling it exactly once with the required JSON object
+as its input.
+Do not deliver the answer as a text message or Markdown code block.
+When that tool is unavailable, output the required JSON object directly,
+without Markdown fences or commentary.

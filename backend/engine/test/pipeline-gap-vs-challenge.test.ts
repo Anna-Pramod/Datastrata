@@ -51,12 +51,13 @@ const here = __dirname;
 const engineRoot = join(here, '..');
 
 // ---------------------------------------------------------------------------
-// The prompt sets: v1 kept, v2 current, the reader untouched
+// The prompt sets: v1, v2 and v3 kept, v4 current, the reader untouched by v2
 // ---------------------------------------------------------------------------
 
 describe('the prompt sets are versioned, and the kept v1 set is the one every recording so far was made under', () => {
   const v1 = loadHistoricalPromptSet('v1');
   const v2 = loadHistoricalPromptSet('v2');
+  const v3 = loadHistoricalPromptSet('v3');
   const current = loadPromptSet();
 
   /** The v1 digests, as the S-002 capture's transcript and the S-001 recordings carry them. */
@@ -67,9 +68,10 @@ describe('the prompt sets are versioned, and the kept v1 set is the one every re
   };
 
   it('v1 is kept byte for byte: its digests are the ones the recordings carry', () => {
-    // v2 joined the kept sets when v3 (the quote-hash instruction) became current.
-    expect(HISTORICAL_PROMPT_SET_VERSIONS).toEqual(['v1', 'v2']);
-    expect(CURRENT_PROMPT_SET_VERSION).toBe('v3');
+    // v2 joined the kept sets when v3 (the quote-hash instruction) became
+    // current, and v3 when v4 (the delivery instruction) did.
+    expect(HISTORICAL_PROMPT_SET_VERSIONS).toEqual(['v1', 'v2', 'v3']);
+    expect(CURRENT_PROMPT_SET_VERSION).toBe('v4');
     expect(promptHashes(v1)).toEqual(V1_DIGESTS);
     // Each kept file is a file, resolved by its own literal path.
     for (const role of ['reader', 'prosecutor', 'adjudicator'] as const) {
@@ -100,7 +102,7 @@ describe('the prompt sets are versioned, and the kept v1 set is the one every re
     expect(current.reader.sha256).not.toBe(v2.reader.sha256);
   });
 
-  it('the v2 prosecutor distinguishes a challenge from a gap, in words v1 did not have, and still ends as the schema route expects', () => {
+  it('the v2 prosecutor distinguishes a challenge from a gap, in words v1 did not have, and each set ends with its own delivery instruction', () => {
     for (const phrase of [
       'A gap and a challenge are different findings',
       'An objection you can state and quote from the closure is a **challenge**',
@@ -116,8 +118,10 @@ describe('the prompt sets are versioned, and the kept v1 set is the one every re
     expect(current.prosecutor.text).not.toMatch(/dismiss|ignore the objection|accept the encoding/i);
     // The lens list and the output contract are unchanged.
     expect(current.prosecutor.text).toContain('a wrong measurement period; a wrong scope type or\naddressee');
-    expect(current.prosecutor.text.trimEnd().endsWith('Output the JSON object and nothing else.')).toBe(true);
-    expect(v1.prosecutor.text.trimEnd().endsWith('Output the JSON object and nothing else.')).toBe(true);
+    // The one-line delivery instruction ended every set up to v3; the current
+    // (v4) set ends with the delivery paragraph (`pipeline-quote-pins.test.ts`).
+    for (const kept of [v1, v2, v3]) expect(kept.prosecutor.text.trimEnd().endsWith('Output the JSON object and nothing else.')).toBe(true);
+    expect(current.prosecutor.text.trimEnd().endsWith('without Markdown fences or commentary.')).toBe(true);
   });
 
   it('the v2 adjudicator reserves the halt for a document judgment needs, and names OPEN_QUESTION for a challenge the closure cannot settle', () => {
@@ -131,7 +135,8 @@ describe('the prompt sets are versioned, and the kept v1 set is the one every re
       expect(v1.adjudicator.text, `v1 lacks: ${phrase}`).not.toContain(phrase);
     }
     expect(current.adjudicator.text).not.toMatch(/CSRD-S-\d{3}/);
-    expect(current.adjudicator.text.trimEnd().endsWith('Output the JSON object and nothing else.')).toBe(true);
+    for (const kept of [v1, v2, v3]) expect(kept.adjudicator.text.trimEnd().endsWith('Output the JSON object and nothing else.')).toBe(true);
+    expect(current.adjudicator.text.trimEnd().endsWith('without Markdown fences or commentary.')).toBe(true);
   });
 
   it('the identity moves with the set: v1 derives the historical @3 identity the capture filed, the current set derives another', () => {

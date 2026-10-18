@@ -2214,14 +2214,16 @@ describe('the subscription route runs claude-code-cli@2 from its profile, and @1
   // agree with any change made to it.
   const V2_SETTINGS = '{"switchModelsOnFlag":false,"fastMode":false,"autoContinueAtUsageLimit":false}';
   const V1_SETTINGS = '{"switchModelsOnFlag":false}';
-  // The identities below are over the **current (v3) prompt set**, which the
+  // The identities below are over the **current (v4) prompt set**, which the
   // harness reads for every new run. Under the kept v1 set — the one every
   // recording before 2026-10-18 was made under — the same configurations
-  // derive `pipeline-v3-737f8d50…` (@2) and `pipeline-v3-fd3ed34d…` (@1), and
-  // under the kept v2 set `pipeline-v3-9599bc1e…` (@2) and `pipeline-v3-a408775f…`
-  // (@1), all still pinned in `pipeline-identity.test.ts` over `loadHistoricalPromptSet`.
-  const V2_PIPELINE_VERSION = 'pipeline-v3-c3a654feeb5bed7787695fe69591834b62118efa1cf7d2f6e686215f975987d8';
-  const V1_PIPELINE_VERSION = 'pipeline-v3-c5938591581a75c0a36e8827ef4e8c3408c256f429c7b472a5fbbe3e51a46481';
+  // derive `pipeline-v3-737f8d50…` (@2) and `pipeline-v3-fd3ed34d…` (@1); under
+  // the kept v2 set `pipeline-v3-9599bc1e…` (@2) and `pipeline-v3-a408775f…`
+  // (@1); and under the kept v3 set `pipeline-v3-c3a654fe…` (@2) and
+  // `pipeline-v3-c5938591…` (@1), all still pinned in `pipeline-identity.test.ts`
+  // over `loadHistoricalPromptSet`.
+  const V2_PIPELINE_VERSION = 'pipeline-v3-d6005bb183a8e865b875569af64ad588a85410997ae7b718b9e068fb1ce22542';
+  const V1_PIPELINE_VERSION = 'pipeline-v3-63ee97e89173e82d939d472fc85a9578d164ee544dd025f0d4e404cbf062878c';
   const V2_SHA256 = '494870c9763b5ea370b6165e7e04af589a7b2472bf0de18ffb25477f8230bdf6';
   const V1_SHA256 = '013a1cf17df5ff1dcc189d5d6fd3fdd5f097ddc3cd41aa9992e99805574febbe';
   /** `@2`'s thirteen launch controls. */
@@ -4598,13 +4600,14 @@ describe('the trust block on the @2 route: four tiers, each a status and its met
 describe('the subscription route runs claude-code-cli@3 by default: --permission-mode default requested, and every protection @2 has, each beside its negative control', () => {
   // Every `@3` value below is a literal written here, never read off the `@3` profile or adapter.
   const V2_SETTINGS = '{"switchModelsOnFlag":false,"fastMode":false,"autoContinueAtUsageLimit":false}';
-  // Over the current (v3) prompt set, which the harness reads for every new
+  // Over the current (v4) prompt set, which the harness reads for every new
   // run. The S-002 capture (r1) and the rehearsal were filed under the v1 set's
-  // @3 identity, `pipeline-v3-ecb06a30…`, and r2 under the v2 set's,
-  // `pipeline-v3-3d7265b7…`; both still pinned in `pipeline-identity.test.ts`
-  // over `loadHistoricalPromptSet`, and the kept files reproduce them.
-  const V3_PIPELINE_VERSION = 'pipeline-v3-55f2fd84f3774b9a7e7aab64d44e842021406b4ad9d018d0aae81882bfec742b';
-  const V2_PIPELINE_VERSION = 'pipeline-v3-c3a654feeb5bed7787695fe69591834b62118efa1cf7d2f6e686215f975987d8';
+  // @3 identity, `pipeline-v3-ecb06a30…`, r2 under the v2 set's,
+  // `pipeline-v3-3d7265b7…`, and r3 under the v3 set's, `pipeline-v3-55f2fd84…`;
+  // all three still pinned in `pipeline-identity.test.ts` over
+  // `loadHistoricalPromptSet`, and the kept files reproduce them.
+  const V3_PIPELINE_VERSION = 'pipeline-v3-f13257de847c9bd3e0535e19e92dddb3b8e8f95480102b5031bcf43c86f7b3b6';
+  const V2_PIPELINE_VERSION = 'pipeline-v3-d6005bb183a8e865b875569af64ad588a85410997ae7b718b9e068fb1ce22542';
   const V2_SHA256 = '494870c9763b5ea370b6165e7e04af589a7b2472bf0de18ffb25477f8230bdf6';
   /** `@3`'s thirteen launch controls: `@2`'s. */
   const V3_CONTROLS = {

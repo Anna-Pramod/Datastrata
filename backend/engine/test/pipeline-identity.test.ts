@@ -448,8 +448,8 @@ describe('the identities the @2 migration must not move', () => {
    * Every literal in this block was taken over the v1 prompt set — the set
    * every recording before 2026-10-18 was made under — so each is asserted
    * over `loadHistoricalPromptSet('v1')`: the kept files, byte for byte. The
-   * current set (v2, whose prosecutor and adjudicator changed) derives other
-   * identities, pinned in the v2 block at the end of this file.
+   * current set (v4) derives other identities, pinned beside the kept v2 and
+   * v3 sets' in the block at the end of this file.
    */
   const v1 = loadHistoricalPromptSet('v1');
 
@@ -580,7 +580,7 @@ describe('the identities the @2 migration must not move', () => {
      * through neither its loader nor `sha256Hex`.
      */
     function promptFileSha256(
-      set: 'v1' | 'v2' | 'current' = 'v1',
+      set: 'v1' | 'v2' | 'v3' | 'current' = 'v1',
     ): Record<'reader' | 'prosecutor' | 'adjudicator', string> {
       const dir = set === 'current' ? join(engineRoot, 'prompts', 'verification') : join(engineRoot, 'prompts', 'history', set);
       const of = (file: string): string => createHash('sha256').update(readFileSync(join(dir, file))).digest('hex');
@@ -606,7 +606,7 @@ describe('the identities the @2 migration must not move', () => {
       models: { reader: string; prosecutor: string; adjudicator: string };
       providerAdapter: { id: string; version: string };
       invocation?: InvocationIdentity;
-      promptSet?: 'v1' | 'v2' | 'current';
+      promptSet?: 'v1' | 'v2' | 'v3' | 'current';
     }): string {
       const prompt = promptFileSha256(values.promptSet ?? 'v1');
       const invocation = values.invocation;
@@ -685,7 +685,7 @@ describe('the identities the @2 migration must not move', () => {
       ).toBe(SUBSCRIPTION_V2_PIPELINE_VERSION);
     });
 
-    it('the hand-writer over the kept v2 prompt files reproduces the v2 @2 and @3 literals (the r2 capture ran under the @3 one), and over the current (v3) files the v3 literals the builder derives in the block at the end of this file', () => {
+    it('the hand-writer over the kept v2 and v3 prompt files reproduces their @2 and @3 literals (r2 ran under v2\'s @3, r3 under v3\'s), and over the current (v4) files the v4 literals the builder derives in the block at the end of this file', () => {
       expect(
         handWrittenIdentity({ models: OPUS_5_5, providerAdapter: { id: 'claude-code-cli', version: '2' }, invocation: INVOCATION_V2, promptSet: 'v2' }),
       ).toBe('pipeline-v3-9599bc1e617321fb8cae51bddaf8fe0d34445d97358290c0c4f32554084ce4a4');
@@ -698,8 +698,19 @@ describe('the identities the @2 migration must not move', () => {
         }),
       ).toBe('pipeline-v3-3d7265b786fff38fb3a12d7f01e3b75d219653611ddbc079bfd7c874a6bca750');
       expect(
-        handWrittenIdentity({ models: OPUS_5_5, providerAdapter: { id: 'claude-code-cli', version: '2' }, invocation: INVOCATION_V2, promptSet: 'current' }),
+        handWrittenIdentity({ models: OPUS_5_5, providerAdapter: { id: 'claude-code-cli', version: '2' }, invocation: INVOCATION_V2, promptSet: 'v3' }),
       ).toBe('pipeline-v3-c3a654feeb5bed7787695fe69591834b62118efa1cf7d2f6e686215f975987d8');
+      expect(
+        handWrittenIdentity({
+          models: OPUS_5_5,
+          providerAdapter: { id: 'claude-code-cli', version: '3' },
+          invocation: { ...INVOCATION_V2, permissionMode: 'default' },
+          promptSet: 'v3',
+        }),
+      ).toBe('pipeline-v3-55f2fd84f3774b9a7e7aab64d44e842021406b4ad9d018d0aae81882bfec742b');
+      expect(
+        handWrittenIdentity({ models: OPUS_5_5, providerAdapter: { id: 'claude-code-cli', version: '2' }, invocation: INVOCATION_V2, promptSet: 'current' }),
+      ).toBe('pipeline-v3-d6005bb183a8e865b875569af64ad588a85410997ae7b718b9e068fb1ce22542');
       expect(
         handWrittenIdentity({
           models: OPUS_5_5,
@@ -707,7 +718,7 @@ describe('the identities the @2 migration must not move', () => {
           invocation: { ...INVOCATION_V2, permissionMode: 'default' },
           promptSet: 'current',
         }),
-      ).toBe('pipeline-v3-55f2fd84f3774b9a7e7aab64d44e842021406b4ad9d018d0aae81882bfec742b');
+      ).toBe('pipeline-v3-f13257de847c9bd3e0535e19e92dddb3b8e8f95480102b5031bcf43c86f7b3b6');
     });
 
     it('a ceiling of 63,999 is a different pipeline', () => {
@@ -837,10 +848,10 @@ describe('the identities the @2 migration must not move', () => {
 });
 
 // ---------------------------------------------------------------------------
-// The current (v3) prompt set: new identities; the v1 and v2 ones kept
+// The current (v4) prompt set: new identities; the v1, v2 and v3 ones kept
 // ---------------------------------------------------------------------------
 
-describe('the v3 prompt set derives new identities over the S-002 closure, and the kept v1 and v2 sets still derive the historical ones', () => {
+describe('the v4 prompt set derives new identities over the S-002 closure, and the kept v1, v2 and v3 sets still derive the historical ones', () => {
   const paths: VerifyPaths = {
     packDir: join(engineRoot, 'knowledge', 'csrd'),
     corpusDir: join(engineRoot, 'corpus'),
@@ -851,13 +862,29 @@ describe('the v3 prompt set derives new identities over the S-002 closure, and t
   const current = loadPromptSet();
   const v1 = loadHistoricalPromptSet('v1');
   const v2 = loadHistoricalPromptSet('v2');
+  const v3 = loadHistoricalPromptSet('v3');
 
   /**
-   * Taken from `pipelineVersionFor` over the current prompt files on
-   * 2026-10-18, once, after the v3 quote-hash instruction was written into
-   * all three prompts (`CHECKPOINT-opus55-s002-capture-r2.md`, the repair
-   * that followed r2), and corroborated above by the hand-written derivation
-   * over the same files.
+   * Taken from `pipelineVersionFor` over the v4 prompt files on 2026-10-19,
+   * once, after the final delivery instruction — call the StructuredOutput
+   * tool exactly once where it is available, direct JSON where it is not —
+   * replaced the one-line "Output the JSON object and nothing else." in all
+   * three prompts (`CHECKPOINT-opus55-s002-capture-r3.md`: r3's prosecutor
+   * answered as a fenced text block and never called the tool), and
+   * corroborated above by the hand-written derivation over the same files.
+   */
+  const V4_PROMPTS = {
+    http: 'pipeline-v3-f5f3c5857f0063e5a799a31c5d1b4f6cf66df0f9f9c31f735e434f2f3d04473c',
+    at1: 'pipeline-v3-63ee97e89173e82d939d472fc85a9578d164ee544dd025f0d4e404cbf062878c',
+    at2: 'pipeline-v3-d6005bb183a8e865b875569af64ad588a85410997ae7b718b9e068fb1ce22542',
+    at3: 'pipeline-v3-f13257de847c9bd3e0535e19e92dddb3b8e8f95480102b5031bcf43c86f7b3b6',
+  };
+  /**
+   * The v3 values: taken the same way on 2026-10-18 after the quote-hash
+   * instruction was written into all three prompts
+   * (`CHECKPOINT-opus55-s002-capture-r2.md`, the repair that followed r2);
+   * the r3 capture's pre-flight printed the `at3` one and the capture ran
+   * under it. Asserted over the kept files, byte for byte.
    */
   const V3_PROMPTS = {
     http: 'pipeline-v3-5fe9a880f0cc7ebe5200dddcdc0a4140506b34f465fd886b019d3c370ec7590b',
@@ -889,19 +916,21 @@ describe('the v3 prompt set derives new identities over the S-002 closure, and t
     ['at1', SUBSCRIPTION_ROLE_CONFIG_V1],
     ['at2', SUBSCRIPTION_ROLE_CONFIG],
     ['at3', SUBSCRIPTION_ROLE_CONFIG_V3],
-  ] as const)('%s: the current set derives the v3 literal, the kept v2 set the v2 one, the kept v1 set the historical one', (key, config) => {
-    expect(pipelineVersionFor({ prompts: current, config, closure })).toBe(V3_PROMPTS[key]);
+  ] as const)('%s: the current set derives the v4 literal, the kept v3 set the v3 one, the kept v2 set the v2 one, the kept v1 set the historical one', (key, config) => {
+    expect(pipelineVersionFor({ prompts: current, config, closure })).toBe(V4_PROMPTS[key]);
+    expect(pipelineVersionFor({ prompts: v3, config, closure })).toBe(V3_PROMPTS[key]);
     expect(pipelineVersionFor({ prompts: v2, config, closure })).toBe(V2_PROMPTS[key]);
     expect(pipelineVersionFor({ prompts: v1, config, closure })).toBe(V1_PROMPTS[key]);
-    expect(new Set([V1_PROMPTS[key], V2_PROMPTS[key], V3_PROMPTS[key]]).size).toBe(3);
+    expect(new Set([V1_PROMPTS[key], V2_PROMPTS[key], V3_PROMPTS[key], V4_PROMPTS[key]]).size).toBe(4);
   });
 
-  it('v2 differs from v1 in the prosecutor and adjudicator digests only, the reader being the same file; v3 differs from v2 in all three', () => {
+  it('v2 differs from v1 in the prosecutor and adjudicator digests only, the reader being the same file; v3 differs from v2, and v4 from v3, in all three', () => {
     expect(promptHashes(v2).reader).toBe(promptHashes(v1).reader);
     expect(promptHashes(v2).prosecutor).not.toBe(promptHashes(v1).prosecutor);
     expect(promptHashes(v2).adjudicator).not.toBe(promptHashes(v1).adjudicator);
     for (const role of ['reader', 'prosecutor', 'adjudicator'] as const) {
-      expect(promptHashes(current)[role], role).not.toBe(promptHashes(v2)[role]);
+      expect(promptHashes(v3)[role], role).not.toBe(promptHashes(v2)[role]);
+      expect(promptHashes(current)[role], role).not.toBe(promptHashes(v3)[role]);
     }
   });
 });

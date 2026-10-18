@@ -446,15 +446,23 @@ describe('FIXTURE — through runVerificationPipeline, a quote that fails the co
 });
 
 // ---------------------------------------------------------------------------
-// 5. The v3 prompts say it; v1 and v2 are kept byte for byte under their own
-//    versions, and the identity moves with the set
+// 5. The v3 and v4 prompts say it; v1, v2 and v3 are kept byte for byte under
+//    their own versions; v4 replaces the delivery line and nothing else; and
+//    the identity moves with the set
 // ---------------------------------------------------------------------------
 
-describe('the v3 prompt set tells every role to copy the fence hash; v2 is kept beside v1 and still derives its own identity', () => {
+describe('the v3 and v4 prompt sets tell every role to copy the fence hash; v4 adds the delivery instruction; v1, v2 and v3 are kept and still derive their own identities', () => {
   const current = loadPromptSet();
   const v1 = loadHistoricalPromptSet('v1');
   const v2 = loadHistoricalPromptSet('v2');
+  const v3 = loadHistoricalPromptSet('v3');
 
+  /** The v3 digests, as `VERSIONS.md` recorded them while v3 was current and as the r3 capture's pre-flight and streams carry them. */
+  const V3_DIGESTS = {
+    reader: 'd35043566ce39aa369b1d71466328ba5b991a0f2b0fc900cf1c6ce0d3b4ad5f1',
+    prosecutor: '148f12a94231128edbd2224ca6d130d859b372b825bd16af7260d9c5e41a7e54',
+    adjudicator: '9292026f228fab2623970912000f994452056a49194221a19d9d55e85029c998',
+  };
   /** The v2 digests, as `VERSIONS.md` recorded them while v2 was current and as the r2 capture's streams carry them. */
   const V2_DIGESTS = {
     reader: '4d21d2b93df0e23b5ae6d95987d9c72ef167bc01d03cb48f7eb742ade2f3ed6e',
@@ -467,25 +475,46 @@ describe('the v3 prompt set tells every role to copy the fence hash; v2 is kept 
     adjudicator: 'f38ba1f0cf217904f63501300d14a925928ed0eb929b4fb6c83d5d72e798a46a',
   };
 
-  it('v3 is current; v1 and v2 are the kept sets, each read from its own literal paths', () => {
-    expect(CURRENT_PROMPT_SET_VERSION).toBe('v3');
-    expect(HISTORICAL_PROMPT_SET_VERSIONS).toEqual(['v1', 'v2']);
+  /**
+   * The one-line delivery instruction every set up to v3 ended with, and the
+   * paragraph v4 ends with instead: r3's prosecutor (2026-10-18) answered as a
+   * fenced text block under the one-liner and never called the StructuredOutput
+   * tool, so the launch failed with the committed zero retries
+   * (`CHECKPOINT-opus55-s002-capture-r3.md`). The paragraph names the tool
+   * for the CLI route and keeps direct JSON for the HTTP route, where no tool
+   * is offered. An instruction reduces the observed risk; it guarantees nothing.
+   */
+  const OLD_DELIVERY_LINE = 'Output the JSON object and nothing else.\n';
+  const V4_DELIVERY_PARAGRAPH =
+    'When the StructuredOutput tool is available,\n' +
+    'deliver your answer by calling it exactly once with the required JSON object\n' +
+    'as its input.\n' +
+    'Do not deliver the answer as a text message or Markdown code block.\n' +
+    'When that tool is unavailable, output the required JSON object directly,\n' +
+    'without Markdown fences or commentary.\n';
+
+  it('v4 is current; v1, v2 and v3 are the kept sets, each read from its own literal paths', () => {
+    expect(CURRENT_PROMPT_SET_VERSION).toBe('v4');
+    expect(HISTORICAL_PROMPT_SET_VERSIONS).toEqual(['v1', 'v2', 'v3']);
     for (const role of ['reader', 'prosecutor', 'adjudicator'] as const) {
+      expect(historicalPromptPath('v3', role)).toBe(join(engineRoot, 'prompts', 'history', 'v3', `${role}.md`));
       expect(historicalPromptPath('v2', role)).toBe(join(engineRoot, 'prompts', 'history', 'v2', `${role}.md`));
       expect(historicalPromptPath('v1', role)).toBe(join(engineRoot, 'prompts', 'history', 'v1', `${role}.md`));
     }
   });
 
-  it('v2 is kept byte for byte (the digests the r2 capture ran under), v1 is untouched, and v3 differs from both in every role', () => {
+  it('v3 is kept byte for byte (the digests the r3 capture ran under), v2 and v1 are untouched, and v4 differs from all three in every role', () => {
+    expect(promptHashes(v3)).toEqual(V3_DIGESTS);
     expect(promptHashes(v2)).toEqual(V2_DIGESTS);
     expect(promptHashes(v1)).toEqual(V1_DIGESTS);
     for (const role of ['reader', 'prosecutor', 'adjudicator'] as const) {
+      expect(current[role].sha256, role).not.toBe(V3_DIGESTS[role]);
       expect(current[role].sha256, role).not.toBe(V2_DIGESTS[role]);
       expect(current[role].sha256, role).not.toBe(V1_DIGESTS[role]);
     }
   });
 
-  it('every v3 prompt carries the hash instruction, in words v1 and v2 do not have, and still ends as the schema route expects', () => {
+  it('every v3 and v4 prompt carries the hash instruction, in words v1 and v2 do not have; v3 still ends with the one-line delivery instruction, v4 with the paragraph', () => {
     for (const role of ['reader', 'prosecutor', 'adjudicator'] as const) {
       for (const phrase of [
         '## A quote carries its document\'s hash',
@@ -497,23 +526,49 @@ describe('the v3 prompt set tells every role to copy the fence hash; v2 is kept 
         'never empty',
       ]) {
         expect(current[role].text, `${role}: ${phrase}`).toContain(phrase);
+        expect(v3[role].text, `v3 ${role}: ${phrase}`).toContain(phrase);
         expect(v2[role].text, `v2 ${role} lacks: ${phrase}`).not.toContain(phrase);
         expect(v1[role].text, `v1 ${role} lacks: ${phrase}`).not.toContain(phrase);
       }
-      expect(current[role].text.trimEnd().endsWith('Output the JSON object and nothing else.'), role).toBe(true);
+      expect(v3[role].text.endsWith('\n' + OLD_DELIVERY_LINE), role).toBe(true);
+      expect(current[role].text.endsWith('\n' + V4_DELIVERY_PARAGRAPH), role).toBe(true);
       expect(current[role].text, role).not.toMatch(/CSRD-S-\d{3}/);
     }
     // The adjudicator's pin rule no longer contradicts the instruction: the quote hash is the one hash it writes.
     expect(current.adjudicator.text).toContain('The one hash you write is a quote\'s `sha256Normalized`');
+    expect(v3.adjudicator.text).toContain('The one hash you write is a quote\'s `sha256Normalized`');
     expect(current.adjudicator.text).not.toContain('Do not emit hashes, closure identities');
     expect(v2.adjudicator.text).toContain('Do not emit hashes, closure identities');
   });
 
-  it('the identity moves with the set: v1, v2 and v3 derive three pipelines under one configuration', () => {
+  it('v4 replaces the one-line delivery instruction with the paragraph naming the StructuredOutput tool, in words no kept set has, and changes nothing else: v3 with that one line replaced is v4', () => {
+    for (const role of ['reader', 'prosecutor', 'adjudicator'] as const) {
+      for (const phrase of [
+        'When the StructuredOutput tool is available',
+        'deliver your answer by calling it exactly once',
+        'Do not deliver the answer as a text message or Markdown code block.',
+        'When that tool is unavailable, output the required JSON object directly',
+        'without Markdown fences or commentary.',
+      ]) {
+        expect(current[role].text, `${role}: ${phrase}`).toContain(phrase);
+        for (const [label, kept] of [['v1', v1], ['v2', v2], ['v3', v3]] as const) {
+          expect(kept[role].text, `${label} ${role} lacks: ${phrase}`).not.toContain(phrase);
+        }
+      }
+      // The old line is gone from v4 and occurs exactly once in v3 (the positive control); the paragraph occurs exactly once in v4.
+      expect(current[role].text, role).not.toContain(OLD_DELIVERY_LINE.trimEnd());
+      expect(v3[role].text.split(OLD_DELIVERY_LINE).length - 1, role).toBe(1);
+      expect(current[role].text.split(V4_DELIVERY_PARAGRAPH).length - 1, role).toBe(1);
+      // Nothing else moved: the kept v3 file with its last line replaced is the v4 file, character for character.
+      expect(current[role].text, role).toBe(v3[role].text.replace(OLD_DELIVERY_LINE, V4_DELIVERY_PARAGRAPH));
+    }
+  });
+
+  it('the identity moves with the set: v1, v2, v3 and v4 derive four pipelines under one configuration', () => {
     const closure = fixtureClosure();
     const of = (prompts: typeof current) => pipelineVersionFor({ prompts, config: DEFAULT_ROLE_CONFIG, closure });
-    const [underV1, underV2, underV3] = [of(v1), of(v2), of(current)];
-    for (const identity of [underV1, underV2, underV3]) expect(identity).toMatch(/^pipeline-v3-[0-9a-f]{64}$/);
-    expect(new Set([underV1, underV2, underV3]).size).toBe(3);
+    const [underV1, underV2, underV3, underV4] = [of(v1), of(v2), of(v3), of(current)];
+    for (const identity of [underV1, underV2, underV3, underV4]) expect(identity).toMatch(/^pipeline-v3-[0-9a-f]{64}$/);
+    expect(new Set([underV1, underV2, underV3, underV4]).size).toBe(4);
   });
 });

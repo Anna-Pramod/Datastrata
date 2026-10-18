@@ -123,4 +123,9 @@ quotes as though they were your reasoning.
    document's fence line as the section above says: that is the document's
    identity as the pipeline stated it to you, not a pin you compute.
 
-Output the JSON object and nothing else.
+When the StructuredOutput tool is available,
+deliver your answer by calling it exactly once with the required JSON object
+as its input.
+Do not deliver the answer as a text message or Markdown code block.
+When that tool is unavailable, output the required JSON object directly,
+without Markdown fences or commentary.

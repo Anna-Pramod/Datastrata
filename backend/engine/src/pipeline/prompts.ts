@@ -180,17 +180,28 @@ export function loadPromptSet(dir?: string): PromptSet {
  *         prosecutor and the adjudicator distinguish a challenge the closure
  *         can carry from a document a judgment genuinely needs; the reader is
  *         byte-identical to v1 (`HANDOFF-2026-10-18-s002-scope-vs-timing.md`)
- *     v3  the set in `prompts/verification/` today: every role is told to
- *         copy a quote's `sha256Normalized` from its document's fence line,
- *         after r2 returned 120 quotes with the field empty and was refused
- *         at assembly (`CHECKPOINT-opus55-s002-capture-r2.md`); all three
- *         files change, the reader included
+ *     v3  the set the third S-002 capture (r3, 2026-10-18) ran under: every
+ *         role is told to copy a quote's `sha256Normalized` from its
+ *         document's fence line, after r2 returned 120 quotes with the field
+ *         empty and was refused at assembly
+ *         (`CHECKPOINT-opus55-s002-capture-r2.md`); all three files change,
+ *         the reader included
+ *     v4  the set in `prompts/verification/` today: the one-line delivery
+ *         instruction every earlier set ended with ("Output the JSON object
+ *         and nothing else.") is replaced by a paragraph naming the
+ *         StructuredOutput tool — call it exactly once where it is offered,
+ *         output the JSON object directly where it is not — after r3's
+ *         prosecutor answered as a fenced text block, never called the tool,
+ *         and the launch failed under the committed zero structured-output
+ *         retries (`CHECKPOINT-opus55-s002-capture-r3.md`); nothing else in
+ *         the three files changes, and the HTTP route, which offers no tool,
+ *         keeps its direct JSON
  */
-export const CURRENT_PROMPT_SET_VERSION = 'v3';
+export const CURRENT_PROMPT_SET_VERSION = 'v4';
 
-export type HistoricalPromptSetVersion = 'v1' | 'v2';
+export type HistoricalPromptSetVersion = 'v1' | 'v2' | 'v3';
 
-export const HISTORICAL_PROMPT_SET_VERSIONS: readonly HistoricalPromptSetVersion[] = ['v1', 'v2'];
+export const HISTORICAL_PROMPT_SET_VERSIONS: readonly HistoricalPromptSetVersion[] = ['v1', 'v2', 'v3'];
 
 /** A superseded set's file for one role: literal paths, for the same reason `defaultPromptPath` uses them. */
 export function historicalPromptPath(version: HistoricalPromptSetVersion, role: RoleName): string {
@@ -212,6 +223,15 @@ export function historicalPromptPath(version: HistoricalPromptSetVersion, role: 
           return fileURLToPath(new URL('../../prompts/history/v2/prosecutor.md', import.meta.url));
         case 'adjudicator':
           return fileURLToPath(new URL('../../prompts/history/v2/adjudicator.md', import.meta.url));
+      }
+    case 'v3':
+      switch (role) {
+        case 'reader':
+          return fileURLToPath(new URL('../../prompts/history/v3/reader.md', import.meta.url));
+        case 'prosecutor':
+          return fileURLToPath(new URL('../../prompts/history/v3/prosecutor.md', import.meta.url));
+        case 'adjudicator':
+          return fileURLToPath(new URL('../../prompts/history/v3/adjudicator.md', import.meta.url));
       }
   }
 }
