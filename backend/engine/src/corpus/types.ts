@@ -96,6 +96,16 @@ export interface CorpusDocument {
    * added only where a signature needs it, with its justification.
    */
   operativeRanges?: OperativeRange[];
+  /**
+   * Other published forms of this document's identity a role might use to
+   * name it — a consolidated CELEX code, an ELI — recorded so that a reference
+   * in one of them resolves to this document rather than reading as a document
+   * the corpus does not hold (`pipeline/document-reference.ts`). Optional and
+   * absent by default; unique across the index and never equal to a document
+   * id (`verifyCorpusIntegrity`). Not part of any closure hash: it is how the
+   * document may be *named*, and says nothing about what it *is*.
+   */
+  aliases?: string[];
   edges: CorpusEdge[];
 }
 

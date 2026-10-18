@@ -55,6 +55,7 @@ import {
   type ClosurePolicy,
 } from '../corpus/closure';
 import type { CorpusDocument, CorpusIndex } from '../corpus/types';
+import { resolveDocumentReference, type DocumentReferenceResolution } from './document-reference';
 import type { AuthorisedCorpus } from '../corpus/authority';
 import { pinnedStandingFor, standingMapFor, type DocumentStanding } from '../corpus/standing';
 import type { KnowledgePack, TemporalStanding } from '../types';
@@ -638,6 +639,22 @@ export class EntitledClosure {
    */
   corpusHolds(docId: string): boolean {
     return this.#source.index.documents.some((document) => document.docId === docId);
+  }
+
+  /**
+   * What a reference a role used means, against the index: a document id or
+   * a declared alias resolves to the document it names; anything else is
+   * unknown, or ambiguous, and said so. Nothing is inferred from the shape of
+   * the reference.
+   *
+   * The companion of `corpusHolds`, not a replacement for it: `corpusHolds`
+   * and `entitled` keep speaking exact ids, so this answers identity and
+   * hands out nothing — no document, no text, no edge. The gap seam asks it
+   * before it classifies, so a recognisable name for a held document cannot
+   * read as a document the corpus lacks (`document-reference.ts`).
+   */
+  resolveDocumentReference(reference: string): DocumentReferenceResolution {
+    return resolveDocumentReference(this.#source.index.documents, reference);
   }
 
   /**

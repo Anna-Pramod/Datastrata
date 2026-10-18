@@ -63,10 +63,13 @@ import { renderReaderInput, readerInputFor } from '../src/pipeline/reader';
 import { featuresFromRequirement } from '../src/verification/features';
 import { ADVERSE_COVERAGE, coverageVerdictSchema } from '../src/verification/result';
 import { sha256Hex } from '../src/corpus/hash';
+import { parseCorpusIndex } from '../src/corpus/schema';
 import type { AuthoredRequirement, Condition } from '../src/types';
 import {
   docText,
   fixtureAuthorisedCorpus,
+  fixtureCorpus,
+  fixtureIndex,
   fixtureRenderContext,
   fixtureRequirement,
   lensFromRequest,
@@ -1213,5 +1216,91 @@ describe('the closure renderer stays shared', () => {
     // against `'closure.documents()'` — as this line first did — proved only
     // that `toContain` works.
     expect(strip(readFileSync('src/pipeline/entitlement.ts', 'utf8'))).toContain('.documents()');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The identifier a halting prosecutor uses is resolved through declared metadata
+// ---------------------------------------------------------------------------
+
+describe('a prosecutor naming a held document by a declared alias halts on a closure_gap over its real id', () => {
+  const requirement = fixtureRequirement();
+
+  /** The fixture world with `CELEX-A` declared for the entitled DOC-A and `CELEX-D` for the unreached DOC-D. */
+  function aliasedWorld() {
+    const base = fixtureIndex();
+    const aliasesFor: Record<string, string[]> = { 'DOC-A': ['CELEX-A'], 'DOC-D': ['CELEX-D'] };
+    const index = parseCorpusIndex({
+      ...base,
+      documents: base.documents.map((document) =>
+        document.docId in aliasesFor ? { ...document, aliases: aliasesFor[document.docId] } : document,
+      ),
+    });
+    const aliasedCorpus = fixtureAuthorisedCorpus(fixtureCorpus(index));
+    const closure = EntitledClosure.forSources(aliasedCorpus, fixtureRegister(), fixtureSourceUniverse(), ['SRC-100']);
+    return { corpus: aliasedCorpus, closure };
+  }
+
+  function pipelineInput(runner: Parameters<typeof runVerificationPipeline>[0]['runner']) {
+    const world = aliasedWorld();
+    return {
+      packId: 'testpack',
+      requirementId: requirement.id,
+      requirement,
+      renderContext: ctxRender,
+      closure: world.closure,
+      corpus: world.corpus,
+      prompts,
+      config: { ...DEFAULT_ROLE_CONFIG, prosecutorCount: 3 },
+      runner,
+    };
+  }
+
+  function haltingRunner(docId: string) {
+    return stubRunner((request) =>
+      request.role === 'reader'
+        ? JSON.stringify(stubReaderOutput())
+        : request.role === 'prosecutor'
+          ? request.index === 0
+            ? JSON.stringify({
+                lens: lensFromRequest(request),
+                coverage: [],
+                challenges: [],
+                gaps: [{ kind: 'closure_gap', docId, detail: 'the prosecutor needed the annex' }],
+              })
+            : JSON.stringify(stubProsecutorOutput(lensFromRequest(request)))
+          : JSON.stringify({ adjudications: [], gaps: [] }),
+    );
+  }
+
+  it('files the gap under the corpus’s own id, keeps the role’s identifier in the detail, and gives no ingest guidance', async () => {
+    // The S-002 capture's shape: the corpus holds the document and declares the
+    // form the role used; the old byte-for-byte comparison filed a corpus_gap
+    // telling a human to ingest a document already ingested.
+    const outcome = await runVerificationPipeline(pipelineInput(haltingRunner('CELEX-D')));
+    expect(outcome.halted).toBe(true);
+    expect(outcome.tail.gaps).toHaveLength(1);
+    const gap = outcome.tail.gaps[0]!;
+    expect(gap.kind).toBe('closure_gap');
+    expect(gap.docId).toBe('DOC-D');
+    expect(gap.detail).toContain('the prosecutor needed the annex');
+    expect(gap.detail).toContain('CELEX-D');
+    expect(gap.detail).not.toContain('ingest');
+  });
+
+  it('an undeclared scheme over the same suffix stays a corpus_gap under the reference: nothing is inferred', async () => {
+    const outcome = await runVerificationPipeline(pipelineInput(haltingRunner('UNRELATED-D')));
+    expect(outcome.tail.gaps.map((gap) => [gap.kind, gap.docId])).toEqual([['corpus_gap', 'UNRELATED-D']]);
+  });
+
+  it('refuses the run, naming the role, when the declared alias is of a document the role was handed', async () => {
+    await expect(runVerificationPipeline(pipelineInput(haltingRunner('CELEX-A')))).rejects.toMatchObject({
+      name: 'RoleOutputError',
+      role: 'prosecutor',
+      index: 0,
+    });
+    await expect(runVerificationPipeline(pipelineInput(haltingRunner('CELEX-A')))).rejects.toThrow(
+      /cannot be a gap/,
+    );
   });
 });

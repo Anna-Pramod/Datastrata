@@ -1,5 +1,5 @@
 {
-  "updated": "2026-09-05",
+  "updated": "2026-10-18",
   "documents": [
     {
       "docId": "DOC-32013L0034",
@@ -68,6 +68,9 @@
           "justification": "Article 29a is the provision CSRD-S-002 cites (locator Article 29a(1)): the consolidated sustainability reporting obligation and its thresholds. The range ends at the CHAPTER 6a heading so that heading stays outside it."
         }
       ],
+      "aliases": [
+        "CELEX-32013L0034"
+      ],
       "edges": [
         {
           "edgeId": "EDGE-32013L0034-amendedBy-32026L0470",
@@ -99,6 +102,9 @@
       "contentSelector": "#text",
       "artefactAuthenticity": "official_consolidation",
       "nonOperativeSections": [],
+      "aliases": [
+        "CELEX-32022L2464"
+      ],
       "edges": []
     },
     {
@@ -118,6 +124,9 @@
       "contentSelector": "#text",
       "artefactAuthenticity": "official_consolidation",
       "nonOperativeSections": [],
+      "aliases": [
+        "CELEX-32023R2772"
+      ],
       "edges": []
     },
     {
@@ -150,6 +159,9 @@
           ],
           "justification": "Point (5) of Article 2 of the Omnibus is the amending instruction for Article 29a of Directive 2013/34/EU, whose replacement text is what the consolidation now carries. Operative text of the amending act; declared for CSRD-S-002."
         }
+      ],
+      "aliases": [
+        "CELEX-32026L0470"
       ],
       "edges": []
     }

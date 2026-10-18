@@ -91,6 +91,28 @@ const operativeRange = z
   })
   .strict();
 
+/**
+ * Declared aliases, canonical like `nonOperativeSections`: already trimmed,
+ * non-empty, no duplicates within the document. Cross-document uniqueness and
+ * the ban on an alias that is some document's id are whole-index questions,
+ * asked in `verifyCorpusIntegrity`.
+ */
+const aliases = z.array(z.string()).superRefine((entries, ctx) => {
+  const seen = new Set<string>();
+  entries.forEach((alias, i) => {
+    if (alias.length === 0 || alias !== alias.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `aliases[${i}]: an alias must be non-empty and already trimmed`,
+      });
+    }
+    if (seen.has(alias)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `aliases[${i}]: "${alias}" is declared more than once` });
+    }
+    seen.add(alias);
+  });
+});
+
 const corpusDocument = z
   .object({
     docId,
@@ -108,6 +130,7 @@ const corpusDocument = z
     artefactAuthenticity: artefactAuthenticitySchema,
     nonOperativeSections,
     operativeRanges: z.array(operativeRange).optional(),
+    aliases: aliases.optional(),
     edges: z.array(corpusEdge),
   })
   .strict()
@@ -249,6 +272,22 @@ export function verifyCorpusIntegrity(index: CorpusIndex): void {
   for (const d of index.documents) {
     for (const e of d.edges) {
       if (!docIds.has(e.to)) problems.push(`${e.edgeId}: points at unknown document ${e.to}`);
+    }
+  }
+
+  // An alias is another name for exactly one document. One that is also a
+  // document id, or that two documents declare, would make a reference resolve
+  // to two documents at once — the ambiguity the resolver exists to report, but
+  // authored into the index rather than arriving from a role.
+  const aliasOwners = new Map<string, string>();
+  for (const d of index.documents) {
+    for (const alias of d.aliases ?? []) {
+      if (docIds.has(alias)) problems.push(`${d.docId}: alias ${alias} is a document id`);
+      const owner = aliasOwners.get(alias);
+      if (owner !== undefined && owner !== d.docId) {
+        problems.push(`${d.docId}: alias ${alias} is already declared by ${owner}`);
+      }
+      aliasOwners.set(alias, d.docId);
     }
   }
 

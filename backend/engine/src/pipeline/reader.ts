@@ -142,11 +142,17 @@ export type ReaderDocumentRequest =
  * anyway. The refusal is classified in the same step, so the caller never holds
  * an unexplained "no".
  */
-export function requestDocument(closure: EntitledClosure, docId: string): ReaderDocumentRequest {
+export function requestDocument(closure: EntitledClosure, reference: string): ReaderDocumentRequest {
+  // The reference is resolved the way the gap seam resolves it, so a request
+  // and a halt agree about what a name means. Entitlement is still decided on
+  // the exact id: resolution says which document was named, `entitled` says
+  // whether that document may be opened, and only the second grants anything.
+  const resolution = closure.resolveDocumentReference(reference);
+  const docId = resolution.outcome === 'resolved' ? resolution.docId : reference;
   if (!closure.entitled(docId)) {
     return {
       granted: false,
-      gap: gapForUnreachableDocument(closure, docId, `the reader requested ${docId}`),
+      gap: gapForUnreachableDocument(closure, reference, `the reader requested ${reference}`),
     };
   }
   return { granted: true, document: closure.document(docId) };

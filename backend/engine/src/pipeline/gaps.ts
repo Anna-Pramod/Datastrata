@@ -45,6 +45,7 @@
  */
 
 import type { VerificationResult } from '../verification/result';
+import { AmbiguousDocumentReferenceError } from './document-reference';
 import type { EntitledClosure } from './entitlement';
 
 /**
@@ -81,9 +82,11 @@ export class EntitledDocumentIsNotAGapError extends Error {
   constructor(
     readonly docId: string,
     readonly closureSha256: string,
+    /** How the role named it, when that differs from the id. */
+    readonly reference: string = docId,
   ) {
     super(
-      `${docId} is inside the entitled closure ${closureSha256}, so it cannot be a gap: the role was handed this document's text, and a halt naming it would send a human to ingest a document the corpus already holds`,
+      `${docId}${reference === docId ? '' : ` (named as ${reference})`} is inside the entitled closure ${closureSha256}, so it cannot be a gap: the role was handed this document's text, and a halt naming it would send a human to ingest a document the corpus already holds`,
     );
     this.name = 'EntitledDocumentIsNotAGapError';
   }
@@ -112,17 +115,46 @@ export function classifyUnreachableDocument(
  * `detail` states the answer as well as the fact, because the two kinds are
  * repaired by different people doing different things and a reader of
  * `gaps[]` should not have to know the taxonomy to act on one.
+ *
+ * **The reference is resolved before it is classified.** A role names a
+ * document in its own words; `EntitledClosure.resolveDocumentReference` says
+ * which held document, if any, those words identify. A resolved reference is
+ * classified under the document's own id — so a held document named by a
+ * declared alias is the `closure_gap` it is, never a `corpus_gap` whose
+ * "ingest it" would send a human after a document already ingested — and the
+ * detail keeps the role's identifier beside it. An unknown reference, one no
+ * id or declared alias identifies, is a `corpus_gap` under the reference
+ * itself, which is all that can honestly be said of it. An ambiguous one is
+ * refused, because choosing for the role would be the engine deciding what
+ * the role meant.
  */
 export function gapForUnreachableDocument(
   closure: EntitledClosure,
-  docId: string,
+  reference: string,
   context?: string,
 ): DocumentGap {
-  const kind = classifyUnreachableDocument(closure, docId);
-  const because =
-    kind === 'closure_gap'
-      ? `the corpus holds ${docId}, but the entitled closure ${closure.sha256} does not reach it under the traversal policy in force; record the relationship that connects it or widen the policy, then restart verification`
-      : `the corpus holds no document ${docId} at all; ingest it, then restart verification`;
+  const resolution = closure.resolveDocumentReference(reference);
+  if (resolution.outcome === 'ambiguous') {
+    throw new AmbiguousDocumentReferenceError(reference, resolution.candidates);
+  }
+
+  let kind: 'corpus_gap' | 'closure_gap';
+  let docId: string;
+  let because: string;
+  if (resolution.outcome === 'unknown') {
+    kind = 'corpus_gap';
+    docId = reference;
+    because = `no document id or declared alias in the corpus identifies ${reference}; if it names a document the corpus should hold, ingest it (or declare the alias), then restart verification`;
+  } else {
+    docId = resolution.docId;
+    if (closure.entitled(docId)) throw new EntitledDocumentIsNotAGapError(docId, closure.sha256, reference);
+    kind = classifyUnreachableDocument(closure, docId);
+    const named = docId === reference ? '' : ` (named by the role as ${reference})`;
+    because =
+      kind === 'closure_gap'
+        ? `the corpus holds ${docId}${named}, but the entitled closure ${closure.sha256} does not reach it under the traversal policy in force; record the relationship that connects it or widen the policy, then restart verification`
+        : `the corpus holds no document ${docId}${named} at all; ingest it, then restart verification`;
+  }
   return {
     kind,
     docId,
