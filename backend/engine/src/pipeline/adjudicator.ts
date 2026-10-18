@@ -56,6 +56,7 @@ import { gapForUnreachableDocument, type DocumentGap } from './gaps';
 import type { RolePrompt } from './prompts';
 import { createAgentRole } from './agent-role';
 import { parseRoleOutput, type AdjudicatorOutput, type ReaderOutput } from './role-outputs';
+import { assertAdjudicatorQuotesPinned } from './quote-pins';
 import { RoleOutputError, type RoleExecution } from './roles';
 import type { AgentRunner } from './runner';
 import type { ChallengeSeed, CoverageTable } from './prosecutors';
@@ -654,8 +655,14 @@ export async function runAdjudicator(run: AdjudicatorRun): Promise<AdjudicatorOu
     prompt: run.prompt,
     runner: run.runner,
     renderInput: renderAdjudicatorInput,
+    // Shape, then the adjudication rules, then every verdict quote's docId and
+    // hash against the closure — refused here, before assembly (`quote-pins.ts`).
     parse: (raw) =>
-      assertAdjudication(parseRoleOutput('adjudicator', index, raw), input.challenges, index),
+      assertAdjudicatorQuotesPinned(
+        assertAdjudication(parseRoleOutput('adjudicator', index, raw), input.challenges, index),
+        input.closure,
+        index,
+      ),
   });
 
   const execution = await role.run(input);

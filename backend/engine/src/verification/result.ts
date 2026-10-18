@@ -339,8 +339,13 @@ function repeatedIds(ids: readonly string[]): string[] {
  * items where the reasoning is hardest to follow by eye. The switch is
  * exhaustive over `EvidenceItem`, so adding a kind that carries a quote fails
  * `tsc` here rather than silently exempting it.
+ *
+ * Exported for the role seams (`pipeline/quote-pins.ts`), which check the
+ * same quotes against the closure's pins before the next role launches: one
+ * enumeration, two gates, so the seam and the record boundary cannot come to
+ * disagree about which quotes an item carries.
  */
-function quotesOf(item: EvidenceItem, label: string): Array<{ quote: QuoteEvidence; path: string }> {
+export function quotesOf(item: EvidenceItem, label: string): Array<{ quote: QuoteEvidence; path: string }> {
   switch (item.kind) {
     case 'quote':
       return [{ quote: item, path: label }];

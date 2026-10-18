@@ -176,16 +176,21 @@ export function loadPromptSet(dir?: string): PromptSet {
  *
  *     v1  the set every recording before 2026-10-18 was made under: the S-001
  *         replay fixtures, the two probes, the rehearsal and the S-002 capture
- *     v2  the set in `prompts/verification/` today: the prosecutor and the
- *         adjudicator distinguish a challenge the closure can carry from a
- *         document a judgment genuinely needs; the reader is byte-identical
- *         to v1 (`HANDOFF-2026-10-18-s002-scope-vs-timing.md`)
+ *     v2  the set the second S-002 capture (r2, 2026-10-18) ran under: the
+ *         prosecutor and the adjudicator distinguish a challenge the closure
+ *         can carry from a document a judgment genuinely needs; the reader is
+ *         byte-identical to v1 (`HANDOFF-2026-10-18-s002-scope-vs-timing.md`)
+ *     v3  the set in `prompts/verification/` today: every role is told to
+ *         copy a quote's `sha256Normalized` from its document's fence line,
+ *         after r2 returned 120 quotes with the field empty and was refused
+ *         at assembly (`CHECKPOINT-opus55-s002-capture-r2.md`); all three
+ *         files change, the reader included
  */
-export const CURRENT_PROMPT_SET_VERSION = 'v2';
+export const CURRENT_PROMPT_SET_VERSION = 'v3';
 
-export type HistoricalPromptSetVersion = 'v1';
+export type HistoricalPromptSetVersion = 'v1' | 'v2';
 
-export const HISTORICAL_PROMPT_SET_VERSIONS: readonly HistoricalPromptSetVersion[] = ['v1'];
+export const HISTORICAL_PROMPT_SET_VERSIONS: readonly HistoricalPromptSetVersion[] = ['v1', 'v2'];
 
 /** A superseded set's file for one role: literal paths, for the same reason `defaultPromptPath` uses them. */
 export function historicalPromptPath(version: HistoricalPromptSetVersion, role: RoleName): string {
@@ -198,6 +203,15 @@ export function historicalPromptPath(version: HistoricalPromptSetVersion, role: 
           return fileURLToPath(new URL('../../prompts/history/v1/prosecutor.md', import.meta.url));
         case 'adjudicator':
           return fileURLToPath(new URL('../../prompts/history/v1/adjudicator.md', import.meta.url));
+      }
+    case 'v2':
+      switch (role) {
+        case 'reader':
+          return fileURLToPath(new URL('../../prompts/history/v2/reader.md', import.meta.url));
+        case 'prosecutor':
+          return fileURLToPath(new URL('../../prompts/history/v2/prosecutor.md', import.meta.url));
+        case 'adjudicator':
+          return fileURLToPath(new URL('../../prompts/history/v2/adjudicator.md', import.meta.url));
       }
   }
 }

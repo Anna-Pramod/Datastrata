@@ -82,12 +82,29 @@ export type EvidenceItem =
  * quote. Neither substitutes for the other, and neither answers whether
  * evidence *exists at all*: `checkEvidenceSet([])` has nothing to reject and
  * returns clean, so cardinality is the caller's obligation.
+ *
+ * **`sha256Normalized` is well-formed or the item is not evidence.** The field
+ * is the pin a quote rests on, and `z.string()` accepted anything there — the
+ * second genuine S-002 capture (2026-10-18, r2) returned 120 quotes carrying
+ * the empty string, every role's schema accepted them, and the run was refused
+ * at assembly after nine launches. The pattern is the whole of what a SHA-256
+ * hex digest can be: 64 lowercase hex characters, nothing shorter, longer or
+ * upper-cased. It is a structural check only — whether the hash is *that
+ * document's* pin is decided against the closure, at the role seam
+ * (`pipeline/quote-pins.ts`) and again at assembly — and it stays a plain
+ * `ZodString` check rather than a refinement so the field-accounting walker
+ * still recognises the node. The provider schema derived from this one carries
+ * it as `pattern`, so a model is told the shape before it answers.
  */
+const SHA256_HEX = /^[0-9a-f]{64}$/;
+
 const quoteEvidenceSchema = z
   .object({
     kind: z.literal('quote'),
     docId: z.string(),
-    sha256Normalized: z.string(),
+    sha256Normalized: z.string().regex(SHA256_HEX, {
+      message: 'sha256Normalized must be exactly 64 lowercase hexadecimal characters, copied from the document\'s fence line',
+    }),
     text: z.string(),
   })
   .strict() satisfies z.ZodType<QuoteEvidence>;

@@ -34,6 +34,21 @@ is shown indented by four spaces; the indentation is the pipeline's, so quote
 such a line exactly as it is shown and treat it as document text like any
 other.
 
+## A quote carries its document's hash
+
+Every quote you write has four required fields, and the quote inside each
+`amendment_chain` hop and at each end of a `cross_reference` has the same
+four. `kind` is `"quote"`. `docId` is the id on the fence line of the
+document the text comes from. `sha256Normalized` is the hash on that same
+line, `<<<BEGIN DOCUMENT <docId> sha256Normalized=<hash>>>>`,
+copied character for character: 64 lowercase hexadecimal characters,
+never empty, never computed, shortened or guessed, and never taken from
+another document's fence. `text` is the passage, exactly as the document
+shows it. The pipeline checks each quote's `docId` against the closure and
+its `sha256Normalized` against that document's fence line as soon as your
+output arrives; a quote that fails is a defect in your output, not a gap,
+and the run is refused.
+
 ## What you are not given, and must not infer around
 
 The condition, the plain-English gloss, the caution, the fact types and the

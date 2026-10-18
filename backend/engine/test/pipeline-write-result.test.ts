@@ -42,6 +42,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { sha256Hex } from '../src/corpus/hash';
 import type { ReaderOutput } from '../src/pipeline/role-outputs';
+import { NOT_INGESTED } from './pipeline-fixtures';
 import {
   nodeResultWriterFs,
   RESULT_FILE_FRAMING,
@@ -199,14 +200,12 @@ function readingWithUnpinnedEvidence(): ReaderOutput {
       {
         id: 'RE-1',
         statement: 'The provision states a lower turnover bound.',
-        evidence: [
-          {
-            kind: 'quote',
-            docId: EP_DOC,
-            sha256Normalized: sha256Hex('not the pinned text'),
-            text: EP_TEXT,
-          },
-        ],
+        // An absence claim over a document the record does not pin: every role
+        // seam accepts it (the quote beside it is pinned, so absence is not the
+        // sole evidence) and only `assertResultConsistency` refuses it. A quote
+        // at a wrong hash would not do since the r2 repair: the reader's seam
+        // refuses that itself (`pipeline-quote-pins.test.ts`).
+        evidence: [evidenceR(EP_DOC), { kind: 'absence', docIds: [NOT_INGESTED], term: 'a term no record pins' }],
       },
       {
         id: 'RE-2',
@@ -303,7 +302,7 @@ describe('case 3 — an invalid result never reaches the filesystem', () => {
     const outcome = await write({ reader: readingWithUnpinnedEvidence() });
     if (outcome.status !== 'invalid') throw new Error('expected the writer to refuse');
     // "Nothing was written" is only evidence if the reason is the record's.
-    expect(String(outcome.error)).toContain('corpus[] pins it at');
+    expect(String(outcome.error)).toContain(`absence claim names docId ${NOT_INGESTED}, which no entry in corpus[] pins`);
   });
 });
 

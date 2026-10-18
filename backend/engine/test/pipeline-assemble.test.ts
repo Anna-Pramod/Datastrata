@@ -29,7 +29,6 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { sha256Hex } from '../src/corpus/hash';
 import { assembleVerificationResult, ResultAssemblyError } from '../src/pipeline/assemble';
 import { canonicaliseGapBearingRun } from '../src/pipeline/orchestrate';
 import type { Requirement } from '../src/types';
@@ -423,8 +422,11 @@ describe('assembly refuses rather than repairs', () => {
   });
 
   it('refuses evidence that does not rest on the corpus this record pins', async () => {
-    // Cross-field only: the role seams check evidence kinds and cardinality and
-    // nothing checks a quote's hash against the pins until the record exists.
+    // Cross-field only: the role seams check evidence kinds, cardinality and —
+    // since the r2 repair — every quote's docId and hash against the closure
+    // (`quote-pins.ts`, held in `pipeline-quote-pins.test.ts`), so a quote at a
+    // wrong hash no longer reaches assembly. An absence claim over a document
+    // the record does not pin is what no seam checks until the record exists.
     const error = await refusalFrom(
       assembleFromRun({
         reader: readingOutput({
@@ -432,7 +434,7 @@ describe('assembly refuses rather than repairs', () => {
             {
               id: 'RE-1',
               statement: 'The provision states a lower turnover bound.',
-              evidence: [{ kind: 'quote', docId: 'DOC-A', sha256Normalized: sha256Hex('not the pinned text'), text: EP_TEXT }],
+              evidence: [evidenceR('DOC-A'), { kind: 'absence', docIds: [NOT_INGESTED], term: 'a term no record pins' }],
             },
             {
               id: 'RE-2',
@@ -445,8 +447,8 @@ describe('assembly refuses rather than repairs', () => {
     );
     expect(error).toBeInstanceOf(ResultConsistencyError);
     const problems = (error as ResultConsistencyError).problems.join(' ');
-    expect(problems).toContain('reading.elements[0] (RE-1).evidence[0]');
-    expect(problems).toContain('corpus[] pins it at');
+    expect(problems).toContain('reading.elements[0] (RE-1).evidence[1]');
+    expect(problems).toContain(`absence claim names docId ${NOT_INGESTED}, which no entry in corpus[] pins`);
   });
 
   it('refuses a gap that records a source id in the field documents own', async () => {

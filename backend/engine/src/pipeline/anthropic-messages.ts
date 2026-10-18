@@ -93,7 +93,9 @@ type JsonSchema = Record<string, unknown>;
  * outside the subset the reference lists — array `minItems` above 1, string
  * lengths, numeric bounds, refinements, open objects — is refused by name.
  * A converter that silently dropped a constraint would send the provider a
- * looser shape than the seam accepts and call it the same schema.
+ * looser shape than the seam accepts and call it the same schema. A string
+ * regex is forwarded as `pattern` (the quote hash's 64-hex rule rests on it),
+ * so the provider is told the shape the seam will enforce.
  */
 export function toProviderJsonSchema(schema: z.ZodTypeAny): JsonSchema {
   const def = schema._def as { typeName: string } & Record<string, unknown>;
@@ -126,12 +128,23 @@ export function toProviderJsonSchema(schema: z.ZodTypeAny): JsonSchema {
       return out;
     }
     case 'ZodString': {
-      for (const check of def['checks'] as Array<{ kind: string }>) {
+      const out: JsonSchema = { type: 'string' };
+      for (const check of def['checks'] as Array<{ kind: string; regex?: RegExp }>) {
         if (check.kind === 'min') throw new UnsupportedSchemaFeatureError('a string minLength');
         if (check.kind === 'max') throw new UnsupportedSchemaFeatureError('a string maxLength');
+        if (check.kind === 'regex' && check.regex !== undefined) {
+          // The one string constraint forwarded: a JSON-schema `pattern` is the
+          // regex's source and nothing else, so a regex carrying flags would be
+          // sent as a different (stricter or looser) pattern than the seam
+          // applies. Refused rather than approximated, as every other mismatch.
+          if (check.regex.flags !== '') throw new UnsupportedSchemaFeatureError(`a string regex with flags "${check.regex.flags}" (a JSON-schema pattern carries none)`);
+          if ('pattern' in out) throw new UnsupportedSchemaFeatureError('a second regex check on one string');
+          out['pattern'] = check.regex.source;
+          continue;
+        }
         throw new UnsupportedSchemaFeatureError(`a string ${check.kind} check`);
       }
-      return { type: 'string' };
+      return out;
     }
     case 'ZodNumber': {
       let integer = false;

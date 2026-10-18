@@ -56,6 +56,7 @@ const engineRoot = join(here, '..');
 
 describe('the prompt sets are versioned, and the kept v1 set is the one every recording so far was made under', () => {
   const v1 = loadHistoricalPromptSet('v1');
+  const v2 = loadHistoricalPromptSet('v2');
   const current = loadPromptSet();
 
   /** The v1 digests, as the S-002 capture's transcript and the S-001 recordings carry them. */
@@ -66,8 +67,9 @@ describe('the prompt sets are versioned, and the kept v1 set is the one every re
   };
 
   it('v1 is kept byte for byte: its digests are the ones the recordings carry', () => {
-    expect(HISTORICAL_PROMPT_SET_VERSIONS).toEqual(['v1']);
-    expect(CURRENT_PROMPT_SET_VERSION).toBe('v2');
+    // v2 joined the kept sets when v3 (the quote-hash instruction) became current.
+    expect(HISTORICAL_PROMPT_SET_VERSIONS).toEqual(['v1', 'v2']);
+    expect(CURRENT_PROMPT_SET_VERSION).toBe('v3');
     expect(promptHashes(v1)).toEqual(V1_DIGESTS);
     // Each kept file is a file, resolved by its own literal path.
     for (const role of ['reader', 'prosecutor', 'adjudicator'] as const) {
@@ -90,11 +92,12 @@ describe('the prompt sets are versioned, and the kept v1 set is the one every re
     for (const role of transcript.roles) expect(role.promptSha256, role.role).toBe(V1_DIGESTS[role.role]);
   });
 
-  it('v2 changes the prosecutor and the adjudicator and leaves the blind reader byte-identical', () => {
-    expect(current.reader.sha256).toBe(v1.reader.sha256);
-    expect(current.reader.text).toBe(v1.reader.text);
-    expect(current.prosecutor.sha256).not.toBe(v1.prosecutor.sha256);
-    expect(current.adjudicator.sha256).not.toBe(v1.adjudicator.sha256);
+  it('v2 changes the prosecutor and the adjudicator and leaves the blind reader byte-identical (v3, the current set, moves all three for the quote-hash rule — pipeline-quote-pins.test.ts)', () => {
+    expect(v2.reader.sha256).toBe(v1.reader.sha256);
+    expect(v2.reader.text).toBe(v1.reader.text);
+    expect(v2.prosecutor.sha256).not.toBe(v1.prosecutor.sha256);
+    expect(v2.adjudicator.sha256).not.toBe(v1.adjudicator.sha256);
+    expect(current.reader.sha256).not.toBe(v2.reader.sha256);
   });
 
   it('the v2 prosecutor distinguishes a challenge from a gap, in words v1 did not have, and still ends as the schema route expects', () => {

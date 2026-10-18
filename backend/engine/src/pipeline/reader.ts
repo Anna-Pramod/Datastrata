@@ -50,6 +50,7 @@ import {
   type PipelineGap,
 } from './gaps';
 import type { RolePrompt } from './prompts';
+import { assertReaderQuotesPinned } from './quote-pins';
 import { parseRoleOutput, type ReaderOutput } from './role-outputs';
 import { RoleOutputError, type RoleExecution } from './roles';
 import type { AgentRunner } from './runner';
@@ -299,7 +300,14 @@ export async function runBlindReader(run: BlindReaderRun): Promise<ReaderOutcome
     prompt: run.prompt,
     runner: run.runner,
     renderInput: renderReaderInput,
-    parse: (raw) => assertReaderEvidence(parseRoleOutput('reader', index, raw), index),
+    // Three gates, in order: the shape (schema, 64-hex hashes included), the
+    // evidence rule (§2.2), then every quote's docId and hash against the
+    // closure the reader was handed — so a reader quoting a document it was
+    // never shown, or at a hash that is not that document's fence hash, is
+    // refused here after one launch rather than at assembly after nine
+    // (`quote-pins.ts`).
+    parse: (raw) =>
+      assertReaderQuotesPinned(assertReaderEvidence(parseRoleOutput('reader', index, raw), index), closure, index),
   });
 
   const execution = await role.run(run.input);

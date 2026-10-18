@@ -1,0 +1,519 @@
+/**
+ * The quote-hash contract, enforced before spend.
+ *
+ * Why this file exists: the second genuine S-002 capture (2026-10-18, r2) ran
+ * nine role launches to completion and was refused at assembly because every
+ * one of its 120 quotes carried `sha256Normalized` as the empty string. Three
+ * things let that through until the last moment: the quote schema accepted any
+ * string, so the JSON schema the CLI enforced accepted `""`; no prompt said a
+ * quote must carry its document's hash; and the only pin check lived in
+ * `assertResultConsistency`, which runs after the last launch. r1's reader,
+ * under byte-identical prompt bytes, had filled every hash correctly — two
+ * behaviours, one contract that let both through.
+ *
+ * What is held here, each with its positive control (TEST-EVIDENCE-STANDARD
+ * failure modes #5 and #7): the schema refuses a hash that is not 64 lowercase
+ * hex at every quote position; the provider schema derived from it carries the
+ * same constraint; each role's seam refuses a well-formed hash that is not the
+ * closure's pin for its document, and a document outside the closure, naming
+ * the role, the path and the mismatch; a bad output stops the run before the
+ * next role launches; the v3 prompts tell every role to copy the fence hash,
+ * and the v2 set is kept byte for byte under its own version.
+ *
+ * **Synthetic fixtures throughout.** A stub runner returns outputs written
+ * here; nothing shows what a model will do with the v3 prompts. Only a live
+ * run can, and none has.
+ */
+
+import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
+import { evidenceItemSchema, type EvidenceItem, type QuoteEvidence } from '../src/corpus/evidence';
+import { sha256Hex } from '../src/corpus/hash';
+import { roleOutputJsonSchema, toProviderJsonSchema, UnsupportedSchemaFeatureError } from '../src/pipeline/anthropic-messages';
+import { DEFAULT_ROLE_CONFIG } from '../src/pipeline/config';
+import { EntitledClosure } from '../src/pipeline/entitlement';
+import { pipelineVersionFor, runVerificationPipeline } from '../src/pipeline/orchestrate';
+import {
+  CURRENT_PROMPT_SET_VERSION,
+  HISTORICAL_PROMPT_SET_VERSIONS,
+  historicalPromptPath,
+  loadHistoricalPromptSet,
+  loadPromptSet,
+  promptHashes,
+} from '../src/pipeline/prompts';
+import { qualifiedChallengeId } from '../src/pipeline/prosecutors';
+import {
+  assertAdjudicatorQuotesPinned,
+  assertProsecutorQuotesPinned,
+  assertReaderQuotesPinned,
+  quotePinProblems,
+} from '../src/pipeline/quote-pins';
+import { parseRoleOutput, type AdjudicatorOutput, type ProsecutorOutput, type ReaderOutput } from '../src/pipeline/role-outputs';
+import { RoleOutputError } from '../src/pipeline/roles';
+import {
+  docText,
+  fixtureAuthorisedCorpus,
+  fixtureRegister,
+  fixtureRenderContext,
+  fixtureRequirement,
+  fixtureSourceUniverse,
+  lensFromRequest,
+  NOT_INGESTED,
+  stubProsecutorOutput,
+  stubReaderOutput,
+  stubRunner,
+} from './pipeline-fixtures';
+
+const engineRoot = join(__dirname, '..');
+
+// ---------------------------------------------------------------------------
+// The fixture world: SRC-100's closure is {DOC-A, DOC-B, DOC-C}; DOC-Z is in
+// the corpus and outside it; NOT_INGESTED is in neither.
+// ---------------------------------------------------------------------------
+
+const corpus = fixtureAuthorisedCorpus();
+function fixtureClosure(): EntitledClosure {
+  return EntitledClosure.forSources(corpus, fixtureRegister(), fixtureSourceUniverse(), ['SRC-100']);
+}
+
+/** The pin the closure's fence line carries for a fixture document. */
+const PIN = (docId: string): string => sha256Hex(docText(docId));
+
+/** A well-formed SHA-256 that is no fixture document's pin. */
+const WRONG = '5c'.repeat(32);
+
+const TEXT = 'The operative test is stated here.';
+
+function quote(docId: string, sha256Normalized: string = PIN(docId), text: string = TEXT): QuoteEvidence {
+  return { kind: 'quote', docId, sha256Normalized, text };
+}
+
+function readerWith(evidence: EvidenceItem[]): ReaderOutput {
+  return { elements: [{ id: 'RE-STUB', statement: 'FIXTURE: a placeholder proposition.', evidence }], gaps: [] };
+}
+
+function prosecutorWith(lens: string, evidence: EvidenceItem[]): ProsecutorOutput {
+  return {
+    ...stubProsecutorOutput(lens),
+    challenges: [{ id: 'C1-fixture', lens, statement: 'FIXTURE: a placeholder challenge.', evidence }],
+  };
+}
+
+/** The challenge `prosecutorWith` raises as prosecutor 0, under the id the adjudicator is shown. */
+const RAISED = qualifiedChallengeId(0, 'C1-fixture');
+
+function adjudicatorWith(evidence: EvidenceItem[], challengeId: string = RAISED): AdjudicatorOutput {
+  return {
+    adjudications: [{ challengeId, verdict: 'CONFIRMED', resolution: 'FIXTURE: confirmed.', evidence }],
+    gaps: [],
+  };
+}
+
+/** One quote at every position a quote can occupy, all carrying `hash` for `docId`. */
+function everyPosition(docId: string, hash: string): EvidenceItem[] {
+  return [
+    quote(docId, hash),
+    { kind: 'amendment_chain', hops: [{ edgeId: 'E-1', quote: quote(docId, hash) }] },
+    { kind: 'cross_reference', edgeId: 'E-2', from: quote(docId, hash), to: quote(docId, hash) },
+  ];
+}
+
+async function rejection(promise: Promise<unknown>): Promise<RoleOutputError> {
+  try {
+    await promise;
+  } catch (error) {
+    expect(error).toBeInstanceOf(RoleOutputError);
+    return error as RoleOutputError;
+  }
+  throw new Error('expected the promise to reject with a RoleOutputError, and it resolved');
+}
+
+function caught(fn: () => unknown): RoleOutputError {
+  try {
+    fn();
+  } catch (error) {
+    expect(error).toBeInstanceOf(RoleOutputError);
+    return error as RoleOutputError;
+  }
+  throw new Error('expected a RoleOutputError, and nothing was thrown');
+}
+
+// ---------------------------------------------------------------------------
+// 1. The schema: exactly 64 lowercase hex, at every quote position
+// ---------------------------------------------------------------------------
+
+describe('the quote schema requires sha256Normalized to be exactly 64 lowercase hexadecimal characters', () => {
+  const MALFORMED: ReadonlyArray<[string, string]> = [
+    ['the empty string (the r2 shape)', ''],
+    ['63 characters', '5c'.repeat(31) + '5'],
+    ['65 characters', '5c'.repeat(32) + 'c'],
+    ['a non-hex character', 'g' + '5c'.repeat(31) + '5'],
+    ['uppercase hex', '5C'.repeat(32)],
+  ];
+
+  it.each(MALFORMED)('the reader seam refuses %s at the top level, inside an amendment-chain hop, and at both ends of a cross-reference, naming each path', (_what, hash) => {
+    const error = caught(() => parseRoleOutput('reader', 0, JSON.parse(JSON.stringify(readerWith(everyPosition('DOC-A', hash))))));
+    expect(error.role).toBe('reader');
+    const problems = error.problems.join('\n');
+    for (const path of [
+      'elements.0.evidence.0.sha256Normalized',
+      'elements.0.evidence.1.hops.0.quote.sha256Normalized',
+      'elements.0.evidence.2.from.sha256Normalized',
+      'elements.0.evidence.2.to.sha256Normalized',
+    ]) {
+      expect(problems, path).toContain(path);
+    }
+    expect(problems).toContain('64 lowercase hexadecimal');
+  });
+
+  it.each(MALFORMED)('the prosecutor and adjudicator seams refuse %s the same way, on their own paths', (_what, hash) => {
+    const prosecutor = caught(() => parseRoleOutput('prosecutor', 3, JSON.parse(JSON.stringify(prosecutorWith('stub_lens', [quote('DOC-A', hash)])))));
+    expect(prosecutor.role).toBe('prosecutor');
+    expect(prosecutor.index).toBe(3);
+    expect(prosecutor.problems.join('\n')).toContain('challenges.0.evidence.0.sha256Normalized');
+    const adjudicator = caught(() => parseRoleOutput('adjudicator', 0, JSON.parse(JSON.stringify(adjudicatorWith([quote('DOC-A', hash)])))));
+    expect(adjudicator.role).toBe('adjudicator');
+    expect(adjudicator.problems.join('\n')).toContain('adjudications.0.evidence.0.sha256Normalized');
+  });
+
+  it('positive control: 64 lowercase hex is accepted at every position, whether or not it is the pin — the schema says well-formed, the seam says true', () => {
+    expect(() => parseRoleOutput('reader', 0, JSON.parse(JSON.stringify(readerWith(everyPosition('DOC-A', PIN('DOC-A'))))))).not.toThrow();
+    expect(() => parseRoleOutput('reader', 0, JSON.parse(JSON.stringify(readerWith(everyPosition('DOC-A', WRONG)))))).not.toThrow();
+  });
+
+  it('is the one evidence schema: the record contract refuses the same values, so a result cannot carry what a role may not return', () => {
+    expect(evidenceItemSchema.safeParse(quote('DOC-A', '')).success).toBe(false);
+    expect(evidenceItemSchema.safeParse(quote('DOC-A', '5C'.repeat(32))).success).toBe(false);
+    expect(evidenceItemSchema.safeParse(quote('DOC-A', PIN('DOC-A'))).success).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 2. The provider schema derived from it carries the constraint
+// ---------------------------------------------------------------------------
+
+describe('the structured-output schema handed to the provider carries the hash constraint', () => {
+  const HASH_SCHEMA = { type: 'string', pattern: '^[0-9a-f]{64}$' };
+
+  type Props = { properties: Record<string, unknown> };
+  /** The evidence item variants of a role schema, at the path `evidence` sits under for that role. */
+  function evidenceVariants(role: 'reader' | 'prosecutor' | 'adjudicator'): Props[] {
+    const schema = roleOutputJsonSchema(role) as { properties: Record<string, { items: Props }> };
+    const container = role === 'reader' ? 'elements' : role === 'prosecutor' ? 'challenges' : 'adjudications';
+    const evidence = schema.properties[container]!.items.properties['evidence'] as { items: { anyOf: Props[] } };
+    return evidence.items.anyOf;
+  }
+
+  it.each(['reader', 'prosecutor', 'adjudicator'] as const)('%s: the quote, each hop quote and both cross-reference ends declare the 64-hex pattern; `text` and `docId` do not', (role) => {
+    const [plain, chain, cross] = evidenceVariants(role) as [Props, Props & { properties: { hops: { items: Props } } }, Props];
+    expect(plain.properties['sha256Normalized']).toEqual(HASH_SCHEMA);
+    expect(chain.properties.hops.items.properties['quote']).toMatchObject({ properties: { sha256Normalized: HASH_SCHEMA } });
+    expect(cross.properties['from']).toMatchObject({ properties: { sha256Normalized: HASH_SCHEMA } });
+    expect(cross.properties['to']).toMatchObject({ properties: { sha256Normalized: HASH_SCHEMA } });
+    // Positive control for the pattern's presence: the other strings carry none.
+    expect(plain.properties['text']).toEqual({ type: 'string' });
+    expect(plain.properties['docId']).toEqual({ type: 'string' });
+  });
+
+  it('the converter emits a regex check as `pattern`, refuses one with flags, and still refuses string lengths', () => {
+    expect(toProviderJsonSchema(z.string().regex(/^[0-9a-f]{64}$/))).toEqual(HASH_SCHEMA);
+    expect(() => toProviderJsonSchema(z.string().regex(/^abc$/i))).toThrow(UnsupportedSchemaFeatureError);
+    expect(() => toProviderJsonSchema(z.string().regex(/^abc$/i))).toThrow(/flags/);
+    expect(() => toProviderJsonSchema(z.string().min(1))).toThrow(/minLength/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 3. The seam: entitlement and the exact pin, per role, directly callable
+// ---------------------------------------------------------------------------
+
+describe('each role seam refuses a quote whose docId is outside the closure or whose hash is not that document\'s pin', () => {
+  const closure = fixtureClosure();
+
+  it('the fixture closure is {DOC-A, DOC-B, DOC-C}, DOC-Z is held but outside, and the pins differ — or nothing below can tell the cases apart', () => {
+    expect(closure.docIds).toEqual(['DOC-A', 'DOC-B', 'DOC-C']);
+    expect(closure.entitled('DOC-Z')).toBe(false);
+    expect(closure.corpusHolds('DOC-Z')).toBe(true);
+    expect(closure.corpusHolds(NOT_INGESTED)).toBe(false);
+    expect(new Set([PIN('DOC-A'), PIN('DOC-B'), PIN('DOC-C'), PIN('DOC-Z'), WRONG]).size).toBe(5);
+  });
+
+  it('reader: a well-formed hash that is not the pin is refused, naming the element, the path, the model\'s hash and the closure\'s', () => {
+    const output = readerWith([quote('DOC-A', WRONG)]);
+    const error = caught(() => assertReaderQuotesPinned(output, closure, 0));
+    expect(error.role).toBe('reader');
+    expect(error.index).toBe(0);
+    expect(error.problems).toHaveLength(1);
+    expect(error.problems[0]).toContain('elements[0] (RE-STUB).evidence[0]');
+    expect(error.problems[0]).toContain('DOC-A');
+    expect(error.problems[0]).toContain(WRONG.slice(0, 12));
+    expect(error.problems[0]).toContain(PIN('DOC-A').slice(0, 12));
+    // Never silently filled or overwritten: the output still carries what the model returned.
+    expect((output.elements[0]!.evidence[0] as { sha256Normalized: string }).sha256Normalized).toBe(WRONG);
+  });
+
+  it('reader: another entitled document\'s real pin on the wrong docId is a mismatch, not a correction', () => {
+    const error = caught(() => assertReaderQuotesPinned(readerWith([quote('DOC-A', PIN('DOC-B'))]), closure, 0));
+    expect(error.problems).toHaveLength(1);
+    expect(error.problems[0]).toContain('DOC-A');
+    expect(error.problems[0]).toContain(PIN('DOC-B').slice(0, 12));
+    expect(error.problems[0]).toContain(PIN('DOC-A').slice(0, 12));
+  });
+
+  it('reader: a docId outside the closure is refused whether the corpus holds it (DOC-Z, at its own real hash) or not', () => {
+    const error = caught(() =>
+      assertReaderQuotesPinned(readerWith([quote('DOC-Z', PIN('DOC-Z')), quote(NOT_INGESTED, WRONG)]), closure, 0),
+    );
+    expect(error.problems).toHaveLength(2);
+    expect(error.problems[0]).toContain('elements[0] (RE-STUB).evidence[0]');
+    expect(error.problems[0]).toContain('DOC-Z');
+    expect(error.problems[0]).toContain('entitled closure');
+    expect(error.problems[1]).toContain('elements[0] (RE-STUB).evidence[1]');
+    expect(error.problems[1]).toContain(NOT_INGESTED);
+  });
+
+  it('reader: nested quotes are checked under their own paths — a hop inside an amendment chain and the far end of a cross-reference', () => {
+    const error = caught(() =>
+      assertReaderQuotesPinned(
+        readerWith([
+          quote('DOC-A'),
+          { kind: 'amendment_chain', hops: [{ edgeId: 'E-1', quote: quote('DOC-A') }, { edgeId: 'E-1', quote: quote('DOC-B', WRONG) }] },
+          { kind: 'cross_reference', edgeId: 'E-2', from: quote('DOC-A'), to: quote('DOC-C', WRONG) },
+        ]),
+        closure,
+        0,
+      ),
+    );
+    expect(error.problems).toHaveLength(2);
+    expect(error.problems[0]).toContain('elements[0] (RE-STUB).evidence[1].hops[1].quote');
+    expect(error.problems[0]).toContain('DOC-B');
+    expect(error.problems[1]).toContain('elements[0] (RE-STUB).evidence[2].to');
+    expect(error.problems[1]).toContain('DOC-C');
+  });
+
+  it('prosecutor: refused under challenges[i] (id).evidence[j], with the prosecutor\'s own index', () => {
+    const error = caught(() => assertProsecutorQuotesPinned(prosecutorWith('stub_lens', [quote('DOC-A'), quote('DOC-B', WRONG)]), closure, 4));
+    expect(error.role).toBe('prosecutor');
+    expect(error.index).toBe(4);
+    expect(error.problems).toHaveLength(1);
+    expect(error.problems[0]).toContain('challenges[0] (C1-fixture).evidence[1]');
+    expect(error.problems[0]).toContain('DOC-B');
+  });
+
+  it('adjudicator: refused under adjudications[i] (challengeId).evidence[j]', () => {
+    const error = caught(() => assertAdjudicatorQuotesPinned(adjudicatorWith([quote('DOC-Z', PIN('DOC-Z'))]), closure, 0));
+    expect(error.role).toBe('adjudicator');
+    expect(error.problems).toHaveLength(1);
+    expect(error.problems[0]).toContain(`adjudications[0] (${RAISED}).evidence[0]`);
+    expect(error.problems[0]).toContain('DOC-Z');
+  });
+
+  it('positive control: every position carrying its own document\'s pin passes all three seams, and the outputs come back unchanged', () => {
+    const reader = readerWith([
+      quote('DOC-A'),
+      { kind: 'amendment_chain', hops: [{ edgeId: 'E-1', quote: quote('DOC-A') }, { edgeId: 'E-1', quote: quote('DOC-B') }] },
+      { kind: 'cross_reference', edgeId: 'E-2', from: quote('DOC-A'), to: quote('DOC-C') },
+      { kind: 'absence', docIds: ['DOC-A'], term: 'FIXTURE absent term' },
+    ]);
+    expect(assertReaderQuotesPinned(reader, closure, 0)).toBe(reader);
+    const prosecutor = prosecutorWith('stub_lens', [quote('DOC-B'), quote('DOC-C')]);
+    expect(assertProsecutorQuotesPinned(prosecutor, closure, 1)).toBe(prosecutor);
+    const adjudicator = adjudicatorWith([quote('DOC-C')]);
+    expect(assertAdjudicatorQuotesPinned(adjudicator, closure, 0)).toBe(adjudicator);
+    expect(quotePinProblems([{ label: 'x', items: reader.elements[0]!.evidence }], closure)).toEqual([]);
+  });
+
+  it('the predicate reads the pins off the closure it is handed, not off the quote: a closure pinning DOC-A elsewhere refuses the fixture pin', () => {
+    // Called directly with a source the natural caller cannot produce (failure mode #4).
+    const elsewhere = { docIds: ['DOC-A'] as readonly string[], document: () => ({ sha256Normalized: 'a'.repeat(64) }) };
+    const problems = quotePinProblems([{ label: 'elements[0] (RE-STUB).evidence', items: [quote('DOC-A')] }], elsewhere);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('aaaaaaaaaaaa');
+    expect(problems[0]).toContain(PIN('DOC-A').slice(0, 12));
+    expect(quotePinProblems([{ label: 'x', items: [quote('DOC-A', 'a'.repeat(64))] }], elsewhere)).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 4. Through the pipeline: a bad output stops the run before the next role
+// ---------------------------------------------------------------------------
+
+describe('FIXTURE — through runVerificationPipeline, a quote that fails the contract stops the run at its own role, before the next role launches', () => {
+  const requirement = fixtureRequirement();
+  const prompts = loadPromptSet();
+
+  function input(runner: ReturnType<typeof stubRunner>) {
+    return {
+      packId: 'testpack',
+      requirementId: requirement.id,
+      requirement,
+      renderContext: fixtureRenderContext(),
+      closure: fixtureClosure(),
+      corpus,
+      prompts,
+      config: { ...DEFAULT_ROLE_CONFIG, prosecutorCount: 2 },
+      runner,
+    };
+  }
+
+  /** A runner answering every role validly, with the overrides a case needs. */
+  function runnerWith(over: { reader?: ReaderOutput; prosecutor?: (index: number, lens: string) => ProsecutorOutput; adjudicator?: AdjudicatorOutput }) {
+    return stubRunner((request) => {
+      if (request.role === 'reader') return JSON.stringify(over.reader ?? stubReaderOutput());
+      if (request.role === 'prosecutor') {
+        const lens = lensFromRequest(request);
+        return JSON.stringify(over.prosecutor?.(request.index, lens) ?? (request.index === 0 ? prosecutorWith(lens, [quote('DOC-A')]) : stubProsecutorOutput(lens)));
+      }
+      return JSON.stringify(over.adjudicator ?? adjudicatorWith([quote('DOC-B')]));
+    });
+  }
+
+  const launched = (runner: ReturnType<typeof stubRunner>) => runner.requests.map((request) => `${request.role}[${request.index}]`);
+
+  it('positive control: valid quotes at every role run reader, two prosecutors and the adjudicator, and the record carries the adjudicated challenge with the hashes the roles returned', async () => {
+    const runner = runnerWith({});
+    const outcome = await runVerificationPipeline(input(runner));
+    expect(launched(runner)).toEqual(['reader[0]', 'prosecutor[0]', 'prosecutor[1]', 'adjudicator[0]']);
+    expect(outcome.halted).toBe(false);
+    const challenge = outcome.adjudication?.challenges.find((c) => c.id === RAISED);
+    expect(challenge?.verdict).toBe('CONFIRMED');
+    expect((challenge?.evidence[0] as { sha256Normalized: string }).sha256Normalized).toBe(PIN('DOC-A'));
+    expect((challenge?.adjudicationEvidence[0] as { sha256Normalized: string }).sha256Normalized).toBe(PIN('DOC-B'));
+  });
+
+  it('the r2 shape: a reader whose quote carries the empty string is refused at the reader seam after one request; no prosecutor launches', async () => {
+    const runner = runnerWith({ reader: readerWith([quote('DOC-A', '')]) });
+    const error = await rejection(runVerificationPipeline(input(runner)));
+    expect(error.role).toBe('reader');
+    expect(error.problems.join('\n')).toContain('elements.0.evidence.0.sha256Normalized');
+    expect(launched(runner)).toEqual(['reader[0]']);
+  });
+
+  it('a reader quote at a well-formed hash that is not the pin is refused at the reader seam; no prosecutor launches', async () => {
+    const runner = runnerWith({ reader: readerWith([quote('DOC-A', WRONG)]) });
+    const error = await rejection(runVerificationPipeline(input(runner)));
+    expect(error.role).toBe('reader');
+    expect(error.message).toContain('reader[0]');
+    expect(error.problems[0]).toContain('elements[0] (RE-STUB).evidence[0]');
+    expect(error.problems[0]).toContain(WRONG.slice(0, 12));
+    expect(launched(runner)).toEqual(['reader[0]']);
+  });
+
+  it('a reader quote naming a document outside the closure is refused the same way', async () => {
+    const runner = runnerWith({ reader: readerWith([quote('DOC-Z', PIN('DOC-Z'))]) });
+    const error = await rejection(runVerificationPipeline(input(runner)));
+    expect(error.role).toBe('reader');
+    expect(error.problems[0]).toContain('DOC-Z');
+    expect(launched(runner)).toEqual(['reader[0]']);
+  });
+
+  it('a bad hash inside a nested hop of the reader\'s evidence is refused before any prosecutor launches, under the hop\'s path', async () => {
+    const runner = runnerWith({
+      reader: readerWith([quote('DOC-A'), { kind: 'amendment_chain', hops: [{ edgeId: 'E-1', quote: quote('DOC-A') }, { edgeId: 'E-1', quote: quote('DOC-B', WRONG) }] }]),
+    });
+    const error = await rejection(runVerificationPipeline(input(runner)));
+    expect(error.problems[0]).toContain('elements[0] (RE-STUB).evidence[1].hops[1].quote');
+    expect(launched(runner)).toEqual(['reader[0]']);
+  });
+
+  it('a bad prosecutor[0] quote stops the run before prosecutor[1] and the adjudicator launch', async () => {
+    const runner = runnerWith({ prosecutor: (index, lens) => (index === 0 ? prosecutorWith(lens, [quote('DOC-A', WRONG)]) : stubProsecutorOutput(lens)) });
+    const error = await rejection(runVerificationPipeline(input(runner)));
+    expect(error.role).toBe('prosecutor');
+    expect(error.index).toBe(0);
+    expect(error.problems[0]).toContain('challenges[0] (C1-fixture).evidence[0]');
+    expect(launched(runner)).toEqual(['reader[0]', 'prosecutor[0]']);
+  });
+
+  it('a bad prosecutor[1] quote stops the run before the adjudicator launches, and names index 1', async () => {
+    const runner = runnerWith({ prosecutor: (index, lens) => (index === 1 ? prosecutorWith(lens, [quote(NOT_INGESTED, WRONG)]) : prosecutorWith(lens, [quote('DOC-A')])) });
+    const error = await rejection(runVerificationPipeline(input(runner)));
+    expect(error.role).toBe('prosecutor');
+    expect(error.index).toBe(1);
+    expect(error.problems[0]).toContain(NOT_INGESTED);
+    expect(launched(runner)).toEqual(['reader[0]', 'prosecutor[0]', 'prosecutor[1]']);
+  });
+
+  it('a bad adjudicator quote is refused at the adjudicator seam, so no record is assembled from it', async () => {
+    const runner = runnerWith({ adjudicator: adjudicatorWith([quote('DOC-B', WRONG)]) });
+    const error = await rejection(runVerificationPipeline(input(runner)));
+    expect(error.role).toBe('adjudicator');
+    expect(error.problems[0]).toContain(`adjudications[0] (${RAISED}).evidence[0]`);
+    expect(error.problems[0]).toContain('DOC-B');
+    expect(launched(runner)).toEqual(['reader[0]', 'prosecutor[0]', 'prosecutor[1]', 'adjudicator[0]']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 5. The v3 prompts say it; v1 and v2 are kept byte for byte under their own
+//    versions, and the identity moves with the set
+// ---------------------------------------------------------------------------
+
+describe('the v3 prompt set tells every role to copy the fence hash; v2 is kept beside v1 and still derives its own identity', () => {
+  const current = loadPromptSet();
+  const v1 = loadHistoricalPromptSet('v1');
+  const v2 = loadHistoricalPromptSet('v2');
+
+  /** The v2 digests, as `VERSIONS.md` recorded them while v2 was current and as the r2 capture's streams carry them. */
+  const V2_DIGESTS = {
+    reader: '4d21d2b93df0e23b5ae6d95987d9c72ef167bc01d03cb48f7eb742ade2f3ed6e',
+    prosecutor: '9c0ecc66306d2107518aeeb92ada4deb4010a1436a8f9481559004dd6d6ca0b5',
+    adjudicator: 'cea3e6f02951b300c84b603d9b36b538f77fb7f2a3c8ac9c6bc470961ec24698',
+  };
+  const V1_DIGESTS = {
+    reader: '4d21d2b93df0e23b5ae6d95987d9c72ef167bc01d03cb48f7eb742ade2f3ed6e',
+    prosecutor: '87eb0a212ec3b5e97ec4ce26dbe416a47bcf3562e87f45dcbf08ff73829c3edb',
+    adjudicator: 'f38ba1f0cf217904f63501300d14a925928ed0eb929b4fb6c83d5d72e798a46a',
+  };
+
+  it('v3 is current; v1 and v2 are the kept sets, each read from its own literal paths', () => {
+    expect(CURRENT_PROMPT_SET_VERSION).toBe('v3');
+    expect(HISTORICAL_PROMPT_SET_VERSIONS).toEqual(['v1', 'v2']);
+    for (const role of ['reader', 'prosecutor', 'adjudicator'] as const) {
+      expect(historicalPromptPath('v2', role)).toBe(join(engineRoot, 'prompts', 'history', 'v2', `${role}.md`));
+      expect(historicalPromptPath('v1', role)).toBe(join(engineRoot, 'prompts', 'history', 'v1', `${role}.md`));
+    }
+  });
+
+  it('v2 is kept byte for byte (the digests the r2 capture ran under), v1 is untouched, and v3 differs from both in every role', () => {
+    expect(promptHashes(v2)).toEqual(V2_DIGESTS);
+    expect(promptHashes(v1)).toEqual(V1_DIGESTS);
+    for (const role of ['reader', 'prosecutor', 'adjudicator'] as const) {
+      expect(current[role].sha256, role).not.toBe(V2_DIGESTS[role]);
+      expect(current[role].sha256, role).not.toBe(V1_DIGESTS[role]);
+    }
+  });
+
+  it('every v3 prompt carries the hash instruction, in words v1 and v2 do not have, and still ends as the schema route expects', () => {
+    for (const role of ['reader', 'prosecutor', 'adjudicator'] as const) {
+      for (const phrase of [
+        '## A quote carries its document\'s hash',
+        'four required fields',
+        '`kind` is `"quote"`',
+        'copied character for character',
+        '`<<<BEGIN DOCUMENT <docId> sha256Normalized=<hash>>>>`',
+        '64 lowercase hexadecimal characters',
+        'never empty',
+      ]) {
+        expect(current[role].text, `${role}: ${phrase}`).toContain(phrase);
+        expect(v2[role].text, `v2 ${role} lacks: ${phrase}`).not.toContain(phrase);
+        expect(v1[role].text, `v1 ${role} lacks: ${phrase}`).not.toContain(phrase);
+      }
+      expect(current[role].text.trimEnd().endsWith('Output the JSON object and nothing else.'), role).toBe(true);
+      expect(current[role].text, role).not.toMatch(/CSRD-S-\d{3}/);
+    }
+    // The adjudicator's pin rule no longer contradicts the instruction: the quote hash is the one hash it writes.
+    expect(current.adjudicator.text).toContain('The one hash you write is a quote\'s `sha256Normalized`');
+    expect(current.adjudicator.text).not.toContain('Do not emit hashes, closure identities');
+    expect(v2.adjudicator.text).toContain('Do not emit hashes, closure identities');
+  });
+
+  it('the identity moves with the set: v1, v2 and v3 derive three pipelines under one configuration', () => {
+    const closure = fixtureClosure();
+    const of = (prompts: typeof current) => pipelineVersionFor({ prompts, config: DEFAULT_ROLE_CONFIG, closure });
+    const [underV1, underV2, underV3] = [of(v1), of(v2), of(current)];
+    for (const identity of [underV1, underV2, underV3]) expect(identity).toMatch(/^pipeline-v3-[0-9a-f]{64}$/);
+    expect(new Set([underV1, underV2, underV3]).size).toBe(3);
+  });
+});

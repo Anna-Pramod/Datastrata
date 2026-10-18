@@ -49,6 +49,7 @@ import { gapForUnreachableDocument, type DocumentGap } from './gaps';
 import type { RolePrompt } from './prompts';
 import { parseRoleOutput, type ProsecutorOutput, type ReaderOutput } from './role-outputs';
 import { createAgentRole } from './agent-role';
+import { assertProsecutorQuotesPinned } from './quote-pins';
 import { RoleOutputError, RoleTransportError, type RoleExecution } from './roles';
 import { TranscriptReplayError } from './replay';
 import type { AgentRunner } from './runner';
@@ -804,7 +805,15 @@ export async function runProsecutors(run: ProsecutorsRun): Promise<ProsecutorsOu
       // pass as a field and not only as a heading. One value, two uses.
       lens,
       renderInput: renderProsecutorInput,
-      parse: (raw) => assertProsecutorCoverage(parseRoleOutput('prosecutor', index, raw), ctx, index),
+      // Shape, then the coverage rules, then every challenge quote's docId and
+      // hash against the closure — refused here, before the next lens launches
+      // (`quote-pins.ts`).
+      parse: (raw) =>
+        assertProsecutorQuotesPinned(
+          assertProsecutorCoverage(parseRoleOutput('prosecutor', index, raw), ctx, index),
+          run.closure,
+          index,
+        ),
     });
 
     let execution: RoleExecution<ProsecutorOutput>;

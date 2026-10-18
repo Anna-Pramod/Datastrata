@@ -139,8 +139,15 @@ function stripLedger(ledger: BudgetLedger): Record<string, unknown> {
   return copy;
 }
 
-/** The UTF-8 length of the Messages adapter's request for `roleRequest()` at `1104e8f`. */
-const BODY_BYTES = 2384;
+/**
+ * The UTF-8 length of the Messages adapter's request for `roleRequest()`: 2384
+ * at `1104e8f`, plus the 108 bytes the reader's structured-output schema grew
+ * by on 2026-10-18 when `sha256Normalized` gained its 64-hex `pattern`
+ * (`corpus/evidence.ts`; the reader schema went from 2,168 to 2,276 bytes).
+ * The body embeds that schema, so this is the one capture literal the schema
+ * moves; every other record and ledger field is as captured.
+ */
+const BODY_BYTES = 2384 + 108;
 
 const http = (over: Partial<AttemptRecord> = {}): Record<string, unknown> => ({
   role: 'reader', index: 0, attempt: 1, runAttempt: 1, sent: true, status: 200, requestId: 'req_ok', usage: null, outcome: 'completed', detail: null, possiblyBilled: true, delayMs: null, ...over,

@@ -285,10 +285,14 @@ function prosecution(lens: string) {
  * runs — so this stays an *input* derived from production rather than a
  * hard-coded list that would silently under-answer if the count moved.
  */
-function adjudication(adjudicationHash?: string) {
-  const evidence = adjudicationHash === undefined
-    ? evidenceA()
-    : { ...evidenceA(), sha256Normalized: adjudicationHash };
+function adjudication(absenceDocId?: string) {
+  // With `absenceDocId`, the adjudicator's evidence also carries an absence
+  // claim naming it: a document no entry in `corpus[]` pins, which every role
+  // seam accepts (the quote beside it is pinned, so absence is not the sole
+  // evidence) and `assertResultConsistency` refuses at assembly.
+  const evidence = absenceDocId === undefined
+    ? [evidenceA()]
+    : [evidenceA(), { kind: 'absence' as const, docIds: [absenceDocId], term: 'a term no record pins' }];
   const ids: string[] = [];
   for (let i = 0; i < DEFAULT_ROLE_CONFIG.prosecutorCount; i += 1) {
     ids.push(qualifiedChallengeId(i, 'C1'), qualifiedChallengeId(i, 'C2'));
@@ -298,7 +302,7 @@ function adjudication(adjudicationHash?: string) {
       challengeId,
       verdict: 'CONFIRMED' as const,
       resolution: 'The challenge is upheld and the encoding already carries the bound.',
-      evidence: [evidence],
+      evidence,
     })),
     gaps: [],
   };
@@ -317,7 +321,7 @@ interface Injected extends RunCapabilities {
  * parameter.
  */
 function capability(
-  options: { firstStatement?: string; adjudicationHash?: string; readerGapDocId?: string } = {},
+  options: { firstStatement?: string; adjudicationAbsenceDocId?: string; readerGapDocId?: string } = {},
 ): Injected {
   const runner = stubRunner((request) => {
     switch (request.role) {
@@ -339,7 +343,7 @@ function capability(
       case 'prosecutor':
         return JSON.stringify(prosecution(lensFromRequest(request)));
       case 'adjudicator':
-        return JSON.stringify(adjudication(options.adjudicationHash));
+        return JSON.stringify(adjudication(options.adjudicationAbsenceDocId));
     }
   });
   return { runner, requests: runner.requests };
@@ -504,13 +508,16 @@ describe('verify run — a gap-bearing run', () => {
 
 describe('verify run — an invalid run', () => {
   it('refuses, and names the record boundary rather than any earlier one', async () => {
-    // A genuine record-boundary failure: the adjudicator's quote pins a hash
-    // the run's own `corpus[]` does not. No role gate checks a quote hash, so
-    // this reaches `assertResultConsistency` inside assembly and nowhere else.
+    // A genuine record-boundary failure: the adjudicator's evidence carries an
+    // absence claim naming a document the run's own `corpus[]` does not pin.
+    // No role gate checks an absence claim's documents, so this reaches
+    // `assertResultConsistency` inside assembly and nowhere else. (A quote at a
+    // wrong hash would no longer serve: since the r2 repair the adjudicator's
+    // seam refuses that itself — `pipeline-quote-pins.test.ts`.)
     const outcome = await verifyRun(
       CONNECTED,
       COMPLETE_REQ,
-      capability({ adjudicationHash: 'f'.repeat(64) }),
+      capability({ adjudicationAbsenceDocId: 'DOC-NOT-HELD' }),
     );
 
     expect(outcome.exitCode).toBe(EXIT_REFUSED);
@@ -530,7 +537,7 @@ describe('verify run — an invalid run', () => {
     // satisfy neither. Only this test distinguishes the second from the first,
     // which is what makes "Invalid publishes nothing" attributable on its own.
     const destination = destinationIn(CONNECTED, COMPLETE_REQ);
-    await verifyRun(CONNECTED, COMPLETE_REQ, capability({ adjudicationHash: 'f'.repeat(64) }));
+    await verifyRun(CONNECTED, COMPLETE_REQ, capability({ adjudicationAbsenceDocId: 'DOC-NOT-HELD' }));
 
     expect.soft(existsSync(destination)).toBe(false);
     expect.soft(existsSync(dirname(destination))).toBe(false);
@@ -544,7 +551,7 @@ describe('verify run — an invalid run', () => {
     const outcome = await verifyRun(
       CONNECTED,
       COMPLETE_REQ,
-      capability({ adjudicationHash: 'f'.repeat(64) }),
+      capability({ adjudicationAbsenceDocId: 'DOC-NOT-HELD' }),
     );
 
     expect(outcome.exitCode).toBe(EXIT_REFUSED);

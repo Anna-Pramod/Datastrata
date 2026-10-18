@@ -159,7 +159,8 @@ describe('the structured-output schema is derived from the local role schema', (
       }
     };
     for (const role of ['reader', 'prosecutor', 'adjudicator'] as const) walk(roleOutputJsonSchema(role));
-    expect([...keywords].sort()).toEqual(['additionalProperties', 'anyOf', 'const', 'enum', 'items', 'minItems', 'required', 'type']);
+    // `pattern` joined the list with the quote hash's 64-hex rule (`corpus/evidence.ts`).
+    expect([...keywords].sort()).toEqual(['additionalProperties', 'anyOf', 'const', 'enum', 'items', 'minItems', 'pattern', 'required', 'type']);
   });
 });
 

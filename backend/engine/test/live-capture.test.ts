@@ -990,11 +990,26 @@ function fabricatedReading() {
 /** A well-formed SHA-256 that is not DOC-32013L0034's. */
 const WRONG_HASH = '5c'.repeat(32);
 
-/** `reading()` with RE-1's quote pinning DOC-32013L0034 at `WRONG_HASH`: the seam takes any string there, and assembly compares it with the pin. */
+/** `reading()` with RE-1's quote pinning DOC-32013L0034 at `WRONG_HASH`: well-formed, so the schema takes it; the reader's seam compares it with the closure's pin and refuses (`quote-pins.ts`), as assembly would have. */
 function wrongHashReading() {
   const output = reading();
   output.elements[0]!.evidence[0]!.sha256Normalized = WRONG_HASH;
   return output;
+}
+
+/**
+ * `adjudication()` with the first verdict's evidence carrying, beside its real quote, an absence claim naming a
+ * document the corpus does not hold. Every role seam accepts it — the quote is pinned, and absence is not the sole
+ * evidence — and `assertResultConsistency` refuses it at assembly: the record-boundary-only defect, now that the
+ * quote-pin rule is applied at the seams too.
+ */
+function absenceOutsideAdjudication() {
+  const output = adjudication();
+  const [first, ...rest] = output.adjudications;
+  return {
+    ...output,
+    adjudications: [{ ...first!, evidence: [...first!.evidence, { kind: 'absence' as const, docIds: ['DOC-NOT-HELD-5C'], term: 'ABSENCE 5C a term no record pins' }] }, ...rest],
+  } as unknown as ReturnType<typeof adjudication>;
 }
 
 /** `reading()` with RE-1 resting on an absence claim alone: well-formed evidence, which the reader's seam refuses as sole evidence. */
@@ -2199,13 +2214,14 @@ describe('the subscription route runs claude-code-cli@2 from its profile, and @1
   // agree with any change made to it.
   const V2_SETTINGS = '{"switchModelsOnFlag":false,"fastMode":false,"autoContinueAtUsageLimit":false}';
   const V1_SETTINGS = '{"switchModelsOnFlag":false}';
-  // The identities below are over the **current (v2) prompt set**, which the
+  // The identities below are over the **current (v3) prompt set**, which the
   // harness reads for every new run. Under the kept v1 set — the one every
   // recording before 2026-10-18 was made under — the same configurations
-  // derive `pipeline-v3-737f8d50…` (@2) and `pipeline-v3-fd3ed34d…` (@1), still
-  // pinned in `pipeline-identity.test.ts` over `loadHistoricalPromptSet('v1')`.
-  const V2_PIPELINE_VERSION = 'pipeline-v3-9599bc1e617321fb8cae51bddaf8fe0d34445d97358290c0c4f32554084ce4a4';
-  const V1_PIPELINE_VERSION = 'pipeline-v3-a408775f89d1c930d1ddd6e856c0e3d4c7bd4ab5ce888b5bdae3f200be74b13c';
+  // derive `pipeline-v3-737f8d50…` (@2) and `pipeline-v3-fd3ed34d…` (@1), and
+  // under the kept v2 set `pipeline-v3-9599bc1e…` (@2) and `pipeline-v3-a408775f…`
+  // (@1), all still pinned in `pipeline-identity.test.ts` over `loadHistoricalPromptSet`.
+  const V2_PIPELINE_VERSION = 'pipeline-v3-c3a654feeb5bed7787695fe69591834b62118efa1cf7d2f6e686215f975987d8';
+  const V1_PIPELINE_VERSION = 'pipeline-v3-c5938591581a75c0a36e8827ef4e8c3408c256f429c7b472a5fbbe3e51a46481';
   const V2_SHA256 = '494870c9763b5ea370b6165e7e04af589a7b2472bf0de18ffb25477f8230bdf6';
   const V1_SHA256 = '013a1cf17df5ff1dcc189d5d6fd3fdd5f097ddc3cd41aa9992e99805574febbe';
   /** `@2`'s thirteen launch controls. */
@@ -2347,10 +2363,12 @@ describe('the subscription route runs claude-code-cli@2 from its profile, and @1
     expect([launches[1]!.role, launches[1]!.index]).toEqual(['reader', 0]);
     expect(launches[1]!.argv).toEqual(V2_READER_ARGV);
     // A characterisation pin (Task 5a review repair R9): the sha256 of the reader's --json-schema text as the
-    // code emitted it on 2026-09-26, recorded from that code. The literal argv above computes this element from
-    // roleOutputJsonSchema, so it agrees with any schema change; this pin does not, so a change is seen here.
+    // code emitted it on 2026-10-18, recorded from that code, after the quote schema gained the 64-hex `pattern`
+    // on `sha256Normalized` (it was `ca1406ec…`, 2,168 bytes, from 2026-09-26 until then; now 2,276 bytes). The
+    // literal argv above computes this element from roleOutputJsonSchema, so it agrees with any schema change;
+    // this pin does not, so a change is seen here.
     expect(launches[1]!.argv[17]).toBe('--json-schema');
-    expect(createHash('sha256').update(launches[1]!.argv[18]!, 'utf8').digest('hex'), 'sha256 of the reader\'s --json-schema text').toBe('ca1406ec0b32b8d6d42736a3128ba5439a0860ea8ce27dc3b9a10fcb92d85cfd');
+    expect(createHash('sha256').update(launches[1]!.argv[18]!, 'utf8').digest('hex'), 'sha256 of the reader\'s --json-schema text').toBe('7eef02e9cd8277a69bfaaad002eaf3e6d16f5af7ecedc60c95bf69179febc480');
     for (const line of launches.slice(1)) {
       expect(line.envNames).toEqual(['CLAUDE_CODE_DISABLE_FAST_MODE', 'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC', 'CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK', 'CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK', 'CLAUDE_CODE_DISABLE_REFUSAL_RETRY', 'CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS', 'CLAUDE_CODE_MAX_OUTPUT_TOKENS', 'CLAUDE_CODE_MAX_RETRIES', 'CLAUDE_CODE_NO_MODEL_FALLBACK', 'DISABLE_AUTOUPDATER', 'DISABLE_ERROR_REPORTING', 'DISABLE_TELEMETRY', 'HOME', 'MAX_STRUCTURED_OUTPUT_RETRIES', 'PATH', 'USER']);
       expect(line.argv[14]).toBe(V2_SETTINGS);
@@ -4387,14 +4405,15 @@ describe('the trust block on the @2 route: four tiers, each a status and its met
     expect(seam.written).toBeNull();
     expect(existsSync(join(seamDir, 'csrd'))).toBe(false);
 
-    // result_invalid: RE-1's quote pins DOC-32013L0034 at a well-formed hash the corpus does not hold; the seam takes
-    // it, every role runs, and assembly refuses the record.
+    // result_invalid: the adjudicator's first verdict carries an absence claim naming a document the corpus does not
+    // hold; every seam takes it, every role runs, and assembly refuses the record. (A wrong quote hash no longer
+    // reaches this stage: the reader's seam refuses it, V2-T5.)
     const invalidDir = verificationDirFor('invalid');
-    const invalid = await commandOver(invalidDir, { reading: wrongHashReading() });
+    const invalid = await commandOver(invalidDir, { adjudication: absenceOutsideAdjudication() });
     expect(invalid.stage, invalid.outcome.lines.join(' | ')).toBe('result_invalid');
     expect(invalid.outcome.exitCode).toBe(1);
     expect(invalid.outcome.lines[0]).toBe('REFUSED — the run did not produce a verification result, so nothing was written.');
-    expect(invalid.outcome.lines.join('\n')).toContain('quote pins DOC-32013L0034 at hash');
+    expect(invalid.outcome.lines.join('\n')).toContain('adjudicationEvidence[1]: absence claim names docId DOC-NOT-HELD-5C');
     expect(invalid.world?.requirement.id).toBe('CSRD-S-002');
     expect(invalid.written).toBeNull();
     expect(existsSync(join(invalidDir, 'csrd'))).toBe(false);
@@ -4465,16 +4484,17 @@ describe('the trust block on the @2 route: four tiers, each a status and its met
     expect(sets.filter((set) => set.ok)).toHaveLength(29);
   }, 20_000);
 
-  it('V2-T5 — a reader quote naming DOC-32013L0034 at a well-formed hash the corpus does not hold passes the seam and is refused by assembly: every role ran, failed as RunRefused, no result file; trust says the schema tier is invalid and evidence unassessed (the result_invalid stage, reached through the harness)', async () => {
+  it('V2-T5 — a reader quote naming DOC-32013L0034 at a well-formed hash the corpus does not hold is refused at the reader\'s own seam against the closure\'s pin (the r2 defect, after one launch): failed as RunRefused, no prosecutor launched, no result file; trust says the schema tier is invalid and evidence unassessed', async () => {
     const outcome = await captureV2(readerServes(wrongHashReading()), { executionId: 'wrong-hash' });
     expect(outcome.status).toBe('failed');
     expect(outcome.error?.name).toBe('RunRefused');
     expect(outcome.exitCode).toBe(1);
-    expect(outcome.lines[0]).toBe('REFUSED — the run did not produce a verification result, so nothing was written.');
-    expect(outcome.lines.join('\n')).toContain('quote pins DOC-32013L0034 at hash');
-    // Assembly, not the seam: all nine roles answered, and the writer refused the record.
-    expect(roleLaunchCount()).toBe(9);
-    expect(attemptsOf(outcome.attemptsPath).map((a) => a['outcome'])).toEqual(Array<string>(9).fill('completed'));
+    expect(outcome.lines[0]).toBe('REFUSED — a role output was refused at its own boundary.');
+    expect(outcome.lines[1]).toContain('reader[0] returned output that is not a valid reader output');
+    expect(outcome.lines[1]).toContain('elements[0] (RE-1).evidence[0]: quote pins DOC-32013L0034 at hash 5c5c5c5c5c5c…, but that document\'s fence line carries 8822d68adb0e…');
+    // The seam, not assembly: one launch, and the eight r2 spent after it never start.
+    expect(roleLaunchCount()).toBe(1);
+    expect(attemptsOf(outcome.attemptsPath).map((a) => `${a['role']}[${a['index']}] ${a['outcome']}`)).toEqual(['reader[0] completed']);
     expect(existsSync(resultFileOf(outcome.executionDir))).toBe(false);
     expectTrust(outcome.summaryPath, trustBlock('failed', 'RunRefused', 'invalid', 'unassessed', null));
   }, 20_000);
@@ -4578,12 +4598,13 @@ describe('the trust block on the @2 route: four tiers, each a status and its met
 describe('the subscription route runs claude-code-cli@3 by default: --permission-mode default requested, and every protection @2 has, each beside its negative control', () => {
   // Every `@3` value below is a literal written here, never read off the `@3` profile or adapter.
   const V2_SETTINGS = '{"switchModelsOnFlag":false,"fastMode":false,"autoContinueAtUsageLimit":false}';
-  // Over the current (v2) prompt set, which the harness reads for every new
-  // run. The S-002 capture and the rehearsal were filed under the v1 set's @3
-  // identity, `pipeline-v3-ecb06a30…`, still pinned in `pipeline-identity.test.ts`
-  // over `loadHistoricalPromptSet('v1')`; the kept v1 files reproduce it.
-  const V3_PIPELINE_VERSION = 'pipeline-v3-3d7265b786fff38fb3a12d7f01e3b75d219653611ddbc079bfd7c874a6bca750';
-  const V2_PIPELINE_VERSION = 'pipeline-v3-9599bc1e617321fb8cae51bddaf8fe0d34445d97358290c0c4f32554084ce4a4';
+  // Over the current (v3) prompt set, which the harness reads for every new
+  // run. The S-002 capture (r1) and the rehearsal were filed under the v1 set's
+  // @3 identity, `pipeline-v3-ecb06a30…`, and r2 under the v2 set's,
+  // `pipeline-v3-3d7265b7…`; both still pinned in `pipeline-identity.test.ts`
+  // over `loadHistoricalPromptSet`, and the kept files reproduce them.
+  const V3_PIPELINE_VERSION = 'pipeline-v3-55f2fd84f3774b9a7e7aab64d44e842021406b4ad9d018d0aae81882bfec742b';
+  const V2_PIPELINE_VERSION = 'pipeline-v3-c3a654feeb5bed7787695fe69591834b62118efa1cf7d2f6e686215f975987d8';
   const V2_SHA256 = '494870c9763b5ea370b6165e7e04af589a7b2472bf0de18ffb25477f8230bdf6';
   /** `@3`'s thirteen launch controls: `@2`'s. */
   const V3_CONTROLS = {
