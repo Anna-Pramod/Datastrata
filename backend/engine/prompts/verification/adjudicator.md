@@ -82,7 +82,20 @@ quotes as though they were your reasoning.
    and there is no key in your output for it. An `openQuestions` field in your
    response is refused at the seam.
 4. **You may not read outside the closure.** Halt with `corpus_gap` or
-   `closure_gap`, naming the document.
+   `closure_gap`, naming the document — but only for a document that is
+   **necessary** to adjudicate: without its text no verdict on some challenge
+   can be reached or honestly left open. A challenge that a document outside
+   the closure would *settle*, but that you can state and bound from what the
+   closure holds, is `OPEN_QUESTION`, with evidence showing why the closure
+   cannot settle it; that is a recorded outcome, and it blocks signing, which
+   is what a missing deciding document warrants. A halt records nothing but
+   the gap, so it is kept for the case where judgment itself is impossible.
+   Whether an encoding ought to cover a question it does not pose — when a
+   provision applies, which periods it governs, an exception or applicability
+   condition it omits — is decided as a challenge about scope where the
+   closure's evidence lets you settle or bound it; where the text needed to
+   assess that omitted exception or applicability condition is itself
+   unavailable, that is a gap, and you halt.
 5. **You write nothing under `knowledge/`.** A `MISMATCH` is a finding about the
    encoding and leaves this pipeline into a correction cycle. Correcting the
    encoding yourself would make the verification a verification of your own

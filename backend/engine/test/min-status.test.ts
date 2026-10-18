@@ -413,12 +413,24 @@ describe('the version registry after the bump', () => {
     JSON.parse(readFileSync(join(REGISTRY_DIR, 'csrd.json'), 'utf8')),
   );
 
-  it('records every requirement at version 3, matching its current content', () => {
+  /**
+   * The one requirement re-authored since the version-3 bump: CSRD-S-002's
+   * plain-English text gained its scope-not-timing statement on 2026-10-18
+   * (`HANDOFF-2026-10-18-s002-scope-vs-timing.md`), so it stands at version 4.
+   * Every other requirement is still at 3. Stated as a table rather than a
+   * blanket number so that a further re-authoring has to be declared here.
+   */
+  const CURRENT_VERSION = (id: string): number => (id === 'CSRD-S-002' ? 4 : 3);
+
+  it('records every requirement at its current version, matching its current content', () => {
     const pack = csrdPack();
     for (const r of pack.requirements) {
-      expect(r.version, r.id).toBe(3);
-      expect(registry[r.id]?.['3'], r.id).toBe(requirementSha256(r));
+      expect(r.version, r.id).toBe(CURRENT_VERSION(r.id));
+      expect(registry[r.id]?.[String(r.version)], r.id).toBe(requirementSha256(r));
     }
+    // The version-3 digests are still bound to version 3 for every requirement,
+    // S-002 included: a later version appends, it never rewrites.
+    for (const r of pack.requirements) expect(registry[r.id]?.['3'], r.id).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it('still holds every historical digest, byte-for-byte, so old versions keep their meaning', () => {
@@ -465,11 +477,15 @@ describe('the version registry after the bump', () => {
     }
   });
 
-  it('has appended version 3 and nothing beyond it', () => {
-    // No version 4: the migration is one bump, and a stray higher version would
-    // mean some requirement was re-authored after the registry was settled.
+  it('holds exactly the versions 1 to the current one, and nothing beyond', () => {
+    // A stray higher version would mean some requirement was re-authored
+    // without being declared in `CURRENT_VERSION` above; a missing lower one
+    // would mean history was dropped. Only S-002 has a version 4.
     for (const r of csrdPack().requirements) {
-      expect(Object.keys(registry[r.id] ?? {}).sort(), r.id).toEqual(['1', '2', '3']);
+      const expected = Array.from({ length: CURRENT_VERSION(r.id) }, (_, i) => String(i + 1));
+      expect(Object.keys(registry[r.id] ?? {}).sort(), r.id).toEqual(expected);
     }
+    expect(registry['CSRD-S-002']?.['4']).toMatch(/^[0-9a-f]{64}$/);
+    expect(registry['CSRD-S-001']?.['4']).toBeUndefined();
   });
 });

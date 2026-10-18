@@ -151,6 +151,72 @@ export function loadPromptSet(dir?: string): PromptSet {
   return set;
 }
 
+// ---------------------------------------------------------------------------
+// Versioned prompt sets
+// ---------------------------------------------------------------------------
+
+/**
+ * The prompt set the repository ships today, and the earlier sets it keeps.
+ *
+ * A recording binds the prompt it was made under twice over: `promptSha256`
+ * on every exchange, and the prompt's text inside the `requestSha256` digest
+ * (`request-identity.ts`). So a recording made under an earlier set can be
+ * replayed only against that set — and never by rewriting the recording,
+ * weakening the digest, or re-recording it live. Each superseded set is
+ * therefore kept byte for byte under `prompts/history/<version>/` — beside
+ * `prompts/verification/`, never inside it, so that directory still holds
+ * exactly the three current files —
+ * and `loadHistoricalPromptSet` reads it the way `loadPromptSet` reads the
+ * current one: three literal file paths, no directory resolution (the tracer
+ * rule in this file's header applies to these paths too).
+ *
+ * The version label is for people; the identity is the digests. Two sets with
+ * one differing file are two pipelines, and `pipelineVersion` says so without
+ * reading the label.
+ *
+ *     v1  the set every recording before 2026-10-18 was made under: the S-001
+ *         replay fixtures, the two probes, the rehearsal and the S-002 capture
+ *     v2  the set in `prompts/verification/` today: the prosecutor and the
+ *         adjudicator distinguish a challenge the closure can carry from a
+ *         document a judgment genuinely needs; the reader is byte-identical
+ *         to v1 (`HANDOFF-2026-10-18-s002-scope-vs-timing.md`)
+ */
+export const CURRENT_PROMPT_SET_VERSION = 'v2';
+
+export type HistoricalPromptSetVersion = 'v1';
+
+export const HISTORICAL_PROMPT_SET_VERSIONS: readonly HistoricalPromptSetVersion[] = ['v1'];
+
+/** A superseded set's file for one role: literal paths, for the same reason `defaultPromptPath` uses them. */
+export function historicalPromptPath(version: HistoricalPromptSetVersion, role: RoleName): string {
+  switch (version) {
+    case 'v1':
+      switch (role) {
+        case 'reader':
+          return fileURLToPath(new URL('../../prompts/history/v1/reader.md', import.meta.url));
+        case 'prosecutor':
+          return fileURLToPath(new URL('../../prompts/history/v1/prosecutor.md', import.meta.url));
+        case 'adjudicator':
+          return fileURLToPath(new URL('../../prompts/history/v1/adjudicator.md', import.meta.url));
+      }
+  }
+}
+
+/**
+ * A superseded prompt set, read from its kept files.
+ *
+ * For replaying a recording against the contract it was made under: the
+ * `pipelineVersion` and `runId` the recording carries derive from these
+ * digests, so `bind` selects it and `run` re-derives each exchange's
+ * `requestSha256` from the same prompt text. Nothing about the recording is
+ * touched; the question is asked exactly as it was asked.
+ */
+export function loadHistoricalPromptSet(version: HistoricalPromptSetVersion): PromptSet {
+  const set = {} as Record<RoleName, RolePrompt>;
+  for (const role of ROLE_NAMES) set[role] = loadRolePrompt(role, historicalPromptPath(version, role));
+  return set;
+}
+
 /** The per-role hashes, in the shape the identity builder takes. */
 export function promptHashes(prompts: PromptSet): Readonly<Record<RoleName, string>> {
   return {

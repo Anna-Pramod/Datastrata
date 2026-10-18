@@ -47,6 +47,7 @@
  * cascade gets its own proof rather than being mistaken for a bug.
  */
 
+import { loadHistoricalPromptSet } from '../src/pipeline/prompts';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   cpSync,
@@ -245,8 +246,15 @@ function verifyRun(
   requirementId: string,
   transcriptRoot: string,
 ): Promise<{ exitCode: number; lines: string[] }> {
+  // The committed recordings were made under the v1 prompt set, and a
+  // recording binds its prompts by digest on every exchange. Replaying them
+  // against the current set would derive another `pipelineVersion` and `runId`
+  // and `bind` would refuse by name — correctly. So the historical contract is
+  // what they are asked under: the kept v1 files, byte for byte, through the
+  // same production run path. Nothing in a recording is edited for this.
   return dispatch(['run', PACK_ID, requirementId], pathsFor(outDir), () => true, undefined, {
     runner: replayFromRoot(transcriptRoot, PACK_ID, requirementId),
+    prompts: loadHistoricalPromptSet('v1'),
   });
 }
 

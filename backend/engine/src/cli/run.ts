@@ -67,7 +67,7 @@
 import { DEFAULT_ROLE_CONFIG } from '../pipeline/config';
 import { EntitledClosure } from '../pipeline/entitlement';
 import { runVerificationPipeline } from '../pipeline/orchestrate';
-import { loadPromptSet, MissingPromptFileError } from '../pipeline/prompts';
+import { loadPromptSet, MissingPromptFileError, type PromptSet } from '../pipeline/prompts';
 import { RoleOutputError } from '../pipeline/roles';
 import { MissingAgentRunnerError, type AgentRunner } from '../pipeline/runner';
 import type { RunTranscript } from '../pipeline/transcript';
@@ -106,6 +106,19 @@ export interface RunCapabilities {
    * turns it into a named refusal with nothing contacted.
    */
   runner?: AgentRunner | null;
+  /**
+   * The prompt set the run is defined over. Absent, the repository's current
+   * set (`loadPromptSet`).
+   *
+   * Supplied for one reason: replaying a recording against the contract it
+   * was made under. A recording binds its prompt set by digest, on every
+   * exchange and inside `requestSha256`, so a run over a later set derives a
+   * different `pipelineVersion` and `runId` and `bind` refuses the recording
+   * by name. The replayer passes `loadHistoricalPromptSet(<version>)` and the
+   * recording is asked exactly the question it answered. The recording itself
+   * is never edited, and no digest check is relaxed.
+   */
+  prompts?: PromptSet;
   /**
    * Where this run's recording goes, if anywhere.
    *
@@ -189,7 +202,7 @@ export async function runRun(
       renderContext: world.renderCtx,
       closure,
       corpus: world.corpus,
-      prompts: loadPromptSet(),
+      prompts: capabilities.prompts ?? loadPromptSet(),
       config: DEFAULT_ROLE_CONFIG,
       // The whole execution capability, and no default behind it.
       runner: capabilities.runner ?? null,

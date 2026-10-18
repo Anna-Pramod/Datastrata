@@ -680,7 +680,11 @@ describe('the real CSRD pack, partitioned by what a live run could reach', () =>
     expect(authored).toHaveLength(16);
     for (const requirement of authored) {
       expect(sourceIdsOf(requirement), requirement.id).toEqual([...AUDITED_SOURCES[requirement.id]!]);
-      expect(requirement.version, requirement.id).toBe(3);
+      // The audit's pack stood at version 3 throughout. CSRD-S-002 alone has
+      // since been re-authored (its plain-English scope statement, 2026-10-18,
+      // `HANDOFF-2026-10-18-s002-scope-vs-timing.md`) and is at 4; its cited
+      // sources, the audit's concern here, are unchanged.
+      expect(requirement.version, requirement.id).toBe(requirement.id === 'CSRD-S-002' ? 4 : 3);
     }
     // 18 citations across five sources, per the audit's §11 arithmetic as
     // corrected. The total is unchanged by the correction because S-004 was

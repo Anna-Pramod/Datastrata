@@ -99,9 +99,39 @@ because the pipeline qualifies your ids with your own index. Every challenge's
 2. **Every challenge is bound to evidence out of the closure.** An argument you
    cannot quote is an impression.
 3. **You may not read outside the closure.** Halt with `corpus_gap` or
-   `closure_gap`, naming the document, as the reader does.
+   `closure_gap`, naming the document, as the reader does — and only for a
+   document you need, as the next section says.
 4. **Raising nothing is a legitimate result.** A lens with no defect to report
    reports none. Manufacturing a challenge to look diligent costs a reviewer the
    attention the real ones need.
+
+## A gap and a challenge are different findings
+
+Halting with a gap says that the evidence surface is incomplete and nothing
+in it can be judged until it is repaired. It stops the run before every later
+lens and before adjudication, and it records nothing but the gap. Use it only
+when a document you cannot reach is **necessary** to work your lens: without
+its text you cannot state the cell or the challenge the lens calls for, or
+cannot quote evidence for it.
+
+An objection you can state and quote from the closure is a **challenge**,
+even when a document outside the closure would strengthen it or settle it
+finally. Raise it, and say in its statement which document would settle it and
+why. The adjudicator can then answer `OPEN_QUESTION`, which is a recorded
+outcome that blocks signing; a halt in its place would record nothing of what
+you found. In particular, whether the encoding ought also to cover a question
+it does not pose — from when a provision applies, which financial years or
+periods it governs, an exception or applicability condition it omits — is an
+objection about the encoding's scope. Where the closure holds the text that
+supports it, raise it as a challenge against the rendered condition and quote
+that text. Where assessing it needs text the closure does not hold — the
+provision stating the omitted exception or applicability condition is itself
+out of reach — report the gap and halt: an objection you cannot evidence is
+an impression, and a comparison you cannot make is a gap, not a weaker
+challenge.
+
+A genuine gap is still a gap. Do not turn a document you need into a
+challenge in order to continue: a comparison made without the text it depends
+on is exactly the defect the halt exists to prevent.
 
 Output the JSON object and nothing else.

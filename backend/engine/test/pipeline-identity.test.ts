@@ -30,6 +30,7 @@ import {
 import { buildRunId } from '../src/pipeline/run-identity';
 import {
   defaultPromptPath,
+  loadHistoricalPromptSet,
   loadPromptSet,
   MissingPromptFileError,
   promptHashes,
@@ -443,22 +444,31 @@ describe('the identities the @2 migration must not move', () => {
     expect(CLAUDE_CODE_CLI_IDENTITY).toEqual({ id: 'claude-code-cli', version: '1' });
   });
 
-  it('the HTTP identity over the real prompts and the S-002 closure is the literal', () => {
+  /**
+   * Every literal in this block was taken over the v1 prompt set — the set
+   * every recording before 2026-10-18 was made under — so each is asserted
+   * over `loadHistoricalPromptSet('v1')`: the kept files, byte for byte. The
+   * current set (v2, whose prosecutor and adjudicator changed) derives other
+   * identities, pinned in the v2 block at the end of this file.
+   */
+  const v1 = loadHistoricalPromptSet('v1');
+
+  it('the HTTP identity over the v1 prompts and the S-002 closure is the literal', () => {
     expect(
-      pipelineVersionFor({ prompts: loadPromptSet(), config: DEFAULT_ROLE_CONFIG, closure: s002Closure() }),
+      pipelineVersionFor({ prompts: v1, config: DEFAULT_ROLE_CONFIG, closure: s002Closure() }),
     ).toBe(HTTP_PIPELINE_VERSION);
   });
 
-  it('the @1 subscription identity over the real prompts and the S-002 closure is the literal', () => {
+  it('the @1 subscription identity over the v1 prompts and the S-002 closure is the literal', () => {
     expect(
-      pipelineVersionFor({ prompts: loadPromptSet(), config: subscriptionV1Config, closure: s002Closure() }),
+      pipelineVersionFor({ prompts: v1, config: subscriptionV1Config, closure: s002Closure() }),
     ).toBe(SUBSCRIPTION_V1_PIPELINE_VERSION);
   });
 
   it('SUBSCRIPTION_ROLE_CONFIG_V1, as the capture harness exports it, gives the @1 literal and is the configuration written out above, with no invocation key at all', () => {
     // Moved here from Task 3, where the export did not exist yet (a parent decision).
     expect(
-      pipelineVersionFor({ prompts: loadPromptSet(), config: SUBSCRIPTION_ROLE_CONFIG_V1, closure: s002Closure() }),
+      pipelineVersionFor({ prompts: v1, config: SUBSCRIPTION_ROLE_CONFIG_V1, closure: s002Closure() }),
     ).toBe(SUBSCRIPTION_V1_PIPELINE_VERSION);
     expect(SUBSCRIPTION_ROLE_CONFIG_V1).toEqual(subscriptionV1Config);
     expect('invocation' in SUBSCRIPTION_ROLE_CONFIG_V1).toBe(false);
@@ -553,7 +563,7 @@ describe('the identities the @2 migration must not move', () => {
     const SUBSCRIPTION_V2_PIPELINE_VERSION = 'pipeline-v3-737f8d5015ea4249eef93cfa66c0b1b9bbb323fd633e7d5a71c26f453f8ce90e';
 
     const versionOf = (config: RoleConfig): string =>
-      pipelineVersionFor({ prompts: loadPromptSet(), config, closure: s002Closure() });
+      pipelineVersionFor({ prompts: v1, config, closure: s002Closure() });
 
     /**
      * What `pipelineVersionFor` returned for the configuration above before
@@ -569,9 +579,11 @@ describe('the identities the @2 migration must not move', () => {
      * `prompts.ts` names, read without an encoding, as it reads them — but
      * through neither its loader nor `sha256Hex`.
      */
-    function promptFileSha256(): Record<'reader' | 'prosecutor' | 'adjudicator', string> {
-      const of = (file: string): string =>
-        createHash('sha256').update(readFileSync(join(engineRoot, 'prompts', 'verification', file))).digest('hex');
+    function promptFileSha256(
+      set: 'v1' | 'current' = 'v1',
+    ): Record<'reader' | 'prosecutor' | 'adjudicator', string> {
+      const dir = set === 'v1' ? join(engineRoot, 'prompts', 'history', 'v1') : join(engineRoot, 'prompts', 'verification');
+      const of = (file: string): string => createHash('sha256').update(readFileSync(join(dir, file))).digest('hex');
       return { reader: of('reader.md'), prosecutor: of('prosecutor.md'), adjudicator: of('adjudicator.md') };
     }
 
@@ -594,8 +606,9 @@ describe('the identities the @2 migration must not move', () => {
       models: { reader: string; prosecutor: string; adjudicator: string };
       providerAdapter: { id: string; version: string };
       invocation?: InvocationIdentity;
+      promptSet?: 'v1' | 'current';
     }): string {
-      const prompt = promptFileSha256();
+      const prompt = promptFileSha256(values.promptSet ?? 'v1');
       const invocation = values.invocation;
       const controls = invocation?.controls;
       const json =
@@ -633,7 +646,7 @@ describe('the identities the @2 migration must not move', () => {
       );
     });
 
-    it('the @2 identity over the real prompts and the S-002 closure is the literal', () => {
+    it('the @2 identity over the v1 prompts and the S-002 closure is the literal', () => {
       expect(versionOf(subscriptionV2Config)).toBe(SUBSCRIPTION_V2_PIPELINE_VERSION);
     });
 
@@ -670,6 +683,20 @@ describe('the identities the @2 migration must not move', () => {
           invocation: INVOCATION_V2,
         }),
       ).toBe(SUBSCRIPTION_V2_PIPELINE_VERSION);
+    });
+
+    it('the hand-writer over the current (v2) prompt files reproduces the v2 @2 and @3 literals, which the builder derives in the block at the end of this file', () => {
+      expect(
+        handWrittenIdentity({ models: OPUS_5_5, providerAdapter: { id: 'claude-code-cli', version: '2' }, invocation: INVOCATION_V2, promptSet: 'current' }),
+      ).toBe('pipeline-v3-9599bc1e617321fb8cae51bddaf8fe0d34445d97358290c0c4f32554084ce4a4');
+      expect(
+        handWrittenIdentity({
+          models: OPUS_5_5,
+          providerAdapter: { id: 'claude-code-cli', version: '3' },
+          invocation: { ...INVOCATION_V2, permissionMode: 'default' },
+          promptSet: 'current',
+        }),
+      ).toBe('pipeline-v3-3d7265b786fff38fb3a12d7f01e3b75d219653611ddbc079bfd7c874a6bca750');
     });
 
     it('a ceiling of 63,999 is a different pipeline', () => {
@@ -751,7 +778,7 @@ describe('the identities the @2 migration must not move', () => {
        */
       const SUBSCRIPTION_V3_PIPELINE_VERSION = 'pipeline-v3-ecb06a30764aff78ecf25bde4a8c3e25fcf4d827ce336a5cd757863ae8eb332d';
 
-      it('the @3 identity over the real prompts and the S-002 closure is the literal', () => {
+      it('the @3 identity over the v1 prompts and the S-002 closure is the literal', () => {
         expect(versionOf(subscriptionV3Config)).toBe(SUBSCRIPTION_V3_PIPELINE_VERSION);
       });
 
@@ -795,5 +822,58 @@ describe('the identities the @2 migration must not move', () => {
         expect('permissionMode' in CLAUDE_CODE_CLI_V2_ADAPTER.invocation!, "@2's invocation declares a permission mode").toBe(false);
       });
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The current (v2) prompt set: new identities, the v1 ones kept
+// ---------------------------------------------------------------------------
+
+describe('the v2 prompt set derives new identities over the S-002 closure, and the kept v1 set still derives the historical ones', () => {
+  const paths: VerifyPaths = {
+    packDir: join(engineRoot, 'knowledge', 'csrd'),
+    corpusDir: join(engineRoot, 'corpus'),
+    verificationDir: join(engineRoot, 'verification'),
+  };
+  const world = readWorld(paths, 'csrd', 'CSRD-S-002');
+  const closure = EntitledClosure.forSources(world.corpus, world.sourceRegister, world.pack, sourceIdsOf(world.requirement));
+  const current = loadPromptSet();
+  const v1 = loadHistoricalPromptSet('v1');
+
+  /**
+   * Taken from `pipelineVersionFor` over the current prompt files on
+   * 2026-10-18, once, after the v2 prosecutor and adjudicator were written
+   * (`HANDOFF-2026-10-18-s002-scope-vs-timing.md`), and corroborated below by
+   * the hand-written derivation over the same files. The v1 values beside
+   * them are the ones pinned above and the ones the recordings carry.
+   */
+  const V2_PROMPTS = {
+    http: 'pipeline-v3-a0f59e79d11d451d9993f253eb4f2efe665a8bdbd9d8a57339d2dfccea59fbe2',
+    at1: 'pipeline-v3-a408775f89d1c930d1ddd6e856c0e3d4c7bd4ab5ce888b5bdae3f200be74b13c',
+    at2: 'pipeline-v3-9599bc1e617321fb8cae51bddaf8fe0d34445d97358290c0c4f32554084ce4a4',
+    at3: 'pipeline-v3-3d7265b786fff38fb3a12d7f01e3b75d219653611ddbc079bfd7c874a6bca750',
+  };
+  const V1_PROMPTS = {
+    http: 'pipeline-v3-06789a364d220899535cbf0cc40fcd5b816becf4328be70b795f54340d4ad7c0',
+    at1: 'pipeline-v3-fd3ed34d558145c09ef7105506c76767d1dc335ce2d82d57fbc6e2c148509ae5',
+    at2: 'pipeline-v3-737f8d5015ea4249eef93cfa66c0b1b9bbb323fd633e7d5a71c26f453f8ce90e',
+    at3: 'pipeline-v3-ecb06a30764aff78ecf25bde4a8c3e25fcf4d827ce336a5cd757863ae8eb332d',
+  };
+
+  it.each([
+    ['http', DEFAULT_ROLE_CONFIG],
+    ['at1', SUBSCRIPTION_ROLE_CONFIG_V1],
+    ['at2', SUBSCRIPTION_ROLE_CONFIG],
+    ['at3', SUBSCRIPTION_ROLE_CONFIG_V3],
+  ] as const)('%s: the current set derives the v2 literal and the kept v1 set derives the historical one', (key, config) => {
+    expect(pipelineVersionFor({ prompts: current, config, closure })).toBe(V2_PROMPTS[key]);
+    expect(pipelineVersionFor({ prompts: v1, config, closure })).toBe(V1_PROMPTS[key]);
+    expect(V2_PROMPTS[key]).not.toBe(V1_PROMPTS[key]);
+  });
+
+  it('the two sets differ in the prosecutor and adjudicator digests only; the reader is the same file', () => {
+    expect(promptHashes(current).reader).toBe(promptHashes(v1).reader);
+    expect(promptHashes(current).prosecutor).not.toBe(promptHashes(v1).prosecutor);
+    expect(promptHashes(current).adjudicator).not.toBe(promptHashes(v1).adjudicator);
   });
 });
