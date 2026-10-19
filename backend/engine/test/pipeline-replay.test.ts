@@ -47,7 +47,7 @@
  * cascade gets its own proof rather than being mistaken for a bug.
  */
 
-import { loadHistoricalPromptSet } from '../src/pipeline/prompts';
+import { loadHistoricalPromptSet, loadPromptSet } from '../src/pipeline/prompts';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   cpSync,
@@ -110,6 +110,9 @@ import {
   type RunTranscript,
 } from '../src/pipeline/transcript';
 import { RESULT_FILE_FRAMING } from '../src/pipeline/write-result';
+import { requirementInputSha256, requirementSha256 } from '../src/verification/canonical';
+import { requirementSchema } from '../src/knowledge/schema';
+import type { AuthoredRequirement, Requirement } from '../src/types';
 import {
   canonicalResultJson,
   resultSha256,
@@ -183,12 +186,17 @@ afterEach(() => {
   rmSync(verificationDir, { recursive: true, force: true });
 });
 
-function pathsFor(outDir: string): VerifyPaths {
+/** The paths for a run over `worldDir`: the connected world by default, or a historical copy of it. */
+function pathsIn(worldDir: string, outDir: string): VerifyPaths {
   return {
-    packDir: join(world, 'knowledge', PACK_ID),
-    corpusDir: join(world, 'corpus'),
+    packDir: join(worldDir, 'knowledge', PACK_ID),
+    corpusDir: join(worldDir, 'corpus'),
     verificationDir: outDir,
   };
+}
+
+function pathsFor(outDir: string): VerifyPaths {
+  return pathsIn(world, outDir);
 }
 
 /**
@@ -240,23 +248,44 @@ function transcriptRootWith(
   return root;
 }
 
-/** The production command path, exactly as `verify.ts` reaches it. */
+/** The production command path, exactly as `verify.ts` reaches it, under the current contract. */
 function verifyRun(
   outDir: string,
   requirementId: string,
   transcriptRoot: string,
 ): Promise<{ exitCode: number; lines: string[] }> {
-  // The committed recordings were made under the v1 prompt set and the 1.1.0
-  // closure grammar, and a recording binds both: its prompts by digest on
-  // every exchange, and the bytes of every message it was shown — the grammar
-  // included — through `requestSha256`, with the grammar version hashed into
-  // `pipelineVersion` as well. Replaying them against the current set or the
-  // current grammar would derive another `pipelineVersion` and `runId` and
-  // `bind` would refuse by name — correctly. So the historical contract is
-  // what they are asked under: the kept v1 files, byte for byte, and the kept
-  // 1.1.0 grammar, through the same production run path. Nothing in a
-  // recording is edited for this.
+  // The current recording — the exclusion-era generation of 2026-10-19 — was
+  // made under the current prompt set (v5) and the current closure grammar
+  // (1.2.0), so it is asked its question under exactly those, stated here
+  // rather than left to the defaults: a recording binds both, its prompts by
+  // digest on every exchange and the bytes of every message it was shown —
+  // the grammar included — through `requestSha256`, with the grammar version
+  // hashed into `pipelineVersion` as well. Every earlier generation was made
+  // under the kept v1 set and the kept 1.1.0 grammar; `verifyHistoricalRun`
+  // asks those their question under that contract. Nothing in a recording is
+  // edited for either.
   return dispatch(['run', PACK_ID, requirementId], pathsFor(outDir), () => true, undefined, {
+    runner: replayFromRoot(transcriptRoot, PACK_ID, requirementId),
+    prompts: loadPromptSet(),
+    closureRendererVersion: '1.2.0',
+  });
+}
+
+/**
+ * The same production path under the historical contract every recording
+ * before 2026-10-19 was made under — the kept v1 prompt files, byte for byte,
+ * and the kept 1.1.0 grammar — over `worldDir`: the connected world, or a copy
+ * of it carrying a requirement's kept historical text. Replaying a kept
+ * recording against the current set or grammar would derive another
+ * `pipelineVersion` and `runId` and `bind` would refuse by name, correctly.
+ */
+function verifyHistoricalRun(
+  outDir: string,
+  requirementId: string,
+  transcriptRoot: string,
+  worldDir: string = world,
+): Promise<{ exitCode: number; lines: string[] }> {
+  return dispatch(['run', PACK_ID, requirementId], pathsIn(worldDir, outDir), () => true, undefined, {
     runner: replayFromRoot(transcriptRoot, PACK_ID, requirementId),
     prompts: loadHistoricalPromptSet('v1'),
     closureRendererVersion: '1.1.0',
@@ -357,11 +386,12 @@ describe('the committed replay fixture', () => {
     // enforces the filing rule (tested below), and derivation is established by
     // the fact that `bind` matches during a real `verifyRun`.
     //
-    // Two files, not one. The directory used to hold exactly one recording; the
+    // Six files, not one. The directory used to hold exactly one recording; the
     // provenance migration retired the first without deleting it, because a
     // recording is evidence of an execution and deleting it would erase the
-    // only record of what the pipeline produced under the previous provenance.
-    // Both are named here so a third arriving unannounced is a red.
+    // only record of what the pipeline produced under the previous provenance,
+    // and every retirement since has done the same. All six are named here so
+    // a seventh arriving unannounced is a red.
     const files = readdirSync(join(FIXTURE_TRANSCRIPT_ROOT, PACK_ID, REQUIREMENT_ID));
     expect(files.filter((file) => file.endsWith('.json')).sort()).toEqual(
       [`${transcript.runId}.json`, ...SUPERSEDED_RUN_IDS.map((id) => `${id}.json`)].sort(),
@@ -383,7 +413,8 @@ describe('the committed replay fixture', () => {
     expect(digestOf(RETIRED.provenanceEra)).toBe('84e3d2ca67f22717f738e3ffb04fd40c2c7436a2cf2193d6b111fde701435b60');
     expect(digestOf(RETIRED.standingEra)).toBe('534ffe431d4cc380fc1e441b70f79cda45c65ed23572e223a11ace80a6e5f888');
     expect(digestOf(RETIRED.promptEra)).toBe('0d71e28a897aeba1f9e2d2818a24e44b740eeaa753ec266fff202e9188e3a8d7');
-    expect(SUPERSEDED_RUN_IDS).toEqual([RETIRED.preD1a, RETIRED.provenanceEra, RETIRED.standingEra, RETIRED.promptEra]);
+    expect(digestOf(RETIRED.adapterEra)).toBe('def7f7fca69c49d389ce337d9b1e48ff3c7e9b39b69c12caa651c289cc3c1288');
+    expect(SUPERSEDED_RUN_IDS).toEqual([RETIRED.preD1a, RETIRED.provenanceEra, RETIRED.standingEra, RETIRED.promptEra, RETIRED.adapterEra]);
   });
 
   it('records one exchange per configured execution, each bound', () => {
@@ -1885,16 +1916,19 @@ describe('the binding B-PROMPT moved', () => {
  * identity moves is measured, not imposed.
  */
 describe('the binding B-ADAPTER moved', () => {
+  // Static against static since E retired the adapter-era recording: both
+  // sides are kept files, compared with the exported comparator.
   const promptEra = () => supersededById(RETIRED.promptEra);
+  const adapterEra = () => supersededById(RETIRED.adapterEra);
 
   it('A6 — moves exactly pipelineVersion and runId', () => {
-    const differences = bindingDifferences(committed(), promptEra());
+    const differences = bindingDifferences(adapterEra(), promptEra());
     expect(differences.map((d) => d.field).sort()).toEqual(['pipelineVersion', 'runId']);
   });
 
   it('leaves the closure and every other binding field untouched', () => {
     const before = promptEra();
-    const now = committed();
+    const now = adapterEra();
     for (const field of ['packId', 'requirementId', 'requirementInputSha256', 'renderedConditionSha256', 'corpusClosureSha256'] as const) {
       expect(now[field], field).toBe(before[field]);
     }
@@ -1903,17 +1937,161 @@ describe('the binding B-ADAPTER moved', () => {
   });
 
   it('records nine exchanges — one reader, seven prosecutors in lens order, one adjudicator — through the adapter path', () => {
-    const now = committed();
+    const now = adapterEra();
     expect(now.roles.map((r) => `${r.role}:${r.index}`)).toEqual(['reader:0', ...DEFAULT_ROLE_CONFIG.lenses.map((_, i) => `prosecutor:${i}`), 'adjudicator:0']);
     expect(now.roles.filter((r) => r.role === 'prosecutor').map((r) => r.lens)).toEqual([...DEFAULT_ROLE_CONFIG.lenses]);
     // The prompt-era recording ran three prosecutors under the unselected adapter; this is the measured difference in shape.
     expect(promptEra().roles).toHaveLength(5);
   });
+});
 
-  it('the live pipeline binds to the adapter-era recording and to nothing retired', async () => {
-    // Positive control for all four partitions: the current recording really
-    // is the one the production path selects today.
+// ---------------------------------------------------------------------------
+// E's effect on run identity — the Article 1(4) exclusion
+// ---------------------------------------------------------------------------
+
+/**
+ * What E did to the binding, measured between the adapter-era recording and
+ * the exclusion-era one. CSRD-S-001 moved to version 4 — the Article 1(4)
+ * branch as the last conjunct of its ALL, and the locator beside Article
+ * 19a(1) — so the requirement input and its rendering moved; the new
+ * generation was also the first recorded under the v5 prompt set and the
+ * 1.2.0 grammar, so `pipelineVersion` moved; `runId` follows from all three.
+ * The closure did not move: the requirement cites the same source. Stated
+ * whole, like the four partitions before it.
+ */
+describe('the binding E moved', () => {
+  const adapterEra = () => supersededById(RETIRED.adapterEra);
+
+  it('moves exactly pipelineVersion, requirementInputSha256, renderedConditionSha256 and runId', () => {
+    const differences = bindingDifferences(committed(), adapterEra());
+    expect(differences.map((d) => d.field).sort()).toEqual([
+      'pipelineVersion',
+      'renderedConditionSha256',
+      'requirementInputSha256',
+      'runId',
+    ]);
+  });
+
+  it('leaves packId, requirementId and the closure untouched, and carries the version-4 input in place of the version-3 one', () => {
+    const before = adapterEra();
+    const now = committed();
+    for (const field of ['packId', 'requirementId', 'corpusClosureSha256'] as const) {
+      expect(now[field], field).toBe(before[field]);
+    }
+    // The literals the version bump pinned (`knowledge-article-1-4-exclusion.test.ts`),
+    // restated here so each recording is tied to its requirement text by name.
+    expect(before.requirementInputSha256).toBe('9b8b8436fee1e7db7b3bfe7da9f3f47e32522858c1e982a2038921a6f50dbd8f');
+    expect(now.requirementInputSha256).toBe('340cf51442b1e30349f2d4863d479bcff32d19a1dc2b6da7da1c81b62546849d');
+    expect(before.renderedConditionSha256).toBe('ee7f97a38bf165dec2a45bd3c44043d2acede8073812d93b85207afff94722a4');
+    expect(now.renderedConditionSha256).toBe('3bd1ae18f61248241c32ce4510744c1e48a88a953f38e6f04a22fb866297d8a8');
+    expect(now.pipelineVersion).not.toBe(before.pipelineVersion);
+    expect(now.runId).not.toBe(before.runId);
+  });
+
+  it('records nine exchanges through the adapter path, like the generation it retired', () => {
+    const now = committed();
+    expect(now.roles.map((r) => `${r.role}:${r.index}`)).toEqual(['reader:0', ...DEFAULT_ROLE_CONFIG.lenses.map((_, i) => `prosecutor:${i}`), 'adjudicator:0']);
+    expect(now.roles.filter((r) => r.role === 'prosecutor').map((r) => r.lens)).toEqual([...DEFAULT_ROLE_CONFIG.lenses]);
+  });
+
+  it('the live pipeline binds to the exclusion-era recording and to nothing retired', async () => {
+    // Positive control for all five partitions: the current recording really
+    // is the one the production path selects today, under the current contract.
     const outcome = await verifyRun(verificationDir, REQUIREMENT_ID, FIXTURE_TRANSCRIPT_ROOT);
     expect(outcome.exitCode).toBe(EXIT_OK);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The retired adapter-era recording still answers the question it was asked
+// ---------------------------------------------------------------------------
+
+/** The kept version-3 text of CSRD-S-001: the authored record as committed before E, verbatim. */
+const HISTORICAL_S001_V3 = join(engineRoot, 'test', 'historical-requirements', 'CSRD-S-001.v3.json');
+
+function historicalS001(): AuthoredRequirement {
+  return requirementSchema.parse(JSON.parse(readFileSync(HISTORICAL_S001_V3, 'utf8'))) as AuthoredRequirement;
+}
+
+/**
+ * A copy of the connected world with CSRD-S-001's record replaced by its kept
+ * version-3 text. The registry still holds version 3 — it appends and never
+ * rewrites — so `loadPack` accepts the copy; the corpus, the register and
+ * every other requirement are the current repository's.
+ */
+function historicalWorld(): string {
+  const root = mkdtempSync(join(tmpdir(), 'replay-world-v3-'));
+  mkdirSync(join(root, 'knowledge'), { recursive: true });
+  cpSync(join(engineRoot, 'knowledge', PACK_ID), join(root, 'knowledge', PACK_ID), { recursive: true });
+  cpSync(join(engineRoot, 'corpus'), join(root, 'corpus'), { recursive: true });
+  installRealRegister(root);
+  const file = join(root, 'knowledge', PACK_ID, 'requirements.json');
+  const authored = JSON.parse(readFileSync(file, 'utf8')) as { id: string }[];
+  expect(authored.some((r) => r.id === REQUIREMENT_ID)).toBe(true);
+  const replaced = authored.map((r) => (r.id === REQUIREMENT_ID ? historicalS001() : r));
+  writeFileSync(file, `${JSON.stringify(replaced, null, 2)}\n`, 'utf8');
+  return root;
+}
+
+describe('the retired adapter-era recording, over the version-3 text it was made against', () => {
+  it('the kept text is the authentic version 3: the registry’s own digest, and the input every pre-E recording carries', () => {
+    // Not a reconstruction. The whole-record digest is the one the registry
+    // bound to version 3, and the verification input is the one the retired
+    // recording carries — both literals, neither read from the fixture.
+    const kept = historicalS001();
+    expect(kept.id).toBe(REQUIREMENT_ID);
+    expect(kept.version).toBe(3);
+    expect(requirementSha256(kept as Requirement)).toBe('026154c0b0070f89c641ccd36f8769ac10a8f268533591b1047b3a9ceda32787');
+    expect(requirementInputSha256(kept)).toBe('9b8b8436fee1e7db7b3bfe7da9f3f47e32522858c1e982a2038921a6f50dbd8f');
+    expect(requirementInputSha256(kept)).toBe(supersededById(RETIRED.adapterEra).requirementInputSha256);
+  });
+
+  it('replays over the historical world under the kept v1 set and the kept 1.1.0 grammar, through the production path, publishing a valid dossier', async () => {
+    const worldV3 = historicalWorld();
+    const root = transcriptRootWith([supersededById(RETIRED.adapterEra)]);
+    try {
+      const outcome = await verifyHistoricalRun(verificationDir, REQUIREMENT_ID, root, worldV3);
+      expect(outcome.exitCode).toBe(EXIT_OK);
+      const result = readback(resultPath(pathsIn(worldV3, verificationDir), PACK_ID, REQUIREMENT_ID));
+      expect(result.requirementInputSha256).toBe('9b8b8436fee1e7db7b3bfe7da9f3f47e32522858c1e982a2038921a6f50dbd8f');
+      expect(result.gaps).toEqual([]);
+      // The recording's own judgments, through the production assembler.
+      expect(result.reading.elements[0]?.statement).toBe(READING_ONE);
+      expect(trap.calls).toEqual([]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+      rmSync(worldV3, { recursive: true, force: true });
+    }
+  });
+
+  it('is refused over the current world by name: the verification input moved, and a recording of version 3 does not answer version 4', async () => {
+    // The paired negative — the dry assessment's refusal of 2026-10-19,
+    // asserted as intended. Green by construction on its own; it means
+    // something only beside the positive above.
+    const root = transcriptRootWith([supersededById(RETIRED.adapterEra)]);
+    try {
+      await verifyHistoricalRun(verificationDir, REQUIREMENT_ID, root);
+      throw new Error('the run bound to the retired recording over the current text, which it must not');
+    } catch (error) {
+      if (!(error instanceof TranscriptRunMismatchError)) throw error;
+      expect(error.offered).toEqual([RETIRED.adapterEra]);
+      const byField = new Map(error.differences.map((d) => [d.field, d]));
+      expect(byField.get('requirementInputSha256')).toEqual({
+        field: 'requirementInputSha256',
+        expected: '340cf51442b1e30349f2d4863d479bcff32d19a1dc2b6da7da1c81b62546849d',
+        found: '9b8b8436fee1e7db7b3bfe7da9f3f47e32522858c1e982a2038921a6f50dbd8f',
+      });
+      expect(byField.get('renderedConditionSha256')).toEqual({
+        field: 'renderedConditionSha256',
+        expected: '3bd1ae18f61248241c32ce4510744c1e48a88a953f38e6f04a22fb866297d8a8',
+        found: 'ee7f97a38bf165dec2a45bd3c44043d2acede8073812d93b85207afff94722a4',
+      });
+      expect(byField.has('runId')).toBe(true);
+      // What did not move is named too, so the refusal is the one intended.
+      expect(byField.has('corpusClosureSha256')).toBe(false);
+      expect(byField.has('pipelineVersion')).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

@@ -1,5 +1,5 @@
 /**
- * The free check — eight questions, each one a fact the CSRD pack actually
+ * The free check — nine questions, each one a fact the CSRD pack actually
  * consumes, and the translation from answers to an engine Profile.
  *
  * Nothing is asked that cannot move a determination, and nothing is invented:
@@ -8,8 +8,12 @@
  * 800–1,500) exist so the evaluator can demonstrate the behaviour that defines
  * the product — an honest INDETERMINATE naming the fact that would resolve it.
  *
- * Question numbering follows the pack's own questionnaire: Q-003, Q-004, Q-005,
- * Q-007, Q-008, Q-011, Q-014 / Q-012.
+ * Question numbering follows the pack's own questionnaire: Q-003, Q-039, Q-004,
+ * Q-005, Q-007, Q-008, Q-011, Q-014 / Q-012. The Article 1(4) exclusion
+ * (Q-039) is asked as yes / no / not sure with nothing preselected: a "not
+ * sure" is left unanswered like every other unsure answer, so the size tests
+ * stay unresolved until it is clarified rather than reading the entity as not
+ * excluded.
  */
 
 export type FactValueInput =
@@ -23,6 +27,13 @@ export type GroupPosition = 'standalone' | 'parent' | 'subsidiary' | 'parent_and
 export interface CheckerAnswers {
   country?: string;
   legalForm?: string;
+  /**
+   * Q-039: whether Article 1(4) excludes the entity — the European Financial
+   * Stability Facility, or a financial product listed in point (b) or (f) of
+   * Article 2(12) of Regulation (EU) 2019/2088. Absent or 'unknown' contributes
+   * no fact; there is no default.
+   */
+  exclusion?: 'yes' | 'no' | 'unknown';
   financialYear?: string;
   groupPosition?: GroupPosition;
   turnover?: string;
@@ -128,7 +139,7 @@ export const YES_NO_UNSURE: Option[] = [
 
 export const isEu = (code?: string) => Boolean(code && EU_COUNTRIES.some((c) => c.id === code));
 
-/** Step 8 changes shape for a subsidiary — the exemption route is the live question. */
+/** The last step changes shape for a subsidiary — the exemption route is the live question. */
 export const stepEightIsParentReport = (a: CheckerAnswers) =>
   a.groupPosition === 'subsidiary' || a.groupPosition === 'parent_and_subsidiary';
 
@@ -162,7 +173,7 @@ export function buildAssessmentInput(answers: CheckerAnswers, assessmentDate: st
 
   if (answers.country) {
     facts.push(stated('entity.incorporation_country', entityId, { kind: 'string', value: answers.country }));
-    // Q-012, asked properly at step 8 for an EU entity. "Not sure" contributes no
+    // Q-012, asked properly at the last step for an EU entity. "Not sure" contributes no
     // fact at all, so the engine reports it as unresolved rather than assuming
     // the country of incorporation.
     const governing =
@@ -176,6 +187,13 @@ export function buildAssessmentInput(answers: CheckerAnswers, assessmentDate: st
   }
   if (answers.legalForm) {
     facts.push(stated('entity.legal_form', entityId, { kind: 'string', value: answers.legalForm }));
+  }
+  // Q-039. "Yes" and "no" are both statements the engine can use; "I'm not
+  // sure" and an absent answer contribute no fact, so the size tests report
+  // `missing_fact` and name this question rather than reading the entity as
+  // not excluded. No default, in either direction.
+  if (answers.exclusion === 'yes' || answers.exclusion === 'no') {
+    facts.push(stated('entity.excluded_by_article_1_4', entityId, { kind: 'boolean', value: answers.exclusion === 'yes' }));
   }
   if (answers.groupPosition) {
     facts.push(stated('entity.is_parent_undertaking', entityId, { kind: 'boolean', value: isGroupParent }));
@@ -199,7 +217,7 @@ export function buildAssessmentInput(answers: CheckerAnswers, assessmentDate: st
     if (isGroupParent) facts.push(stated('group.avg_employees', orgId, employees));
   }
 
-  // Article 40a route, for a non-EU entity (step 8 on that path).
+  // Article 40a route, for a non-EU entity (the last step on that path).
   if (answers.country && !isEu(answers.country)) {
     // The entity is the top of its own group in these two cases, so its country
     // IS the ultimate parent's. For a subsidiary we genuinely do not know, and
@@ -260,6 +278,7 @@ export const REASON_COPY: Record<string, string> = {
 export const FACT_COPY: Record<string, string> = {
   'entity.incorporation_country': 'Country of incorporation',
   'entity.legal_form': 'Legal form',
+  'entity.excluded_by_article_1_4': 'Whether Article 1(4) excludes the entity (answer needed)',
   'entity.governing_member_state': 'Governing Member State',
   'entity.net_turnover_eur': 'Exact net turnover',
   'entity.avg_employees': 'Exact average headcount',

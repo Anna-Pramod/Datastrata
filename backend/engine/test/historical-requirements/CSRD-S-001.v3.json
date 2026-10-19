@@ -1,0 +1,53 @@
+{
+  "id": "CSRD-S-001",
+  "version": 3,
+  "ruleRef": "R-001",
+  "title": "Individual Article 19a threshold scope",
+  "program": "CSRD",
+  "decisionArea": "Individual scope",
+  "plainEnglish": "An undertaking falls within Article 19a where it exceeds EUR 450 million net turnover and an average of 1,000 employees during the financial year. Both thresholds are cumulative.",
+  "scopeType": "legal_entity",
+  "relationshipClass": "direct_legal",
+  "severity": "critical",
+  "kind": "boolean",
+  "condition": {
+    "op": "all",
+    "of": [
+      {
+        "op": "in_catalogue",
+        "fact": "entity.incorporation_country",
+        "catalogue": "eu_member_states"
+      },
+      {
+        "op": "in_catalogue",
+        "fact": "entity.legal_form",
+        "catalogue": "accounting_directive_forms"
+      },
+      {
+        "op": "cmp",
+        "fact": "entity.net_turnover_eur",
+        "cmp": "gt",
+        "value": 450000000
+      },
+      {
+        "op": "cmp",
+        "fact": "entity.avg_employees",
+        "cmp": "gt",
+        "value": 1000
+      }
+    ]
+  },
+  "legalStatus": "in_force",
+  "provenance": [
+    {
+      "sourceId": "SRC-001",
+      "locators": [
+        {
+          "kind": "provision",
+          "text": "Article 19a(1)"
+        }
+      ]
+    }
+  ],
+  "caution": "Threshold-crossing ranges are indeterminate — ask for the exact value. This is scope, not the final reporting duty (see CSRD-S-014); national transposition may vary timing and options."
+}

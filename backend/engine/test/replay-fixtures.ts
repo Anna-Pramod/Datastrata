@@ -105,12 +105,25 @@ export const REQUIREMENT_ID = 'CSRD-S-001';
  * shape a genuine recording will have; it is still synthetic, and a genuine
  * recording will be filed beside it under its own identity rather than in
  * place of it.
+ *
+ * `run-v1-8717925d…` is the adapter-era generation, retired on 2026-10-19 by
+ * E, the Article 1(4) exclusion: CSRD-S-001 moved to version 4 — a negated
+ * branch over `entity.excluded_by_article_1_4` as the last conjunct of its
+ * ALL, and `Article 1(4)` as a second locator on SRC-001 — so
+ * `requirementInputSha256` and `renderedConditionSha256` moved. The recording
+ * that replaced it is the first made under the v5 prompt set and the 1.2.0
+ * closure grammar, so `pipelineVersion` moved too, and `runId` with all
+ * three; the closure did not move. The retired file still replays over the
+ * kept version-3 text (`test/historical-requirements/CSRD-S-001.v3.json`)
+ * under the kept v1 set and the kept 1.1.0 grammar, and is refused over the
+ * current text by name — both asserted in `pipeline-replay.test.ts`.
  */
 export const SUPERSEDED_RUN_IDS: readonly string[] = [
   'run-v1-764e571e7fb566ba75cc2ff126ac1d7b18cb59a887b033eef9f97c2f1f215d54',
   'run-v1-e77e9d0d4f4ce72d5543f6e21d99074051ad3d8d10ba4c661d2f73f0656574df',
   'run-v1-a6743df7d36b87e9495aadc1094b3894ee74fb976b41f884cda28ab5215b7688',
   'run-v1-14b519609731346ac45f71e02845814a6729876e6d614953ee6830ed47d59652',
+  'run-v1-8717925d731334f6162bdc2fd35a230d3bde7a5d1dc66588db5f5544a0748310',
 ];
 
 /** The retired identities by generation, so a test selects a recording by what it is and never by position. */
@@ -119,6 +132,7 @@ export const RETIRED = {
   provenanceEra: 'run-v1-e77e9d0d4f4ce72d5543f6e21d99074051ad3d8d10ba4c661d2f73f0656574df',
   standingEra: 'run-v1-a6743df7d36b87e9495aadc1094b3894ee74fb976b41f884cda28ab5215b7688',
   promptEra: 'run-v1-14b519609731346ac45f71e02845814a6729876e6d614953ee6830ed47d59652',
+  adapterEra: 'run-v1-8717925d731334f6162bdc2fd35a230d3bde7a5d1dc66588db5f5544a0748310',
 } as const;
 
 export const DOC_HOST = 'DOC-32013L0034';

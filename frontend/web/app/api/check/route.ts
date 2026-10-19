@@ -46,6 +46,7 @@ export const dynamic = 'force-dynamic';
 const answersSchema = z.object({
   country: z.string().max(4).optional(),
   legalForm: z.string().max(64).optional(),
+  exclusion: z.enum(['yes', 'no', 'unknown']).optional(),
   financialYear: z.string().regex(/^\d{4}$/).optional(),
   groupPosition: z.enum(['standalone', 'parent', 'subsidiary', 'parent_and_subsidiary']).optional(),
   turnover: z.string().max(32).optional(),

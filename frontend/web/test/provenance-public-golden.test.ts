@@ -52,6 +52,8 @@ const FIXED_ANSWERS: CheckerAnswers = {
   employees: 'gt1500',
   reportedFy2024: 'no',
   governingChoice: 'same',
+  // Q-039: not excluded by Article 1(4), stated — an in-scope undertaking is the scenario.
+  exclusion: 'no',
 };
 const FIXED_DATE = '2026-07-26';
 

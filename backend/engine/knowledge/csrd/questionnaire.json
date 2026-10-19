@@ -417,5 +417,20 @@
     "showWhen": { "allOf": [ { "factEquals": { "fact": "readiness.module_enabled", "value": true } }, { "requirementIs": { "requirement": "CSRD-S-014", "truth": "APPLIES" } } ] },
     "inputPath": "Country pack + confirmation",
     "whyAsked": "Creates dated actions from national law."
+  },
+  {
+    "id": "Q-039",
+    "order": 39,
+    "module": "Universal",
+    "text": "Is the entity the European Financial Stability Facility, or a financial product listed in point (b) or (f) of Article 2(12) of Regulation (EU) 2019/2088?",
+    "factTypes": ["entity.excluded_by_article_1_4"],
+    "showWhen": {
+      "allOf": [
+        { "factInSet": { "fact": "entity.incorporation_country", "set": ["AT","BE","BG","HR","CY","CZ","DK","EE","FI","FR","DE","GR","HU","IE","IT","LV","LT","LU","MT","NL","PL","PT","RO","SK","SI","ES","SE"] } },
+        { "factExists": { "fact": "entity.legal_form" } }
+      ]
+    },
+    "inputPath": "Manual (yes / no / unknown) + constitutive instrument or fund documentation",
+    "whyAsked": "Article 1(4) of Directive 2013/34/EU removes both from Articles 19a, 29a and 29d. An unknown answer leaves the individual and consolidated size tests (CSRD-S-001, CSRD-S-002) unresolved rather than reading as in scope."
   }
 ]

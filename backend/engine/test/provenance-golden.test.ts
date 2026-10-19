@@ -62,6 +62,8 @@ function fixedProfile() {
     .num('e1', 'entity.net_turnover_eur', 520_000_000)
     .num('e1', 'entity.avg_employees', 1350)
     .str('e1', 'entity.governing_member_state', 'FR')
+    // Not excluded by Article 1(4) (Q-039): stated for this scenario, never defaulted.
+    .bool('e1', 'entity.excluded_by_article_1_4', false)
     .bool('e1', 'readiness.management_report_section_ready', false)
     .bool('e1', 'readiness.digital_format_ready', true)
     .bool('e1', 'readiness.publication_calendar_ready', false)

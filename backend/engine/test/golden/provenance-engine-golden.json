@@ -75,7 +75,8 @@
       "evaluatedAt": "2026-07-26",
       "legalStatus": "in_force",
       "locators": [
-        "Article 19a(1)"
+        "Article 19a(1)",
+        "Article 1(4)"
       ],
       "needs": [],
       "packVersion": "csrd@0.1.0 (legal snapshot 2026-07-26)",
@@ -168,9 +169,35 @@
             ],
             "op": "cmp",
             "truth": "APPLIES"
+          },
+          {
+            "children": [
+              {
+                "detail": "entity.excluded_by_article_1_4 (false) == true",
+                "factsUsed": [
+                  {
+                    "factType": "entity.excluded_by_article_1_4",
+                    "scopeId": "e1",
+                    "source": {
+                      "kind": "customer_statement",
+                      "ref": "test fixture"
+                    },
+                    "value": {
+                      "kind": "boolean",
+                      "value": false
+                    }
+                  }
+                ],
+                "op": "eq",
+                "truth": "DOES_NOT_APPLY"
+              }
+            ],
+            "detail": "not",
+            "op": "not",
+            "truth": "APPLIES"
           }
         ],
-        "detail": "all of 4",
+        "detail": "all of 5",
         "op": "all",
         "truth": "APPLIES"
       }
@@ -182,7 +209,8 @@
       "evaluatedAt": "2026-07-26",
       "legalStatus": "in_force",
       "locators": [
-        "Article 29a(1)"
+        "Article 29a(1)",
+        "Article 1(4)"
       ],
       "needs": [],
       "packVersion": "csrd@0.1.0 (legal snapshot 2026-07-26)",
@@ -270,9 +298,35 @@
             "op": "cmp",
             "reason": "customer_scope_ambiguity",
             "truth": "INDETERMINATE"
+          },
+          {
+            "children": [
+              {
+                "detail": "entity.excluded_by_article_1_4 (false) == true",
+                "factsUsed": [
+                  {
+                    "factType": "entity.excluded_by_article_1_4",
+                    "scopeId": "e1",
+                    "source": {
+                      "kind": "customer_statement",
+                      "ref": "test fixture"
+                    },
+                    "value": {
+                      "kind": "boolean",
+                      "value": false
+                    }
+                  }
+                ],
+                "op": "eq",
+                "truth": "DOES_NOT_APPLY"
+              }
+            ],
+            "detail": "not",
+            "op": "not",
+            "truth": "APPLIES"
           }
         ],
-        "detail": "all of 5",
+        "detail": "all of 6",
         "op": "all",
         "truth": "DOES_NOT_APPLY"
       }

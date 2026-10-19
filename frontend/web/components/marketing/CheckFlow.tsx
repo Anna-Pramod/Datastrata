@@ -108,6 +108,13 @@ export function CheckFlow() {
       node: <Chips name="Legal form" options={LEGAL_FORMS} value={a.legalForm} onPick={(id) => setA((p) => ({ ...p, legalForm: id }))} />,
     },
     {
+      q: 'Is the entity the European Financial Stability Facility, or a financial product listed in point (b) or (f) of Article 2(12) of Regulation (EU) 2019/2088?',
+      why: 'Q-039 · Article 1(4) removes both from Articles 19a and 29a. ‘Not sure’ leaves the size tests unresolved until clarified.',
+      answered: Boolean(a.exclusion),
+      // Nothing preselected: the visitor states yes, no or not sure, and only a stated yes or no reaches the engine.
+      node: <Chips name="Article 1(4) exclusion" options={YES_NO_UNSURE} value={a.exclusion} onPick={(id) => setA((p) => ({ ...p, exclusion: id as CheckerAnswers['exclusion'] }))} />,
+    },
+    {
       q: 'Which financial year are you assessing?',
       why: 'Q-004 · determines the threshold period, the wave and any transitional option.',
       answered: Boolean(a.financialYear),

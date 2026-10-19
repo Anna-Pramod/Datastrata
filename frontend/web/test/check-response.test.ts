@@ -25,6 +25,8 @@ const EU_ABOVE_THRESHOLD: CheckerAnswers = {
   employees: 'gt1500',
   reportedFy2024: 'no',
   governingChoice: 'same',
+  // Q-039: an ordinary undertaking, not excluded by Article 1(4). Stated, not defaulted.
+  exclusion: 'no',
 };
 
 /** Deliberately in the past, so it can never coincide with the machine's clock. */
@@ -64,5 +66,53 @@ describe('buildCheckResponse', () => {
       .filter(([, line]) => /new Date|Date\.now|performance\.now/.test(line))
       .map(([n, line]) => `${n}:${line}`);
     expect(offenders).toEqual([]);
+  });
+});
+
+/**
+ * The Article 1(4) exclusion question (Q-039), through the public path.
+ *
+ * "Yes" takes the entity out of Article 19a definitively and "no" leaves it
+ * in; an absent or "I'm not sure" answer contributes no fact at all, so the
+ * engine reports the size test as unresolved with `missing_fact`. The copy a
+ * visitor reads then says a fact is missing and names the question — never
+ * that the law is ambiguous, because it is the answer that is missing.
+ */
+describe('the Article 1(4) exclusion answer', () => {
+  const s001 = (answers: CheckerAnswers) => {
+    const found = buildCheckResponse(csrdPack(), answers, FIXED_DATE).determinations.find((d) => d.id === 'CSRD-S-001');
+    if (found === undefined) throw new Error('no CSRD-S-001 determination in the payload');
+    return found;
+  };
+  /** The in-scope answers with the exclusion answer removed, so each case states its own. */
+  const { exclusion: _stated, ...withoutExclusion } = EU_ABOVE_THRESHOLD;
+
+  it('"no" with an in-scope EU profile: the individual size test applies', () => {
+    const d = s001({ ...withoutExclusion, exclusion: 'no' });
+    expect(d.result).toBe('APPLIES');
+    expect(d.reason).toBeUndefined();
+    expect(d.needs).toEqual([]);
+  });
+
+  it('"yes": the entity is definitively outside Article 19a, with no reason code and nothing to resolve', () => {
+    const d = s001({ ...withoutExclusion, exclusion: 'yes' });
+    expect(d.result).toBe('DOES_NOT_APPLY');
+    expect(d.reason).toBeUndefined();
+    expect(d.needs).toEqual([]);
+    expect(d.locators).toContain('Article 1(4)');
+  });
+
+  it.each([
+    ['absent', withoutExclusion],
+    ['"I\'m not sure"', { ...withoutExclusion, exclusion: 'unknown' as const }],
+  ])('%s: the size test stays unresolved, naming the missing answer and not calling the law ambiguous', (_label, answers) => {
+    const d = s001(answers);
+    expect(d.result).toBe('INDETERMINATE');
+    expect(d.reason).toBe('missing_fact');
+    expect(d.reasonCopy).toBe('A fact we need is missing');
+    expect(d.reasonCopy).not.toBe('The law is ambiguous here');
+    expect(d.needs.map((n) => n.factType)).toEqual(['entity.excluded_by_article_1_4']);
+    // The customer-facing label says the answer is what is missing.
+    expect(d.needs[0]?.label).toBe('Whether Article 1(4) excludes the entity (answer needed)');
   });
 });

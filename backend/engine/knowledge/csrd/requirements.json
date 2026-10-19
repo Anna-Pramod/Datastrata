@@ -1,12 +1,12 @@
 [
   {
     "id": "CSRD-S-001",
-    "version": 3,
+    "version": 4,
     "ruleRef": "R-001",
     "title": "Individual Article 19a threshold scope",
     "program": "CSRD",
     "decisionArea": "Individual scope",
-    "plainEnglish": "An undertaking falls within Article 19a where it exceeds EUR 450 million net turnover and an average of 1,000 employees during the financial year. Both thresholds are cumulative.",
+    "plainEnglish": "An undertaking falls within Article 19a where it exceeds EUR 450 million net turnover and an average of 1,000 employees during the financial year. Both thresholds are cumulative. Article 1(4) removes the European Financial Stability Facility and the financial products listed in points (b) and (f) of Article 2(12) of Regulation (EU) 2019/2088 from Article 19a; an undertaking whose exclusion status is unknown stays unresolved rather than being read as in scope.",
     "scopeType": "legal_entity",
     "relationshipClass": "direct_legal",
     "severity": "critical",
@@ -35,6 +35,14 @@
           "fact": "entity.avg_employees",
           "cmp": "gt",
           "value": 1000
+        },
+        {
+          "op": "not",
+          "of": {
+            "op": "eq",
+            "fact": "entity.excluded_by_article_1_4",
+            "value": true
+          }
         }
       ]
     },
@@ -46,6 +54,10 @@
           {
             "kind": "provision",
             "text": "Article 19a(1)"
+          },
+          {
+            "kind": "provision",
+            "text": "Article 1(4)"
           }
         ]
       }
@@ -54,12 +66,12 @@
   },
   {
     "id": "CSRD-S-002",
-    "version": 4,
+    "version": 5,
     "ruleRef": "R-002",
     "title": "Consolidated Article 29a threshold scope",
     "program": "CSRD",
     "decisionArea": "Consolidated scope",
-    "plainEnglish": "A parent undertaking falls within Article 29a where its group exceeds EUR 450 million net turnover and an average of 1,000 employees on a consolidated basis. This is the consolidated size test only; it does not decide whether or when the group must report. CSRD-S-014 composes the threshold and exemption results into the reporting duty, and the financial-year questions rest with CSRD-S-003, CSRD-S-004 (Article 5(2) of Directive (EU) 2022/2464) and the national overlay (CSRD-S-013).",
+    "plainEnglish": "A parent undertaking falls within Article 29a where its group exceeds EUR 450 million net turnover and an average of 1,000 employees on a consolidated basis. This is the consolidated size test only; it does not decide whether or when the group must report. CSRD-S-014 composes the threshold and exemption results into the reporting duty, and the financial-year questions rest with CSRD-S-003, CSRD-S-004 (Article 5(2) of Directive (EU) 2022/2464) and the national overlay (CSRD-S-013). Article 1(4) removes the European Financial Stability Facility and the financial products listed in points (b) and (f) of Article 2(12) of Regulation (EU) 2019/2088 from Article 29a; an undertaking whose exclusion status is unknown stays unresolved rather than being read as in scope.",
     "scopeType": "legal_entity",
     "relationshipClass": "direct_legal",
     "severity": "critical",
@@ -93,6 +105,14 @@
           "fact": "group.avg_employees",
           "cmp": "gt",
           "value": 1000
+        },
+        {
+          "op": "not",
+          "of": {
+            "op": "eq",
+            "fact": "entity.excluded_by_article_1_4",
+            "value": true
+          }
         }
       ]
     },
@@ -104,6 +124,10 @@
           {
             "kind": "provision",
             "text": "Article 29a(1)"
+          },
+          {
+            "kind": "provision",
+            "text": "Article 1(4)"
           }
         ]
       }

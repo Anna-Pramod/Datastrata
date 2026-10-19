@@ -414,13 +414,16 @@ describe('the version registry after the bump', () => {
   );
 
   /**
-   * The one requirement re-authored since the version-3 bump: CSRD-S-002's
+   * The requirements re-authored since the version-3 bump: CSRD-S-002's
    * plain-English text gained its scope-not-timing statement on 2026-10-18
-   * (`HANDOFF-2026-10-18-s002-scope-vs-timing.md`), so it stands at version 4.
-   * Every other requirement is still at 3. Stated as a table rather than a
-   * blanket number so that a further re-authoring has to be declared here.
+   * (`HANDOFF-2026-10-18-s002-scope-vs-timing.md`, version 4), and on
+   * 2026-10-19 both size tests gained the Article 1(4) exclusion branch
+   * (`knowledge-article-1-4-exclusion.test.ts`): CSRD-S-002 stands at 5 and
+   * CSRD-S-001 at 4. Every other requirement is still at 3. Stated as a table
+   * rather than a blanket number so that a further re-authoring has to be
+   * declared here.
    */
-  const CURRENT_VERSION = (id: string): number => (id === 'CSRD-S-002' ? 4 : 3);
+  const CURRENT_VERSION = (id: string): number => (id === 'CSRD-S-002' ? 5 : id === 'CSRD-S-001' ? 4 : 3);
 
   it('records every requirement at its current version, matching its current content', () => {
     const pack = csrdPack();
@@ -480,12 +483,15 @@ describe('the version registry after the bump', () => {
   it('holds exactly the versions 1 to the current one, and nothing beyond', () => {
     // A stray higher version would mean some requirement was re-authored
     // without being declared in `CURRENT_VERSION` above; a missing lower one
-    // would mean history was dropped. Only S-002 has a version 4.
+    // would mean history was dropped. Only S-002 has a version 5 and only
+    // S-001 and S-002 a version 4; the next requirement is the control.
     for (const r of csrdPack().requirements) {
       const expected = Array.from({ length: CURRENT_VERSION(r.id) }, (_, i) => String(i + 1));
       expect(Object.keys(registry[r.id] ?? {}).sort(), r.id).toEqual(expected);
     }
-    expect(registry['CSRD-S-002']?.['4']).toMatch(/^[0-9a-f]{64}$/);
-    expect(registry['CSRD-S-001']?.['4']).toBeUndefined();
+    expect(registry['CSRD-S-002']?.['5']).toMatch(/^[0-9a-f]{64}$/);
+    expect(registry['CSRD-S-001']?.['4']).toMatch(/^[0-9a-f]{64}$/);
+    expect(registry['CSRD-S-001']?.['5']).toBeUndefined();
+    expect(registry['CSRD-S-003']?.['4']).toBeUndefined();
   });
 });

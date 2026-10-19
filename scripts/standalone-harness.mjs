@@ -58,6 +58,8 @@ export const CHECK_REQUEST_BODY = {
   employees: 'gt1500',
   reportedFy2024: 'no',
   governingChoice: 'same',
+  // Q-039: not excluded by Article 1(4), stated — "answering every question" now includes this one.
+  exclusion: 'no',
 };
 
 /** Carries the detail — usually the server's own output — alongside the verdict. */

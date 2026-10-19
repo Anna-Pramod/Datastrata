@@ -29,7 +29,9 @@ describe('P-001 EU standalone above thresholds', () => {
     .euEntity('e1', 'Alpine Industrie SAS', 'FR')
     .num('e1', 'entity.net_turnover_eur', 520_000_000)
     .num('e1', 'entity.avg_employees', 1350)
-    .str('e1', 'entity.governing_member_state', 'FR');
+    .str('e1', 'entity.governing_member_state', 'FR')
+    // Not excluded by Article 1(4) (Q-039): stated for this scenario, never defaulted.
+    .bool('e1', 'entity.excluded_by_article_1_4', false);
   const r = assess(csrdPack(), p.build(), ctx(...FY2027, 'e1'));
 
   it('individual EU scope applies and the reporting duty is active', () => {
@@ -101,7 +103,9 @@ describe('P-003 consolidated group scope', () => {
     .num('parent', 'entity.avg_employees', 400)
     .num('grp', 'group.consolidated_net_turnover_eur', 900_000_000)
     .num('grp', 'group.avg_employees', 4000)
-    .str('parent', 'entity.governing_member_state', 'NL');
+    .str('parent', 'entity.governing_member_state', 'NL')
+    // Not excluded by Article 1(4) (Q-039): stated for this scenario, never defaulted.
+    .bool('parent', 'entity.excluded_by_article_1_4', false);
   const r = assess(csrdPack(), p.build(), ctx(...FY2027, 'parent'));
 
   it('consolidated scope applies while the individual route is negative', () => {
@@ -127,7 +131,9 @@ describe('P-004 exempt subsidiary (threshold in scope, duty exempt)', () => {
     .str('grp', 'parent.report_standard', 'ESRS')
     .str('grp', 'parent.report_public_url', 'https://example.com/group-report')
     .bool('sub', 'entity.national_publication_conditions_met', true)
-    .str('sub', 'entity.governing_member_state', 'DE');
+    .str('sub', 'entity.governing_member_state', 'DE')
+    // Not excluded by Article 1(4) (Q-039): stated for this scenario, never defaulted.
+    .bool('sub', 'entity.excluded_by_article_1_4', false);
   const r = assess(csrdPack(), p.build(), ctx(...FY2027, 'sub'));
 
   it('threshold applies AND the exemption applies — two separate determinations', () => {

@@ -35,7 +35,8 @@
         }
       ],
       "locators": [
-        "Article 19a(1)"
+        "Article 19a(1)",
+        "Article 1(4)"
       ],
       "caution": "Threshold-crossing ranges are indeterminate — ask for the exact value. This is scope, not the final reporting duty (see CSRD-S-014); national transposition may vary timing and options."
     },
@@ -55,7 +56,8 @@
         }
       ],
       "locators": [
-        "Article 29a(1)"
+        "Article 29a(1)",
+        "Article 1(4)"
       ],
       "caution": "Use the legal consolidation perimeter, not internal business units."
     },

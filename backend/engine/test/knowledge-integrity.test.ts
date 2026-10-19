@@ -19,7 +19,7 @@ describe('CSRD knowledge pack integrity', () => {
     expect(pack.sources).toHaveLength(17);
     expect(pack.obligationTemplates).toHaveLength(17);
     expect(pack.gapTests).toHaveLength(16);
-    expect(pack.questions).toHaveLength(38);
+    expect(pack.questions).toHaveLength(39);
     expect(pack.factTypes.length).toBeGreaterThanOrEqual(47);
   });
 

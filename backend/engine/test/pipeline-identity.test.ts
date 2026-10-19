@@ -479,7 +479,7 @@ describe('the identities the @2 migration must not move', () => {
     expect('invocation' in SUBSCRIPTION_ROLE_CONFIG_V1).toBe(false);
   });
 
-  it('the HTTP literal is the pipelineVersion the committed S-001 recording carries', () => {
+  it('the HTTP literal is the pipelineVersion the retired adapter-era S-001 recording carries', () => {
     const recording = JSON.parse(
       readFileSync(
         join(
@@ -496,6 +496,32 @@ describe('the identities the @2 migration must not move', () => {
     // Positive control: the file read is the recording named, not another one.
     expect(recording.runId).toBe('run-v1-8717925d731334f6162bdc2fd35a230d3bde7a5d1dc66588db5f5544a0748310');
     expect(recording.pipelineVersion).toBe(HTTP_PIPELINE_VERSION);
+  });
+
+  /**
+   * The exclusion-era S-001 recording (2026-10-19) is the first made under the
+   * current set and grammar. Its `pipelineVersion` is derived here through
+   * `pipelineVersionFor` over the current prompt files and S-001's own closure
+   * under the current grammar — never read off the recording, which would
+   * agree with anything — and compared with what the file carries.
+   */
+  it('the current-set HTTP identity over S-001’s closure is the pipelineVersion the exclusion-era recording carries', () => {
+    const world = readWorld(paths, 'csrd', 'CSRD-S-001');
+    expect(world.requirement.id).toBe('CSRD-S-001');
+    const derived = pipelineVersionFor({
+      prompts: loadPromptSet(),
+      config: DEFAULT_ROLE_CONFIG,
+      closure: EntitledClosure.forSources(world.corpus, world.sourceRegister, world.pack, sourceIdsOf(world.requirement)),
+    });
+    const file = 'run-v1-fc345f42bea3a9677b8c827da42ce47f3b195588bb4cd1d489371c9a42c6015a.json';
+    const recording = JSON.parse(
+      readFileSync(join(engineRoot, 'test', 'verification-transcripts', 'csrd', 'CSRD-S-001', file), 'utf8'),
+    ) as { runId: string; pipelineVersion: string };
+    // Positive control: the file read is the recording named, not another one.
+    expect(`${recording.runId}.json`).toBe(file);
+    expect(recording.pipelineVersion).toBe(derived);
+    // And the move is real: it is not the identity the retired generation was filed under.
+    expect(derived).not.toBe(HTTP_PIPELINE_VERSION);
   });
 
   it('the two configurations differ in the adapter alone, and the two literals differ', () => {

@@ -72,6 +72,8 @@ const ANSWERS: CheckerAnswers = {
   employees: 'gt1500',
   reportedFy2024: 'no',
   governingChoice: 'same',
+  // Q-039: not excluded by Article 1(4), stated — an in-scope undertaking is the scenario.
+  exclusion: 'no',
 };
 
 /** Runs `fn` as a process whose working directory is `dir`, and puts it back. */

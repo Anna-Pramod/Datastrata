@@ -17,6 +17,12 @@
  * fold timing into the size test or lose the cross-reference, and they pin the
  * fact that the correction moved the description and not the verification
  * input.
+ *
+ * One day later the input did move, by design: version 5 added the Article
+ * 1(4) exclusion branch and its locator (`knowledge-article-1-4-exclusion
+ * .test.ts`). The digest the r1–r5 records carry is kept below as the
+ * historical literal, and the current one is pinned beside it, so the move
+ * is declared rather than discovered.
  */
 
 import { join } from 'node:path';
@@ -84,12 +90,15 @@ function referencedRequirements(condition: Condition): { requirement: string; ex
 }
 
 /**
- * The verification input the S-002 capture pinned (`requirementInputSha256`
- * in its filed `verification-result.json`, execution 20261018T121625Z-2d4de0).
- * The correction below edits what the requirement *says*, never what it
- * *verifies*, so this digest must not move.
+ * The verification input the five S-002 captures pinned (`requirementInputSha256`
+ * in their filed `verification-result.json`, executions 20261018T121625Z-2d4de0
+ * through 20261019T141716Z-b588bc), which describes version 4. The scope
+ * statement edited what the requirement *says*, never what it *verifies*, so
+ * the digest held through version 4; version 5's exclusion branch moved it
+ * to `S002_CURRENT_INPUT_SHA256`.
  */
-const S002_CAPTURED_INPUT_SHA256 = 'fecc50505cb4779323b70203924c012b783bf5186e34ecf9ed4d3df20b6fea95';
+const S002_R1_TO_R5_CAPTURED_INPUT_SHA256 = 'fecc50505cb4779323b70203924c012b783bf5186e34ecf9ed4d3df20b6fea95';
+const S002_CURRENT_INPUT_SHA256 = '93ad5a911f14aac849dc95dfde262ce7a260eae9a162626b0c1d006b0592610f';
 
 describe('CSRD-S-002 is the consolidated size test, and the pack keeps timing elsewhere', () => {
   const s002 = requirement('CSRD-S-002');
@@ -103,9 +112,10 @@ describe('CSRD-S-002 is the consolidated size test, and the pack keeps timing el
     for (const token of ['CSRD-S-014', 'CSRD-S-003', 'CSRD-S-004', 'Article 5(2)']) {
       expect(s002.plainEnglish, token).toContain(token);
     }
-    // A description edit is a revision: the version moved with it, and the
-    // registry binds the new text (loadPack above would have refused otherwise).
-    expect(s002.version).toBe(4);
+    // A description edit is a revision: the version moved with it (4), and the
+    // Article 1(4) branch moved it again (5); the registry binds the current
+    // text (loadPack above would have refused otherwise).
+    expect(s002.version).toBe(5);
   });
 
   it('S-001 carries the matching scope-not-duty note, so the two size tests say the same thing', () => {
@@ -121,13 +131,13 @@ describe('CSRD-S-002 is the consolidated size test, and the pack keeps timing el
     expect(TEMPORAL.test('cmp')).toBe(false);
   });
 
-  it('the timing requirements cite Article 5(2) of SRC-002; the size test cites Article 29a(1) of SRC-001 only', () => {
+  it('the timing requirements cite Article 5(2) of SRC-002; the size test cites SRC-001 only — Article 29a(1), and the Article 1(4) exclusion', () => {
     for (const timing of [s003, s004]) {
       expect(timing.provenance.map((p) => p.sourceId), timing.id).toEqual(['SRC-002']);
       expect(locatorTexts(timing).some((text) => text.startsWith('Article 5(2)')), timing.id).toBe(true);
     }
     expect(s002.provenance.map((p) => p.sourceId)).toEqual(['SRC-001']);
-    expect(locatorTexts(s002)).toEqual(['Article 29a(1)']);
+    expect(locatorTexts(s002)).toEqual(['Article 29a(1)', 'Article 1(4)']);
   });
 
   it('S-014, the reporting duty, composes the size test with the FY2025–26 exemption rather than restating either; S-003 is not composed into it', () => {
@@ -141,13 +151,14 @@ describe('CSRD-S-002 is the consolidated size test, and the pack keeps timing el
     expect(referencedRequirements(conditionOf(s002))).toEqual([]);
   });
 
-  it('the correction moved the description, not the verification input the capture pinned', () => {
-    expect(requirementInputSha256(s002)).toBe(S002_CAPTURED_INPUT_SHA256);
+  it('the scope statement left the verification input where the captures pinned it; the Article 1(4) branch moved it, to the digest pinned here', () => {
+    expect(requirementInputSha256(s002)).toBe(S002_CURRENT_INPUT_SHA256);
+    expect(requirementInputSha256(s002)).not.toBe(S002_R1_TO_R5_CAPTURED_INPUT_SHA256);
     // Positive control for the digest: a condition edit would move it.
     const widened: Requirement = {
       ...s002,
       condition: { op: 'all', of: [...(conditionOf(s002) as { op: 'all'; of: Condition[] }).of, { op: 'fy_start_year_in', years: [2027] }] },
     };
-    expect(requirementInputSha256(widened)).not.toBe(S002_CAPTURED_INPUT_SHA256);
+    expect(requirementInputSha256(widened)).not.toBe(S002_CURRENT_INPUT_SHA256);
   });
 });

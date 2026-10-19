@@ -15,7 +15,7 @@ The first genuine provider transcript does not exist yet. It will use this same 
 and this same path, and replacing this file is a decision rather than a fix: it retires
 the recorded outputs as evidence.
 
-## Five generations live here
+## Six generations live here
 
 A recording is bound to a run identity, so it stops binding when the question moves.
 When that happens the old recording is **retired, not deleted**: it is evidence of an
@@ -30,7 +30,8 @@ one by accident.
 | provenance-era | `run-v1-e77e9d0d…` | retired 2026-09-05 |
 | standing-era | `run-v1-a6743df7…` | retired 2026-09-05 |
 | prompt-era | `run-v1-14b51960…` | retired 2026-09-06 |
-| adapter-era | `run-v1-8717925d73133…` | current |
+| adapter-era | `run-v1-8717925d…` | retired 2026-10-19 |
+| exclusion-era | `run-v1-fc345f42bea3a…` | current |
 
 The D1(a) provenance migration retired the first. It moved `pipelineVersion` — the
 reader prompt changed when locators replaced source identities in `ReaderInput` — and
@@ -59,13 +60,27 @@ themselves, not asserted from a plan.
 B-ADAPTER retired the fourth. The role configuration moved to seven prosecutors, one
 per declared lens, and selected the concrete adapter `anthropic-messages@1`; both are
 `pipelineVersion` inputs, so `runId` moved with it. The prompts, the closure renderer
-and every other binding field did **not** move. This recording was made through the
+and every other binding field did **not** move. The adapter-era recording was made through the
 adapter path — the live runner, the adapter's real request and projection — over a
 **canned transport** with the suite's network trap installed, so it has the shape a
 genuine recording will have. It is still synthetic: no model was contacted, and the
 nine exchanges (one reader, seven prosecutors, one adjudicator) carry the synthetic
 outputs. A genuine recording, when one is authorised and made, is filed beside these
 under its own identity; none of them is deleted for it.
+
+E — the Article 1(4) exclusion — retired the fifth. CSRD-S-001 moved to version 4: a
+negated branch over `entity.excluded_by_article_1_4` became the last conjunct of its
+ALL and `Article 1(4)` a second locator on SRC-001, so `requirementInputSha256` moved
+(`9b8b8436…` → `340cf514…`) and `renderedConditionSha256` with it (`ee7f97a3…` →
+`3bd1ae18…`). This sixth recording is also the first made under the v5 prompt set and
+the `1.2.0` closure grammar (the evidence-edge contract), so `pipelineVersion` moved
+as well, and `runId` follows from all three. `corpusClosureSha256` did **not** move:
+the closure hash covers the stored documents, and the requirement cites the same
+source. The retired adapter-era recording still replays over the version-3 text it
+was made against (`test/historical-requirements/CSRD-S-001.v3.json`, under the kept
+v1 set and the kept 1.1.0 grammar — `pipeline-replay.test.ts`) and is refused over
+the current text by name. Still synthetic: the same canned transport, the same
+network trap, no model contacted.
 
 `SUPERSEDED_RUN_IDS` in `test/replay-fixtures.ts` is the list of retired identities.
 Adding a generation means appending to it, never overwriting a file.
