@@ -12,7 +12,14 @@ import { join } from 'node:path';
 import { normalize, NORMALIZER_VERSION } from '../src/corpus/normalize';
 import { sha256Hex } from '../src/corpus/hash';
 import { loadCorpus, type LoadedCorpus } from '../src/corpus/store';
-import { checkEvidenceSet, type EvidenceItem, type QuoteEvidence } from '../src/corpus/evidence';
+import {
+  checkEvidenceSet,
+  corpusEdgeLookup,
+  edgeReferenceProblems,
+  type EdgeLookup,
+  type EvidenceItem,
+  type QuoteEvidence,
+} from '../src/corpus/evidence';
 
 const prov = { type: 'celex_metadata', source: 'CELEX', recordedOn: '2026-08-20' } as const;
 
@@ -416,5 +423,119 @@ describe('evidence sets', () => {
   it('reports every problem, not just the first', () => {
     const items: EvidenceItem[] = [quote('not in here at all'), quote('nor is this')];
     expect(checkEvidenceSet(items, corpus).problems).toHaveLength(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The edge rules, shared. r4 (2026-10-19) showed why they must be one function:
+// the reader named four edge ids the corpus does not hold, every role seam
+// passed (the seams checked quotes, not edges), nine launches were spent, and
+// only the record boundary's `checkEvidenceSet` refused. The seam that now
+// refuses an unlisted edge before the next launch (`pipeline/edge-references.ts`)
+// must apply exactly the rules the gate applies, over a narrower scope — so the
+// rules are extracted here and called directly, over a lookup the corpus could
+// never produce (TEST-EVIDENCE-STANDARD, failure mode #4), and the gate is held
+// to obtaining every edge problem from the same function.
+// ---------------------------------------------------------------------------
+
+describe('the edge rules, shared: edgeReferenceProblems over a structural lookup, and the gate obtaining its edge problems from it', () => {
+  /** Canonically (amender -> amended): X1 B -> A, X2 C -> B, X6 B -> D (shares X1's amender, succeeds nothing). */
+  const FIXTURE_EDGES = new Map<string, { edgeId: string; kind: 'amends' | 'amendedBy' | 'references' | 'consolidates' | 'definesTermsFor'; from: string; to: string }>([
+    ['X1', { edgeId: 'X1', kind: 'amends', from: 'DOC-B', to: 'DOC-A' }],
+    ['X2', { edgeId: 'X2', kind: 'amends', from: 'DOC-C', to: 'DOC-B' }],
+    ['X6', { edgeId: 'X6', kind: 'amendedBy', from: 'DOC-D', to: 'DOC-B' }],
+    ['R1', { edgeId: 'R1', kind: 'references', from: 'DOC-A', to: 'DOC-C' }],
+    ['K1', { edgeId: 'K1', kind: 'consolidates', from: 'DOC-A', to: 'DOC-B' }],
+  ]);
+  const lookup: EdgeLookup = { scope: 'a fixture', edge: (edgeId) => FIXTURE_EDGES.get(edgeId) };
+  /** The edge rules never read a quote's text or hash; a well-formed placeholder keeps the item schema-shaped. */
+  const q = (docId: string): QuoteEvidence => ({ kind: 'quote', docId, sha256Normalized: 'a'.repeat(64), text: 'placeholder' });
+  const hop = (edgeId: string, docId: string) => ({ edgeId, quote: q(docId) });
+  const chain = (...hops: Array<{ edgeId: string; quote: QuoteEvidence }>): EvidenceItem => ({ kind: 'amendment_chain', hops });
+  const cross = (edgeId: string, from: string, to: string): EvidenceItem => ({ kind: 'cross_reference', edgeId, from: q(from), to: q(to) });
+
+  it('an id the lookup does not hold is reported under the hop\'s path, naming the id and the lookup\'s scope, and nothing else', () => {
+    expect(edgeReferenceProblems(chain(hop('NOPE', 'DOC-A')), 'evidence[0]', lookup)).toEqual([
+      'evidence[0].hops[0]: names edge NOPE, which a fixture does not hold',
+    ]);
+  });
+
+  it('a hop on a references or consolidates edge is refused for its kind', () => {
+    expect(edgeReferenceProblems(chain(hop('R1', 'DOC-A')), 'evidence[0]', lookup)).toEqual([
+      'evidence[0].hops[0]: edge R1 is a references edge; an amendment_chain hop must rest on an amends or amendedBy edge',
+    ]);
+    expect(edgeReferenceProblems(chain(hop('K1', 'DOC-A')), 'evidence[0]', lookup).join('\n')).toContain('K1 is a consolidates edge');
+  });
+
+  it('a hop whose quote comes from neither endpoint of its edge is refused, naming both endpoints', () => {
+    expect(edgeReferenceProblems(chain(hop('X1', 'DOC-C')), 'evidence[0]', lookup)).toEqual([
+      'evidence[0].hops[0]: quote is taken from DOC-C, which is neither endpoint of edge X1 (DOC-B -> DOC-A)',
+    ]);
+  });
+
+  it('continuity: a chain walked either way passes; hops that share an amender without succeeding one another are refused naming both ids', () => {
+    expect(edgeReferenceProblems(chain(hop('X1', 'DOC-B'), hop('X2', 'DOC-C')), 'evidence[0]', lookup)).toEqual([]);
+    expect(edgeReferenceProblems(chain(hop('X2', 'DOC-C'), hop('X1', 'DOC-B')), 'evidence[0]', lookup)).toEqual([]);
+    const broken = edgeReferenceProblems(chain(hop('X1', 'DOC-B'), hop('X6', 'DOC-D')), 'evidence[0]', lookup);
+    expect(broken).toHaveLength(1);
+    expect(broken[0]).toContain('evidence[0].hops[1]: edge X6');
+    expect(broken[0]).toContain('does not continue the amendment chain from X1');
+  });
+
+  it('an empty chain is refused by name', () => {
+    expect(edgeReferenceProblems(chain(), 'evidence[3]', lookup)).toEqual(['evidence[3]: amendment chain has no hops']);
+  });
+
+  it('a cross_reference must rest on a references edge that connects its two quotes\' documents', () => {
+    expect(edgeReferenceProblems(cross('X1', 'DOC-B', 'DOC-A'), 'evidence[0]', lookup)).toEqual([
+      'evidence[0]: edge X1 is a amends edge; a cross_reference must rest on a references edge',
+    ]);
+    expect(edgeReferenceProblems(cross('R1', 'DOC-C', 'DOC-A'), 'evidence[0]', lookup)).toEqual([
+      'evidence[0]: edge R1 does not connect DOC-C to DOC-A',
+    ]);
+    expect(edgeReferenceProblems(cross('NOPE', 'DOC-A', 'DOC-C'), 'evidence[0]', lookup)).toEqual([
+      'evidence[0]: names edge NOPE, which a fixture does not hold',
+    ]);
+    expect(edgeReferenceProblems(cross('R1', 'DOC-A', 'DOC-C'), 'evidence[0]', lookup)).toEqual([]);
+  });
+
+  it('a quote and an absence carry no edge, so they raise no edge problem', () => {
+    expect(edgeReferenceProblems(q('DOC-A'), 'evidence[0]', lookup)).toEqual([]);
+    expect(edgeReferenceProblems({ kind: 'absence', docIds: ['DOC-A'], term: 'nothing' }, 'evidence[0]', lookup)).toEqual([]);
+  });
+
+  it('corpusEdgeLookup speaks for the whole loaded corpus and names it as such', () => {
+    const over = corpusEdgeLookup(corpus);
+    expect(over.scope).toBe('the corpus');
+    expect(over.edge('E1')).toMatchObject({ edgeId: 'E1', kind: 'amendedBy', from: 'DOC-A', to: 'DOC-B' });
+    expect(over.edge('E-INVENTED')).toBeUndefined();
+  });
+
+  it('one function, two gates: for every edge-bearing item in this file, the gate\'s edge problems are exactly the function\'s over the corpus lookup', () => {
+    const cq = (text: string, docId: string): QuoteEvidence => ({ kind: 'quote', docId, sha256Normalized: corpus.document(docId).sha256Normalized, text });
+    const cases: EvidenceItem[] = [
+      { kind: 'amendment_chain', hops: [{ edgeId: 'E1', quote: cq('substitutes the opening words', 'DOC-B') }] },
+      { kind: 'amendment_chain', hops: [{ edgeId: 'E1', quote: cq('substitutes the opening words', 'DOC-B') }, { edgeId: 'E2', quote: cq('replaces the thresholds', 'DOC-C') }] },
+      { kind: 'amendment_chain', hops: [{ edgeId: 'E1', quote: cq('substitutes the opening words', 'DOC-B') }, { edgeId: 'E6', quote: cq('taxonomy-aligned turnover', 'DOC-D') }] },
+      { kind: 'amendment_chain', hops: [{ edgeId: 'E2', quote: cq('replaces the thresholds', 'DOC-C') }, { edgeId: 'E1', quote: cq('substitutes the opening words', 'DOC-B') }, { edgeId: 'E6', quote: cq('taxonomy-aligned turnover', 'DOC-D') }] },
+      { kind: 'amendment_chain', hops: [{ edgeId: 'E1', quote: cq('substitutes the opening words', 'DOC-B') }, { edgeId: 'E7', quote: cq('revises the taxonomy reporting annex', 'DOC-E') }] },
+      { kind: 'amendment_chain', hops: [{ edgeId: 'E3', quote: cq('Article 19a', 'DOC-A') }] },
+      { kind: 'amendment_chain', hops: [{ edgeId: 'E-INVENTED', quote: cq('substitutes the opening words', 'DOC-B') }] },
+      { kind: 'amendment_chain', hops: [{ edgeId: 'E1', quote: cq('taxonomy-aligned turnover', 'DOC-D') }] },
+      { kind: 'amendment_chain', hops: [] },
+      { kind: 'cross_reference', edgeId: 'E3', from: cq('Article 19a', 'DOC-A'), to: cq('Article 1(4)(a)', 'DOC-B') },
+      { kind: 'cross_reference', edgeId: 'E1', from: cq('Article 19a', 'DOC-A'), to: cq('Article 1(4)(a)', 'DOC-B') },
+      { kind: 'cross_reference', edgeId: 'E3', from: cq('Article 1(4)(a)', 'DOC-B'), to: cq('Article 19a', 'DOC-A') },
+    ];
+    const quoteTextProblem = /: quote (is empty|names .* which the corpus does not hold|pins .* at hash|not found in)/;
+    let refusals = 0;
+    for (const item of cases) {
+      const gate = checkEvidenceSet([item], corpus).problems.filter((p) => !quoteTextProblem.test(p));
+      const shared = edgeReferenceProblems(item, 'evidence[0]', corpusEdgeLookup(corpus));
+      expect(gate).toEqual(shared);
+      if (shared.length > 0) refusals += 1;
+    }
+    // The equivalence is not vacuous: most cases carry at least one edge problem.
+    expect(refusals).toBeGreaterThanOrEqual(8);
   });
 });

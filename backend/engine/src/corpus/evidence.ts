@@ -12,11 +12,25 @@
  * does not occur; it cannot prove no economically equivalent criterion exists
  * under different words. That is a legal judgment, so absence may never be the
  * sole evidence for a conclusion.
+ *
+ * **The edge rules are one function, `edgeReferenceProblems`, over a lookup.**
+ * The fourth genuine S-002 capture (2026-10-19, r4) returned a reading whose
+ * `amendment_chain` and `cross_reference` items named four edge ids the corpus
+ * does not hold. Every role seam passed — the seams checked quotes, not edges
+ * — nine launches were spent, and only this module's `checkEvidenceSet`, run
+ * at the record boundary, refused. The seam that now refuses an unlisted edge
+ * before the next role launches (`pipeline/edge-references.ts`) must apply
+ * exactly the rules the gate applies, over the narrower scope of the entitled
+ * closure; a second implementation would be a second answer to "is this edge
+ * reference sound", differing in whatever its author forgot. So the rules
+ * take an `EdgeLookup` — what an id resolves to, and what to call the place
+ * it was resolved in — and the gate hands in the whole corpus.
  */
 
 import { z } from 'zod';
 import { amendmentDirection } from './schema';
 import type { LoadedCorpus } from './store';
+import type { CorpusEdge } from './types';
 import { normalizeWhitespace } from './normalize';
 
 export interface QuoteEvidence {
@@ -178,13 +192,150 @@ function checkQuote(q: QuoteEvidence, corpus: LoadedCorpus, label: string, probl
   }
 }
 
-function edgeById(corpus: LoadedCorpus, edgeId: string) {
+function edgeById(corpus: LoadedCorpus, edgeId: string): CorpusEdge | undefined {
   for (const d of corpus.index.documents) {
     for (const e of d.edges) {
       if (e.edgeId === edgeId) return e;
     }
   }
   return undefined;
+}
+
+/**
+ * Where an edge id is looked up, and what to call that place in a message.
+ *
+ * Structural rather than `LoadedCorpus`, for two reasons. The role seam holds
+ * no corpus — a role reads through `EntitledClosure` and nothing else — so it
+ * supplies the closure's own edges and names the scope `the entitled closure`.
+ * And a test can hand in edges the corpus would never produce, so each rule
+ * can be shown to fail on its own (TEST-EVIDENCE-STANDARD, failure mode #4).
+ * The scope is written into the refusal so a reader knows which question was
+ * asked: an id `the corpus` does not hold is an invention; an id `the entitled
+ * closure` does not hold may be an invention or a relationship outside what
+ * the role was shown, and either is a defect of the output.
+ */
+export interface EdgeLookup {
+  readonly scope: string;
+  edge(edgeId: string): Pick<CorpusEdge, 'edgeId' | 'kind' | 'from' | 'to'> | undefined;
+}
+
+/** The gate's lookup: every edge of every document the loaded corpus holds. */
+export function corpusEdgeLookup(corpus: LoadedCorpus): EdgeLookup {
+  return { scope: 'the corpus', edge: (edgeId) => edgeById(corpus, edgeId) };
+}
+
+/**
+ * Every edge problem of one evidence item, in order, none omitted.
+ *
+ * Four rules, and only these: the edge exists in the lookup's scope; an
+ * `amendment_chain` hop rests on an `amends` or `amendedBy` edge and its
+ * quote is taken from one of that edge's two documents; a `cross_reference`
+ * rests on a `references` edge whose `from` and `to` are the documents of its
+ * two quotes; and a chain chains, in one direction. Nothing here reads a
+ * quote's text or hash — the text is `checkQuote`'s question at the gate, the
+ * hash is the quote-pin seam's at the role — so the same call is sound over
+ * a closure that holds no text at all.
+ *
+ * A `quote` and an `absence` name no edge and raise nothing.
+ */
+export function edgeReferenceProblems(item: EvidenceItem, label: string, edges: EdgeLookup): string[] {
+  const problems: string[] = [];
+
+  if (item.kind === 'amendment_chain') {
+    if (item.hops.length === 0) {
+      problems.push(`${label}: amendment chain has no hops`);
+      return problems;
+    }
+    // A chain has to chain, and a chain has to run one way.
+    //
+    // Checking hops in isolation would make this item a bag of unrelated
+    // (edge, quote) pairs: an agent could assert a chain A -> D out of a
+    // genuine A -> B edge and a genuine C -> D edge, both quotes checking,
+    // and nothing would object. Requiring only that consecutive hops *touch*
+    // is not enough either: two edges that both amend from the same document
+    // are connected without either succeeding the other.
+    //
+    // Orientation is decidable because the direction is canonicalised first.
+    // `amends` and `amendedBy` state one relation from opposite ends, so the
+    // raw from/to pair says nothing on its own -- but amendmentDirection()
+    // resolves both spellings to one (amender, amended) pair, the same one
+    // the schema's cycle detection uses. A chain is then oriented when every
+    // junction runs the same way: each hop amending the previous hop's
+    // amender, or each hop being amended by the previous hop's amended
+    // document. Either walk direction is fine; mixing them is not.
+    type Amendment = { edgeId: string; amender: string; amended: string };
+    const walk: Array<Amendment | null> = [];
+
+    item.hops.forEach((hop, h) => {
+      const hopLabel = `${label}.hops[${h}]`;
+      const edge = edges.edge(hop.edgeId);
+      if (edge === undefined) {
+        problems.push(`${hopLabel}: names edge ${hop.edgeId}, which ${edges.scope} does not hold`);
+        walk.push(null);
+        return;
+      }
+      if (hop.quote.docId !== edge.from && hop.quote.docId !== edge.to) {
+        problems.push(
+          `${hopLabel}: quote is taken from ${hop.quote.docId}, which is neither endpoint of edge ${hop.edgeId} (${edge.from} -> ${edge.to})`,
+        );
+      }
+      // A hop must be an amendment. A `references` edge has no amender, so
+      // orientation is not a question that can be asked of it -- and a
+      // chain of references is not an amendment chain in the first place.
+      const direction = amendmentDirection(edge);
+      if (direction === null) {
+        problems.push(
+          `${hopLabel}: edge ${hop.edgeId} is a ${edge.kind} edge; an amendment_chain hop must rest on an amends or amendedBy edge`,
+        );
+      }
+      walk.push(direction === null ? null : { edgeId: hop.edgeId, ...direction });
+    });
+
+    // Orientation needs every hop to have a direction; any hop that failed
+    // above already carries its own problem, so there is nothing to add.
+    const hops: Amendment[] = walk.filter((h): h is Amendment => h !== null);
+    if (hops.length === walk.length) {
+      let forward = true; // each hop amends the previous hop's amender
+      let backward = true; // each hop is amended by the previous hop's amended document
+      for (let h = 1; h < hops.length; h += 1) {
+        const prev = hops[h - 1] as Amendment;
+        const next = hops[h] as Amendment;
+        forward = forward && next.amended === prev.amender;
+        backward = backward && next.amender === prev.amended;
+        // The first junction at which no single walk direction survives the
+        // chain so far: where the succession provably breaks, whether the
+        // chain never connected or changed direction here.
+        if (!forward && !backward) {
+          problems.push(
+            `${label}.hops[${h}]: edge ${next.edgeId} (${next.amender} amends ${next.amended}) does not continue the amendment chain from ${prev.edgeId} (${prev.amender} amends ${prev.amended}): every hop must run the same way, each one either amending the previous hop's amender or being amended by the previous hop's amended document`,
+          );
+          break;
+        }
+      }
+    }
+    return problems;
+  }
+
+  if (item.kind === 'cross_reference') {
+    const edge = edges.edge(item.edgeId);
+    if (edge === undefined) {
+      problems.push(`${label}: names edge ${item.edgeId}, which ${edges.scope} does not hold`);
+      return problems;
+    }
+    // Spec 2.2: "Both quotes check; a `references` edge connects them."
+    // The kind is the claim. "X cites Y" and "X was amended by Y" are
+    // different legal relations, and an amendment edge does not establish
+    // that one provision cross-refers to another.
+    if (edge.kind !== 'references') {
+      problems.push(`${label}: edge ${item.edgeId} is a ${edge.kind} edge; a cross_reference must rest on a references edge`);
+    }
+    if (edge.from !== item.from.docId || edge.to !== item.to.docId) {
+      problems.push(`${label}: edge ${item.edgeId} does not connect ${item.from.docId} to ${item.to.docId}`);
+    }
+    return problems;
+  }
+
+  return problems;
 }
 
 /**
@@ -222,6 +373,11 @@ export function checkEvidenceSet(
     );
   }
 
+  // One lookup for the whole set: the edge rules are `edgeReferenceProblems`'s,
+  // the same function the role seams call over the entitled closure, so the
+  // gate cannot come to apply a rule the seam does not, or the reverse.
+  const edges = corpusEdgeLookup(corpus);
+
   items.forEach((item, i) => {
     const label = `evidence[${i}]`;
 
@@ -231,101 +387,13 @@ export function checkEvidenceSet(
     }
 
     if (item.kind === 'amendment_chain') {
-      if (item.hops.length === 0) {
-        problems.push(`${label}: amendment chain has no hops`);
-        return;
-      }
-      // A chain has to chain, and a chain has to run one way.
-      //
-      // Checking hops in isolation would make this item a bag of unrelated
-      // (edge, quote) pairs: an agent could assert a chain A -> D out of a
-      // genuine A -> B edge and a genuine C -> D edge, both quotes checking,
-      // and nothing would object. Requiring only that consecutive hops *touch*
-      // is not enough either: two edges that both amend from the same document
-      // are connected without either succeeding the other.
-      //
-      // Orientation is decidable because the direction is canonicalised first.
-      // `amends` and `amendedBy` state one relation from opposite ends, so the
-      // raw from/to pair says nothing on its own -- but amendmentDirection()
-      // resolves both spellings to one (amender, amended) pair, the same one
-      // the schema's cycle detection uses. A chain is then oriented when every
-      // junction runs the same way: each hop amending the previous hop's
-      // amender, or each hop being amended by the previous hop's amended
-      // document. Either walk direction is fine; mixing them is not.
-      type Amendment = { edgeId: string; amender: string; amended: string };
-      const walk: Array<Amendment | null> = [];
-
-      item.hops.forEach((hop, h) => {
-        const hopLabel = `${label}.hops[${h}]`;
-        const edge = edgeById(corpus, hop.edgeId);
-        if (edge === undefined) {
-          problems.push(`${hopLabel}: names edge ${hop.edgeId}, which the corpus does not hold`);
-          walk.push(null);
-        } else {
-          if (hop.quote.docId !== edge.from && hop.quote.docId !== edge.to) {
-            problems.push(
-              `${hopLabel}: quote is taken from ${hop.quote.docId}, which is neither endpoint of edge ${hop.edgeId} (${edge.from} -> ${edge.to})`,
-            );
-          }
-          // A hop must be an amendment. A `references` edge has no amender, so
-          // orientation is not a question that can be asked of it -- and a
-          // chain of references is not an amendment chain in the first place.
-          const direction = amendmentDirection(edge);
-          if (direction === null) {
-            problems.push(
-              `${hopLabel}: edge ${hop.edgeId} is a ${edge.kind} edge; an amendment_chain hop must rest on an amends or amendedBy edge`,
-            );
-          }
-          walk.push(direction === null ? null : { edgeId: hop.edgeId, ...direction });
-        }
-        checkQuote(hop.quote, corpus, hopLabel, problems);
-      });
-
-      // Orientation needs every hop to have a direction; any hop that failed
-      // above already carries its own problem, so there is nothing to add.
-      const hops: Amendment[] = walk.filter((h): h is Amendment => h !== null);
-      if (hops.length === walk.length) {
-        let forward = true; // each hop amends the previous hop's amender
-        let backward = true; // each hop is amended by the previous hop's amended document
-        for (let h = 1; h < hops.length; h += 1) {
-          const prev = hops[h - 1] as Amendment;
-          const next = hops[h] as Amendment;
-          forward = forward && next.amended === prev.amender;
-          backward = backward && next.amender === prev.amended;
-          // The first junction at which no single walk direction survives the
-          // chain so far: where the succession provably breaks, whether the
-          // chain never connected or changed direction here.
-          if (!forward && !backward) {
-            problems.push(
-              `${label}.hops[${h}]: edge ${next.edgeId} (${next.amender} amends ${next.amended}) does not continue the amendment chain from ${prev.edgeId} (${prev.amender} amends ${prev.amended}): every hop must run the same way, each one either amending the previous hop's amender or being amended by the previous hop's amended document`,
-            );
-            break;
-          }
-        }
-      }
+      problems.push(...edgeReferenceProblems(item, label, edges));
+      item.hops.forEach((hop, h) => checkQuote(hop.quote, corpus, `${label}.hops[${h}]`, problems));
       return;
     }
 
     if (item.kind === 'cross_reference') {
-      const edge = edgeById(corpus, item.edgeId);
-      if (edge === undefined) {
-        problems.push(`${label}: names edge ${item.edgeId}, which the corpus does not hold`);
-      } else {
-        // Spec 2.2: "Both quotes check; a `references` edge connects them."
-        // The kind is the claim. "X cites Y" and "X was amended by Y" are
-        // different legal relations, and an amendment edge does not establish
-        // that one provision cross-refers to another.
-        if (edge.kind !== 'references') {
-          problems.push(
-            `${label}: edge ${item.edgeId} is a ${edge.kind} edge; a cross_reference must rest on a references edge`,
-          );
-        }
-        if (edge.from !== item.from.docId || edge.to !== item.to.docId) {
-          problems.push(
-            `${label}: edge ${item.edgeId} does not connect ${item.from.docId} to ${item.to.docId}`,
-          );
-        }
-      }
+      problems.push(...edgeReferenceProblems(item, label, edges));
       checkQuote(item.from, corpus, `${label}.from`, problems);
       checkQuote(item.to, corpus, `${label}.to`, problems);
       return;

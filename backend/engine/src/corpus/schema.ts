@@ -193,7 +193,7 @@ export function parseCorpusIndex(raw: unknown): CorpusIndex {
  * Returns null for a kind that is not an amendment at all, since no such edge
  * has an amender.
  */
-export function amendmentDirection(edge: CorpusEdge): { amender: string; amended: string } | null {
+export function amendmentDirection(edge: Pick<CorpusEdge, 'kind' | 'from' | 'to'>): { amender: string; amended: string } | null {
   if (edge.kind === 'amends') return { amender: edge.from, amended: edge.to };
   if (edge.kind === 'amendedBy') return { amender: edge.to, amended: edge.from };
   return null;
