@@ -206,7 +206,7 @@ describe('the requirements the question does not arise for', () => {
       freshnessResolver: resolver,
     });
 
-    expect(pack.requirements).toHaveLength(16);
+    expect(pack.requirements).toHaveLength(23);
     expect(calls).toHaveLength(0);
     for (const r of pack.requirements) {
       expect(r.derivedStatus, r.id).toBe('draft');

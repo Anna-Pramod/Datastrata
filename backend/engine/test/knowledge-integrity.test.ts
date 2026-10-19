@@ -15,12 +15,15 @@ describe('CSRD knowledge pack integrity', () => {
   });
 
   it('has the expected content inventory', () => {
-    expect(pack.requirements).toHaveLength(16);
+    // Sixteen requirements until the C/G composition of 2026-10-20 added seven
+    // (CSRD-S-017 to CSRD-S-023), with nine questions and ten facts after the
+    // review corrections (the reporting parent's country, the Article 37 alternative).
+    expect(pack.requirements).toHaveLength(23);
     expect(pack.sources).toHaveLength(17);
     expect(pack.obligationTemplates).toHaveLength(17);
     expect(pack.gapTests).toHaveLength(16);
-    expect(pack.questions).toHaveLength(39);
-    expect(pack.factTypes.length).toBeGreaterThanOrEqual(47);
+    expect(pack.questions).toHaveLength(48);
+    expect(pack.factTypes.length).toBeGreaterThanOrEqual(57);
   });
 
   it('every requirement cites at least one official source', () => {

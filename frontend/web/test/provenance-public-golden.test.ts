@@ -37,6 +37,8 @@ import {
   AUDIT_EXPECTED_SOURCES,
   AUDIT_EXPECTED_UNIVERSE,
   CORRECTED_CASE,
+  EXPECTED_SOURCES,
+  POST_AUDIT_SOURCES,
 } from '../../../backend/engine/test/audit-expected-provenance';
 
 const HISTORICAL = fileURLToPath(new URL('./golden/migration-public-golden.json', import.meta.url));
@@ -134,10 +136,11 @@ describe('what a customer is shown, checked against the audit and the pack', () 
     const live = payload();
     expect(live.determinations.length).toBeGreaterThan(0);
     for (const determination of live.determinations) {
+      // The audit for the sixteen; the C/G design (2026-10-20) for the seven after it.
       expect(
         determination.sources.map((source) => source.id),
         determination.id,
-      ).toEqual([...AUDIT_EXPECTED_SOURCES[determination.id]!]);
+      ).toEqual([...EXPECTED_SOURCES[determination.id]!]);
     }
   });
 
@@ -183,23 +186,33 @@ describe('what a customer is shown, checked against the audit and the pack', () 
 // ---------------------------------------------------------------------------
 
 describe('the transition from the historical public generation to this one', () => {
-  it('leaves every field outside the determinations identical', () => {
-    const strip = (path: string) => {
-      const { determinations: _dropped, ...rest } = JSON.parse(readFileSync(path, 'utf8')) as Record<
-        string,
-        unknown
-      >;
-      return JSON.stringify(rest, null, 2);
+  it('leaves every field outside the determinations identical, except the counts the seven C/G determinations add', () => {
+    const outside = (path: string) => {
+      const { determinations: _dropped, counts, ...rest } = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown> & {
+        counts: CheckResponse['counts'];
+      };
+      return { rest: JSON.stringify(rest, null, 2), counts };
     };
-    // Headline, counts, obligations, next questions, dates — the whole of the
-    // surface that was *not* meant to move.
-    expect(strip(PROVENANCE)).toBe(strip(HISTORICAL));
+    // Headline, obligations, next questions, dates — the whole of the surface
+    // that was *not* meant to move. The counts did move on 2026-10-20, by
+    // exactly the seven determinations the C/G composition adds for the fixed
+    // standalone profile: CSRD-S-017 and CSRD-S-020 apply; CSRD-S-018, S-019,
+    // S-021, S-022 and S-023 do not; nothing new is unresolved.
+    const before = outside(HISTORICAL);
+    const after = outside(PROVENANCE);
+    expect(after.rest).toBe(before.rest);
+    expect(after.counts).toEqual({
+      applies: before.counts.applies + 2,
+      doesNotApply: before.counts.doesNotApply + 5,
+      indeterminate: before.counts.indeterminate,
+    });
   });
 
-  it('keeps determination order and requirement identity unchanged', () => {
-    expect(determinationsOf(PROVENANCE).map((d) => d.id)).toEqual(
-      determinationsOf(HISTORICAL).map((d) => d.id),
-    );
+  it('keeps the sixteen historical determinations in order as a prefix; the seven of the C/G composition follow, in id order', () => {
+    const ids = determinationsOf(PROVENANCE).map((d) => d.id);
+    const historical = determinationsOf(HISTORICAL).map((d) => d.id);
+    expect(ids.slice(0, historical.length)).toEqual(historical);
+    expect(ids.slice(historical.length)).toEqual(Object.keys(POST_AUDIT_SOURCES));
   });
 
   it('replaces provisions with locators, everywhere and only there', () => {
@@ -218,6 +231,11 @@ describe('the transition from the historical public generation to this one', () 
     const moved: string[] = [];
     for (const determination of determinationsOf(PROVENANCE)) {
       const now = determination.sources.map((s) => s.id);
+      if (!before.has(determination.id)) {
+        // Authored after the audit: the design's sources, and nothing moved.
+        expect(now, determination.id).toEqual([...POST_AUDIT_SOURCES[determination.id]!]);
+        continue;
+      }
       expect(now, determination.id).toEqual([...AUDIT_EXPECTED_SOURCES[determination.id]!]);
       if (JSON.stringify(before.get(determination.id)) !== JSON.stringify(now)) {
         moved.push(determination.id);

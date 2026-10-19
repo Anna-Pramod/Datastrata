@@ -108,7 +108,9 @@ function consolidated(status: Exclusion): Profile {
     .org('grp', 'Vestfold Group')
     .euEntity('parent', 'Vestfold Holding BV', 'NL', { parentId: 'grp', isParent: true })
     .num('grp', 'group.consolidated_net_turnover_eur', 900_000_000)
-    .num('grp', 'group.avg_employees', 4000);
+    .num('grp', 'group.avg_employees', 4000)
+    // Not a financial holding undertaking (Q-045): stated, so the Article 29a(7a) bracket (CSRD-S-023) is closed for this scenario.
+    .bool('parent', 'entity.is_financial_holding_undertaking', false);
   return withExclusion(builder, 'parent', status).build();
 }
 

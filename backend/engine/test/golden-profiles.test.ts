@@ -105,7 +105,9 @@ describe('P-003 consolidated group scope', () => {
     .num('grp', 'group.avg_employees', 4000)
     .str('parent', 'entity.governing_member_state', 'NL')
     // Not excluded by Article 1(4) (Q-039): stated for this scenario, never defaulted.
-    .bool('parent', 'entity.excluded_by_article_1_4', false);
+    .bool('parent', 'entity.excluded_by_article_1_4', false)
+    // Not a financial holding undertaking (Q-045): stated, so the Article 29a(7a) bracket (CSRD-S-023) is closed for this scenario.
+    .bool('parent', 'entity.is_financial_holding_undertaking', false);
   const r = assess(csrdPack(), p.build(), ctx(...FY2027, 'parent'));
 
   it('consolidated scope applies while the individual route is negative', () => {
@@ -127,7 +129,11 @@ describe('P-004 exempt subsidiary (threshold in scope, duty exempt)', () => {
     .num('sub', 'entity.net_turnover_eur', 520_000_000)
     .num('sub', 'entity.avg_employees', 1350)
     .str('grp', 'group.ultimate_parent_country', 'FR')
+    // The parent that draws up the report is the ultimate parent here — stated, not inferred (Q-047).
+    .str('grp', 'parent.reporting_parent_country', 'FR')
     .bool('sub', 'parent.report_includes_entity', true)
+    // The Article 19a(9) disclosures are made (Q-044): stated for this scenario.
+    .bool('sub', 'entity.exemption_disclosures_in_management_report', true)
     .str('grp', 'parent.report_standard', 'ESRS')
     .str('grp', 'parent.report_public_url', 'https://example.com/group-report')
     .bool('sub', 'entity.national_publication_conditions_met', true)

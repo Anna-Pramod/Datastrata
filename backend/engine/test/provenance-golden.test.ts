@@ -45,6 +45,8 @@ import {
   AUDIT_EXPECTED_SOURCES,
   AUDIT_EXPECTED_UNIVERSE,
   CORRECTED_CASE,
+  EXPECTED_SOURCES,
+  POST_AUDIT_SOURCES,
 } from './audit-expected-provenance';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -162,8 +164,10 @@ describe('what the generation contains, checked against the audit and the pack',
     const live = fixedResult();
     expect(live.determinations.length).toBeGreaterThan(0);
     for (const determination of live.determinations) {
+      // The audit for the sixteen; the C/G design (2026-10-20) for the seven
+      // authored after it, kept apart in `POST_AUDIT_SOURCES`.
       expect(determination.sources, determination.requirementId).toEqual([
-        ...AUDIT_EXPECTED_SOURCES[determination.requirementId]!,
+        ...EXPECTED_SOURCES[determination.requirementId]!,
       ]);
     }
   });
@@ -190,7 +194,7 @@ describe('what the generation contains, checked against the audit and the pack',
       // so a determination assembled from some other requirement's provenance
       // cannot pass the pair.
       expect(sourceIdsOf(requirement), determination.requirementId).toEqual([
-        ...AUDIT_EXPECTED_SOURCES[determination.requirementId]!,
+        ...EXPECTED_SOURCES[determination.requirementId]!,
       ]);
     }
   });
@@ -258,12 +262,15 @@ describe('the transition from the historical generation to this one', () => {
     expect(strip(PROVENANCE)).toBe(strip(HISTORICAL));
   });
 
-  it('keeps determination order and requirement identity unchanged', () => {
+  it('keeps the sixteen historical determinations in order as a prefix; the seven of the C/G composition follow, in id order', () => {
     // Order is meaning here — it is the order determinations are decided in —
-    // so this is a sequence comparison, not a set comparison.
-    expect(provenanceDeterminations().map((d) => d.requirementId)).toEqual(
-      historicalDeterminations().map((d) => d.requirementId),
-    );
+    // so this is a sequence comparison, not a set comparison. Since the C/G
+    // composition (2026-10-20) the pack holds seven more requirements, appended
+    // after CSRD-S-016, so the historical sequence is a prefix of the current one.
+    const ids = provenanceDeterminations().map((d) => d.requirementId);
+    const historical = historicalDeterminations().map((d) => d.requirementId);
+    expect(ids.slice(0, historical.length)).toEqual(historical);
+    expect(ids.slice(historical.length)).toEqual(Object.keys(POST_AUDIT_SOURCES));
   });
 
   it('replaces provisions with locators, everywhere and only there', () => {
@@ -289,7 +296,12 @@ describe('the transition from the historical generation to this one', () => {
     const before = new Map(historicalDeterminations().map((d) => [d.requirementId, d.sources]));
     const moved: string[] = [];
     for (const determination of provenanceDeterminations()) {
-      const old = before.get(determination.requirementId)!;
+      const old = before.get(determination.requirementId);
+      if (old === undefined) {
+        // Authored after the audit: its sources are the design's, and it moved nothing.
+        expect(determination.sources, determination.requirementId).toEqual([...POST_AUDIT_SOURCES[determination.requirementId]!]);
+        continue;
+      }
       const expected = [...AUDIT_EXPECTED_SOURCES[determination.requirementId]!];
       expect(determination.sources, determination.requirementId).toEqual(expected);
       if (JSON.stringify(old) !== JSON.stringify(determination.sources)) {

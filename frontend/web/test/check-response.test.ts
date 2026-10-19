@@ -116,3 +116,52 @@ describe('the Article 1(4) exclusion answer', () => {
     expect(d.needs[0]?.label).toBe('Whether Article 1(4) excludes the entity (answer needed)');
   });
 });
+
+/**
+ * The financial-holding question (Q-045), asked of a parent undertaking.
+ *
+ * Article 29a(7a) lets a financial holding undertaking choose not to include
+ * the consolidated sustainability information, so a parent's consolidated duty
+ * (CSRD-S-021) is unresolved until its holding status is stated; the option is
+ * never assumed unexercised. A standalone has no consolidated duty for the
+ * question to touch.
+ */
+describe('the financial-holding answer of a parent', () => {
+  const PARENT: CheckerAnswers = { ...EU_ABOVE_THRESHOLD, groupPosition: 'parent' };
+  const find = (answers: CheckerAnswers, id: string) => {
+    const found = buildCheckResponse(csrdPack(), answers, FIXED_DATE).determinations.find((d) => d.id === id);
+    if (found === undefined) throw new Error(`no ${id} determination in the payload`);
+    return found;
+  };
+
+  it('"no": the consolidated duty of a parent above both thresholds applies', () => {
+    expect(find({ ...PARENT, holding: 'no' }, 'CSRD-S-021').result).toBe('APPLIES');
+    expect(find({ ...PARENT, holding: 'no' }, 'CSRD-S-014').result).toBe('APPLIES');
+  });
+
+  it('absent: the consolidated duty stays unresolved and names the holding question — the option is never assumed unexercised', () => {
+    const d = find(PARENT, 'CSRD-S-021');
+    expect(d.result).toBe('INDETERMINATE');
+    expect(d.reason).toBe('upstream_indeterminate');
+    expect(d.needs.map((n) => n.factType)).toContain('entity.is_financial_holding_undertaking');
+    expect(d.needs.find((n) => n.factType === 'entity.is_financial_holding_undertaking')?.label).toBe(
+      'Whether the entity is a financial holding undertaking (answer needed)',
+    );
+  });
+
+  it('"yes": what is then missing is the option\'s own conditions, which the check does not ask (deferred)', () => {
+    const d = find({ ...PARENT, holding: 'yes' }, 'CSRD-S-021');
+    expect(d.result).toBe('INDETERMINATE');
+    expect(d.needs.map((n) => n.factType)).toEqual(
+      expect.arrayContaining(['entity.art_29a_7a_option_exercised', 'group.subsidiaries_business_models_independent']),
+    );
+    // The holding status itself is known, so it is not among the needs: this is
+    // what tells a stated "yes" apart from an answer the checker ignored.
+    expect(d.needs.map((n) => n.factType)).not.toContain('entity.is_financial_holding_undertaking');
+  });
+
+  it('a standalone is untouched by the question, answered or not', () => {
+    expect(find(EU_ABOVE_THRESHOLD, 'CSRD-S-021').result).toBe('DOES_NOT_APPLY');
+    expect(find({ ...EU_ABOVE_THRESHOLD, holding: 'yes' }, 'CSRD-S-021').result).toBe('DOES_NOT_APPLY');
+  });
+});

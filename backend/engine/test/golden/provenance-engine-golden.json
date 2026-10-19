@@ -535,7 +535,7 @@
             "truth": "DOES_NOT_APPLY"
           },
           {
-            "detail": "group.ultimate_parent_country: not available (customer_scope_ambiguity)",
+            "detail": "parent.reporting_parent_country: not available (customer_scope_ambiguity)",
             "factsUsed": [],
             "op": "in_catalogue",
             "reason": "customer_scope_ambiguity",
@@ -547,6 +547,39 @@
             "op": "eq",
             "reason": "missing_fact",
             "truth": "INDETERMINATE"
+          },
+          {
+            "children": [
+              {
+                "detail": "entity.is_parent_undertaking (false) == false",
+                "factsUsed": [
+                  {
+                    "factType": "entity.is_parent_undertaking",
+                    "scopeId": "e1",
+                    "source": {
+                      "kind": "customer_statement",
+                      "ref": "test fixture"
+                    },
+                    "value": {
+                      "kind": "boolean",
+                      "value": false
+                    }
+                  }
+                ],
+                "op": "eq",
+                "truth": "APPLIES"
+              },
+              {
+                "detail": "parent.report_includes_all_subsidiaries: not available (missing_fact)",
+                "factsUsed": [],
+                "op": "eq",
+                "reason": "missing_fact",
+                "truth": "INDETERMINATE"
+              }
+            ],
+            "detail": "any of 2",
+            "op": "any",
+            "truth": "APPLIES"
           },
           {
             "detail": "parent.report_standard: not available (customer_scope_ambiguity)",
@@ -563,6 +596,28 @@
             "truth": "INDETERMINATE"
           },
           {
+            "children": [
+              {
+                "detail": "entity.exemption_disclosures_in_management_report: not available (missing_fact)",
+                "factsUsed": [],
+                "op": "eq",
+                "reason": "missing_fact",
+                "truth": "INDETERMINATE"
+              },
+              {
+                "detail": "entity.article_37_exempt_publishing_consolidated_report: not available (missing_fact)",
+                "factsUsed": [],
+                "op": "eq",
+                "reason": "missing_fact",
+                "truth": "INDETERMINATE"
+              }
+            ],
+            "detail": "any of 2",
+            "op": "any",
+            "reason": "missing_fact",
+            "truth": "INDETERMINATE"
+          },
+          {
             "detail": "entity.national_publication_conditions_met: not available (national_law_unresolved)",
             "factsUsed": [],
             "op": "eq",
@@ -570,7 +625,7 @@
             "truth": "INDETERMINATE"
           }
         ],
-        "detail": "all of 6",
+        "detail": "all of 8",
         "op": "all",
         "truth": "DOES_NOT_APPLY"
       }
@@ -622,7 +677,7 @@
           {
             "children": [
               {
-                "detail": "group.ultimate_parent_country: not available (customer_scope_ambiguity)",
+                "detail": "parent.reporting_parent_country: not available (customer_scope_ambiguity)",
                 "factsUsed": [],
                 "op": "in_catalogue",
                 "reason": "customer_scope_ambiguity",
@@ -640,6 +695,39 @@
             "op": "eq",
             "reason": "missing_fact",
             "truth": "INDETERMINATE"
+          },
+          {
+            "children": [
+              {
+                "detail": "entity.is_parent_undertaking (false) == false",
+                "factsUsed": [
+                  {
+                    "factType": "entity.is_parent_undertaking",
+                    "scopeId": "e1",
+                    "source": {
+                      "kind": "customer_statement",
+                      "ref": "test fixture"
+                    },
+                    "value": {
+                      "kind": "boolean",
+                      "value": false
+                    }
+                  }
+                ],
+                "op": "eq",
+                "truth": "APPLIES"
+              },
+              {
+                "detail": "parent.report_includes_all_subsidiaries: not available (missing_fact)",
+                "factsUsed": [],
+                "op": "eq",
+                "reason": "missing_fact",
+                "truth": "INDETERMINATE"
+              }
+            ],
+            "detail": "any of 2",
+            "op": "any",
+            "truth": "APPLIES"
           },
           {
             "detail": "parent.report_standard: not available (customer_scope_ambiguity)",
@@ -663,6 +751,28 @@
             "truth": "INDETERMINATE"
           },
           {
+            "children": [
+              {
+                "detail": "entity.exemption_disclosures_in_management_report: not available (missing_fact)",
+                "factsUsed": [],
+                "op": "eq",
+                "reason": "missing_fact",
+                "truth": "INDETERMINATE"
+              },
+              {
+                "detail": "entity.article_37_exempt_publishing_consolidated_report: not available (missing_fact)",
+                "factsUsed": [],
+                "op": "eq",
+                "reason": "missing_fact",
+                "truth": "INDETERMINATE"
+              }
+            ],
+            "detail": "any of 2",
+            "op": "any",
+            "reason": "missing_fact",
+            "truth": "INDETERMINATE"
+          },
+          {
             "detail": "entity.national_publication_conditions_met: not available (national_law_unresolved)",
             "factsUsed": [],
             "op": "eq",
@@ -670,7 +780,7 @@
             "truth": "INDETERMINATE"
           }
         ],
-        "detail": "all of 7",
+        "detail": "all of 9",
         "op": "all",
         "truth": "DOES_NOT_APPLY"
       }
@@ -902,7 +1012,7 @@
       }
     },
     {
-      "caution": "A standalone promotional sustainability report is not automatically sufficient. First reporting year and filing calendar resolve through the national overlay (S-013) and timing rules (R-005: generally FY beginning on or after 1 Jan 2027 for non-first-wave reporters).",
+      "caution": "A standalone promotional sustainability report is not automatically sufficient. First reporting year is decided per route by CSRD-S-017 and CSRD-S-018 (Article 5(2) of Directive (EU) 2022/2464); the filing calendar and the exercised national options resolve through the national overlay (CSRD-S-013), and no answer here is a final legal conclusion until the country pack is ratified.",
       "decisionArea": "Reporting duty",
       "derivedStatus": "draft",
       "evaluatedAt": "2026-07-26",
@@ -928,10 +1038,359 @@
       "trace": {
         "children": [
           {
+            "detail": "CSRD-S-020 is APPLIES (expected APPLIES)",
+            "op": "requirement_ref",
+            "truth": "APPLIES"
+          },
+          {
+            "detail": "CSRD-S-021 is DOES_NOT_APPLY (expected APPLIES)",
+            "op": "requirement_ref",
+            "truth": "DOES_NOT_APPLY"
+          }
+        ],
+        "detail": "any of 2",
+        "op": "any",
+        "truth": "APPLIES"
+      }
+    },
+    {
+      "caution": "Provider eligibility and appointment rules require the national overlay. Limited assurance remains the mandatory level; the assurance standard is due by 1 July 2027.",
+      "decisionArea": "Assurance",
+      "derivedStatus": "draft",
+      "evaluatedAt": "2026-07-26",
+      "legalStatus": "in_force",
+      "locators": [
+        "Article 34(1)"
+      ],
+      "needs": [],
+      "packVersion": "csrd@0.1.0 (legal snapshot 2026-07-26)",
+      "program": "CSRD",
+      "relationshipClass": "direct_legal",
+      "requirementId": "CSRD-S-015",
+      "requirementTitle": "Limited assurance over sustainability reporting",
+      "result": "APPLIES",
+      "scopeId": "e1",
+      "scopeName": "Alpine Industrie SAS",
+      "severity": "critical",
+      "sources": [
+        "SRC-001"
+      ],
+      "statusReasons": [],
+      "trace": {
+        "detail": "CSRD-S-014 is APPLIES (expected APPLIES)",
+        "op": "requirement_ref",
+        "truth": "APPLIES"
+      }
+    },
+    {
+      "caution": "The Directive's own calendar. Which measures apply in a given year is decided by the governing Member State's transposition (CSRD-S-013); the FY2025–26 national derogation on the individual basis is CSRD-S-004. Issuers reach this route because admission to a regulated market makes them public-interest entities; the Transparency Directive measures of Article 5(2), third subparagraph, are not encoded. Article 1(3) as amended conditions the extension to credit institutions and insurance undertakings regardless of legal form on the amended thresholds; whether that narrows the first-wave route for such undertakings below those thresholds is an open source question recorded in the design.",
+      "decisionArea": "First application",
+      "derivedStatus": "draft",
+      "evaluatedAt": "2026-07-26",
+      "legalStatus": "in_force",
+      "locators": [
+        "Article 5(2), first subparagraph, point (a)(i)",
+        "Article 5(2), first subparagraph, point (b)(i)",
+        "Article 1(4)"
+      ],
+      "needs": [],
+      "packVersion": "csrd@0.1.0 (legal snapshot 2026-07-26)",
+      "program": "CSRD",
+      "relationshipClass": "timing_context",
+      "requirementId": "CSRD-S-017",
+      "requirementTitle": "Individual first application (Article 5(2) of Directive (EU) 2022/2464)",
+      "result": "APPLIES",
+      "scopeId": "e1",
+      "scopeName": "Alpine Industrie SAS",
+      "severity": "high",
+      "sources": [
+        "SRC-002",
+        "SRC-001"
+      ],
+      "statusReasons": [],
+      "trace": {
+        "children": [
+          {
             "children": [
+              {
+                "detail": "FY start year 2027 in [2024, 2025, 2026]",
+                "op": "fy_start_year_in",
+                "truth": "DOES_NOT_APPLY"
+              },
+              {
+                "detail": "entity.incorporation_country (FR) in catalogue eu_member_states",
+                "factsUsed": [
+                  {
+                    "factType": "entity.incorporation_country",
+                    "scopeId": "e1",
+                    "source": {
+                      "kind": "customer_statement",
+                      "ref": "test fixture"
+                    },
+                    "value": {
+                      "kind": "string",
+                      "value": "FR"
+                    }
+                  }
+                ],
+                "op": "in_catalogue",
+                "truth": "APPLIES"
+              },
+              {
+                "detail": "entity.legal_form (private_limited_company) in catalogue accounting_directive_forms",
+                "factsUsed": [
+                  {
+                    "factType": "entity.legal_form",
+                    "scopeId": "e1",
+                    "source": {
+                      "kind": "customer_statement",
+                      "ref": "test fixture"
+                    },
+                    "value": {
+                      "kind": "string",
+                      "value": "private_limited_company"
+                    }
+                  }
+                ],
+                "op": "in_catalogue",
+                "truth": "APPLIES"
+              },
+              {
+                "children": [
+                  {
+                    "detail": "entity.excluded_by_article_1_4 (false) == true",
+                    "factsUsed": [
+                      {
+                        "factType": "entity.excluded_by_article_1_4",
+                        "scopeId": "e1",
+                        "source": {
+                          "kind": "customer_statement",
+                          "ref": "test fixture"
+                        },
+                        "value": {
+                          "kind": "boolean",
+                          "value": false
+                        }
+                      }
+                    ],
+                    "op": "eq",
+                    "truth": "DOES_NOT_APPLY"
+                  }
+                ],
+                "detail": "not",
+                "op": "not",
+                "truth": "APPLIES"
+              },
+              {
+                "detail": "entity.is_public_interest_entity: not available (missing_fact)",
+                "factsUsed": [],
+                "op": "eq",
+                "reason": "missing_fact",
+                "truth": "INDETERMINATE"
+              },
+              {
+                "detail": "entity.is_large_undertaking: not available (missing_fact)",
+                "factsUsed": [],
+                "op": "eq",
+                "reason": "missing_fact",
+                "truth": "INDETERMINATE"
+              },
+              {
+                "detail": "entity.avg_employees (1350) gt 500",
+                "factsUsed": [
+                  {
+                    "factType": "entity.avg_employees",
+                    "scopeId": "e1",
+                    "source": {
+                      "kind": "customer_statement",
+                      "ref": "test fixture"
+                    },
+                    "value": {
+                      "kind": "number",
+                      "value": 1350
+                    }
+                  }
+                ],
+                "op": "cmp",
+                "truth": "APPLIES"
+              }
+            ],
+            "detail": "all of 7",
+            "op": "all",
+            "truth": "DOES_NOT_APPLY"
+          },
+          {
+            "children": [
+              {
+                "detail": "FY start 2027-01-01 >= 2027-01-01",
+                "op": "fy_starts_on_or_after",
+                "truth": "APPLIES"
+              },
               {
                 "detail": "CSRD-S-001 is APPLIES (expected APPLIES)",
                 "op": "requirement_ref",
+                "truth": "APPLIES"
+              }
+            ],
+            "detail": "all of 2",
+            "op": "all",
+            "truth": "APPLIES"
+          }
+        ],
+        "detail": "any of 2",
+        "op": "any",
+        "truth": "APPLIES"
+      }
+    },
+    {
+      "caution": "The Directive's own calendar. Which measures apply in a given year is decided by the governing Member State's transposition (CSRD-S-013); the FY2025–26 national derogation on the consolidated basis is CSRD-S-022. Issuers reach this route because admission to a regulated market makes them public-interest entities; the Transparency Directive measures of Article 5(2), third subparagraph, are not encoded. Article 1(3) as amended conditions the extension to credit institutions and insurance undertakings regardless of legal form on the amended thresholds; whether that narrows the first-wave route for such undertakings below those thresholds is an open source question recorded in the design.",
+      "decisionArea": "First application",
+      "derivedStatus": "draft",
+      "evaluatedAt": "2026-07-26",
+      "legalStatus": "in_force",
+      "locators": [
+        "Article 5(2), first subparagraph, point (a)(ii)",
+        "Article 5(2), first subparagraph, point (b)(ii)",
+        "Article 1(4)"
+      ],
+      "needs": [],
+      "packVersion": "csrd@0.1.0 (legal snapshot 2026-07-26)",
+      "program": "CSRD",
+      "relationshipClass": "timing_context",
+      "requirementId": "CSRD-S-018",
+      "requirementTitle": "Consolidated first application (Article 5(2) of Directive (EU) 2022/2464)",
+      "result": "DOES_NOT_APPLY",
+      "scopeId": "e1",
+      "scopeName": "Alpine Industrie SAS",
+      "severity": "high",
+      "sources": [
+        "SRC-002",
+        "SRC-001"
+      ],
+      "statusReasons": [],
+      "trace": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": "FY start year 2027 in [2024, 2025, 2026]",
+                "op": "fy_start_year_in",
+                "truth": "DOES_NOT_APPLY"
+              },
+              {
+                "detail": "entity.incorporation_country (FR) in catalogue eu_member_states",
+                "factsUsed": [
+                  {
+                    "factType": "entity.incorporation_country",
+                    "scopeId": "e1",
+                    "source": {
+                      "kind": "customer_statement",
+                      "ref": "test fixture"
+                    },
+                    "value": {
+                      "kind": "string",
+                      "value": "FR"
+                    }
+                  }
+                ],
+                "op": "in_catalogue",
+                "truth": "APPLIES"
+              },
+              {
+                "detail": "entity.legal_form (private_limited_company) in catalogue accounting_directive_forms",
+                "factsUsed": [
+                  {
+                    "factType": "entity.legal_form",
+                    "scopeId": "e1",
+                    "source": {
+                      "kind": "customer_statement",
+                      "ref": "test fixture"
+                    },
+                    "value": {
+                      "kind": "string",
+                      "value": "private_limited_company"
+                    }
+                  }
+                ],
+                "op": "in_catalogue",
+                "truth": "APPLIES"
+              },
+              {
+                "children": [
+                  {
+                    "detail": "entity.excluded_by_article_1_4 (false) == true",
+                    "factsUsed": [
+                      {
+                        "factType": "entity.excluded_by_article_1_4",
+                        "scopeId": "e1",
+                        "source": {
+                          "kind": "customer_statement",
+                          "ref": "test fixture"
+                        },
+                        "value": {
+                          "kind": "boolean",
+                          "value": false
+                        }
+                      }
+                    ],
+                    "op": "eq",
+                    "truth": "DOES_NOT_APPLY"
+                  }
+                ],
+                "detail": "not",
+                "op": "not",
+                "truth": "APPLIES"
+              },
+              {
+                "detail": "entity.is_parent_undertaking (false) == true",
+                "factsUsed": [
+                  {
+                    "factType": "entity.is_parent_undertaking",
+                    "scopeId": "e1",
+                    "source": {
+                      "kind": "customer_statement",
+                      "ref": "test fixture"
+                    },
+                    "value": {
+                      "kind": "boolean",
+                      "value": false
+                    }
+                  }
+                ],
+                "op": "eq",
+                "truth": "DOES_NOT_APPLY"
+              },
+              {
+                "detail": "entity.is_public_interest_entity: not available (missing_fact)",
+                "factsUsed": [],
+                "op": "eq",
+                "reason": "missing_fact",
+                "truth": "INDETERMINATE"
+              },
+              {
+                "detail": "group.is_large_group: not available (customer_scope_ambiguity)",
+                "factsUsed": [],
+                "op": "eq",
+                "reason": "customer_scope_ambiguity",
+                "truth": "INDETERMINATE"
+              },
+              {
+                "detail": "group.avg_employees: not available (customer_scope_ambiguity)",
+                "factsUsed": [],
+                "op": "cmp",
+                "reason": "customer_scope_ambiguity",
+                "truth": "INDETERMINATE"
+              }
+            ],
+            "detail": "all of 8",
+            "op": "all",
+            "truth": "DOES_NOT_APPLY"
+          },
+          {
+            "children": [
+              {
+                "detail": "FY start 2027-01-01 >= 2027-01-01",
+                "op": "fy_starts_on_or_after",
                 "truth": "APPLIES"
               },
               {
@@ -940,8 +1399,240 @@
                 "truth": "DOES_NOT_APPLY"
               }
             ],
+            "detail": "all of 2",
+            "op": "all",
+            "truth": "DOES_NOT_APPLY"
+          }
+        ],
+        "detail": "any of 2",
+        "op": "any",
+        "truth": "DOES_NOT_APPLY"
+      }
+    },
+    {
+      "caution": "Scope and exemption are separate determinations: 'threshold in scope but exempt' must never be summarised as 'CSRD does not apply'. 'EQUIVALENT' requires a formal equivalence basis — treat as legal judgment with a signed DecisionRecord until an equivalence decision exists (as CSRD-S-006). Credit institutions permanently affiliated to a central body, insurance undertakings under group supervision and the Article 48i transitional reporting are analyst and country-pack matters; the reporting parent's country is stated (parent.reporting_parent_country), never inferred from the ultimate parent's. Exemption evidence must remain current every year (O-011).",
+      "decisionArea": "Exemption",
+      "derivedStatus": "draft",
+      "evaluatedAt": "2026-07-26",
+      "legalStatus": "in_force",
+      "locators": [
+        "Article 29a(8)",
+        "Article 29a(9)"
+      ],
+      "needs": [],
+      "packVersion": "csrd@0.1.0 (legal snapshot 2026-07-26)",
+      "program": "CSRD",
+      "relationshipClass": "direct_legal_exemption",
+      "requirementId": "CSRD-S-019",
+      "requirementTitle": "Consolidated exemption via a higher parent's qualifying report",
+      "result": "DOES_NOT_APPLY",
+      "scopeId": "e1",
+      "scopeName": "Alpine Industrie SAS",
+      "severity": "high",
+      "sources": [
+        "SRC-001"
+      ],
+      "statusReasons": [],
+      "trace": {
+        "children": [
+          {
+            "detail": "entity.is_parent_undertaking (false) == true",
+            "factsUsed": [
+              {
+                "factType": "entity.is_parent_undertaking",
+                "scopeId": "e1",
+                "source": {
+                  "kind": "customer_statement",
+                  "ref": "test fixture"
+                },
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "op": "eq",
+            "truth": "DOES_NOT_APPLY"
+          },
+          {
+            "detail": "entity.is_subsidiary (false) == true",
+            "factsUsed": [
+              {
+                "factType": "entity.is_subsidiary",
+                "scopeId": "e1",
+                "source": {
+                  "kind": "customer_statement",
+                  "ref": "test fixture"
+                },
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "op": "eq",
+            "truth": "DOES_NOT_APPLY"
+          },
+          {
+            "detail": "parent.report_includes_entity: not available (missing_fact)",
+            "factsUsed": [],
+            "op": "eq",
+            "reason": "missing_fact",
+            "truth": "INDETERMINATE"
+          },
+          {
+            "detail": "parent.report_includes_all_subsidiaries: not available (missing_fact)",
+            "factsUsed": [],
+            "op": "eq",
+            "reason": "missing_fact",
+            "truth": "INDETERMINATE"
+          },
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": "parent.reporting_parent_country: not available (customer_scope_ambiguity)",
+                    "factsUsed": [],
+                    "op": "in_catalogue",
+                    "reason": "customer_scope_ambiguity",
+                    "truth": "INDETERMINATE"
+                  },
+                  {
+                    "detail": "parent.report_standard: not available (customer_scope_ambiguity)",
+                    "factsUsed": [],
+                    "op": "eq",
+                    "reason": "customer_scope_ambiguity",
+                    "truth": "INDETERMINATE"
+                  }
+                ],
+                "detail": "all of 2",
+                "op": "all",
+                "reason": "customer_scope_ambiguity",
+                "truth": "INDETERMINATE"
+              },
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "detail": "parent.reporting_parent_country: not available (customer_scope_ambiguity)",
+                        "factsUsed": [],
+                        "op": "in_catalogue",
+                        "reason": "customer_scope_ambiguity",
+                        "truth": "INDETERMINATE"
+                      }
+                    ],
+                    "detail": "not",
+                    "op": "not",
+                    "reason": "customer_scope_ambiguity",
+                    "truth": "INDETERMINATE"
+                  },
+                  {
+                    "detail": "parent.report_standard: not available (customer_scope_ambiguity)",
+                    "factsUsed": [],
+                    "op": "in_set",
+                    "reason": "customer_scope_ambiguity",
+                    "truth": "INDETERMINATE"
+                  },
+                  {
+                    "detail": "parent.assurance_opinion_available: not available (customer_scope_ambiguity)",
+                    "factsUsed": [],
+                    "op": "eq",
+                    "reason": "customer_scope_ambiguity",
+                    "truth": "INDETERMINATE"
+                  },
+                  {
+                    "detail": "parent.taxonomy_information_included: not available (customer_scope_ambiguity)",
+                    "factsUsed": [],
+                    "op": "eq",
+                    "reason": "customer_scope_ambiguity",
+                    "truth": "INDETERMINATE"
+                  }
+                ],
+                "detail": "all of 4",
+                "op": "all",
+                "reason": "customer_scope_ambiguity",
+                "truth": "INDETERMINATE"
+              }
+            ],
             "detail": "any of 2",
             "op": "any",
+            "reason": "customer_scope_ambiguity",
+            "truth": "INDETERMINATE"
+          },
+          {
+            "detail": "parent.report_public_url exists",
+            "factsUsed": [],
+            "op": "exists",
+            "reason": "customer_scope_ambiguity",
+            "truth": "INDETERMINATE"
+          },
+          {
+            "children": [
+              {
+                "detail": "entity.exemption_disclosures_in_management_report: not available (missing_fact)",
+                "factsUsed": [],
+                "op": "eq",
+                "reason": "missing_fact",
+                "truth": "INDETERMINATE"
+              },
+              {
+                "detail": "entity.article_37_exempt_publishing_consolidated_report: not available (missing_fact)",
+                "factsUsed": [],
+                "op": "eq",
+                "reason": "missing_fact",
+                "truth": "INDETERMINATE"
+              }
+            ],
+            "detail": "any of 2",
+            "op": "any",
+            "reason": "missing_fact",
+            "truth": "INDETERMINATE"
+          },
+          {
+            "detail": "entity.national_publication_conditions_met: not available (national_law_unresolved)",
+            "factsUsed": [],
+            "op": "eq",
+            "reason": "national_law_unresolved",
+            "truth": "INDETERMINATE"
+          }
+        ],
+        "detail": "all of 8",
+        "op": "all",
+        "truth": "DOES_NOT_APPLY"
+      }
+    },
+    {
+      "caution": "An EU-level screen: the governing Member State's transposition, filing calendar and exercised options resolve through CSRD-S-013, and no answer here is a final legal conclusion until the country pack is ratified.",
+      "decisionArea": "Reporting duty",
+      "derivedStatus": "draft",
+      "evaluatedAt": "2026-07-26",
+      "legalStatus": "in_force",
+      "locators": [
+        "Article 19a(1)",
+        "Article 5(2), first subparagraph"
+      ],
+      "needs": [],
+      "packVersion": "csrd@0.1.0 (legal snapshot 2026-07-26)",
+      "program": "CSRD",
+      "relationshipClass": "direct_legal",
+      "requirementId": "CSRD-S-020",
+      "requirementTitle": "Individual reporting duty (Article 19a)",
+      "result": "APPLIES",
+      "scopeId": "e1",
+      "scopeName": "Alpine Industrie SAS",
+      "severity": "critical",
+      "sources": [
+        "SRC-001",
+        "SRC-002"
+      ],
+      "statusReasons": [],
+      "trace": {
+        "children": [
+          {
+            "detail": "CSRD-S-017 is APPLIES (expected APPLIES)",
+            "op": "requirement_ref",
             "truth": "APPLIES"
           },
           {
@@ -980,32 +1671,243 @@
       }
     },
     {
-      "caution": "Provider eligibility and appointment rules require the national overlay. Limited assurance remains the mandatory level; the assurance standard is due by 1 July 2027.",
-      "decisionArea": "Assurance",
+      "caution": "An EU-level screen: the governing Member State's transposition, filing calendar and exercised options resolve through CSRD-S-013, and no answer here is a final legal conclusion until the country pack is ratified. Use the legal consolidation perimeter, not internal business units.",
+      "decisionArea": "Reporting duty",
       "derivedStatus": "draft",
       "evaluatedAt": "2026-07-26",
       "legalStatus": "in_force",
       "locators": [
-        "Article 34(1)"
+        "Article 29a(1)",
+        "Article 29a(8)",
+        "Article 5(2), first subparagraph"
       ],
       "needs": [],
       "packVersion": "csrd@0.1.0 (legal snapshot 2026-07-26)",
       "program": "CSRD",
       "relationshipClass": "direct_legal",
-      "requirementId": "CSRD-S-015",
-      "requirementTitle": "Limited assurance over sustainability reporting",
-      "result": "APPLIES",
+      "requirementId": "CSRD-S-021",
+      "requirementTitle": "Consolidated reporting duty (Article 29a)",
+      "result": "DOES_NOT_APPLY",
       "scopeId": "e1",
       "scopeName": "Alpine Industrie SAS",
       "severity": "critical",
+      "sources": [
+        "SRC-001",
+        "SRC-002"
+      ],
+      "statusReasons": [],
+      "trace": {
+        "children": [
+          {
+            "detail": "CSRD-S-018 is DOES_NOT_APPLY (expected APPLIES)",
+            "op": "requirement_ref",
+            "truth": "DOES_NOT_APPLY"
+          },
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": "CSRD-S-022 is DOES_NOT_APPLY (expected APPLIES)",
+                    "op": "requirement_ref",
+                    "truth": "DOES_NOT_APPLY"
+                  },
+                  {
+                    "detail": "CSRD-S-019 is DOES_NOT_APPLY (expected APPLIES)",
+                    "op": "requirement_ref",
+                    "truth": "DOES_NOT_APPLY"
+                  },
+                  {
+                    "detail": "CSRD-S-023 is DOES_NOT_APPLY (expected APPLIES)",
+                    "op": "requirement_ref",
+                    "truth": "DOES_NOT_APPLY"
+                  }
+                ],
+                "detail": "any of 3",
+                "op": "any",
+                "truth": "DOES_NOT_APPLY"
+              }
+            ],
+            "detail": "not",
+            "op": "not",
+            "truth": "APPLIES"
+          }
+        ],
+        "detail": "all of 2",
+        "op": "all",
+        "truth": "DOES_NOT_APPLY"
+      }
+    },
+    {
+      "caution": "Requires the governing country pack — this is a national option, not a universal automatic exemption.",
+      "decisionArea": "Transition exemption",
+      "derivedStatus": "draft",
+      "evaluatedAt": "2026-07-26",
+      "legalStatus": "in_force",
+      "locators": [
+        "Article 5(2), fifth subparagraph"
+      ],
+      "needs": [],
+      "packVersion": "csrd@0.1.0 (legal snapshot 2026-07-26)",
+      "program": "CSRD",
+      "relationshipClass": "direct_legal_exemption",
+      "requirementId": "CSRD-S-022",
+      "requirementTitle": "FY2025–26 national transition exemption, consolidated basis",
+      "result": "DOES_NOT_APPLY",
+      "scopeId": "e1",
+      "scopeName": "Alpine Industrie SAS",
+      "severity": "high",
+      "sources": [
+        "SRC-002"
+      ],
+      "statusReasons": [],
+      "trace": {
+        "children": [
+          {
+            "detail": "entity.incorporation_country (FR) in catalogue eu_member_states",
+            "factsUsed": [
+              {
+                "factType": "entity.incorporation_country",
+                "scopeId": "e1",
+                "source": {
+                  "kind": "customer_statement",
+                  "ref": "test fixture"
+                },
+                "value": {
+                  "kind": "string",
+                  "value": "FR"
+                }
+              }
+            ],
+            "op": "in_catalogue",
+            "truth": "APPLIES"
+          },
+          {
+            "detail": "FY start year 2027 in [2025, 2026]",
+            "op": "fy_start_year_in",
+            "truth": "DOES_NOT_APPLY"
+          },
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": "group.consolidated_net_turnover_eur: not available (customer_scope_ambiguity)",
+                    "factsUsed": [],
+                    "op": "cmp",
+                    "reason": "customer_scope_ambiguity",
+                    "truth": "INDETERMINATE"
+                  }
+                ],
+                "detail": "not",
+                "op": "not",
+                "reason": "customer_scope_ambiguity",
+                "truth": "INDETERMINATE"
+              },
+              {
+                "children": [
+                  {
+                    "detail": "group.avg_employees: not available (customer_scope_ambiguity)",
+                    "factsUsed": [],
+                    "op": "cmp",
+                    "reason": "customer_scope_ambiguity",
+                    "truth": "INDETERMINATE"
+                  }
+                ],
+                "detail": "not",
+                "op": "not",
+                "reason": "customer_scope_ambiguity",
+                "truth": "INDETERMINATE"
+              }
+            ],
+            "detail": "any of 2",
+            "op": "any",
+            "reason": "customer_scope_ambiguity",
+            "truth": "INDETERMINATE"
+          },
+          {
+            "detail": "entity.member_state_transition_option: not available (national_law_unresolved)",
+            "factsUsed": [],
+            "op": "eq",
+            "reason": "national_law_unresolved",
+            "truth": "INDETERMINATE"
+          }
+        ],
+        "detail": "all of 4",
+        "op": "all",
+        "truth": "DOES_NOT_APPLY"
+      }
+    },
+    {
+      "caution": "Deferred encoding: the Member State's implementation of the option, the content an opted-out parent still reports and any national conditions are not encoded and resolve through CSRD-S-013 and analyst review; a relief recorded here is an EU-level screen, not a final legal conclusion.",
+      "decisionArea": "Exemption",
+      "derivedStatus": "draft",
+      "evaluatedAt": "2026-07-26",
+      "legalStatus": "in_force",
+      "locators": [
+        "Article 29a(7a)",
+        "Article 2(15)"
+      ],
+      "needs": [],
+      "packVersion": "csrd@0.1.0 (legal snapshot 2026-07-26)",
+      "program": "CSRD",
+      "relationshipClass": "direct_legal_exemption",
+      "requirementId": "CSRD-S-023",
+      "requirementTitle": "Financial-holding option under Article 29a(7a) (deferred encoding)",
+      "result": "DOES_NOT_APPLY",
+      "scopeId": "e1",
+      "scopeName": "Alpine Industrie SAS",
+      "severity": "high",
       "sources": [
         "SRC-001"
       ],
       "statusReasons": [],
       "trace": {
-        "detail": "CSRD-S-014 is APPLIES (expected APPLIES)",
-        "op": "requirement_ref",
-        "truth": "APPLIES"
+        "children": [
+          {
+            "detail": "entity.is_parent_undertaking (false) == true",
+            "factsUsed": [
+              {
+                "factType": "entity.is_parent_undertaking",
+                "scopeId": "e1",
+                "source": {
+                  "kind": "customer_statement",
+                  "ref": "test fixture"
+                },
+                "value": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ],
+            "op": "eq",
+            "truth": "DOES_NOT_APPLY"
+          },
+          {
+            "detail": "entity.is_financial_holding_undertaking: not available (missing_fact)",
+            "factsUsed": [],
+            "op": "eq",
+            "reason": "missing_fact",
+            "truth": "INDETERMINATE"
+          },
+          {
+            "detail": "group.subsidiaries_business_models_independent: not available (customer_scope_ambiguity)",
+            "factsUsed": [],
+            "op": "eq",
+            "reason": "customer_scope_ambiguity",
+            "truth": "INDETERMINATE"
+          },
+          {
+            "detail": "entity.art_29a_7a_option_exercised: not available (missing_fact)",
+            "factsUsed": [],
+            "op": "eq",
+            "reason": "missing_fact",
+            "truth": "INDETERMINATE"
+          }
+        ],
+        "detail": "all of 4",
+        "op": "all",
+        "truth": "DOES_NOT_APPLY"
       }
     }
   ],

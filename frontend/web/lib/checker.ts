@@ -1,6 +1,7 @@
 /**
- * The free check — nine questions, each one a fact the CSRD pack actually
- * consumes, and the translation from answers to an engine Profile.
+ * The free check — nine questions, ten for a parent undertaking, each one a
+ * fact the CSRD pack actually consumes, and the translation from answers to an
+ * engine Profile.
  *
  * Nothing is asked that cannot move a determination, and nothing is invented:
  * an "I'm not sure" answer omits the fact entirely, so the engine reports
@@ -13,7 +14,9 @@
  * (Q-039) is asked as yes / no / not sure with nothing preselected: a "not
  * sure" is left unanswered like every other unsure answer, so the size tests
  * stay unresolved until it is clarified rather than reading the entity as not
- * excluded.
+ * excluded. Q-045 is asked of a parent undertaking only: whether it is a
+ * financial holding undertaking, because the Article 29a(7a) option is never
+ * assumed unexercised for a holding, and never touches a non-holding.
  */
 
 export type FactValueInput =
@@ -36,6 +39,13 @@ export interface CheckerAnswers {
   exclusion?: 'yes' | 'no' | 'unknown';
   financialYear?: string;
   groupPosition?: GroupPosition;
+  /**
+   * Q-045, for a parent undertaking: whether it is a financial holding
+   * undertaking (Article 2(15)). Absent or 'unknown' contributes no fact, so the
+   * consolidated duty stays unresolved rather than assuming the Article 29a(7a)
+   * option unexercised; there is no default.
+   */
+  holding?: 'yes' | 'no' | 'unknown';
   turnover?: string;
   employees?: string;
   reportedFy2024?: string;
@@ -202,6 +212,14 @@ export function buildAssessmentInput(answers: CheckerAnswers, assessmentDate: st
       value: answers.groupPosition === 'subsidiary' || answers.groupPosition === 'parent_and_subsidiary',
     }));
   }
+  // Q-045, for a parent. "Yes" and "no" are statements the engine can use;
+  // "I'm not sure" and an absent answer contribute no fact, so the consolidated
+  // duty (CSRD-S-021) reports the holding question as the missing answer rather
+  // than reading the Article 29a(7a) option as unexercised. Not stated for a
+  // non-parent, which the option cannot touch. No default, in either direction.
+  if (isGroupParent && (answers.holding === 'yes' || answers.holding === 'no')) {
+    facts.push(stated('entity.is_financial_holding_undertaking', entityId, { kind: 'boolean', value: answers.holding === 'yes' }));
+  }
 
   const turnover = TURNOVER_BANDS.find((b) => b.id === answers.turnover)?.value;
   if (turnover) {
@@ -279,6 +297,12 @@ export const FACT_COPY: Record<string, string> = {
   'entity.incorporation_country': 'Country of incorporation',
   'entity.legal_form': 'Legal form',
   'entity.excluded_by_article_1_4': 'Whether Article 1(4) excludes the entity (answer needed)',
+  'entity.is_public_interest_entity': 'Whether the entity is a public-interest entity (answer needed)',
+  'entity.is_large_undertaking': 'Whether the entity is a large undertaking under Article 3(4) (answer needed)',
+  'entity.is_financial_holding_undertaking': 'Whether the entity is a financial holding undertaking (answer needed)',
+  'entity.exemption_disclosures_in_management_report': "Whether the entity's management report carries the exemption disclosures (answer needed)",
+  'entity.art_29a_7a_option_exercised': 'Whether the Article 29a(7a) option was exercised (answer needed)',
+  'entity.article_37_exempt_publishing_consolidated_report': 'Whether the Article 37 management-report exemption applies and the consolidated report is published (answer needed)',
   'entity.governing_member_state': 'Governing Member State',
   'entity.net_turnover_eur': 'Exact net turnover',
   'entity.avg_employees': 'Exact average headcount',
@@ -290,9 +314,13 @@ export const FACT_COPY: Record<string, string> = {
   'entity.national_publication_conditions_met': 'National publication conditions',
   'group.consolidated_net_turnover_eur': 'Consolidated group turnover',
   'group.avg_employees': 'Group average headcount',
+  'group.is_large_group': 'Whether the group is a large group under Article 3(7) (answer needed)',
+  'group.subsidiaries_business_models_independent': "Whether the subsidiaries' business models and operations are independent (answer needed)",
   'group.ultimate_parent_country': "Ultimate parent's country",
   'group.reporting_perimeter_entities': 'Group reporting perimeter',
   'parent.report_includes_entity': 'Whether the parent report covers you',
+  'parent.report_includes_all_subsidiaries': "Whether the parent report also covers all of the entity's own subsidiaries (answer needed)",
+  'parent.reporting_parent_country': 'Where the parent that draws up the report is established (answer needed)',
   'parent.report_standard': 'Which standard the parent reports under',
   'parent.report_public_url': "The parent report's publication URL",
   'parent.assurance_opinion_available': 'Parent assurance opinion',

@@ -93,7 +93,7 @@ const FRESH = 'CSRD-S-001';
 const STALE = 'CSRD-S-002';
 const REVOKED = 'CSRD-S-003';
 const UNPROMOTED_REQ = 'CSRD-S-004';
-/** Two of the sixteen that no golden profile mentions. Verified against the suite. */
+/** One of the twenty-three that no golden profile mentions. Verified against the suite. */
 const NO_GOLDEN = 'CSRD-S-006';
 /** The one `selection` requirement: no top-level condition at all. */
 const SELECTION = 'CSRD-S-012';
@@ -425,16 +425,17 @@ afterEach(() => {
 describe('portfolio header', () => {
   it('counts by derived status, and the counts move with the ledger', () => {
     const html = sheetHtml();
-    // 16 requirements: S-001 verified; S-002 blocked back to draft; S-003
-    // revoked, so draft; S-004 verified; the remaining twelve unsigned.
+    // 23 requirements (sixteen, plus the seven of the C/G composition of
+    // 2026-10-20): S-001 verified; S-002 blocked back to draft; S-003 revoked,
+    // so draft; S-004 verified; the remaining nineteen unsigned.
     expect(html).toContain('<tr><td>verified</td><td>2</td></tr>');
-    expect(html).toContain('<tr><td>draft</td><td>14</td></tr>');
+    expect(html).toContain('<tr><td>draft</td><td>21</td></tr>');
     expect(html).toContain('<tr><td>ratified</td><td>0</td></tr>');
 
     // The same generator over an empty ledger must not print the same numbers.
     writeLedger([]);
     const empty = renderSheet(gatherSheet(PACK_ID, paths));
-    expect(empty).toContain('<tr><td>draft</td><td>16</td></tr>');
+    expect(empty).toContain('<tr><td>draft</td><td>23</td></tr>');
     expect(empty).toContain('<tr><td>verified</td><td>0</td></tr>');
   });
 
@@ -451,12 +452,12 @@ describe('portfolio header', () => {
 
   it('counts the unsigned and the revoked, which the status table folds into draft', () => {
     const html = sheetHtml();
-    expect(html).toContain('12 of 16 requirements carry no signature at all');
+    expect(html).toContain('19 of 23 requirements carry no signature at all');
     expect(html).toContain('1 requirement has been revoked');
 
     writeLedger([]);
     const empty = renderSheet(gatherSheet(PACK_ID, paths));
-    expect(empty).toContain('16 of 16 requirements carry no signature at all');
+    expect(empty).toContain('23 of 23 requirements carry no signature at all');
     expect(empty).toContain('0 requirements have been revoked');
   });
 

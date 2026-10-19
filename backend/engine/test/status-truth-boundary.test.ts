@@ -68,8 +68,8 @@ afterAll(() => {
 
 const HASH = (c: string): string => c.repeat(64);
 
-/** The sixteen requirements the pack actually holds, named rather than counted. */
-const ALL_IDS = Array.from({ length: 16 }, (_, i) => `CSRD-S-${String(i + 1).padStart(3, '0')}`);
+/** The twenty-three requirements the pack actually holds (sixteen, plus the seven of the C/G composition of 2026-10-20), named rather than counted. */
+const ALL_IDS = Array.from({ length: 23 }, (_, i) => `CSRD-S-${String(i + 1).padStart(3, '0')}`);
 
 /**
  * The one requirement signed as `ratified` rather than `verified`.

@@ -79,6 +79,7 @@ export function CheckFlow() {
   const [running, setRunning] = useState(false);
 
   const parentRoute = stepEightIsParentReport(a);
+  const isGroupParent = a.groupPosition === 'parent' || a.groupPosition === 'parent_and_subsidiary';
 
   const steps = [
     {
@@ -126,6 +127,15 @@ export function CheckFlow() {
       answered: Boolean(a.groupPosition),
       node: <Chips name="Group position" options={GROUP_POSITIONS} value={a.groupPosition} onPick={(id) => setA((p) => ({ ...p, groupPosition: id as CheckerAnswers['groupPosition'] }))} />,
     },
+    ...(isGroupParent
+      ? [{
+          q: 'Is the entity a financial holding undertaking?',
+          why: 'Q-045 · Article 2(15): an undertaking whose sole object is to acquire and manage holdings in other undertakings. Article 29a(7a) lets such a holding choose not to include the consolidated sustainability information; ‘Not sure’ leaves the consolidated duty unresolved until clarified.',
+          answered: Boolean(a.holding),
+          // Nothing preselected: the option is never assumed unexercised for a holding, and a non-holding is untouched.
+          node: <Chips name="Financial holding undertaking" options={YES_NO_UNSURE} value={a.holding} onPick={(id) => setA((p) => ({ ...p, holding: id as CheckerAnswers['holding'] }))} />,
+        }]
+      : []),
     {
       q: 'Net turnover for that financial year',
       why: 'Q-007 · Article 19a turns on EUR 450 million. A band that crosses it stays unresolved, deliberately.',

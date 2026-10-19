@@ -238,12 +238,12 @@
   },
   {
     "id": "CSRD-S-005",
-    "version": 3,
+    "version": 4,
     "ruleRef": "R-007",
     "title": "Subsidiary exemption via qualifying EU-parent consolidated report",
     "program": "CSRD",
     "decisionArea": "Exemption",
-    "plainEnglish": "A subsidiary may be exempt from individual sustainability reporting where it is included in a qualifying EU parent consolidated sustainability report and the publication, identification and related conditions are met.",
+    "plainEnglish": "A subsidiary may be exempt from individual sustainability reporting where it is included in a qualifying EU parent consolidated sustainability report and the publication, identification and related conditions are met. Where the subsidiary is itself a parent undertaking, its own subsidiary undertakings must be included in the same report (Article 19a(9): 'such undertaking and its subsidiary undertakings'); inclusion of the subsidiary alone does not establish the exemption. The exemption turns on where the parent that draws up the report is established, which may differ from the group's ultimate parent, and it is conditional on the exempted undertaking's own management report carrying the disclosures of Article 19a(9), second subparagraph, point (a) — the reporting parent's name and registered office, the weblinks to its report and assurance opinion, and the statement of exemption — unless the undertaking is exempted from preparing a management report under Article 37 and publishes the consolidated management report as Article 37 requires, which is stated and never assumed.",
     "scopeType": "legal_entity",
     "relationshipClass": "direct_legal_exemption",
     "severity": "high",
@@ -258,13 +258,28 @@
         },
         {
           "op": "in_catalogue",
-          "fact": "group.ultimate_parent_country",
+          "fact": "parent.reporting_parent_country",
           "catalogue": "eu_member_states"
         },
         {
           "op": "eq",
           "fact": "parent.report_includes_entity",
           "value": true
+        },
+        {
+          "op": "any",
+          "of": [
+            {
+              "op": "eq",
+              "fact": "entity.is_parent_undertaking",
+              "value": false
+            },
+            {
+              "op": "eq",
+              "fact": "parent.report_includes_all_subsidiaries",
+              "value": true
+            }
+          ]
         },
         {
           "op": "eq",
@@ -274,6 +289,21 @@
         {
           "op": "exists",
           "fact": "parent.report_public_url"
+        },
+        {
+          "op": "any",
+          "of": [
+            {
+              "op": "eq",
+              "fact": "entity.exemption_disclosures_in_management_report",
+              "value": true
+            },
+            {
+              "op": "eq",
+              "fact": "entity.article_37_exempt_publishing_consolidated_report",
+              "value": true
+            }
+          ]
         },
         {
           "op": "eq",
@@ -298,12 +328,12 @@
   },
   {
     "id": "CSRD-S-006",
-    "version": 3,
+    "version": 4,
     "ruleRef": "R-007",
     "title": "Subsidiary exemption via qualifying non-EU parent report",
     "program": "CSRD",
     "decisionArea": "Exemption",
-    "plainEnglish": "A subsidiary of a non-EU parent may be exempt where it is included in a qualifying parent report prepared under ESRS or standards deemed equivalent, with assurance, required EU Taxonomy information and publication conditions met.",
+    "plainEnglish": "A subsidiary of a non-EU parent may be exempt where it is included in a qualifying parent report prepared under ESRS or standards deemed equivalent, with assurance, required EU Taxonomy information and publication conditions met. Where the subsidiary is itself a parent undertaking, its own subsidiary undertakings must be included in the same report (Article 19a(9): 'such undertaking and its subsidiary undertakings'); inclusion of the subsidiary alone does not establish the exemption. The exemption turns on where the parent that draws up the report is established, which may differ from the group's ultimate parent, and it is conditional on the exempted undertaking's own management report carrying the disclosures of Article 19a(9), second subparagraph, point (a) — the reporting parent's name and registered office, the weblinks to its report and assurance opinion, and the statement of exemption — unless the undertaking is exempted from preparing a management report under Article 37 and publishes the consolidated management report as Article 37 requires, which is stated and never assumed.",
     "scopeType": "legal_entity",
     "relationshipClass": "direct_legal_exemption",
     "severity": "high",
@@ -320,7 +350,7 @@
           "op": "not",
           "of": {
             "op": "in_catalogue",
-            "fact": "group.ultimate_parent_country",
+            "fact": "parent.reporting_parent_country",
             "catalogue": "eu_member_states"
           }
         },
@@ -328,6 +358,21 @@
           "op": "eq",
           "fact": "parent.report_includes_entity",
           "value": true
+        },
+        {
+          "op": "any",
+          "of": [
+            {
+              "op": "eq",
+              "fact": "entity.is_parent_undertaking",
+              "value": false
+            },
+            {
+              "op": "eq",
+              "fact": "parent.report_includes_all_subsidiaries",
+              "value": true
+            }
+          ]
         },
         {
           "op": "in_set",
@@ -346,6 +391,21 @@
           "op": "eq",
           "fact": "parent.taxonomy_information_included",
           "value": true
+        },
+        {
+          "op": "any",
+          "of": [
+            {
+              "op": "eq",
+              "fact": "entity.exemption_disclosures_in_management_report",
+              "value": true
+            },
+            {
+              "op": "eq",
+              "fact": "entity.article_37_exempt_publishing_consolidated_report",
+              "value": true
+            }
+          ]
         },
         {
           "op": "eq",
@@ -742,56 +802,28 @@
   },
   {
     "id": "CSRD-S-014",
-    "version": 3,
+    "version": 4,
     "ruleRef": "R-017",
     "title": "Reporting duty (post-exemption)",
     "program": "CSRD",
     "decisionArea": "Reporting duty",
-    "plainEnglish": "An active sustainability-reporting duty exists where the individual or consolidated threshold route applies and no transition, subsidiary or parent-report exemption removes it. Required information belongs in a clearly identifiable section of the (consolidated) management report.",
+    "plainEnglish": "An active sustainability-reporting duty exists where either route applies: the individual route (CSRD-S-020: the Article 19a measures apply to the undertaking for the financial year and no individual exemption removes them) or the consolidated route (CSRD-S-021: the Article 29a measures apply to the parent for the financial year and no consolidated exemption removes them). Required information belongs in a clearly identifiable section of the (consolidated) management report.",
     "scopeType": "legal_entity",
     "relationshipClass": "direct_legal",
     "severity": "critical",
     "kind": "boolean",
     "condition": {
-      "op": "all",
+      "op": "any",
       "of": [
         {
-          "op": "any",
-          "of": [
-            {
-              "op": "requirement_ref",
-              "requirement": "CSRD-S-001",
-              "expect": "APPLIES"
-            },
-            {
-              "op": "requirement_ref",
-              "requirement": "CSRD-S-002",
-              "expect": "APPLIES"
-            }
-          ]
+          "op": "requirement_ref",
+          "requirement": "CSRD-S-020",
+          "expect": "APPLIES"
         },
         {
-          "op": "not",
-          "of": {
-            "op": "any",
-            "of": [
-              {
-                "op": "requirement_ref",
-                "requirement": "CSRD-S-004",
-                "expect": "APPLIES"
-              },
-              {
-                "op": "requirement_ref",
-                "requirement": "CSRD-S-005",
-                "expect": "APPLIES"
-              },
-              {
-                "op": "requirement_ref",
-                "requirement": "CSRD-S-006",
-                "expect": "APPLIES"
-              }
-            ]
-          }
+          "op": "requirement_ref",
+          "requirement": "CSRD-S-021",
+          "expect": "APPLIES"
         }
       ]
     },
@@ -811,7 +843,7 @@
         ]
       }
     ],
-    "caution": "A standalone promotional sustainability report is not automatically sufficient. First reporting year and filing calendar resolve through the national overlay (S-013) and timing rules (R-005: generally FY beginning on or after 1 Jan 2027 for non-first-wave reporters)."
+    "caution": "A standalone promotional sustainability report is not automatically sufficient. First reporting year is decided per route by CSRD-S-017 and CSRD-S-018 (Article 5(2) of Directive (EU) 2022/2464); the filing calendar and the exercised national options resolve through the national overlay (CSRD-S-013), and no answer here is a final legal conclusion until the country pack is ratified."
   },
   {
     "id": "CSRD-S-015",
@@ -889,5 +921,616 @@
       }
     ],
     "caution": "Track the first reporting year as a sourced fact."
+  },
+  {
+    "id": "CSRD-S-017",
+    "version": 1,
+    "ruleRef": "R-005",
+    "title": "Individual first application (Article 5(2) of Directive (EU) 2022/2464)",
+    "program": "CSRD",
+    "decisionArea": "First application",
+    "plainEnglish": "The Article 19a measures apply to an undertaking for the assessed financial year under one of two routes: for financial years starting between 1 January 2024 and 31 December 2026, where it is a large undertaking (Article 3(4)) that is a public-interest entity (Article 2(1)) with more than 500 average employees; or for financial years starting on or after 1 January 2027, where it meets the amended Article 19a(1) size test (CSRD-S-001). An undertaking excluded by Article 1(4) is outside both routes in every year: the first-wave route tests the exclusion itself, and the 2027 route inherits it from the size test. Whether the measures apply is a different question from whether the size test passes and from whether an exemption removes the duty (CSRD-S-020).",
+    "scopeType": "legal_entity",
+    "relationshipClass": "timing_context",
+    "severity": "high",
+    "kind": "boolean",
+    "condition": {
+      "op": "any",
+      "of": [
+        {
+          "op": "all",
+          "of": [
+            {
+              "op": "fy_start_year_in",
+              "years": [
+                2024,
+                2025,
+                2026
+              ]
+            },
+            {
+              "op": "in_catalogue",
+              "fact": "entity.incorporation_country",
+              "catalogue": "eu_member_states"
+            },
+            {
+              "op": "in_catalogue",
+              "fact": "entity.legal_form",
+              "catalogue": "accounting_directive_forms"
+            },
+            {
+              "op": "not",
+              "of": {
+                "op": "eq",
+                "fact": "entity.excluded_by_article_1_4",
+                "value": true
+              }
+            },
+            {
+              "op": "eq",
+              "fact": "entity.is_public_interest_entity",
+              "value": true
+            },
+            {
+              "op": "eq",
+              "fact": "entity.is_large_undertaking",
+              "value": true
+            },
+            {
+              "op": "cmp",
+              "fact": "entity.avg_employees",
+              "cmp": "gt",
+              "value": 500
+            }
+          ]
+        },
+        {
+          "op": "all",
+          "of": [
+            {
+              "op": "fy_starts_on_or_after",
+              "date": "2027-01-01"
+            },
+            {
+              "op": "requirement_ref",
+              "requirement": "CSRD-S-001",
+              "expect": "APPLIES"
+            }
+          ]
+        }
+      ]
+    },
+    "legalStatus": "in_force",
+    "provenance": [
+      {
+        "sourceId": "SRC-002",
+        "locators": [
+          {
+            "kind": "provision",
+            "text": "Article 5(2), first subparagraph, point (a)(i)"
+          },
+          {
+            "kind": "provision",
+            "text": "Article 5(2), first subparagraph, point (b)(i)"
+          }
+        ]
+      },
+      {
+        "sourceId": "SRC-001",
+        "locators": [
+          {
+            "kind": "provision",
+            "text": "Article 1(4)"
+          }
+        ]
+      }
+    ],
+    "caution": "The Directive's own calendar. Which measures apply in a given year is decided by the governing Member State's transposition (CSRD-S-013); the FY2025–26 national derogation on the individual basis is CSRD-S-004. Issuers reach this route because admission to a regulated market makes them public-interest entities; the Transparency Directive measures of Article 5(2), third subparagraph, are not encoded. Article 1(3) as amended conditions the extension to credit institutions and insurance undertakings regardless of legal form on the amended thresholds; whether that narrows the first-wave route for such undertakings below those thresholds is an open source question recorded in the design."
+  },
+  {
+    "id": "CSRD-S-018",
+    "version": 1,
+    "ruleRef": "R-005",
+    "title": "Consolidated first application (Article 5(2) of Directive (EU) 2022/2464)",
+    "program": "CSRD",
+    "decisionArea": "First application",
+    "plainEnglish": "The Article 29a measures apply to a parent undertaking for the assessed financial year under one of two routes: for financial years starting between 1 January 2024 and 31 December 2026, where it is a public-interest entity (Article 2(1)) that is the parent of a large group (Article 3(7)) with more than 500 average employees on a consolidated basis; or for financial years starting on or after 1 January 2027, where its group meets the amended Article 29a(1) size test (CSRD-S-002). A parent excluded by Article 1(4) is outside both routes in every year: the first-wave route tests the exclusion itself, and the 2027 route inherits it from the size test. Whether the measures apply is a different question from whether the size test passes and from whether an exemption removes the duty (CSRD-S-021).",
+    "scopeType": "legal_entity",
+    "relationshipClass": "timing_context",
+    "severity": "high",
+    "kind": "boolean",
+    "condition": {
+      "op": "any",
+      "of": [
+        {
+          "op": "all",
+          "of": [
+            {
+              "op": "fy_start_year_in",
+              "years": [
+                2024,
+                2025,
+                2026
+              ]
+            },
+            {
+              "op": "in_catalogue",
+              "fact": "entity.incorporation_country",
+              "catalogue": "eu_member_states"
+            },
+            {
+              "op": "in_catalogue",
+              "fact": "entity.legal_form",
+              "catalogue": "accounting_directive_forms"
+            },
+            {
+              "op": "not",
+              "of": {
+                "op": "eq",
+                "fact": "entity.excluded_by_article_1_4",
+                "value": true
+              }
+            },
+            {
+              "op": "eq",
+              "fact": "entity.is_parent_undertaking",
+              "value": true
+            },
+            {
+              "op": "eq",
+              "fact": "entity.is_public_interest_entity",
+              "value": true
+            },
+            {
+              "op": "eq",
+              "fact": "group.is_large_group",
+              "value": true
+            },
+            {
+              "op": "cmp",
+              "fact": "group.avg_employees",
+              "cmp": "gt",
+              "value": 500
+            }
+          ]
+        },
+        {
+          "op": "all",
+          "of": [
+            {
+              "op": "fy_starts_on_or_after",
+              "date": "2027-01-01"
+            },
+            {
+              "op": "requirement_ref",
+              "requirement": "CSRD-S-002",
+              "expect": "APPLIES"
+            }
+          ]
+        }
+      ]
+    },
+    "legalStatus": "in_force",
+    "provenance": [
+      {
+        "sourceId": "SRC-002",
+        "locators": [
+          {
+            "kind": "provision",
+            "text": "Article 5(2), first subparagraph, point (a)(ii)"
+          },
+          {
+            "kind": "provision",
+            "text": "Article 5(2), first subparagraph, point (b)(ii)"
+          }
+        ]
+      },
+      {
+        "sourceId": "SRC-001",
+        "locators": [
+          {
+            "kind": "provision",
+            "text": "Article 1(4)"
+          }
+        ]
+      }
+    ],
+    "caution": "The Directive's own calendar. Which measures apply in a given year is decided by the governing Member State's transposition (CSRD-S-013); the FY2025–26 national derogation on the consolidated basis is CSRD-S-022. Issuers reach this route because admission to a regulated market makes them public-interest entities; the Transparency Directive measures of Article 5(2), third subparagraph, are not encoded. Article 1(3) as amended conditions the extension to credit institutions and insurance undertakings regardless of legal form on the amended thresholds; whether that narrows the first-wave route for such undertakings below those thresholds is an open source question recorded in the design."
+  },
+  {
+    "id": "CSRD-S-019",
+    "version": 1,
+    "ruleRef": "R-007",
+    "title": "Consolidated exemption via a higher parent's qualifying report",
+    "program": "CSRD",
+    "decisionArea": "Exemption",
+    "plainEnglish": "A parent undertaking that is itself a subsidiary is exempted from consolidated sustainability reporting where it and its subsidiary undertakings are included in another undertaking's consolidated management report drawn up under Articles 29 and 29a, or in a third-country parent's consolidated sustainability reporting carried out under ESRS or equivalent standards with an assurance opinion and the EU Taxonomy information, its own management report carries the Article 29a(8) disclosures (or it is exempted from preparing a management report under Article 37 and publishes the consolidated management report as Article 37 requires, which is stated and never assumed), and the publication conditions are met. The exemption also applies to public-interest entities (Article 29a(9)). Inclusion of the parent alone, without its subsidiaries, does not establish it. The route — the Articles 29/29a sentence or the third-country sentence — follows where the parent that draws up the report is established, which may differ from the group's ultimate parent.",
+    "scopeType": "legal_entity",
+    "relationshipClass": "direct_legal_exemption",
+    "severity": "high",
+    "kind": "boolean",
+    "condition": {
+      "op": "all",
+      "of": [
+        {
+          "op": "eq",
+          "fact": "entity.is_parent_undertaking",
+          "value": true
+        },
+        {
+          "op": "eq",
+          "fact": "entity.is_subsidiary",
+          "value": true
+        },
+        {
+          "op": "eq",
+          "fact": "parent.report_includes_entity",
+          "value": true
+        },
+        {
+          "op": "eq",
+          "fact": "parent.report_includes_all_subsidiaries",
+          "value": true
+        },
+        {
+          "op": "any",
+          "of": [
+            {
+              "op": "all",
+              "of": [
+                {
+                  "op": "in_catalogue",
+                  "fact": "parent.reporting_parent_country",
+                  "catalogue": "eu_member_states"
+                },
+                {
+                  "op": "eq",
+                  "fact": "parent.report_standard",
+                  "value": "ESRS"
+                }
+              ]
+            },
+            {
+              "op": "all",
+              "of": [
+                {
+                  "op": "not",
+                  "of": {
+                    "op": "in_catalogue",
+                    "fact": "parent.reporting_parent_country",
+                    "catalogue": "eu_member_states"
+                  }
+                },
+                {
+                  "op": "in_set",
+                  "fact": "parent.report_standard",
+                  "set": [
+                    "ESRS",
+                    "EQUIVALENT"
+                  ]
+                },
+                {
+                  "op": "eq",
+                  "fact": "parent.assurance_opinion_available",
+                  "value": true
+                },
+                {
+                  "op": "eq",
+                  "fact": "parent.taxonomy_information_included",
+                  "value": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "op": "exists",
+          "fact": "parent.report_public_url"
+        },
+        {
+          "op": "any",
+          "of": [
+            {
+              "op": "eq",
+              "fact": "entity.exemption_disclosures_in_management_report",
+              "value": true
+            },
+            {
+              "op": "eq",
+              "fact": "entity.article_37_exempt_publishing_consolidated_report",
+              "value": true
+            }
+          ]
+        },
+        {
+          "op": "eq",
+          "fact": "entity.national_publication_conditions_met",
+          "value": true
+        }
+      ]
+    },
+    "legalStatus": "in_force",
+    "provenance": [
+      {
+        "sourceId": "SRC-001",
+        "locators": [
+          {
+            "kind": "provision",
+            "text": "Article 29a(8)"
+          },
+          {
+            "kind": "provision",
+            "text": "Article 29a(9)"
+          }
+        ]
+      }
+    ],
+    "caution": "Scope and exemption are separate determinations: 'threshold in scope but exempt' must never be summarised as 'CSRD does not apply'. 'EQUIVALENT' requires a formal equivalence basis — treat as legal judgment with a signed DecisionRecord until an equivalence decision exists (as CSRD-S-006). Credit institutions permanently affiliated to a central body, insurance undertakings under group supervision and the Article 48i transitional reporting are analyst and country-pack matters; the reporting parent's country is stated (parent.reporting_parent_country), never inferred from the ultimate parent's. Exemption evidence must remain current every year (O-011)."
+  },
+  {
+    "id": "CSRD-S-020",
+    "version": 1,
+    "ruleRef": "R-017",
+    "title": "Individual reporting duty (Article 19a)",
+    "program": "CSRD",
+    "decisionArea": "Reporting duty",
+    "plainEnglish": "The undertaking has an individual sustainability-reporting duty where the Article 19a measures apply to it for the assessed financial year (CSRD-S-017) and no individual exemption — the FY2025–26 national derogation (CSRD-S-004) or a subsidiary exemption (CSRD-S-005, CSRD-S-006) — removes them. The size test enters only through the first-application rule's 2027 route, so a first-wave public-interest entity below the amended thresholds keeps its FY2024–26 duty.",
+    "scopeType": "legal_entity",
+    "relationshipClass": "direct_legal",
+    "severity": "critical",
+    "kind": "boolean",
+    "condition": {
+      "op": "all",
+      "of": [
+        {
+          "op": "requirement_ref",
+          "requirement": "CSRD-S-017",
+          "expect": "APPLIES"
+        },
+        {
+          "op": "not",
+          "of": {
+            "op": "any",
+            "of": [
+              {
+                "op": "requirement_ref",
+                "requirement": "CSRD-S-004",
+                "expect": "APPLIES"
+              },
+              {
+                "op": "requirement_ref",
+                "requirement": "CSRD-S-005",
+                "expect": "APPLIES"
+              },
+              {
+                "op": "requirement_ref",
+                "requirement": "CSRD-S-006",
+                "expect": "APPLIES"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "legalStatus": "in_force",
+    "provenance": [
+      {
+        "sourceId": "SRC-001",
+        "locators": [
+          {
+            "kind": "provision",
+            "text": "Article 19a(1)"
+          }
+        ]
+      },
+      {
+        "sourceId": "SRC-002",
+        "locators": [
+          {
+            "kind": "provision",
+            "text": "Article 5(2), first subparagraph"
+          }
+        ]
+      }
+    ],
+    "caution": "An EU-level screen: the governing Member State's transposition, filing calendar and exercised options resolve through CSRD-S-013, and no answer here is a final legal conclusion until the country pack is ratified."
+  },
+  {
+    "id": "CSRD-S-021",
+    "version": 1,
+    "ruleRef": "R-017",
+    "title": "Consolidated reporting duty (Article 29a)",
+    "program": "CSRD",
+    "decisionArea": "Reporting duty",
+    "plainEnglish": "The parent undertaking has a consolidated sustainability-reporting duty where the Article 29a measures apply to it for the assessed financial year (CSRD-S-018) and no consolidated exemption — the FY2025–26 national derogation on a consolidated basis (CSRD-S-022), the Article 29a(8) exemption (CSRD-S-019) or the Article 29a(7a) financial-holding option (CSRD-S-023) — removes them. An individual exemption of the parent never removes this duty.",
+    "scopeType": "legal_entity",
+    "relationshipClass": "direct_legal",
+    "severity": "critical",
+    "kind": "boolean",
+    "condition": {
+      "op": "all",
+      "of": [
+        {
+          "op": "requirement_ref",
+          "requirement": "CSRD-S-018",
+          "expect": "APPLIES"
+        },
+        {
+          "op": "not",
+          "of": {
+            "op": "any",
+            "of": [
+              {
+                "op": "requirement_ref",
+                "requirement": "CSRD-S-022",
+                "expect": "APPLIES"
+              },
+              {
+                "op": "requirement_ref",
+                "requirement": "CSRD-S-019",
+                "expect": "APPLIES"
+              },
+              {
+                "op": "requirement_ref",
+                "requirement": "CSRD-S-023",
+                "expect": "APPLIES"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "legalStatus": "in_force",
+    "provenance": [
+      {
+        "sourceId": "SRC-001",
+        "locators": [
+          {
+            "kind": "provision",
+            "text": "Article 29a(1)"
+          },
+          {
+            "kind": "provision",
+            "text": "Article 29a(8)"
+          }
+        ]
+      },
+      {
+        "sourceId": "SRC-002",
+        "locators": [
+          {
+            "kind": "provision",
+            "text": "Article 5(2), first subparagraph"
+          }
+        ]
+      }
+    ],
+    "caution": "An EU-level screen: the governing Member State's transposition, filing calendar and exercised options resolve through CSRD-S-013, and no answer here is a final legal conclusion until the country pack is ratified. Use the legal consolidation perimeter, not internal business units."
+  },
+  {
+    "id": "CSRD-S-022",
+    "version": 1,
+    "ruleRef": "R-006",
+    "title": "FY2025–26 national transition exemption, consolidated basis",
+    "program": "CSRD",
+    "decisionArea": "Transition exemption",
+    "plainEnglish": "Member States may relieve a parent undertaking whose group, on a consolidated basis, falls below either amended threshold for financial years beginning between 1 January 2025 and 31 December 2026, where the national transition option is exercised. The consolidated twin of CSRD-S-004: Article 5(2), fifth subparagraph, applies 'on a consolidated basis where applicable', so the consolidated figures govern the consolidated duty and the individual figures the individual duty.",
+    "scopeType": "legal_entity",
+    "relationshipClass": "direct_legal_exemption",
+    "severity": "high",
+    "kind": "boolean",
+    "condition": {
+      "op": "all",
+      "of": [
+        {
+          "op": "in_catalogue",
+          "fact": "entity.incorporation_country",
+          "catalogue": "eu_member_states"
+        },
+        {
+          "op": "fy_start_year_in",
+          "years": [
+            2025,
+            2026
+          ]
+        },
+        {
+          "op": "any",
+          "of": [
+            {
+              "op": "not",
+              "of": {
+                "op": "cmp",
+                "fact": "group.consolidated_net_turnover_eur",
+                "cmp": "gt",
+                "value": 450000000
+              }
+            },
+            {
+              "op": "not",
+              "of": {
+                "op": "cmp",
+                "fact": "group.avg_employees",
+                "cmp": "gt",
+                "value": 1000
+              }
+            }
+          ]
+        },
+        {
+          "op": "eq",
+          "fact": "entity.member_state_transition_option",
+          "value": true
+        }
+      ]
+    },
+    "legalStatus": "in_force",
+    "provenance": [
+      {
+        "sourceId": "SRC-002",
+        "locators": [
+          {
+            "kind": "provision",
+            "text": "Article 5(2), fifth subparagraph"
+          }
+        ]
+      }
+    ],
+    "caution": "Requires the governing country pack — this is a national option, not a universal automatic exemption."
+  },
+  {
+    "id": "CSRD-S-023",
+    "version": 1,
+    "ruleRef": "R-025",
+    "title": "Financial-holding option under Article 29a(7a) (deferred encoding)",
+    "program": "CSRD",
+    "decisionArea": "Exemption",
+    "plainEnglish": "A parent undertaking that is a financial holding undertaking (Article 2(15)) whose subsidiary undertakings' business models and operations are independent of one another may choose not to include the consolidated sustainability information in its consolidated management report. Encoded as a bracket on the consolidated duty: a stated exercise of the option over independent subsidiaries relieves the parent at EU level; an unknown holding status, independence or exercise stays unresolved and is never read as 'not exercised'; a parent that is not a financial holding undertaking is untouched.",
+    "scopeType": "legal_entity",
+    "relationshipClass": "direct_legal_exemption",
+    "severity": "high",
+    "kind": "boolean",
+    "condition": {
+      "op": "all",
+      "of": [
+        {
+          "op": "eq",
+          "fact": "entity.is_parent_undertaking",
+          "value": true
+        },
+        {
+          "op": "eq",
+          "fact": "entity.is_financial_holding_undertaking",
+          "value": true
+        },
+        {
+          "op": "eq",
+          "fact": "group.subsidiaries_business_models_independent",
+          "value": true
+        },
+        {
+          "op": "eq",
+          "fact": "entity.art_29a_7a_option_exercised",
+          "value": true
+        }
+      ]
+    },
+    "legalStatus": "in_force",
+    "provenance": [
+      {
+        "sourceId": "SRC-001",
+        "locators": [
+          {
+            "kind": "provision",
+            "text": "Article 29a(7a)"
+          },
+          {
+            "kind": "provision",
+            "text": "Article 2(15)"
+          }
+        ]
+      }
+    ],
+    "caution": "Deferred encoding: the Member State's implementation of the option, the content an opted-out parent still reports and any national conditions are not encoded and resolve through CSRD-S-013 and analyst review; a relief recorded here is an EU-level screen, not a final legal conclusion."
   }
 ]

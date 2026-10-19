@@ -104,16 +104,16 @@ describe('the empty-ledger invariant', () => {
   const pack = csrdPack();
   const result = assess(pack, wideProfile(), CTX());
 
-  it('reads all sixteen requirements as draft', () => {
-    expect(pack.requirements).toHaveLength(16);
+  it('reads all twenty-three requirements as draft', () => {
+    expect(pack.requirements).toHaveLength(23);
     for (const r of pack.requirements) {
       expect(r.derivedStatus, r.id).toBe('draft');
       expect(r.statusReasons, r.id).toEqual([]);
     }
   });
 
-  it('evaluates all sixteen at the default floor', () => {
-    expect(evaluatedIds(result)).toHaveLength(16);
+  it('evaluates all twenty-three at the default floor', () => {
+    expect(evaluatedIds(result)).toHaveLength(23);
   });
 
   it('reports that the answer contains draft content', () => {
@@ -137,7 +137,7 @@ describe('minStatus, one test per level', () => {
   });
 
   it('draft yields every requirement', () => {
-    expect(evaluatedIds(at('draft'))).toHaveLength(16);
+    expect(evaluatedIds(at('draft'))).toHaveLength(23);
   });
 
   it('verified yields verified plus ratified, and nothing draft', () => {
@@ -419,11 +419,19 @@ describe('the version registry after the bump', () => {
    * (`HANDOFF-2026-10-18-s002-scope-vs-timing.md`, version 4), and on
    * 2026-10-19 both size tests gained the Article 1(4) exclusion branch
    * (`knowledge-article-1-4-exclusion.test.ts`): CSRD-S-002 stands at 5 and
-   * CSRD-S-001 at 4. Every other requirement is still at 3. Stated as a table
-   * rather than a blanket number so that a further re-authoring has to be
-   * declared here.
+   * CSRD-S-001 at 4. On 2026-10-20 the C/G composition
+   * (`knowledge-timing-and-exemption-composition.test.ts`) took CSRD-S-005,
+   * CSRD-S-006 and CSRD-S-014 to 4 and authored CSRD-S-017 to CSRD-S-023 at
+   * version 1 — the first requirements with no pre-migration history. Every
+   * other requirement is still at 3. Stated as a table rather than a blanket
+   * number so that a further re-authoring has to be declared here.
    */
-  const CURRENT_VERSION = (id: string): number => (id === 'CSRD-S-002' ? 5 : id === 'CSRD-S-001' ? 4 : 3);
+  const AUTHORED_AFTER_MIGRATION = ['CSRD-S-017', 'CSRD-S-018', 'CSRD-S-019', 'CSRD-S-020', 'CSRD-S-021', 'CSRD-S-022', 'CSRD-S-023'];
+  const CURRENT_VERSION = (id: string): number =>
+    id === 'CSRD-S-002' ? 5
+    : ['CSRD-S-001', 'CSRD-S-005', 'CSRD-S-006', 'CSRD-S-014'].includes(id) ? 4
+    : AUTHORED_AFTER_MIGRATION.includes(id) ? 1
+    : 3;
 
   it('records every requirement at its current version, matching its current content', () => {
     const pack = csrdPack();
@@ -431,9 +439,13 @@ describe('the version registry after the bump', () => {
       expect(r.version, r.id).toBe(CURRENT_VERSION(r.id));
       expect(registry[r.id]?.[String(r.version)], r.id).toBe(requirementSha256(r));
     }
-    // The version-3 digests are still bound to version 3 for every requirement,
-    // S-002 included: a later version appends, it never rewrites.
-    for (const r of pack.requirements) expect(registry[r.id]?.['3'], r.id).toMatch(/^[0-9a-f]{64}$/);
+    // The version-3 digests are still bound to version 3 for every pre-migration
+    // requirement, S-002 included: a later version appends, it never rewrites.
+    // The seven authored at version 1 have no version 3 to keep.
+    for (const r of pack.requirements) {
+      if (AUTHORED_AFTER_MIGRATION.includes(r.id)) expect(registry[r.id]?.['3'], r.id).toBeUndefined();
+      else expect(registry[r.id]?.['3'], r.id).toMatch(/^[0-9a-f]{64}$/);
+    }
   });
 
   it('still holds every historical digest, byte-for-byte, so old versions keep their meaning', () => {
@@ -452,16 +464,19 @@ describe('the version registry after the bump', () => {
       expect(registry[id]?.[version], `${id} v${version}`).toBe(digest);
     }
 
-    // The table covers the pack rather than a subset of it: sixteen
-    // requirements, each at both historical versions. Without this, deleting
-    // rows from the oracle would weaken the check silently and stay green.
+    // The table covers the pre-migration pack rather than a subset of it:
+    // sixteen requirements, each at both historical versions. Without this,
+    // deleting rows from the oracle would weaken the check silently and stay
+    // green. The seven authored on 2026-10-20 have no history to freeze.
     const covered = new Map<string, string[]>();
     for (const [id, version] of FROZEN_HISTORICAL_DIGESTS) {
       covered.set(id, [...(covered.get(id) ?? []), version].sort());
     }
     expect(covered.size).toBe(16);
     for (const [id, versions] of covered) expect(versions, id).toEqual(['1', '2']);
-    expect([...covered.keys()].sort()).toEqual(csrdPack().requirements.map((r) => r.id).sort());
+    expect([...covered.keys()].sort()).toEqual(
+      csrdPack().requirements.map((r) => r.id).filter((id) => !AUTHORED_AFTER_MIGRATION.includes(id)).sort(),
+    );
   });
 
   it('keeps the three versions distinct, so a version number names one content', () => {
@@ -470,6 +485,11 @@ describe('the version registry after the bump', () => {
     // be true even if every frozen literal still matched.
     const pack = csrdPack();
     for (const r of pack.requirements) {
+      // A requirement authored at version 1 has one content and one digest.
+      if (AUTHORED_AFTER_MIGRATION.includes(r.id)) {
+        expect(Object.keys(registry[r.id] ?? {}), r.id).toEqual(['1']);
+        continue;
+      }
       const [one, two, three] = [registry[r.id]?.['1'], registry[r.id]?.['2'], registry[r.id]?.['3']];
       for (const [label, value] of [['1', one], ['2', two], ['3', three]] as const) {
         expect(value, `${r.id} v${label}`).toMatch(/^[0-9a-f]{64}$/);
@@ -483,8 +503,9 @@ describe('the version registry after the bump', () => {
   it('holds exactly the versions 1 to the current one, and nothing beyond', () => {
     // A stray higher version would mean some requirement was re-authored
     // without being declared in `CURRENT_VERSION` above; a missing lower one
-    // would mean history was dropped. Only S-002 has a version 5 and only
-    // S-001 and S-002 a version 4; the next requirement is the control.
+    // would mean history was dropped. Only S-002 has a version 5; S-001,
+    // S-005, S-006 and S-014 have a version 4; the seven C/G requirements have
+    // version 1 alone; the next requirement is the control.
     for (const r of csrdPack().requirements) {
       const expected = Array.from({ length: CURRENT_VERSION(r.id) }, (_, i) => String(i + 1));
       expect(Object.keys(registry[r.id] ?? {}).sort(), r.id).toEqual(expected);

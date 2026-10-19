@@ -179,7 +179,7 @@
     "showWhen": {
       "allOf": [
         { "factEquals": { "fact": "parent.report_includes_entity", "value": true } },
-        { "factInSet": { "fact": "group.ultimate_parent_country", "set": ["AT","BE","BG","HR","CY","CZ","DK","EE","FI","FR","DE","GR","HU","IE","IT","LV","LT","LU","MT","NL","PL","PT","RO","SK","SI","ES","SE"], "negate": true } }
+        { "factInSet": { "fact": "parent.reporting_parent_country", "set": ["AT","BE","BG","HR","CY","CZ","DK","EE","FI","FR","DE","GR","HU","IE","IT","LV","LT","LU","MT","NL","PL","PT","RO","SK","SI","ES","SE"], "negate": true } }
       ]
     },
     "inputPath": "Document upload/OCR",
@@ -432,5 +432,105 @@
     },
     "inputPath": "Manual (yes / no / unknown) + constitutive instrument or fund documentation",
     "whyAsked": "Article 1(4) of Directive 2013/34/EU removes both from Articles 19a, 29a and 29d. An unknown answer leaves the individual and consolidated size tests (CSRD-S-001, CSRD-S-002) unresolved rather than reading as in scope."
+  },
+  {
+    "id": "Q-040",
+    "order": 40,
+    "module": "First application",
+    "text": "Is the entity a public-interest entity under Article 2(1) of Directive 2013/34/EU — securities admitted to trading on an EU regulated market, a credit institution, an insurance undertaking, or designated as such by its Member State?",
+    "factTypes": ["entity.is_public_interest_entity"],
+    "showWhen": {
+      "allOf": [
+        { "factInSet": { "fact": "entity.incorporation_country", "set": ["AT","BE","BG","HR","CY","CZ","DK","EE","FI","FR","DE","GR","HU","IE","IT","LV","LT","LU","MT","NL","PL","PT","RO","SK","SI","ES","SE"] } },
+        { "anyOf": [ { "requirementIs": { "requirement": "CSRD-S-017", "truth": "INDETERMINATE" } }, { "requirementIs": { "requirement": "CSRD-S-018", "truth": "INDETERMINATE" } } ] }
+      ]
+    },
+    "inputPath": "Manual (yes / no / unknown) + listing, licence or national designation",
+    "whyAsked": "Article 5(2), first subparagraph, point (a), of Directive (EU) 2022/2464 applies the sustainability-reporting measures for financial years starting between 1 January 2024 and 31 December 2026 only to large public-interest entities with more than 500 employees and to public-interest-entity parents of large groups with more than 500 employees. An unknown status leaves first application (CSRD-S-017, CSRD-S-018) unresolved for those years."
+  },
+  {
+    "id": "Q-041",
+    "order": 41,
+    "module": "First application",
+    "text": "Is the entity a large undertaking under Article 3(4) of Directive 2013/34/EU — exceeding at least two of balance sheet total EUR 25 million, net turnover EUR 50 million and 250 average employees, assessed under the two-consecutive-years rule of Article 3(10)?",
+    "factTypes": ["entity.is_large_undertaking"],
+    "showWhen": {
+      "allOf": [
+        { "factInSet": { "fact": "entity.incorporation_country", "set": ["AT","BE","BG","HR","CY","CZ","DK","EE","FI","FR","DE","GR","HU","IE","IT","LV","LT","LU","MT","NL","PL","PT","RO","SK","SI","ES","SE"] } },
+        { "requirementIs": { "requirement": "CSRD-S-017", "truth": "INDETERMINATE" } }
+      ]
+    },
+    "inputPath": "Manual (yes / no / unknown) + audited financial statements for the two preceding financial years",
+    "whyAsked": "The first-wave population of Article 5(2), point (a)(i), is large undertakings. The status is stated and reviewed rather than computed from one year's figures, because Article 3(10) makes a change of category effective only after two consecutive financial years; unknown stays unresolved."
+  },
+  {
+    "id": "Q-042",
+    "order": 42,
+    "module": "First application",
+    "text": "Is the group a large group under Article 3(7) of Directive 2013/34/EU — on a consolidated basis exceeding at least two of balance sheet total EUR 25 million, net turnover EUR 50 million and 250 average employees, assessed under the two-consecutive-years rule of Article 3(10)?",
+    "factTypes": ["group.is_large_group"],
+    "showWhen": { "allOf": [ { "factEquals": { "fact": "entity.is_parent_undertaking", "value": true } }, { "requirementIs": { "requirement": "CSRD-S-018", "truth": "INDETERMINATE" } } ] },
+    "inputPath": "Manual (yes / no / unknown) + audited consolidated financial statements for the two preceding financial years",
+    "whyAsked": "The first-wave population of Article 5(2), point (a)(ii), is public-interest-entity parents of large groups. Stated and reviewed rather than computed, for the Article 3(10) reason; unknown stays unresolved."
+  },
+  {
+    "id": "Q-043",
+    "order": 43,
+    "module": "Higher-parent exemption",
+    "text": "Does that parent's consolidated (sustainability) report also include every one of the entity's own subsidiary undertakings?",
+    "factTypes": ["parent.report_includes_all_subsidiaries"],
+    "showWhen": { "allOf": [ { "factEquals": { "fact": "entity.is_parent_undertaking", "value": true } }, { "factEquals": { "fact": "parent.report_includes_entity", "value": true } } ] },
+    "inputPath": "Parent's consolidation perimeter against the entity's own list of subsidiaries",
+    "whyAsked": "Articles 19a(9) and 29a(8) of Directive 2013/34/EU exempt an undertaking only where it and its subsidiary undertakings are included. Inclusion of the entity alone establishes neither the individual (CSRD-S-005, CSRD-S-006) nor the consolidated (CSRD-S-019) exemption; unknown stays unresolved."
+  },
+  {
+    "id": "Q-044",
+    "order": 44,
+    "module": "Higher-parent exemption",
+    "text": "Does the entity's own management report carry the exemption disclosures — the reporting parent's name and registered office, the weblinks to its consolidated report and assurance opinion, and the statement that the entity is exempted?",
+    "factTypes": ["entity.exemption_disclosures_in_management_report"],
+    "showWhen": { "allOf": [ { "factEquals": { "fact": "entity.is_subsidiary", "value": true } }, { "factEquals": { "fact": "parent.report_includes_entity", "value": true } } ] },
+    "inputPath": "The entity's management report",
+    "whyAsked": "Article 19a(9) and Article 29a(8), second subparagraph, point (a), of Directive 2013/34/EU make the disclosures a condition of the subsidiary exemptions (CSRD-S-005, CSRD-S-006) and of the consolidated exemption (CSRD-S-019). An undertaking exempted under Article 37 that publishes the consolidated management report may answer no here and state that alternative instead (Q-048)."
+  },
+  {
+    "id": "Q-045",
+    "order": 45,
+    "module": "Exemption",
+    "text": "Is the entity a financial holding undertaking under Article 2(15) of Directive 2013/34/EU — one whose sole object is to acquire and manage holdings in other undertakings without involving itself in their management?",
+    "factTypes": ["entity.is_financial_holding_undertaking"],
+    "showWhen": { "allOf": [ { "factEquals": { "fact": "entity.is_parent_undertaking", "value": true } }, { "requirementIs": { "requirement": "CSRD-S-021", "truth": "INDETERMINATE" } } ] },
+    "inputPath": "Manual (yes / no / unknown) + constitutive instrument",
+    "whyAsked": "Article 29a(7a) lets a financial holding undertaking whose subsidiaries' business models and operations are independent choose not to include the consolidated sustainability information. The option is never assumed unexercised for a holding, so a parent's consolidated duty (CSRD-S-021) stays unresolved until its holding status is stated; a non-holding is untouched."
+  },
+  {
+    "id": "Q-046",
+    "order": 46,
+    "module": "Exemption",
+    "text": "Are the business models and operations of the group's subsidiaries independent of one another, and has the entity chosen under Article 29a(7a) not to include the consolidated sustainability information in its consolidated management report?",
+    "factTypes": ["group.subsidiaries_business_models_independent", "entity.art_29a_7a_option_exercised"],
+    "showWhen": { "factEquals": { "fact": "entity.is_financial_holding_undertaking", "value": true } },
+    "inputPath": "Group structure; board decision; the consolidated management report",
+    "whyAsked": "The two conditions of the Article 29a(7a) option (CSRD-S-023). The Member State's implementation of the option is a national-law matter resolved through CSRD-S-013; its encoding is deferred."
+  },
+  {
+    "id": "Q-047",
+    "order": 47,
+    "module": "Subsidiary exemption",
+    "text": "In which country is the parent undertaking that draws up the consolidated (sustainability) report covering the entity established?",
+    "factTypes": ["parent.reporting_parent_country"],
+    "showWhen": { "factEquals": { "fact": "parent.report_includes_entity", "value": true } },
+    "inputPath": "The parent's consolidated (sustainability) report; group structure",
+    "whyAsked": "Articles 19a(9) and 29a(8) of Directive 2013/34/EU follow one sentence for a parent established in a Member State (a consolidated management report under Articles 29 and 29a) and another for a parent established in a third country (consolidated sustainability reporting under ESRS or equivalent standards, assured, with the Taxonomy information). The reporting parent may be an intermediate parent; its country is never inferred from the ultimate parent's (Q-006), which the Article 40a route concerns."
+  },
+  {
+    "id": "Q-048",
+    "order": 48,
+    "module": "Subsidiary exemption",
+    "text": "The entity's management report does not carry the exemption disclosures: is the entity exempted from preparing a management report under Article 37 of Directive 2013/34/EU, and does it publish the parent's consolidated management report as Article 37 requires?",
+    "factTypes": ["entity.article_37_exempt_publishing_consolidated_report"],
+    "showWhen": { "allOf": [ { "factEquals": { "fact": "entity.is_subsidiary", "value": true } }, { "factEquals": { "fact": "parent.report_includes_entity", "value": true } }, { "factEquals": { "fact": "entity.exemption_disclosures_in_management_report", "value": false } } ] },
+    "inputPath": "The Article 37 declarations; the publication of the consolidated management report",
+    "whyAsked": "Articles 19a(9) and 29a(8) of Directive 2013/34/EU: an undertaking exempted from preparing a management report in accordance with Article 37 is not obliged to carry the disclosures, provided it publishes the consolidated management report in accordance with Article 37. Asked only once the disclosures are stated as not made; unknown stays unresolved and is never read as the alternative applying."
   }
 ]

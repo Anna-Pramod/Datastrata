@@ -49,6 +49,7 @@ const answersSchema = z.object({
   exclusion: z.enum(['yes', 'no', 'unknown']).optional(),
   financialYear: z.string().regex(/^\d{4}$/).optional(),
   groupPosition: z.enum(['standalone', 'parent', 'subsidiary', 'parent_and_subsidiary']).optional(),
+  holding: z.enum(['yes', 'no', 'unknown']).optional(),
   turnover: z.string().max(32).optional(),
   employees: z.string().max(32).optional(),
   reportedFy2024: z.string().max(16).optional(),

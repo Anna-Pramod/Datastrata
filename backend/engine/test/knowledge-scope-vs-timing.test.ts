@@ -23,6 +23,12 @@
  * .test.ts`). The digest the r1–r5 records carry is kept below as the
  * historical literal, and the current one is pinned beside it, so the move
  * is declared rather than discovered.
+ *
+ * Since the C/G composition (2026-10-20, `knowledge-timing-and-exemption-
+ * composition.test.ts`) S-014 composes the two route duties, S-020 and S-021,
+ * which compose the first-application rules S-017 and S-018 with each route's
+ * own exemptions; the size tests enter through the rules' 2027 route only,
+ * and S-003 is still composed into nothing.
  */
 
 import { join } from 'node:path';
@@ -132,7 +138,7 @@ describe('CSRD-S-002 is the consolidated size test, and the pack keeps timing el
   });
 
   it('the timing requirements cite Article 5(2) of SRC-002; the size test cites SRC-001 only — Article 29a(1), and the Article 1(4) exclusion', () => {
-    for (const timing of [s003, s004]) {
+    for (const timing of [s003, s004, requirement('CSRD-S-022')]) {
       expect(timing.provenance.map((p) => p.sourceId), timing.id).toEqual(['SRC-002']);
       expect(locatorTexts(timing).some((text) => text.startsWith('Article 5(2)')), timing.id).toBe(true);
     }
@@ -140,11 +146,20 @@ describe('CSRD-S-002 is the consolidated size test, and the pack keeps timing el
     expect(locatorTexts(s002)).toEqual(['Article 29a(1)', 'Article 1(4)']);
   });
 
-  it('S-014, the reporting duty, composes the size test with the FY2025–26 exemption rather than restating either; S-003 is not composed into it', () => {
+  it('S-014, the reporting duty, composes the two route duties; each route composes its first-application rule with its own exemptions, the size test entering through that rule; S-003 is composed into none of them', () => {
     const refs = referencedRequirements(conditionOf(s014));
-    expect(refs).toContainEqual({ requirement: 'CSRD-S-002', expect: 'APPLIES' });
-    expect(refs).toContainEqual({ requirement: 'CSRD-S-004', expect: 'APPLIES' });
-    expect(refs.map((r) => r.requirement)).not.toContain('CSRD-S-003');
+    expect(refs).toEqual([
+      { requirement: 'CSRD-S-020', expect: 'APPLIES' },
+      { requirement: 'CSRD-S-021', expect: 'APPLIES' },
+    ]);
+    const consolidated = referencedRequirements(conditionOf(requirement('CSRD-S-021')));
+    expect(consolidated).toContainEqual({ requirement: 'CSRD-S-018', expect: 'APPLIES' });
+    expect(consolidated).toContainEqual({ requirement: 'CSRD-S-022', expect: 'APPLIES' });
+    expect(consolidated.map((r) => r.requirement)).not.toContain('CSRD-S-002');
+    expect(referencedRequirements(conditionOf(requirement('CSRD-S-018')))).toEqual([{ requirement: 'CSRD-S-002', expect: 'APPLIES' }]);
+    for (const id of ['CSRD-S-014', 'CSRD-S-020', 'CSRD-S-021', 'CSRD-S-017', 'CSRD-S-018']) {
+      expect(referencedRequirements(conditionOf(requirement(id))).map((r) => r.requirement), id).not.toContain('CSRD-S-003');
+    }
     // And S-014 itself says where first-year applicability is decided: not here.
     expect(s014.caution).toMatch(/First reporting year/);
     // S-002 itself references nothing: it is a leaf the duty builds on.

@@ -891,7 +891,9 @@ describe('a requirement whose evidence is only partly served (the real corpus)',
     // corpus, not a claim that every requirement can be verified: CSRD-S-011
     // and CSRD-S-012 still halt, over closures that are no longer empty.
     expect(empty.map((entry) => entry.id)).toEqual([]);
-    expect(pack.requirements).toHaveLength(16);
+    // Twenty-three since the C/G composition (2026-10-20): the seven new
+    // requirements cite SRC-001 and SRC-002, both served.
+    expect(pack.requirements).toHaveLength(23);
 
     // **Empty closure is not the same question as gap-bearing.** `CSRD-S-011`
     // cites the served `SRC-001` and the unserved `SRC-008`, so it gaps over a

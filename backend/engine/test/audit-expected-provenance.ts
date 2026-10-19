@@ -41,6 +41,29 @@ export const AUDIT_EXPECTED_SOURCES: Readonly<Record<string, readonly string[]>>
   'CSRD-S-016': ['SRC-001'],
 };
 
+/**
+ * The seven requirements authored after the audit, by the C/G composition of
+ * 2026-10-20 (`docs/superpowers/specs/2026-10-19-timing-and-exemption-composition-design.md`).
+ * Their authority is that design, not the audit: the audit never saw them, so
+ * they are kept apart from the table above and from its arithmetic, and joined
+ * to it only where an oracle must cover every determination the pack emits.
+ */
+export const POST_AUDIT_SOURCES: Readonly<Record<string, readonly string[]>> = {
+  'CSRD-S-017': ['SRC-002', 'SRC-001'],
+  'CSRD-S-018': ['SRC-002', 'SRC-001'],
+  'CSRD-S-019': ['SRC-001'],
+  'CSRD-S-020': ['SRC-001', 'SRC-002'],
+  'CSRD-S-021': ['SRC-001', 'SRC-002'],
+  'CSRD-S-022': ['SRC-002'],
+  'CSRD-S-023': ['SRC-001'],
+};
+
+/** What every requirement the pack holds should cite: the audit for the sixteen, the design for the seven. */
+export const EXPECTED_SOURCES: Readonly<Record<string, readonly string[]>> = {
+  ...AUDIT_EXPECTED_SOURCES,
+  ...POST_AUDIT_SOURCES,
+};
+
 /** The audited universe: five sources, and `SRC-004` is not among them. */
 export const AUDIT_EXPECTED_UNIVERSE: readonly string[] = [
   'SRC-001', 'SRC-002', 'SRC-005', 'SRC-007', 'SRC-008',

@@ -14,8 +14,8 @@
   "headline": "Reporting duty active for Your entity. 2 determination(s) unresolved and awaiting input. national-law status requires review — this is NOT a final legal conclusion.",
   "nationalLawResolved": false,
   "counts": {
-    "applies": 4,
-    "doesNotApply": 6,
+    "applies": 6,
+    "doesNotApply": 11,
     "indeterminate": 3
   },
   "determinations": [
@@ -269,7 +269,7 @@
         "Article 19a(1)",
         "Article 29a(1)"
       ],
-      "caution": "A standalone promotional sustainability report is not automatically sufficient. First reporting year and filing calendar resolve through the national overlay (S-013) and timing rules (R-005: generally FY beginning on or after 1 Jan 2027 for non-first-wave reporters)."
+      "caution": "A standalone promotional sustainability report is not automatically sufficient. First reporting year is decided per route by CSRD-S-017 and CSRD-S-018 (Article 5(2) of Directive (EU) 2022/2464); the filing calendar and the exercised national options resolve through the national overlay (CSRD-S-013), and no answer here is a final legal conclusion until the country pack is ratified."
     },
     {
       "id": "CSRD-S-015",
@@ -321,6 +321,175 @@
         "Article 19a(3)"
       ],
       "caution": "Track the first reporting year as a sourced fact."
+    },
+    {
+      "id": "CSRD-S-017",
+      "title": "Individual first application (Article 5(2) of Directive (EU) 2022/2464)",
+      "decisionArea": "First application",
+      "result": "APPLIES",
+      "severity": "high",
+      "relationshipClass": "timing_context",
+      "needs": [],
+      "sources": [
+        {
+          "id": "SRC-002",
+          "title": "Directive (EU) 2022/2464 — CSRD",
+          "url": "https://eur-lex.europa.eu/eli/dir/2022/2464/oj/eng"
+        },
+        {
+          "id": "SRC-001",
+          "title": "Directive 2013/34/EU — Accounting Directive (host instrument)",
+          "url": "https://eur-lex.europa.eu/eli/dir/2013/34/oj/eng"
+        }
+      ],
+      "locators": [
+        "Article 5(2), first subparagraph, point (a)(i)",
+        "Article 5(2), first subparagraph, point (b)(i)",
+        "Article 1(4)"
+      ],
+      "caution": "The Directive's own calendar. Which measures apply in a given year is decided by the governing Member State's transposition (CSRD-S-013); the FY2025–26 national derogation on the individual basis is CSRD-S-004. Issuers reach this route because admission to a regulated market makes them public-interest entities; the Transparency Directive measures of Article 5(2), third subparagraph, are not encoded. Article 1(3) as amended conditions the extension to credit institutions and insurance undertakings regardless of legal form on the amended thresholds; whether that narrows the first-wave route for such undertakings below those thresholds is an open source question recorded in the design."
+    },
+    {
+      "id": "CSRD-S-018",
+      "title": "Consolidated first application (Article 5(2) of Directive (EU) 2022/2464)",
+      "decisionArea": "First application",
+      "result": "DOES_NOT_APPLY",
+      "severity": "high",
+      "relationshipClass": "timing_context",
+      "needs": [],
+      "sources": [
+        {
+          "id": "SRC-002",
+          "title": "Directive (EU) 2022/2464 — CSRD",
+          "url": "https://eur-lex.europa.eu/eli/dir/2022/2464/oj/eng"
+        },
+        {
+          "id": "SRC-001",
+          "title": "Directive 2013/34/EU — Accounting Directive (host instrument)",
+          "url": "https://eur-lex.europa.eu/eli/dir/2013/34/oj/eng"
+        }
+      ],
+      "locators": [
+        "Article 5(2), first subparagraph, point (a)(ii)",
+        "Article 5(2), first subparagraph, point (b)(ii)",
+        "Article 1(4)"
+      ],
+      "caution": "The Directive's own calendar. Which measures apply in a given year is decided by the governing Member State's transposition (CSRD-S-013); the FY2025–26 national derogation on the consolidated basis is CSRD-S-022. Issuers reach this route because admission to a regulated market makes them public-interest entities; the Transparency Directive measures of Article 5(2), third subparagraph, are not encoded. Article 1(3) as amended conditions the extension to credit institutions and insurance undertakings regardless of legal form on the amended thresholds; whether that narrows the first-wave route for such undertakings below those thresholds is an open source question recorded in the design."
+    },
+    {
+      "id": "CSRD-S-019",
+      "title": "Consolidated exemption via a higher parent's qualifying report",
+      "decisionArea": "Exemption",
+      "result": "DOES_NOT_APPLY",
+      "severity": "high",
+      "relationshipClass": "direct_legal_exemption",
+      "needs": [],
+      "sources": [
+        {
+          "id": "SRC-001",
+          "title": "Directive 2013/34/EU — Accounting Directive (host instrument)",
+          "url": "https://eur-lex.europa.eu/eli/dir/2013/34/oj/eng"
+        }
+      ],
+      "locators": [
+        "Article 29a(8)",
+        "Article 29a(9)"
+      ],
+      "caution": "Scope and exemption are separate determinations: 'threshold in scope but exempt' must never be summarised as 'CSRD does not apply'. 'EQUIVALENT' requires a formal equivalence basis — treat as legal judgment with a signed DecisionRecord until an equivalence decision exists (as CSRD-S-006). Credit institutions permanently affiliated to a central body, insurance undertakings under group supervision and the Article 48i transitional reporting are analyst and country-pack matters; the reporting parent's country is stated (parent.reporting_parent_country), never inferred from the ultimate parent's. Exemption evidence must remain current every year (O-011)."
+    },
+    {
+      "id": "CSRD-S-020",
+      "title": "Individual reporting duty (Article 19a)",
+      "decisionArea": "Reporting duty",
+      "result": "APPLIES",
+      "severity": "critical",
+      "relationshipClass": "direct_legal",
+      "needs": [],
+      "sources": [
+        {
+          "id": "SRC-001",
+          "title": "Directive 2013/34/EU — Accounting Directive (host instrument)",
+          "url": "https://eur-lex.europa.eu/eli/dir/2013/34/oj/eng"
+        },
+        {
+          "id": "SRC-002",
+          "title": "Directive (EU) 2022/2464 — CSRD",
+          "url": "https://eur-lex.europa.eu/eli/dir/2022/2464/oj/eng"
+        }
+      ],
+      "locators": [
+        "Article 19a(1)",
+        "Article 5(2), first subparagraph"
+      ],
+      "caution": "An EU-level screen: the governing Member State's transposition, filing calendar and exercised options resolve through CSRD-S-013, and no answer here is a final legal conclusion until the country pack is ratified."
+    },
+    {
+      "id": "CSRD-S-021",
+      "title": "Consolidated reporting duty (Article 29a)",
+      "decisionArea": "Reporting duty",
+      "result": "DOES_NOT_APPLY",
+      "severity": "critical",
+      "relationshipClass": "direct_legal",
+      "needs": [],
+      "sources": [
+        {
+          "id": "SRC-001",
+          "title": "Directive 2013/34/EU — Accounting Directive (host instrument)",
+          "url": "https://eur-lex.europa.eu/eli/dir/2013/34/oj/eng"
+        },
+        {
+          "id": "SRC-002",
+          "title": "Directive (EU) 2022/2464 — CSRD",
+          "url": "https://eur-lex.europa.eu/eli/dir/2022/2464/oj/eng"
+        }
+      ],
+      "locators": [
+        "Article 29a(1)",
+        "Article 29a(8)",
+        "Article 5(2), first subparagraph"
+      ],
+      "caution": "An EU-level screen: the governing Member State's transposition, filing calendar and exercised options resolve through CSRD-S-013, and no answer here is a final legal conclusion until the country pack is ratified. Use the legal consolidation perimeter, not internal business units."
+    },
+    {
+      "id": "CSRD-S-022",
+      "title": "FY2025–26 national transition exemption, consolidated basis",
+      "decisionArea": "Transition exemption",
+      "result": "DOES_NOT_APPLY",
+      "severity": "high",
+      "relationshipClass": "direct_legal_exemption",
+      "needs": [],
+      "sources": [
+        {
+          "id": "SRC-002",
+          "title": "Directive (EU) 2022/2464 — CSRD",
+          "url": "https://eur-lex.europa.eu/eli/dir/2022/2464/oj/eng"
+        }
+      ],
+      "locators": [
+        "Article 5(2), fifth subparagraph"
+      ],
+      "caution": "Requires the governing country pack — this is a national option, not a universal automatic exemption."
+    },
+    {
+      "id": "CSRD-S-023",
+      "title": "Financial-holding option under Article 29a(7a) (deferred encoding)",
+      "decisionArea": "Exemption",
+      "result": "DOES_NOT_APPLY",
+      "severity": "high",
+      "relationshipClass": "direct_legal_exemption",
+      "needs": [],
+      "sources": [
+        {
+          "id": "SRC-001",
+          "title": "Directive 2013/34/EU — Accounting Directive (host instrument)",
+          "url": "https://eur-lex.europa.eu/eli/dir/2013/34/oj/eng"
+        }
+      ],
+      "locators": [
+        "Article 29a(7a)",
+        "Article 2(15)"
+      ],
+      "caution": "Deferred encoding: the Member State's implementation of the option, the content an opted-out parent still reports and any national conditions are not encoded and resolve through CSRD-S-013 and analyst review; a relief recorded here is an EU-level screen, not a final legal conclusion."
     }
   ],
   "obligations": [

@@ -52,7 +52,7 @@ import type { RenderContext } from '../src/verification/render';
 import { verificationResultSchema, type VerificationResult } from '../src/verification/result';
 import { installNetworkTrap, type NetworkTrap } from './helpers';
 import { installRealRegister, installSyntheticRegister } from './world-register';
-import { AUDIT_EXPECTED_SOURCES, AUDIT_EXPECTED_CITATION_COUNT, AUDIT_EXPECTED_UNIVERSE } from './audit-expected-provenance';
+import { AUDIT_EXPECTED_SOURCES, AUDIT_EXPECTED_CITATION_COUNT, AUDIT_EXPECTED_UNIVERSE, EXPECTED_SOURCES } from './audit-expected-provenance';
 import { csrdPack } from './helpers';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -672,23 +672,30 @@ describe('the real CSRD pack, partitioned by what a live run could reach', () =>
    * actual `serves` — a measurement, not a target.
    */
   const AUDITED_SOURCES = AUDIT_EXPECTED_SOURCES;
+  /** The audited sixteen and the seven of the C/G composition, each cited as its authority says. */
+  const ALL_SOURCES = EXPECTED_SOURCES;
 
   it('the migrated pack cites exactly what the audit determined', () => {
     const authored = z
       .array(requirementSchema)
       .parse(JSON.parse(readFileSync(join(REAL, 'knowledge', PACK_ID, 'requirements.json'), 'utf8')));
-    expect(authored).toHaveLength(16);
+    expect(authored).toHaveLength(23);
     for (const requirement of authored) {
-      expect(sourceIdsOf(requirement), requirement.id).toEqual([...AUDITED_SOURCES[requirement.id]!]);
+      expect(sourceIdsOf(requirement), requirement.id).toEqual([...ALL_SOURCES[requirement.id]!]);
       // The audit's pack stood at version 3 throughout. CSRD-S-002 has since
       // been re-authored twice (its plain-English scope statement, 2026-10-18,
       // `HANDOFF-2026-10-18-s002-scope-vs-timing.md`; the Article 1(4)
       // exclusion branch, 2026-10-19) and is at 5; CSRD-S-001 gained the same
-      // branch and is at 4. Their cited sources, the audit's concern here, are
+      // branch and is at 4; the C/G composition (2026-10-20) took CSRD-S-005,
+      // CSRD-S-006 and CSRD-S-014 to 4 and authored CSRD-S-017 to CSRD-S-023 at
+      // 1. The audited sixteen's cited sources, the audit's concern here, are
       // unchanged: a new locator on SRC-001 is not a new source.
-      expect(requirement.version, requirement.id).toBe(
-        requirement.id === 'CSRD-S-002' ? 5 : requirement.id === 'CSRD-S-001' ? 4 : 3,
-      );
+      const expectedVersion =
+        requirement.id === 'CSRD-S-002' ? 5
+        : ['CSRD-S-001', 'CSRD-S-005', 'CSRD-S-006', 'CSRD-S-014'].includes(requirement.id) ? 4
+        : requirement.id >= 'CSRD-S-017' ? 1
+        : 3;
+      expect(requirement.version, requirement.id).toBe(expectedVersion);
     }
     // 18 citations across five sources, per the audit's §11 arithmetic as
     // corrected. The total is unchanged by the correction because S-004 was
@@ -707,7 +714,7 @@ describe('the real CSRD pack, partitioned by what a live run could reach', () =>
     loadCorpus(join(REAL, 'corpus')).index.documents.flatMap((d) => d.serves),
   );
   const partition = (reachable: boolean) =>
-    Object.entries(AUDITED_SOURCES)
+    Object.entries(ALL_SOURCES)
       .filter(([, ids]) => ids.every((id) => served.has(id)) === reachable)
       .map(([id]) => id);
 
@@ -725,10 +732,12 @@ describe('the real CSRD pack, partitioned by what a live run could reach', () =>
     // movement are why this counts requirements while the cases above count
     // gaps, and why reachability is asserted from an observed request rather
     // than from this list.
+    // Twenty-one since the C/G composition: its seven requirements cite SRC-001
+    // and SRC-002, both served, so none joins the gap-bearing two.
     expect(DETERMINISTIC_GAP).toEqual(['CSRD-S-011', 'CSRD-S-012']);
-    expect(MODEL_REACHABLE).toHaveLength(14);
+    expect(MODEL_REACHABLE).toHaveLength(21);
     expect([...MODEL_REACHABLE, ...DETERMINISTIC_GAP].sort()).toEqual(
-      Object.keys(AUDITED_SOURCES).sort(),
+      Object.keys(ALL_SOURCES).sort(),
     );
   });
 
