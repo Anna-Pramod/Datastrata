@@ -41,6 +41,8 @@ import {
   loadHistoricalPromptSet,
   loadPromptSet,
   promptHashes,
+  UnknownPromptSetVersionError,
+  type HistoricalPromptSetVersion,
 } from '../src/pipeline/prompts';
 import { qualifiedChallengeId } from '../src/pipeline/prosecutors';
 import {
@@ -570,5 +572,19 @@ describe('the v3 and v4 prompt sets tell every role to copy the fence hash; v4 a
     const [underV1, underV2, underV3, underV4] = [of(v1), of(v2), of(v3), of(current)];
     for (const identity of [underV1, underV2, underV3, underV4]) expect(identity).toMatch(/^pipeline-v3-[0-9a-f]{64}$/);
     expect(new Set([underV1, underV2, underV3, underV4]).size).toBe(4);
+  });
+
+  it('a version the repository does not keep is refused by name at runtime, never resolved to the current set; every kept version still loads its own files (the positive control)', () => {
+    // The type union stops a literal at compile time; a value that arrives through a cast or a parsed string must be
+    // stopped here. Before this refusal, an unknown version fell through `historicalPromptPath` to `undefined` and
+    // `loadRolePrompt`'s default path then read the CURRENT prompt file — observed while v3 was being kept.
+    const unknown = 'v9' as unknown as HistoricalPromptSetVersion;
+    expect(() => loadHistoricalPromptSet(unknown)).toThrow(UnknownPromptSetVersionError);
+    expect(() => loadHistoricalPromptSet(unknown)).toThrow('no kept prompt set for version "v9": the kept sets are v1, v2, v3');
+    expect(() => historicalPromptPath(unknown, 'reader')).toThrow(UnknownPromptSetVersionError);
+    for (const [version, digests] of [['v1', V1_DIGESTS], ['v2', V2_DIGESTS], ['v3', V3_DIGESTS]] as const) {
+      expect(promptHashes(loadHistoricalPromptSet(version)), version).toEqual(digests);
+      expect(loadHistoricalPromptSet(version).reader.sha256, `${version} is not the current set`).not.toBe(current.reader.sha256);
+    }
   });
 });

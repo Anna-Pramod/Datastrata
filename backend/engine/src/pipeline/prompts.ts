@@ -203,6 +203,28 @@ export type HistoricalPromptSetVersion = 'v1' | 'v2' | 'v3';
 
 export const HISTORICAL_PROMPT_SET_VERSIONS: readonly HistoricalPromptSetVersion[] = ['v1', 'v2', 'v3'];
 
+/**
+ * A prompt-set version the repository does not keep.
+ *
+ * Its own error, thrown at runtime, because the alternative was observed:
+ * while v3 was being kept, `loadHistoricalPromptSet('v3')` fell through
+ * `historicalPromptPath` to `undefined`, and `loadRolePrompt`'s default path
+ * then read the CURRENT prompt file. A recording would have been replayed
+ * against a prompt it was not made under and refused later for the wrong
+ * reason — or, for a recording made under the current set, not refused at
+ * all. The type union stops a literal at compile time; a value that reaches
+ * this function through a cast or a parsed string must be stopped here, by
+ * name, before any file is read.
+ */
+export class UnknownPromptSetVersionError extends Error {
+  constructor(readonly version: string) {
+    super(
+      `no kept prompt set for version ${JSON.stringify(version)}: the kept sets are ${HISTORICAL_PROMPT_SET_VERSIONS.join(', ')} (under prompts/history/) and the current set is ${CURRENT_PROMPT_SET_VERSION} (prompts/verification/, read by loadPromptSet)`,
+    );
+    this.name = 'UnknownPromptSetVersionError';
+  }
+}
+
 /** A superseded set's file for one role: literal paths, for the same reason `defaultPromptPath` uses them. */
 export function historicalPromptPath(version: HistoricalPromptSetVersion, role: RoleName): string {
   switch (version) {
@@ -233,6 +255,11 @@ export function historicalPromptPath(version: HistoricalPromptSetVersion, role: 
         case 'adjudicator':
           return fileURLToPath(new URL('../../prompts/history/v3/adjudicator.md', import.meta.url));
       }
+    default: {
+      // Exhaustive over the union for the compiler, and a refusal for a value the compiler never saw.
+      const unknown: never = version;
+      throw new UnknownPromptSetVersionError(String(unknown));
+    }
   }
 }
 
