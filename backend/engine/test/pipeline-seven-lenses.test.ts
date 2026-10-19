@@ -89,6 +89,8 @@ describe('seven prosecutors exercise the seven lenses', () => {
     // B-PROMPT holds on the larger inputs: every structural line is the pipeline's own.
     const owned = (headings: string[]) => [
       ...headings.map((h) => `# ${h}`),
+      // Grammar 1.2.0: the closure's relationships, listed before the closure (the evidence-edge contract).
+      '# Entitled relationships',
       `# Entitled closure (${closure.sha256})`,
       ...closure.documents().flatMap((d) => [documentHeading(d), beginFence(d), endFence(d)]),
     ];

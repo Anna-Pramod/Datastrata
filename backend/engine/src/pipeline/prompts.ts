@@ -186,22 +186,33 @@ export function loadPromptSet(dir?: string): PromptSet {
  *         empty and was refused at assembly
  *         (`CHECKPOINT-opus55-s002-capture-r2.md`); all three files change,
  *         the reader included
- *     v4  the set in `prompts/verification/` today: the one-line delivery
- *         instruction every earlier set ended with ("Output the JSON object
- *         and nothing else.") is replaced by a paragraph naming the
- *         StructuredOutput tool — call it exactly once where it is offered,
- *         output the JSON object directly where it is not — after r3's
- *         prosecutor answered as a fenced text block, never called the tool,
- *         and the launch failed under the committed zero structured-output
- *         retries (`CHECKPOINT-opus55-s002-capture-r3.md`); nothing else in
- *         the three files changes, and the HTTP route, which offers no tool,
- *         keeps its direct JSON
+ *     v4  the set the fourth S-002 capture (r4, 2026-10-19) ran under: the
+ *         one-line delivery instruction every earlier set ended with ("Output
+ *         the JSON object and nothing else.") is replaced by a paragraph
+ *         naming the StructuredOutput tool — call it exactly once where it is
+ *         offered, output the JSON object directly where it is not — after
+ *         r3's prosecutor answered as a fenced text block, never called the
+ *         tool, and the launch failed under the committed zero
+ *         structured-output retries (`CHECKPOINT-opus55-s002-capture-r3.md`);
+ *         nothing else in the three files changes, and the HTTP route, which
+ *         offers no tool, keeps its direct JSON
+ *     v5  the set in `prompts/verification/` today: every prompt gains the
+ *         section "A relationship between documents carries its edge id" and
+ *         a `relationships` entry under "What you are given" — the roles are
+ *         shown the closure's edges under `# Entitled relationships`
+ *         (closure-renderer grammar 1.2.0, `entitlement.ts`) and may name
+ *         only those ids, copied character for character, falling back to
+ *         quote evidence where no listed edge carries the relationship —
+ *         after r4's reader named four edge ids the corpus does not hold and
+ *         the record was filed with its evidence validation failed
+ *         (`CHECKPOINT-opus55-s002-capture-r4.md`); each v5 file is its v4
+ *         file with the section and the entry inserted and nothing else
  */
-export const CURRENT_PROMPT_SET_VERSION = 'v4';
+export const CURRENT_PROMPT_SET_VERSION = 'v5';
 
-export type HistoricalPromptSetVersion = 'v1' | 'v2' | 'v3';
+export type HistoricalPromptSetVersion = 'v1' | 'v2' | 'v3' | 'v4';
 
-export const HISTORICAL_PROMPT_SET_VERSIONS: readonly HistoricalPromptSetVersion[] = ['v1', 'v2', 'v3'];
+export const HISTORICAL_PROMPT_SET_VERSIONS: readonly HistoricalPromptSetVersion[] = ['v1', 'v2', 'v3', 'v4'];
 
 /**
  * A prompt-set version the repository does not keep.
@@ -254,6 +265,15 @@ export function historicalPromptPath(version: HistoricalPromptSetVersion, role: 
           return fileURLToPath(new URL('../../prompts/history/v3/prosecutor.md', import.meta.url));
         case 'adjudicator':
           return fileURLToPath(new URL('../../prompts/history/v3/adjudicator.md', import.meta.url));
+      }
+    case 'v4':
+      switch (role) {
+        case 'reader':
+          return fileURLToPath(new URL('../../prompts/history/v4/reader.md', import.meta.url));
+        case 'prosecutor':
+          return fileURLToPath(new URL('../../prompts/history/v4/prosecutor.md', import.meta.url));
+        case 'adjudicator':
+          return fileURLToPath(new URL('../../prompts/history/v4/adjudicator.md', import.meta.url));
       }
     default: {
       // Exhaustive over the union for the compiler, and a refusal for a value the compiler never saw.

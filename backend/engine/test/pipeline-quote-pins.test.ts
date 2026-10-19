@@ -448,16 +448,25 @@ describe('FIXTURE — through runVerificationPipeline, a quote that fails the co
 });
 
 // ---------------------------------------------------------------------------
-// 5. The v3 and v4 prompts say it; v1, v2 and v3 are kept byte for byte under
-//    their own versions; v4 replaces the delivery line and nothing else; and
-//    the identity moves with the set
+// 5. The v3, v4 and v5 prompts say it; v1, v2, v3 and v4 are kept byte for byte
+//    under their own versions; v4 replaces the delivery line and nothing else;
+//    v5 inserts the relationships section and entry and nothing else; and the
+//    identity moves with the set
 // ---------------------------------------------------------------------------
 
-describe('the v3 and v4 prompt sets tell every role to copy the fence hash; v4 adds the delivery instruction; v1, v2 and v3 are kept and still derive their own identities', () => {
+describe('the v3, v4 and v5 prompt sets tell every role to copy the fence hash; v4 adds the delivery instruction; v5 the relationships instruction; v1, v2, v3 and v4 are kept and still derive their own identities', () => {
   const current = loadPromptSet();
   const v1 = loadHistoricalPromptSet('v1');
   const v2 = loadHistoricalPromptSet('v2');
   const v3 = loadHistoricalPromptSet('v3');
+  const v4 = loadHistoricalPromptSet('v4');
+
+  /** The v4 digests, as `VERSIONS.md` recorded them while v4 was current and as the r4 capture's pre-flight and streams carry them. */
+  const V4_DIGESTS = {
+    reader: '3aa48bfddf53749463f74f5ae7f98dfa47426a941d05993782eaca1e06480cff',
+    prosecutor: '92556391c7668b2f2a0dcdc42e4281d9f9a658e7e7abae18f8294363596cb32a',
+    adjudicator: 'a134ce8e3ccc09b63a94308c67db63eefc701b2448359b884c2a4ce2358051d5',
+  };
 
   /** The v3 digests, as `VERSIONS.md` recorded them while v3 was current and as the r3 capture's pre-flight and streams carry them. */
   const V3_DIGESTS = {
@@ -495,28 +504,81 @@ describe('the v3 and v4 prompt sets tell every role to copy the fence hash; v4 a
     'When that tool is unavailable, output the required JSON object directly,\n' +
     'without Markdown fences or commentary.\n';
 
-  it('v4 is current; v1, v2 and v3 are the kept sets, each read from its own literal paths', () => {
-    expect(CURRENT_PROMPT_SET_VERSION).toBe('v4');
-    expect(HISTORICAL_PROMPT_SET_VERSIONS).toEqual(['v1', 'v2', 'v3']);
+  /**
+   * What v5 inserts into each v4 file, and nothing else: an entry under "What
+   * you are given" after the `closure` entry, and a section after "A quote
+   * carries its document's hash". r4's reader (2026-10-19) named four edge ids
+   * the corpus does not hold; nothing had shown it which ids exist
+   * (`CHECKPOINT-opus55-s002-capture-r4.md`). The section names the list the
+   * pipeline now shows (`# Entitled relationships`, grammar 1.2.0), restricts
+   * the ids a role may write to it, and says what to do when no listed edge
+   * carries the relationship. Written out here, so the test states what v5 is
+   * rather than reading it off the file under test.
+   */
+  const V5_RELATIONSHIPS_ENTRY =
+    '- `relationships` — the `# Entitled relationships` section: every edge the\n' +
+    '  corpus records between documents of the closure, as the pipeline states\n' +
+    '  it. It is the complete list.\n';
+  const V5_RELATIONSHIPS_SECTION =
+    '## A relationship between documents carries its edge id\n' +
+    '\n' +
+    'The `# Entitled relationships` section lists every relationship the corpus\n' +
+    'records between documents of the closure: one line per edge, giving its\n' +
+    '`edgeId`, its `kind` (`amends`, `amendedBy`, `consolidates`, `references` or\n' +
+    '`definesTermsFor`), the document it runs `from` and the document it runs\n' +
+    '`to`. It is the complete list, and it is stated by the pipeline: a\n' +
+    'relationship not listed there is not one you may cite as an edge, whatever\n' +
+    'the texts imply. Each hop of an `amendment_chain` and each `cross_reference`\n' +
+    'names an `edgeId`, and the only ids you may write are the ones listed,\n' +
+    'copied character for character. A hop rests on an `amends` or `amendedBy`\n' +
+    'edge and its quote is taken from one of that edge\'s two documents;\n' +
+    'consecutive hops continue one chain in one direction. A `cross_reference`\n' +
+    'rests on a `references` edge whose `from` and `to` are the documents of its\n' +
+    'two quotes. When the list holds no edge that carries the relationship you\n' +
+    'want to show, show it with `quote` evidence from the documents themselves\n' +
+    'and say in the statement what the quoted text establishes. Never write an\n' +
+    'edge id the list does not hold, never compose one from article numbers or\n' +
+    'document ids, and never present a relationship as an edge because the text\n' +
+    'implies it. The pipeline checks every edge id against the list as soon as\n' +
+    'your output arrives; an id it does not hold is a defect in your output, not\n' +
+    'a gap, and the run is refused.\n' +
+    '\n';
+  /** The v4 file with the entry and the section inserted — what v5 must be, character for character. */
+  function v5From(v4Text: string): string {
+    const closureEntry = v4Text.match(/- `closure` — the full text of every document in the entitled closure, and\n  nothing else[^\n]*\n/);
+    expect(closureEntry).not.toBeNull();
+    const withEntry = v4Text.replace(closureEntry![0], closureEntry![0] + V5_RELATIONSHIPS_ENTRY);
+    const hashSection = withEntry.indexOf("## A quote carries its document's hash");
+    expect(hashSection).toBeGreaterThan(0);
+    const sectionEnd = withEntry.indexOf('and the run is refused.\n\n', hashSection) + 'and the run is refused.\n\n'.length;
+    return withEntry.slice(0, sectionEnd) + V5_RELATIONSHIPS_SECTION + withEntry.slice(sectionEnd);
+  }
+
+  it('v5 is current; v1, v2, v3 and v4 are the kept sets, each read from its own literal paths', () => {
+    expect(CURRENT_PROMPT_SET_VERSION).toBe('v5');
+    expect(HISTORICAL_PROMPT_SET_VERSIONS).toEqual(['v1', 'v2', 'v3', 'v4']);
     for (const role of ['reader', 'prosecutor', 'adjudicator'] as const) {
+      expect(historicalPromptPath('v4', role)).toBe(join(engineRoot, 'prompts', 'history', 'v4', `${role}.md`));
       expect(historicalPromptPath('v3', role)).toBe(join(engineRoot, 'prompts', 'history', 'v3', `${role}.md`));
       expect(historicalPromptPath('v2', role)).toBe(join(engineRoot, 'prompts', 'history', 'v2', `${role}.md`));
       expect(historicalPromptPath('v1', role)).toBe(join(engineRoot, 'prompts', 'history', 'v1', `${role}.md`));
     }
   });
 
-  it('v3 is kept byte for byte (the digests the r3 capture ran under), v2 and v1 are untouched, and v4 differs from all three in every role', () => {
+  it('v4 is kept byte for byte (the digests the r4 capture ran under), v3, v2 and v1 are untouched, and v5 differs from all four in every role', () => {
+    expect(promptHashes(v4)).toEqual(V4_DIGESTS);
     expect(promptHashes(v3)).toEqual(V3_DIGESTS);
     expect(promptHashes(v2)).toEqual(V2_DIGESTS);
     expect(promptHashes(v1)).toEqual(V1_DIGESTS);
     for (const role of ['reader', 'prosecutor', 'adjudicator'] as const) {
+      expect(current[role].sha256, role).not.toBe(V4_DIGESTS[role]);
       expect(current[role].sha256, role).not.toBe(V3_DIGESTS[role]);
       expect(current[role].sha256, role).not.toBe(V2_DIGESTS[role]);
       expect(current[role].sha256, role).not.toBe(V1_DIGESTS[role]);
     }
   });
 
-  it('every v3 and v4 prompt carries the hash instruction, in words v1 and v2 do not have; v3 still ends with the one-line delivery instruction, v4 with the paragraph', () => {
+  it('every v3, v4 and v5 prompt carries the hash instruction, in words v1 and v2 do not have; v3 still ends with the one-line delivery instruction, v4 and v5 with the paragraph', () => {
     for (const role of ['reader', 'prosecutor', 'adjudicator'] as const) {
       for (const phrase of [
         '## A quote carries its document\'s hash',
@@ -528,22 +590,25 @@ describe('the v3 and v4 prompt sets tell every role to copy the fence hash; v4 a
         'never empty',
       ]) {
         expect(current[role].text, `${role}: ${phrase}`).toContain(phrase);
+        expect(v4[role].text, `v4 ${role}: ${phrase}`).toContain(phrase);
         expect(v3[role].text, `v3 ${role}: ${phrase}`).toContain(phrase);
         expect(v2[role].text, `v2 ${role} lacks: ${phrase}`).not.toContain(phrase);
         expect(v1[role].text, `v1 ${role} lacks: ${phrase}`).not.toContain(phrase);
       }
       expect(v3[role].text.endsWith('\n' + OLD_DELIVERY_LINE), role).toBe(true);
+      expect(v4[role].text.endsWith('\n' + V4_DELIVERY_PARAGRAPH), role).toBe(true);
       expect(current[role].text.endsWith('\n' + V4_DELIVERY_PARAGRAPH), role).toBe(true);
       expect(current[role].text, role).not.toMatch(/CSRD-S-\d{3}/);
     }
     // The adjudicator's pin rule no longer contradicts the instruction: the quote hash is the one hash it writes.
     expect(current.adjudicator.text).toContain('The one hash you write is a quote\'s `sha256Normalized`');
+    expect(v4.adjudicator.text).toContain('The one hash you write is a quote\'s `sha256Normalized`');
     expect(v3.adjudicator.text).toContain('The one hash you write is a quote\'s `sha256Normalized`');
     expect(current.adjudicator.text).not.toContain('Do not emit hashes, closure identities');
     expect(v2.adjudicator.text).toContain('Do not emit hashes, closure identities');
   });
 
-  it('v4 replaces the one-line delivery instruction with the paragraph naming the StructuredOutput tool, in words no kept set has, and changes nothing else: v3 with that one line replaced is v4', () => {
+  it('v4 replaces the one-line delivery instruction with the paragraph naming the StructuredOutput tool, in words no earlier set has, and changes nothing else: v3 with that one line replaced is v4', () => {
     for (const role of ['reader', 'prosecutor', 'adjudicator'] as const) {
       for (const phrase of [
         'When the StructuredOutput tool is available',
@@ -552,26 +617,56 @@ describe('the v3 and v4 prompt sets tell every role to copy the fence hash; v4 a
         'When that tool is unavailable, output the required JSON object directly',
         'without Markdown fences or commentary.',
       ]) {
+        expect(v4[role].text, `v4 ${role}: ${phrase}`).toContain(phrase);
         expect(current[role].text, `${role}: ${phrase}`).toContain(phrase);
         for (const [label, kept] of [['v1', v1], ['v2', v2], ['v3', v3]] as const) {
           expect(kept[role].text, `${label} ${role} lacks: ${phrase}`).not.toContain(phrase);
         }
       }
       // The old line is gone from v4 and occurs exactly once in v3 (the positive control); the paragraph occurs exactly once in v4.
-      expect(current[role].text, role).not.toContain(OLD_DELIVERY_LINE.trimEnd());
+      expect(v4[role].text, role).not.toContain(OLD_DELIVERY_LINE.trimEnd());
       expect(v3[role].text.split(OLD_DELIVERY_LINE).length - 1, role).toBe(1);
-      expect(current[role].text.split(V4_DELIVERY_PARAGRAPH).length - 1, role).toBe(1);
-      // Nothing else moved: the kept v3 file with its last line replaced is the v4 file, character for character.
-      expect(current[role].text, role).toBe(v3[role].text.replace(OLD_DELIVERY_LINE, V4_DELIVERY_PARAGRAPH));
+      expect(v4[role].text.split(V4_DELIVERY_PARAGRAPH).length - 1, role).toBe(1);
+      // Nothing else moved: the kept v3 file with its last line replaced is the kept v4 file, character for character.
+      expect(v4[role].text, role).toBe(v3[role].text.replace(OLD_DELIVERY_LINE, V4_DELIVERY_PARAGRAPH));
     }
   });
 
-  it('the identity moves with the set: v1, v2, v3 and v4 derive four pipelines under one configuration', () => {
+  it('v5 inserts the relationships entry and section — use only the listed edge ids, quote evidence where no listed edge carries the relationship, never invent an id — in words no kept set has, and changes nothing else: v4 with the two insertions is v5', () => {
+    for (const role of ['reader', 'prosecutor', 'adjudicator'] as const) {
+      for (const phrase of [
+        '## A relationship between documents carries its edge id',
+        '`# Entitled relationships`',
+        'the only ids you may write are the ones listed',
+        'never compose one from article numbers or document ids',
+        'show it with `quote` evidence from the documents themselves',
+        'an id it does not hold is a defect in your output, not',
+        '- `relationships` —',
+      ]) {
+        // Matched as prose, with the files' line wrapping removed, as the prompt-boundary tests match.
+        const flat = (text: string): string => text.replace(/\s+/g, ' ');
+        expect(flat(current[role].text), `${role}: ${phrase}`).toContain(flat(phrase));
+        for (const [label, kept] of [['v1', v1], ['v2', v2], ['v3', v3], ['v4', v4]] as const) {
+          expect(flat(kept[role].text), `${label} ${role} lacks: ${phrase}`).not.toContain(flat(phrase));
+        }
+      }
+      // Each occurs exactly once; the hash section still precedes the relationships section; the delivery paragraph still ends the file.
+      expect(current[role].text.split(V5_RELATIONSHIPS_SECTION).length - 1, role).toBe(1);
+      expect(current[role].text.split(V5_RELATIONSHIPS_ENTRY).length - 1, role).toBe(1);
+      expect(current[role].text.indexOf("## A quote carries its document's hash"), role).toBeLessThan(current[role].text.indexOf(V5_RELATIONSHIPS_SECTION));
+      // Nothing else moved: the kept v4 file with the entry and the section inserted is the v5 file, character for character.
+      expect(current[role].text, role).toBe(v5From(v4[role].text));
+      // Positive control for the transformation: applied to itself it moves the text, so the equality above is not vacuous.
+      expect(v5From(v4[role].text), role).not.toBe(v4[role].text);
+    }
+  });
+
+  it('the identity moves with the set: v1, v2, v3, v4 and v5 derive five pipelines under one configuration', () => {
     const closure = fixtureClosure();
     const of = (prompts: typeof current) => pipelineVersionFor({ prompts, config: DEFAULT_ROLE_CONFIG, closure });
-    const [underV1, underV2, underV3, underV4] = [of(v1), of(v2), of(v3), of(current)];
-    for (const identity of [underV1, underV2, underV3, underV4]) expect(identity).toMatch(/^pipeline-v3-[0-9a-f]{64}$/);
-    expect(new Set([underV1, underV2, underV3, underV4]).size).toBe(4);
+    const [underV1, underV2, underV3, underV4, underV5] = [of(v1), of(v2), of(v3), of(v4), of(current)];
+    for (const identity of [underV1, underV2, underV3, underV4, underV5]) expect(identity).toMatch(/^pipeline-v3-[0-9a-f]{64}$/);
+    expect(new Set([underV1, underV2, underV3, underV4, underV5]).size).toBe(5);
   });
 
   it('a version the repository does not keep is refused by name at runtime, never resolved to the current set; every kept version still loads its own files (the positive control)', () => {
@@ -580,9 +675,9 @@ describe('the v3 and v4 prompt sets tell every role to copy the fence hash; v4 a
     // `loadRolePrompt`'s default path then read the CURRENT prompt file — observed while v3 was being kept.
     const unknown = 'v9' as unknown as HistoricalPromptSetVersion;
     expect(() => loadHistoricalPromptSet(unknown)).toThrow(UnknownPromptSetVersionError);
-    expect(() => loadHistoricalPromptSet(unknown)).toThrow('no kept prompt set for version "v9": the kept sets are v1, v2, v3');
+    expect(() => loadHistoricalPromptSet(unknown)).toThrow('no kept prompt set for version "v9": the kept sets are v1, v2, v3, v4');
     expect(() => historicalPromptPath(unknown, 'reader')).toThrow(UnknownPromptSetVersionError);
-    for (const [version, digests] of [['v1', V1_DIGESTS], ['v2', V2_DIGESTS], ['v3', V3_DIGESTS]] as const) {
+    for (const [version, digests] of [['v1', V1_DIGESTS], ['v2', V2_DIGESTS], ['v3', V3_DIGESTS], ['v4', V4_DIGESTS]] as const) {
       expect(promptHashes(loadHistoricalPromptSet(version)), version).toEqual(digests);
       expect(loadHistoricalPromptSet(version).reader.sha256, `${version} is not the current set`).not.toBe(current.reader.sha256);
     }

@@ -46,6 +46,7 @@ import { authoriseCorpus } from '../src/corpus/authority';
 import { checkEvidenceSet } from '../src/corpus/evidence';
 import type { LoadedCorpus } from '../src/corpus/store';
 import { sha256Hex } from '../src/corpus/hash';
+import { CLOSURE_POLICY_V1 } from '../src/corpus/closure';
 import {
   beginFence,
   CLOSURE_RENDERER_VERSION,
@@ -54,12 +55,18 @@ import {
   EntitledClosure,
   escapeDocumentText,
   headingField,
+  HISTORICAL_CLOSURE_RENDERER_VERSIONS,
   MessageStructureError,
   renderCarried,
   renderEntitledClosure,
+  renderEntitledRelationships,
+  UnknownClosureRendererVersionError,
+  type ClosureRendererVersion,
 } from '../src/pipeline/entitlement';
 import { readerInputFor, renderReaderInput } from '../src/pipeline/reader';
-import { prosecutorInputFor, qualifiedChallengeId, renderProsecutorInput } from '../src/pipeline/prosecutors';
+import { conditionPathsFor, prosecutorInputFor, qualifiedChallengeId, renderProsecutorInput } from '../src/pipeline/prosecutors';
+import { pipelineVersionFor } from '../src/pipeline/orchestrate';
+import { renderRequirement } from '../src/verification/render';
 import { adjudicatorInputFor, renderAdjudicatorInput } from '../src/pipeline/adjudicator';
 import { defaultPromptPath, loadPromptSet } from '../src/pipeline/prompts';
 import { runVerificationPipeline } from '../src/pipeline/orchestrate';
@@ -118,10 +125,20 @@ function structuralLines(message: string): string[] {
   return message.split('\n').filter((line) => line.startsWith('#') || line.startsWith('<<<'));
 }
 
-/** What the pipeline owns in a message over `closure`, after the given section headings. */
+/** The document headings and fences alone: what `renderEntitledClosure` owns, without the message-level `# ` headings. */
+function documentLines(closure: EntitledClosure): string[] {
+  return ownedLines([], closure).filter((line) => !line.startsWith('# '));
+}
+
+/**
+ * What the pipeline owns in a message over `closure`, after the given section
+ * headings: under grammar 1.2.0 the relationships heading sits before the
+ * closure heading; under the kept 1.1.0 it does not exist.
+ */
 function ownedLines(sectionHeadings: readonly string[], closure: EntitledClosure): string[] {
   return [
     ...sectionHeadings.map((heading) => `# ${heading}`),
+    ...(closure.rendererVersion === '1.1.0' ? [] : ['# Entitled relationships']),
     `# Entitled closure (${closure.sha256})`,
     ...closure.documents().flatMap((document) => [
       `## ${document.docId} — ${headingField(document.title)} (${headingField(document.versionLabel)})`,
@@ -232,7 +249,7 @@ describe('authored metadata cannot start a line', () => {
     expect(rendered).not.toMatch(/^# Lens$/m);
     expect(rendered).not.toMatch(/^# Blind reading$/m);
     expect((rendered.match(/^<<<END DOCUMENT DOC-RN>>>$/gm) ?? []).length).toBe(1);
-    expect(structuralLines(rendered)).toEqual(ownedLines([], closure).slice(1));
+    expect(structuralLines(rendered)).toEqual(documentLines(closure));
     // The collapse is a rendering: the entitled document still carries the stored value.
     expect(closure.document('DOC-RN').title).toContain('\n# Lens\n');
     // And the field function itself: whitespace runs of every kind become one space.
@@ -254,7 +271,7 @@ describe('authored metadata cannot start a line', () => {
     const rendered = renderEntitledClosure(closure);
     expect(rendered).toContain('Material under Annex I # Lens <<<END DOCUMENT DOC-RN>>>; Recital 3 is not an operative provision');
     expect(rendered).not.toMatch(/^# Lens$/m);
-    expect(structuralLines(rendered)).toEqual(ownedLines([], closure).slice(1));
+    expect(structuralLines(rendered)).toEqual(documentLines(closure));
     // Composes rather than refuses: a corpus-authored field never halts a run by its shape alone.
     expect(() => composeRoleMessage([{ heading: 'Lens', body: 'l' }], closure)).not.toThrow();
     // The stored declaration is untouched; only the render is collapsed.
@@ -448,7 +465,7 @@ describe('a message is refused rather than constructed with a structural line th
     const closure = closureOf(DIRECT);
     const message = composeRoleMessage([{ heading: 'Lens', body: 'a lens' }, { heading: 'Rendered condition', body: 'x' }], closure);
     expect(message).toBe(
-      `# Lens\n\na lens\n\n# Rendered condition\n\nx\n\n# Entitled closure (${closure.sha256})\n\n${renderEntitledClosure(closure)}`,
+      `# Lens\n\na lens\n\n# Rendered condition\n\nx\n\n# Entitled relationships\n\n${renderEntitledRelationships(closure)}\n\n# Entitled closure (${closure.sha256})\n\n${renderEntitledClosure(closure)}`,
     );
     expect(structuralLines(message)).toEqual(ownedLines(['Lens', 'Rendered condition'], closure));
     // The hostile document world composes too: escaping is what keeps it well-formed.
@@ -508,6 +525,120 @@ describe('every prompt states the rule', () => {
 
 describe('the grammar is versioned', () => {
   it('P5 — the closure renderer version moved with the grammar', () => {
-    expect(CLOSURE_RENDERER_VERSION).toBe('1.1.0');
+    expect(CLOSURE_RENDERER_VERSION).toBe('1.2.0');
+    expect(HISTORICAL_CLOSURE_RENDERER_VERSIONS).toEqual(['1.1.0']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Grammar 1.2.0: the roles are shown the closure's relationships. r4
+// (2026-10-19) showed the reader naming four edge ids the corpus does not hold;
+// nothing had told it which ids exist. The section is emitted by the one
+// composer, for every role, immediately before the closure, so a role can copy
+// an id from it and the edge seam can refuse one that is not there. The kept
+// grammar 1.1.0 must keep producing exactly the bytes it always did, because
+// every recording made under it binds those bytes through `requestSha256`.
+// ---------------------------------------------------------------------------
+
+describe('grammar 1.2.0 shows every role the closure\'s relationships; the kept 1.1.0 renders the bytes it always did', () => {
+  const fixtureCorpusAuthorised = fixtureAuthorisedCorpus();
+  const requirement = fixtureRequirement();
+  const ctx = fixtureRenderContext();
+  const renderedCondition = renderRequirement(requirement, ctx);
+  function fixtureClosureUnder(grammar?: ClosureRendererVersion): EntitledClosure {
+    return grammar === undefined
+      ? EntitledClosure.forSources(fixtureCorpusAuthorised, fixtureRegister(), fixtureSourceUniverse(), ['SRC-100'])
+      : EntitledClosure.forSources(fixtureCorpusAuthorised, fixtureRegister(), fixtureSourceUniverse(), ['SRC-100'], CLOSURE_POLICY_V1, grammar);
+  }
+  function renderAll(closure: EntitledClosure): Record<'reader' | 'prosecutor' | 'adjudicator', string> {
+    return {
+      reader: renderReaderInput(readerInputFor({ packId: 'testpack', requirement, closure })),
+      prosecutor: renderProsecutorInput(
+        prosecutorInputFor({ lens: 'missing_criterion', reading: stubReaderOutput(), renderedCondition, conditionPaths: conditionPathsFor(requirement, ctx), closure }),
+      ),
+      adjudicator: renderAdjudicatorInput(adjudicatorInputFor({ reading: stubReaderOutput(), renderedCondition, table: { cells: [], challenges: [] }, closure })),
+    };
+  }
+
+  it('P11 — under 1.2.0 every role\'s message carries the relationships section once, with the catalog, immediately before the closure, and the structural lines are exactly the pipeline\'s', () => {
+    const closure = closureOf(DIRECT);
+    expect(closure.rendererVersion).toBe('1.2.0');
+    const catalog = renderEntitledRelationships(closure);
+    expect(catalog).toMatch(/^- edgeId: /);
+    const reader = renderReaderInput(readerInputFor({ packId: 'testpack', requirement: fixtureRequirement({ provenance: citing('SRC-912') }), closure }));
+    const prosecutor = renderProsecutorInput(prosecutorInputFor({ reading: stubReaderOutput(), renderedCondition: 'x', conditionPaths: ['root'], lens: 'l', closure }));
+    const adjudicator = renderAdjudicatorInput(adjudicatorInputFor({ reading: stubReaderOutput(), renderedCondition: 'x', table: { cells: [], challenges: [] } as never, closure }));
+    for (const [role, message] of Object.entries({ reader, prosecutor, adjudicator })) {
+      expect(message.split('# Entitled relationships').length - 1, role).toBe(1);
+      expect(message, role).toContain(`# Entitled relationships\n\n${catalog}\n\n# Entitled closure (${closure.sha256})`);
+    }
+    expect(structuralLines(reader)).toEqual(ownedLines(['Requirement', 'Where to look'], closure));
+    expect(structuralLines(prosecutor)).toEqual(ownedLines(['Lens', 'Blind reading', 'Rendered condition', 'Condition addresses'], closure));
+    expect(structuralLines(adjudicator)).toEqual(ownedLines(['Blind reading', 'Rendered condition', 'Coverage', 'Challenges'], closure));
+    // The reader stays blind: the catalog names documents and edges, never a source.
+    expect(reader).not.toMatch(/SRC-\d{3}/);
+  });
+
+  it('P12 — under the kept 1.1.0 the three messages are byte-identical to the ones composed before the grammar moved (digests taken 2026-10-19, before the change), and carry no relationships section', () => {
+    const closure = fixtureClosureUnder('1.1.0');
+    expect(closure.rendererVersion).toBe('1.1.0');
+    const rendered = renderAll(closure);
+    expect(sha256Hex(rendered.reader)).toBe('611f78bb8f16215b8aced733e91b71d496ba9a395251fdc4a06622d1e560a056');
+    expect(sha256Hex(rendered.prosecutor)).toBe('2ecb51495f0628113fda754f54a007e7256f5b00dd03b3cfa91c043377cd7ccd');
+    expect(sha256Hex(rendered.adjudicator)).toBe('2e1cddcd00f68ca6381f4b2d24c6c4c0982c64e9c58ed2a30efd2eaf13e9ec42');
+    for (const message of Object.values(rendered)) expect(message).not.toContain('Entitled relationships');
+    expect(structuralLines(rendered.reader)).toEqual(ownedLines(['Requirement', 'Where to look'], closure));
+    // Positive control for the digests: the same inputs under 1.2.0 render different bytes, by the section alone.
+    const current = renderAll(fixtureClosureUnder());
+    for (const role of ['reader', 'prosecutor', 'adjudicator'] as const) {
+      expect(sha256Hex(current[role])).not.toBe(sha256Hex(rendered[role]));
+      expect(current[role].replace(`# Entitled relationships\n\n${renderEntitledRelationships(fixtureClosureUnder())}\n\n`, '')).toBe(rendered[role]);
+    }
+  });
+
+  it('P13 — a grammar version the repository does not keep is refused by name at construction, never rendered under some other grammar', () => {
+    const build = () => fixtureClosureUnder('9.9.9' as ClosureRendererVersion);
+    expect(build).toThrow(UnknownClosureRendererVersionError);
+    expect(build).toThrow('"9.9.9"');
+    expect(build).toThrow('1.1.0');
+    expect(build).toThrow('1.2.0');
+  });
+
+  it('P14 — the grammar is an identity input through the closure: two closures over one world differing only in grammar derive two pipelineVersions, and the default is the current grammar', () => {
+    const prompts = loadPromptSet();
+    const underCurrent = pipelineVersionFor({ prompts, config: DEFAULT_ROLE_CONFIG, closure: fixtureClosureUnder() });
+    const underKept = pipelineVersionFor({ prompts, config: DEFAULT_ROLE_CONFIG, closure: fixtureClosureUnder('1.1.0') });
+    expect(underCurrent).not.toBe(underKept);
+    expect(underCurrent).toBe(pipelineVersionFor({ prompts, config: DEFAULT_ROLE_CONFIG, closure: fixtureClosureUnder('1.2.0') }));
+    expect(fixtureClosureUnder().rendererVersion).toBe(CLOSURE_RENDERER_VERSION);
+    // The catalog itself is the same list under either grammar; only its rendering is versioned.
+    expect(fixtureClosureUnder('1.1.0').edges).toEqual(fixtureClosureUnder().edges);
+  });
+
+  it('P15 — through a full run, the record carries the grammar the roles were shown: 1.1.0 for a kept-grammar closure, the constant otherwise', async () => {
+    const reading = stubReaderOutput();
+    const runner = () =>
+      stubRunner((request) => {
+        if (request.role === 'reader') return JSON.stringify(reading);
+        if (request.role === 'prosecutor') return JSON.stringify({ lens: lensFromRequest(request), coverage: [{ direction: 'reading_to_condition', readingElementId: 'RE-STUB', conditionPath: 'root', verdict: 'MAPPED' }, { direction: 'condition_to_reading', conditionPath: 'root', readingElementId: 'RE-STUB', verdict: 'MAPPED' }], challenges: [], gaps: [] });
+        return JSON.stringify({ adjudications: [], gaps: [] });
+      });
+    const run = (closure: EntitledClosure) =>
+      runVerificationPipeline({
+        packId: 'testpack',
+        requirementId: requirement.id,
+        requirement,
+        renderContext: ctx,
+        closure,
+        corpus: fixtureCorpusAuthorised,
+        prompts: loadPromptSet(),
+        config: { ...DEFAULT_ROLE_CONFIG, prosecutorCount: 1 },
+        runner: runner(),
+      });
+    const kept = await run(fixtureClosureUnder('1.1.0'));
+    const current = await run(fixtureClosureUnder());
+    expect(kept.tail.closureRendererVersion).toBe('1.1.0');
+    expect(current.tail.closureRendererVersion).toBe('1.2.0');
+    expect(kept.pipelineVersion).not.toBe(current.pipelineVersion);
   });
 });

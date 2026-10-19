@@ -246,15 +246,20 @@ function verifyRun(
   requirementId: string,
   transcriptRoot: string,
 ): Promise<{ exitCode: number; lines: string[] }> {
-  // The committed recordings were made under the v1 prompt set, and a
-  // recording binds its prompts by digest on every exchange. Replaying them
-  // against the current set would derive another `pipelineVersion` and `runId`
-  // and `bind` would refuse by name — correctly. So the historical contract is
-  // what they are asked under: the kept v1 files, byte for byte, through the
-  // same production run path. Nothing in a recording is edited for this.
+  // The committed recordings were made under the v1 prompt set and the 1.1.0
+  // closure grammar, and a recording binds both: its prompts by digest on
+  // every exchange, and the bytes of every message it was shown — the grammar
+  // included — through `requestSha256`, with the grammar version hashed into
+  // `pipelineVersion` as well. Replaying them against the current set or the
+  // current grammar would derive another `pipelineVersion` and `runId` and
+  // `bind` would refuse by name — correctly. So the historical contract is
+  // what they are asked under: the kept v1 files, byte for byte, and the kept
+  // 1.1.0 grammar, through the same production run path. Nothing in a
+  // recording is edited for this.
   return dispatch(['run', PACK_ID, requirementId], pathsFor(outDir), () => true, undefined, {
     runner: replayFromRoot(transcriptRoot, PACK_ID, requirementId),
     prompts: loadHistoricalPromptSet('v1'),
+    closureRendererVersion: '1.1.0',
   });
 }
 

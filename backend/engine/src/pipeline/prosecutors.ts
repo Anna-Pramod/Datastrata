@@ -49,6 +49,7 @@ import { gapForUnreachableDocument, type DocumentGap } from './gaps';
 import type { RolePrompt } from './prompts';
 import { parseRoleOutput, type ProsecutorOutput, type ReaderOutput } from './role-outputs';
 import { createAgentRole } from './agent-role';
+import { assertProsecutorEdgesEntitled } from './edge-references';
 import { assertProsecutorQuotesPinned } from './quote-pins';
 import { RoleOutputError, RoleTransportError, type RoleExecution } from './roles';
 import { TranscriptReplayError } from './replay';
@@ -806,11 +807,16 @@ export async function runProsecutors(run: ProsecutorsRun): Promise<ProsecutorsOu
       lens,
       renderInput: renderProsecutorInput,
       // Shape, then the coverage rules, then every challenge quote's docId and
-      // hash against the closure — refused here, before the next lens launches
-      // (`quote-pins.ts`).
+      // hash against the closure (`quote-pins.ts`), then every edge id against
+      // the relationships the closure lists (`edge-references.ts`) — refused
+      // here, before the next lens launches.
       parse: (raw) =>
-        assertProsecutorQuotesPinned(
-          assertProsecutorCoverage(parseRoleOutput('prosecutor', index, raw), ctx, index),
+        assertProsecutorEdgesEntitled(
+          assertProsecutorQuotesPinned(
+            assertProsecutorCoverage(parseRoleOutput('prosecutor', index, raw), ctx, index),
+            run.closure,
+            index,
+          ),
           run.closure,
           index,
         ),

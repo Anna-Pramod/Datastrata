@@ -5,7 +5,9 @@ exchange's `requestSha256`. A recording is therefore replayable only against
 the set it was made under. Superseded sets are kept byte for byte under
 `history/<version>/` and read by `loadHistoricalPromptSet` (`src/pipeline/prompts.ts`);
 the current set is the three files in `verification/`, which holds exactly those
-three and nothing else. Nothing here is a path
+three and nothing else. The closure-renderer grammar the roles' messages are
+composed under is versioned the same way (`CLOSURE_RENDERER_VERSION`, with the
+kept grammars rendered byte for byte for the recordings made under them). Nothing here is a path
 anything resolves — each file is named by its own literal path in the loader.
 
 | Version | reader | prosecutor | adjudicator | In force |
@@ -13,7 +15,8 @@ anything resolves — each file is named by its own literal path in the loader.
 | v1 (`history/v1/`) | `4d21d2b93df0e23b5ae6d95987d9c72ef167bc01d03cb48f7eb742ade2f3ed6e` | `87eb0a212ec3b5e97ec4ce26dbe416a47bcf3562e87f45dcbf08ff73829c3edb` | `f38ba1f0cf217904f63501300d14a925928ed0eb929b4fb6c83d5d72e798a46a` | every recording before 2026-10-18: the S-001 replay fixtures, the two probes, the rehearsal, the first S-002 capture (r1) |
 | v2 (`history/v2/`) | `4d21d2b93df0e23b5ae6d95987d9c72ef167bc01d03cb48f7eb742ade2f3ed6e` (unchanged) | `9c0ecc66306d2107518aeeb92ada4deb4010a1436a8f9481559004dd6d6ca0b5` | `cea3e6f02951b300c84b603d9b36b538f77fb7f2a3c8ac9c6bc470961ec24698` | 2026-10-18: the second S-002 capture (r2), refused at assembly on empty quote hashes |
 | v3 (`history/v3/`) | `d35043566ce39aa369b1d71466328ba5b991a0f2b0fc900cf1c6ce0d3b4ad5f1` | `148f12a94231128edbd2224ca6d130d859b372b825bd16af7260d9c5e41a7e54` | `9292026f228fab2623970912000f994452056a49194221a19d9d55e85029c998` | 2026-10-18/19: the third S-002 capture (r3), failed at `prosecutor[0]`, which delivered its answer as fenced text and never called the StructuredOutput tool |
-| v4 (`verification/`) | `3aa48bfddf53749463f74f5ae7f98dfa47426a941d05993782eaca1e06480cff` | `92556391c7668b2f2a0dcdc42e4281d9f9a658e7e7abae18f8294363596cb32a` | `a134ce8e3ccc09b63a94308c67db63eefc701b2448359b884c2a4ce2358051d5` | from 2026-10-19, after r3 |
+| v4 (`history/v4/`) | `3aa48bfddf53749463f74f5ae7f98dfa47426a941d05993782eaca1e06480cff` | `92556391c7668b2f2a0dcdc42e4281d9f9a658e7e7abae18f8294363596cb32a` | `a134ce8e3ccc09b63a94308c67db63eefc701b2448359b884c2a4ce2358051d5` | 2026-10-19: the fourth S-002 capture (r4), completed through nine `StructuredOutput` calls, filed with its evidence validation failed on four edge ids the corpus does not hold |
+| v5 (`verification/`) | `9f9f0db4b3e67c82c17a0548f413b45a175b851bee558d467724378cfccb7a6e` | `685266b99dd08ac63e65517cd882a7d53d27751a706b2c853332057d675a0073` | `42c93b0f2b57fd8d5178cf97334d67283b671cb87bb6c3d1c2281134a18c2410` | from 2026-10-19, after r4 |
 
 **v2** adds to the prosecutor and the adjudicator the distinction between an
 objection the closure can carry — a challenge, which the adjudicator may leave
@@ -58,5 +61,32 @@ were not rejected for the supplied schemas, each carrying the 64-hex
 constrained decoding, and it says nothing about the adjudicator schema, which
 has not been sent: the adjudicator never launched.
 
+**v5** adds to all three prompts, after the quote-hash section, the section
+"A relationship between documents carries its edge id", and to each prompt's
+"What you are given" a `relationships` entry: every role's message now carries,
+under `# Entitled relationships` and immediately before the closure, the
+complete list of edges the corpus records between documents of the closure —
+one line per edge with its `edgeId`, `kind`, `from` and `to`, or one sentence
+when there is none (closure-renderer grammar `1.2.0`,
+`src/pipeline/entitlement.ts`). The only edge ids a role may write are the
+listed ones, copied character for character; where no listed edge carries the
+relationship, the role shows it with quote evidence and says what the text
+establishes; it never composes an id from article numbers or document ids.
+Beside the prompts, every role seam now checks each `amendment_chain` hop and
+each `cross_reference` against the list — existence in the closure, kind,
+endpoints and chain continuity, by the signing gate's own rules
+(`src/corpus/evidence.ts`, `edgeReferenceProblems`) — before the next role
+launches (`src/pipeline/edge-references.ts`). Why: r4's reader (2026-10-19)
+named four edge ids the corpus does not hold, in one `amendment_chain` and one
+`cross_reference`; nothing had shown it which ids exist, no seam checked an
+edge, seven prosecutors and the adjudicator ran over that reading, and the
+record boundary's evidence check refused after nine launches
+(`docs/superpowers/CHECKPOINT-opus55-s002-capture-r4.md`). Each v5 file is its
+v4 file with the section and the entry inserted and nothing else changed
+(`test/pipeline-quote-pins.test.ts` asserts it character for character). The
+kept grammar `1.1.0` still renders exactly the bytes every earlier recording
+binds, selected by the replayer beside the kept prompt set.
+
 The identities each set derives over the S-002 closure are pinned in
-`test/pipeline-identity.test.ts`.
+`test/pipeline-identity.test.ts`: the kept sets under the kept grammar
+`1.1.0`, the current set under `1.2.0`.

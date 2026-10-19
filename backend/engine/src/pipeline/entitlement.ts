@@ -54,7 +54,7 @@ import {
   type Closure,
   type ClosurePolicy,
 } from '../corpus/closure';
-import type { CorpusDocument, CorpusIndex } from '../corpus/types';
+import type { CorpusDocument, CorpusIndex, EdgeKind } from '../corpus/types';
 import { resolveDocumentReference, type DocumentReferenceResolution } from './document-reference';
 import type { AuthorisedCorpus } from '../corpus/authority';
 import { pinnedStandingFor, standingMapFor, type DocumentStanding } from '../corpus/standing';
@@ -87,8 +87,63 @@ import { sourceCitability } from '../monitoring/register';
  * nothing about how a model weighs an instruction-shaped sentence it has been
  * told is evidence — that is the model's property, and the prompts state the
  * rule without any claim that stating it makes the model immune.
+ *
+ * `1.2.0`, the evidence-edge contract: every role's message carries, under
+ * `# Entitled relationships` and immediately before the closure, the list of
+ * edges the closure holds between its documents — one line per edge with its
+ * id, kind and endpoints, or one sentence when there is none
+ * (`renderEntitledRelationships`). Why: the fourth genuine S-002 capture
+ * (2026-10-19, r4) returned a reading naming four edge ids the corpus does
+ * not hold; nothing had shown the reader which ids exist, and no seam checked
+ * one (`edge-references.ts` now does, against this list).
+ *
+ * **The grammar is selectable, and the kept one renders the bytes it always
+ * did.** A recording binds the message it was made from through
+ * `requestSha256`, and the identity it carries hashes the grammar version, so
+ * a recording made under `1.1.0` can be replayed only under `1.1.0` — exactly
+ * as a recording made under an earlier prompt set replays only against that
+ * kept set (`prompts.ts`). Every closure therefore carries the grammar its
+ * text is rendered under (`rendererVersion`), chosen at construction and
+ * defaulting to the current constant; `composeRoleMessage` reads it, and the
+ * identity is derived from it. A version outside the kept-or-current set is
+ * refused by name at construction (`UnknownClosureRendererVersionError`), for
+ * the reason an unknown prompt-set version is: a silent fallback to the
+ * current grammar would replay a recording against a question it did not
+ * answer.
  */
-export const CLOSURE_RENDERER_VERSION = '1.1.0';
+export type ClosureRendererVersion = '1.1.0' | '1.2.0';
+
+export const CLOSURE_RENDERER_VERSION: ClosureRendererVersion = '1.2.0';
+
+/** The superseded grammars still rendered, byte for byte, for the recordings made under them. */
+export const HISTORICAL_CLOSURE_RENDERER_VERSIONS: readonly ClosureRendererVersion[] = ['1.1.0'];
+
+/**
+ * What each grammar emits, exhaustively over the union: adding a version to
+ * `ClosureRendererVersion` without deciding its shape here fails to compile.
+ */
+const GRAMMAR: Readonly<Record<ClosureRendererVersion, { readonly relationships: boolean }>> = {
+  '1.1.0': { relationships: false },
+  '1.2.0': { relationships: true },
+};
+
+/** A grammar version the repository neither keeps nor currently renders. */
+export class UnknownClosureRendererVersionError extends Error {
+  constructor(readonly version: string) {
+    super(
+      `no closure-renderer grammar for version ${JSON.stringify(version)}: the kept grammars are ${HISTORICAL_CLOSURE_RENDERER_VERSIONS.join(', ')} and the current grammar is ${CLOSURE_RENDERER_VERSION}`,
+    );
+    this.name = 'UnknownClosureRendererVersionError';
+  }
+}
+
+/** The one place a version string becomes a grammar: kept or current, or refused by name. */
+function assertKnownGrammar(version: string): ClosureRendererVersion {
+  if (version === CLOSURE_RENDERER_VERSION || (HISTORICAL_CLOSURE_RENDERER_VERSIONS as readonly string[]).includes(version)) {
+    return version as ClosureRendererVersion;
+  }
+  throw new UnknownClosureRendererVersionError(version);
+}
 
 /**
  * The corpus reduced to what entitlement needs of it.
@@ -141,6 +196,46 @@ export class OutsideEntitlementError extends Error {
     );
     this.name = 'OutsideEntitlementError';
   }
+}
+
+/**
+ * A relationship as a role sees it: its id, its kind and its two documents.
+ *
+ * Identity and shape only. The provenance — where the claim came from and
+ * when it was recorded — is covered by the closure hash and read by a human
+ * off the pin; a role has no use for it, and a blind reader must not be shown
+ * a register row. Both endpoints are closure members by construction, because
+ * `computeClosure` lists an edge only when both of its documents are inside.
+ */
+export interface EntitledEdge {
+  readonly edgeId: string;
+  readonly kind: EdgeKind;
+  readonly from: string;
+  readonly to: string;
+}
+
+/**
+ * The relationships of the entitled closure, as every role is shown them.
+ *
+ * Why this exists: the fourth genuine S-002 capture (2026-10-19, r4) returned a
+ * reading whose `amendment_chain` and `cross_reference` items named four edge
+ * ids the corpus does not hold. Nothing had told the reader which ids exist —
+ * the closure text shows documents, not the edges between them — so it
+ * composed ids from article numbers and document ids, every seam passed, nine
+ * launches were spent and the record boundary refused. This is the list a
+ * role may copy from, rendered by the one composer for every role, in one
+ * fixed grammar: one line per edge, in `edgeIds` order, or one sentence when
+ * there is none, so that "no relationship is recorded" is stated rather than
+ * left for a model to infer from an absent section. Any change to this text
+ * obliges a `CLOSURE_RENDERER_VERSION` bump, as `renderStanding`'s does.
+ */
+export function renderEntitledRelationships(closure: Pick<EntitledClosure, 'edges'>): string {
+  if (closure.edges.length === 0) {
+    return 'No relationship between the documents of this closure is recorded in the corpus.';
+  }
+  return closure.edges
+    .map((edge) => `- edgeId: ${edge.edgeId}; kind: ${edge.kind}; from: ${edge.from}; to: ${edge.to}`)
+    .join('\n');
 }
 
 /**
@@ -297,12 +392,20 @@ export class MessageStructureError extends Error {
  * heading-shaped value there is refused rather than shown.
  */
 export function composeRoleMessage(sections: readonly MessageSection[], closure: EntitledClosure): string {
+  // The grammar the closure was constructed under decides whether the
+  // relationships section exists; under the kept 1.1.0 the message is exactly
+  // what it was before that section did.
+  const relationships = GRAMMAR[closure.rendererVersion].relationships
+    ? [`# Entitled relationships\n\n${renderEntitledRelationships(closure)}`]
+    : [];
   const message = [
     ...sections.map((section) => `# ${section.heading}\n\n${section.body}`),
+    ...relationships,
     `# Entitled closure (${closure.sha256})\n\n${renderEntitledClosure(closure)}`,
   ].join('\n\n');
   const expected = [
     ...sections.map((section) => `# ${section.heading}`),
+    ...(relationships.length === 0 ? [] : ['# Entitled relationships']),
     `# Entitled closure (${closure.sha256})`,
     ...closure.documents().flatMap((document) => [documentHeading(document), beginFence(document), endFence(document)]),
   ];
@@ -525,6 +628,8 @@ export class EntitledClosure {
     readonly entryDocIds: readonly string[],
     closure: Closure,
     standing: ReadonlyMap<string, readonly PinnedSourceStanding[]>,
+    /** The grammar this closure's text is rendered under, and the identity is derived from. */
+    readonly rendererVersion: ClosureRendererVersion,
   ) {
     this.#source = source;
     this.#closure = closure;
@@ -552,7 +657,11 @@ export class EntitledClosure {
     pack: Pick<KnowledgePack, 'sources'>,
     sourceIds: readonly string[],
     policy: ClosurePolicy = CLOSURE_POLICY_V1,
+    rendererVersion: ClosureRendererVersion = CLOSURE_RENDERER_VERSION,
   ): EntitledClosure {
+    // Before any work: a grammar the repository does not keep is refused by
+    // name, so no closure can be rendered under some other grammar by default.
+    const grammar = assertKnownGrammar(rendererVersion);
     const entryDocIds = docsForSources(source.index, [...sourceIds]);
     const standing = standingMapFor(source.index, pack);
     const closure = computeClosure(source.index, entryDocIds, standing, policy);
@@ -565,7 +674,7 @@ export class EntitledClosure {
     // it established rather than an assumption made here.
     const members = new Map<string, readonly PinnedSourceStanding[]>();
     for (const docId of closure.docIds) members.set(docId, pinnedStandingFor(standing, docId));
-    return new EntitledClosure(source, policy, entryDocIds, closure, members);
+    return new EntitledClosure(source, policy, entryDocIds, closure, members, grammar);
   }
 
   /** Sorted. Every document a role may open. */
@@ -576,6 +685,33 @@ export class EntitledClosure {
   /** Sorted. Every edge with both endpoints inside. */
   get edgeIds(): readonly string[] {
     return this.#closure.edgeIds;
+  }
+
+  /**
+   * The same edges, with their kind and endpoints — what a role is shown and
+   * what the edge seam checks against (`edge-references.ts`).
+   *
+   * Read off the index the closure was computed from, by the ids
+   * `computeClosure` listed, so this cannot name an edge the hash does not
+   * cover. An id the index does not resolve is a closure inconsistent with its
+   * index and is refused, as a missing document is in `documents()`, rather
+   * than skipped: a skipped edge would be a relationship the hash covers and
+   * the roles were not told of.
+   */
+  get edges(): readonly EntitledEdge[] {
+    const byId = new Map<string, EntitledEdge>();
+    for (const document of this.#source.index.documents) {
+      for (const edge of document.edges) {
+        byId.set(edge.edgeId, { edgeId: edge.edgeId, kind: edge.kind, from: edge.from, to: edge.to });
+      }
+    }
+    return this.#closure.edgeIds.map((edgeId) => {
+      const edge = byId.get(edgeId);
+      if (edge === undefined) {
+        throw new Error(`Closure lists edge ${edgeId}, which the index does not hold: closure is inconsistent`);
+      }
+      return edge;
+    });
   }
 
   /** What a signature pins, and what `producePins` is handed. */

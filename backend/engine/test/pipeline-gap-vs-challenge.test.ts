@@ -51,7 +51,7 @@ const here = __dirname;
 const engineRoot = join(here, '..');
 
 // ---------------------------------------------------------------------------
-// The prompt sets: v1, v2 and v3 kept, v4 current, the reader untouched by v2
+// The prompt sets: v1, v2, v3 and v4 kept, v5 current, the reader untouched by v2
 // ---------------------------------------------------------------------------
 
 describe('the prompt sets are versioned, and the kept v1 set is the one every recording so far was made under', () => {
@@ -69,9 +69,10 @@ describe('the prompt sets are versioned, and the kept v1 set is the one every re
 
   it('v1 is kept byte for byte: its digests are the ones the recordings carry', () => {
     // v2 joined the kept sets when v3 (the quote-hash instruction) became
-    // current, and v3 when v4 (the delivery instruction) did.
-    expect(HISTORICAL_PROMPT_SET_VERSIONS).toEqual(['v1', 'v2', 'v3']);
-    expect(CURRENT_PROMPT_SET_VERSION).toBe('v4');
+    // current, v3 when v4 (the delivery instruction) did, and v4 when v5 (the
+    // evidence-edge contract: use only the listed edge ids) did.
+    expect(HISTORICAL_PROMPT_SET_VERSIONS).toEqual(['v1', 'v2', 'v3', 'v4']);
+    expect(CURRENT_PROMPT_SET_VERSION).toBe('v5');
     expect(promptHashes(v1)).toEqual(V1_DIGESTS);
     // Each kept file is a file, resolved by its own literal path.
     for (const role of ['reader', 'prosecutor', 'adjudicator'] as const) {

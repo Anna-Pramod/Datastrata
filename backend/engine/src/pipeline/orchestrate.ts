@@ -38,7 +38,7 @@ import {
 import { renderRequirement, RENDERER_VERSION, type RenderContext } from '../verification/render';
 import { createAgentRole } from './agent-role';
 import type { RoleConfig } from './config';
-import { CLOSURE_RENDERER_VERSION, renderEntitledClosure, type EntitledClosure } from './entitlement';
+import { renderEntitledClosure, type EntitledClosure } from './entitlement';
 import type { PipelineGap } from './gaps';
 import { buildPipelineIdentity, RESULT_SCHEMA_VERSION } from './identity';
 import {
@@ -312,9 +312,12 @@ export function pipelineVersionFor(input: {
       order: input.config.order,
     },
     resultSchemaVersion: input.resultSchemaVersion ?? RESULT_SCHEMA_VERSION,
-    // The constant, always. There is no input for it: the grammar the roles
-    // read under is a fact about this code, not a choice a caller makes.
-    closureRendererVersion: CLOSURE_RENDERER_VERSION,
+    // The closure's own grammar, never a caller's string: it was fixed at the
+    // closure's construction, defaults to the current constant, and is the
+    // grammar every role's message is composed under — so the identity names
+    // what the roles were actually shown, for a kept grammar (a replay of a
+    // recording made under it) as for the current one.
+    closureRendererVersion: input.closure.rendererVersion,
     providerAdapter: input.config.providerAdapter,
     ...declared,
     closurePolicy: input.closure.policy,
@@ -547,7 +550,7 @@ export async function runVerificationPipeline(
     corpus: input.corpus,
     pipelineVersion,
     rendererVersion,
-    closureRendererVersion: CLOSURE_RENDERER_VERSION,
+    closureRendererVersion: input.closure.rendererVersion,
     resultSchemaVersion,
     roleOutputs: {
       reading: reader.output,

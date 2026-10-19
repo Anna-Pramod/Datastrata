@@ -65,7 +65,8 @@
  */
 
 import { DEFAULT_ROLE_CONFIG } from '../pipeline/config';
-import { EntitledClosure } from '../pipeline/entitlement';
+import { CLOSURE_POLICY_V1 } from '../corpus/closure';
+import { CLOSURE_RENDERER_VERSION, EntitledClosure, type ClosureRendererVersion } from '../pipeline/entitlement';
 import { runVerificationPipeline } from '../pipeline/orchestrate';
 import { loadPromptSet, MissingPromptFileError, type PromptSet } from '../pipeline/prompts';
 import { RoleOutputError } from '../pipeline/roles';
@@ -119,6 +120,18 @@ export interface RunCapabilities {
    * is never edited, and no digest check is relaxed.
    */
   prompts?: PromptSet;
+  /**
+   * The closure-renderer grammar the run's role messages are composed under.
+   * Absent, the repository's current grammar (`CLOSURE_RENDERER_VERSION`).
+   *
+   * Supplied for the reason `prompts` is: a recording binds the exact bytes
+   * each role was shown, and the grammar is one of the things that decides
+   * them, so a recording made under a kept grammar is replayed only under
+   * that grammar. The replayer passes it beside the kept prompt set; a
+   * version the repository does not keep is refused by name at closure
+   * construction, never rendered under some other grammar.
+   */
+  closureRendererVersion?: ClosureRendererVersion;
   /**
    * Where this run's recording goes, if anywhere.
    *
@@ -191,7 +204,14 @@ export async function runRun(
   // The capability object, built once and handed to every role. Not a second
   // traversal: `EntitledClosure.forSources` wraps `docsForSources` and
   // `computeClosure`, which is the same pair `readWorld` went through.
-  const closure = EntitledClosure.forSources(world.corpus, world.sourceRegister, world.pack, sourceIdsOf(world.requirement));
+  const closure = EntitledClosure.forSources(
+    world.corpus,
+    world.sourceRegister,
+    world.pack,
+    sourceIdsOf(world.requirement),
+    CLOSURE_POLICY_V1,
+    capabilities.closureRendererVersion ?? CLOSURE_RENDERER_VERSION,
+  );
 
   let run;
   try {

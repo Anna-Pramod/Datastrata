@@ -464,6 +464,8 @@ describe('the adjudicator receives §3.3 claims and no argument about them', () 
       'Rendered condition',
       'Coverage',
       'Challenges',
+      // Grammar 1.2.0: the closure's relationships, listed before the closure (the evidence-edge contract).
+      'Entitled relationships',
       `Entitled closure (${fixtureClosure().sha256})`,
     ]);
   });
