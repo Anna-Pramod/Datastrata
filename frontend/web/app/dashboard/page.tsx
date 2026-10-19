@@ -1,24 +1,38 @@
 /**
- * Dashboard home — the 5a production screen, driven by a real assessment.
+ * Dashboard home — the record screen, driven by a real assessment over the
+ * profile the environment selects.
  *
- * The company is a sample and the page says so in the topbar and the banner.
- * Everything computed from it is real: the counts, the cross-section cells, the
- * obligations and the briefing all come out of `assess()` over the live CSRD
- * pack. The mockup's invented matrix and evidence percentages are not used.
+ * The company is whichever document `DATASTRATA_PILOT_PROFILE` names, or the
+ * synthetic development profile while nothing is configured, and the page says
+ * which in the topbar and the banner. Everything computed from it is real: the
+ * counts, the cross-section cells, the obligations, the per-requirement results
+ * and each requirement's verification status all come out of `assess()` over
+ * the live CSRD pack as the site loaded it. A profile that cannot be served is
+ * a refusal printed in full — the variable, the kind of failure, every problem
+ * by field — and never the sample in its place.
+ *
+ * Dynamic, so the profile file is read per request and nothing about a pilot
+ * company is baked into the build. The file's path is read on the server and
+ * is never rendered; only the variable's name is.
  */
 
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Sidebar, Topbar } from '@/components/app/Shell';
 import { CrossSectionChart, type CellState, type ChartRow } from '@/components/app/CrossSectionChart';
-import { DeadlineChip, EvidenceBar, CapacityChip, NeutralChip } from '@/components/ui/primitives';
-import { csrdPack, packStats } from '@/lib/pack';
-import { SAMPLE_ENTITIES, SAMPLE_ORG, sampleAssessment, SAMPLE_CONTEXT } from '@/lib/sample';
+import { CapacityChip, DeadlineChip, EvidenceBar, NeutralChip, StatusChip } from '@/components/ui/primitives';
+import { entityColumns, factRows, requirementStatusRows, statusSummary, type EntityResult } from '@/lib/dashboard';
+import { historicalEvidenceNotice, S002_R5_DOSSIER } from '@/lib/evidence';
+import { packStats } from '@/lib/pack';
+import { PILOT_PROFILE_ENV } from '@/lib/profile';
+import { pilotRecord } from '@/lib/record';
 import { REGIMES } from '@/lib/regimes';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
-  title: 'Sample report · DataStrata',
-  description: 'A maintained regulatory record, rendered from a real engine assessment over a sample group.',
+  title: 'Record · DataStrata',
+  description: 'A maintained regulatory record, rendered from a real engine assessment over the configured profile.',
 };
 
 /** The cell for an entity is its reporting-duty determination (CSRD-S-014). */
@@ -28,19 +42,84 @@ const CELL: Record<string, CellState> = {
   INDETERMINATE: 'judgment',
 };
 
+const GLYPH: Record<string, string> = { APPLIES: '●', DOES_NOT_APPLY: '○', INDETERMINATE: '◐' };
+const WORD: Record<string, string> = { APPLIES: 'applies', DOES_NOT_APPLY: 'does not apply', INDETERMINATE: 'requires judgment' };
+
+function cellTitle(entity: string, result: EntityResult | undefined): string {
+  if (result === undefined) return `${entity}: not evaluated for this object`;
+  const reason = result.reason === undefined ? '' : ` (${result.reason.replace(/_/g, ' ')})`;
+  const selected = result.selected === undefined ? '' : ` → ${result.selected}`;
+  return `${entity}: ${WORD[result.result]}${selected}${reason}`;
+}
+
+const bannerStyle = {
+  border: '1px solid var(--ds-oxide)',
+  background: 'var(--ds-oxide-wash)',
+  padding: '12px 14px',
+  fontSize: 13,
+  lineHeight: 1.55,
+  marginBottom: 22,
+  maxWidth: '86ch',
+} as const;
+
+const cardTable = { borderCollapse: 'collapse', width: '100%', fontSize: 12.5 } as const;
+const th = { textAlign: 'left', padding: '6px 8px', borderBottom: '1px solid var(--ds-ink)', fontWeight: 600, whiteSpace: 'nowrap' } as const;
+const td = { padding: '6px 8px', borderBottom: '1px solid var(--ds-hairline-3)', verticalAlign: 'top' } as const;
+
 export default function DashboardPage() {
-  const pack = csrdPack();
   const stats = packStats();
-  const result = sampleAssessment();
+  const record = pilotRecord();
+
+  if (!record.ok) {
+    const { error } = record;
+    return (
+      <div className="ds-app" style={{ display: 'flex', minHeight: '100vh' }}>
+        <Sidebar />
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+          <Topbar org="No profile loaded" label="Refused" snapshot={stats.legalSnapshot} />
+          <main id="main" className="ds-app-main" style={{ flex: 1, display: 'flex', minWidth: 0 }}>
+            <div style={{ flex: 1, minWidth: 0, padding: 24, maxWidth: '86ch' }}>
+              <h1 className="ds-h4" style={{ marginBottom: 16 }}>No profile could be loaded</h1>
+              <p style={bannerStyle}>
+                <strong>{error.headline}</strong>
+              </p>
+              {error.problems.length > 0 ? (
+                <ul style={{ margin: '0 0 22px 18px', padding: 0, fontSize: 13, lineHeight: 1.6 }}>
+                  {error.problems.map((problem) => (
+                    <li key={problem} className="ds-mono" style={{ fontSize: 12 }}>{problem}</li>
+                  ))}
+                </ul>
+              ) : null}
+              <p className="ds-micro">
+                THE VARIABLE IS {PILOT_PROFILE_ENV} · THE SERVER LOG CARRIES THE PATH AND THE SYSTEM ERROR · NOTHING IS
+                SUBSTITUTED FOR THE CONFIGURED PROFILE
+              </p>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  const { document, assessment: result, pack } = record;
+  const entities = entityColumns(document);
+  const organisation = document.profile.scopeObjects.find((scope) => scope.type === 'organization');
+  const columns = [...(organisation === undefined ? [] : [{ id: organisation.id, name: organisation.name, short: 'Organisation' }]), ...entities];
+  const rows = requirementStatusRows(pack, result, columns.map((column) => column.id));
+  const facts = factRows(document, pack);
+  const summary = statusSummary(pack);
+  const notice = historicalEvidenceNotice(S002_R5_DOSSIER, pack);
+  const isSynthetic = document.record.kind === 'synthetic';
+  const label = isSynthetic ? 'Synthetic development profile' : 'Pilot record · evaluation';
 
   const dutyByEntity = new Map(
     result.determinations.filter((d) => d.requirementId === 'CSRD-S-014').map((d) => [d.scopeId, d]),
   );
 
-  const rows: ChartRow[] = REGIMES.map((r) => ({
+  const chartRows: ChartRow[] = REGIMES.map((r) => ({
     regime: r.short,
     encoded: r.status === 'encoded',
-    cells: SAMPLE_ENTITIES.map((e) => {
+    cells: entities.map((e) => {
       if (r.status !== 'encoded') return { entity: e.short, state: 'unencoded' as CellState };
       const d = dutyByEntity.get(e.id);
       return {
@@ -61,21 +140,41 @@ export default function DashboardPage() {
   const dated = pack.changeWatch.find((c) => /\b\d{1,2} \w+ 20\d\d\b/.test(c.expected ?? ''));
   const datedText = dated?.expected?.match(/([A-Z][a-z]+ ?\w* ?)?(\d{1,2} \w+ 20\d\d)/)?.[2];
 
+  const signed = summary.verified + summary.ratified;
+
   return (
     <div className="ds-app" style={{ display: 'flex', minHeight: '100vh' }}>
       <Sidebar />
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-        <Topbar org={SAMPLE_ORG} snapshot={stats.legalSnapshot} />
+        <Topbar org={document.record.name} label={label} snapshot={stats.legalSnapshot} />
 
         <main id="main" className="ds-app-main" style={{ flex: 1, display: 'flex', minWidth: 0 }}>
           <div style={{ flex: 1, minWidth: 0, padding: 24 }}>
             <h1 className="ds-h4" style={{ marginBottom: 16 }}>
-              Home · {SAMPLE_ORG}
+              Home · {document.record.name}
             </h1>
-            <p style={{ border: '1px solid var(--ds-oxide)', background: 'var(--ds-oxide-wash)', padding: '12px 14px', fontSize: 13, lineHeight: 1.55, marginBottom: 22, maxWidth: '86ch' }}>
-              <strong>Sample record.</strong> Meridian Steelworks is a made-up group. Every determination,
-              count and citation below is real: the profile is fed to the applicability engine and this page
-              renders what came back. Requirement content is draft and unratified.
+            <p style={bannerStyle}>
+              {isSynthetic ? (
+                <>
+                  <strong>Synthetic development profile.</strong> {document.record.note} No pilot profile is configured
+                  ({PILOT_PROFILE_ENV} is unset).{' '}
+                </>
+              ) : (
+                <>
+                  <strong>Pilot record · evaluation only.</strong> {document.record.note} Facts as stated by{' '}
+                  {document.record.name}{document.record.statedOn ? ` on ${document.record.statedOn}` : ''}, each with its
+                  source; nothing is inferred from an absent or unknown fact.{' '}
+                </>
+              )}
+              Every determination, count and citation below is real: the profile is fed to the applicability engine and
+              this page renders what came back.{' '}
+              {result.containsDraftContent
+                ? 'Requirement content is draft and unratified. '
+                : 'Every requirement evaluated here carries a governing signature. '}
+              {stats.ratifiedCountryPacks === 0
+                ? 'No country pack is ratified, so national-law status requires review and no result is a final legal conclusion. '
+                : ''}
+              Not for reliance.
             </p>
 
             <p className="ds-mono" style={{ fontSize: 13, color: 'var(--ds-text-nav)', marginBottom: 4 }}>
@@ -110,15 +209,68 @@ export default function DashboardPage() {
                   </p>
                 </div>
               </div>
-              <CrossSectionChart rows={rows} columns={SAMPLE_ENTITIES.map((e) => e.short)} />
+              <CrossSectionChart rows={chartRows} columns={entities.map((e) => e.short)} />
               <p className="ds-micro" style={{ borderTop: '1px solid var(--ds-hairline-1)', marginTop: 16, paddingTop: 12 }}>
-                {stats.sources} OFFICIAL SOURCES · PACK {stats.version} · ASSESSED {SAMPLE_CONTEXT.assessmentDate} ·
-                DETERMINATIONS VERSIONED, NEVER OVERWRITTEN
+                {stats.sources} OFFICIAL SOURCES · PACK {stats.version} · ASSESSED {document.context.assessmentDate} · FY{' '}
+                {document.context.financialYear.start} → {document.context.financialYear.end} · DETERMINATIONS VERSIONED, NEVER
+                OVERWRITTEN
               </p>
             </div>
 
+            {/* requirements: results per scope object, status per requirement */}
+            <div className="ds-card" style={{ padding: 20, marginBottom: 22 }}>
+              <h2 className="ds-h4" style={{ marginBottom: 6 }}>Requirements · results and verification status</h2>
+              <p className="ds-micro" style={{ marginBottom: 14 }}>
+                {signed} OF {stats.requirements} CARRY A GOVERNING SIGNATURE · {summary.ratified} RATIFIED · {summary.verified}{' '}
+                VERIFIED · {summary.draft} DRAFT · ● APPLIES ○ DOES NOT APPLY ◐ REQUIRES JUDGMENT — NOT EVALUATED FOR THIS OBJECT
+              </p>
+              <div className="ds-scroll-x">
+                <table style={cardTable}>
+                  <caption className="ds-vh">Each requirement&apos;s determination per scope object, with its verification status as loaded.</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col" style={th}>Requirement</th>
+                      <th scope="col" style={th}>Status</th>
+                      {columns.map((column) => (
+                        <th key={column.id} scope="col" style={{ ...th, textAlign: 'center' }} title={column.name}>
+                          <span className="ds-mono" style={{ fontSize: 9.5, letterSpacing: '.04em', color: 'var(--ds-text-muted)' }}>{column.short}</span>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row) => (
+                      <tr key={row.id}>
+                        <th scope="row" style={{ ...td, textAlign: 'left', fontWeight: 500 }}>
+                          <span className="ds-mono" style={{ fontSize: 11, color: 'var(--ds-text-faint)' }}>{row.id} · v{row.version}</span>
+                          <br />
+                          {row.title}
+                        </th>
+                        <td style={td}>
+                          <StatusChip>{row.status}</StatusChip>
+                          {row.reasons.length > 0 ? (
+                            <span className="ds-micro" style={{ display: 'block', marginTop: 4 }}>{row.reasons.join(', ').replace(/_/g, ' ')}</span>
+                          ) : null}
+                        </td>
+                        {columns.map((column) => {
+                          const cell = row.results[column.id];
+                          return (
+                            <td key={column.id} style={{ ...td, textAlign: 'center' }} title={cellTitle(column.name, cell)}>
+                              <span aria-label={cellTitle(column.name, cell)} style={{ color: cell?.result === 'INDETERMINATE' ? 'var(--ds-oxide)' : undefined }}>
+                                {cell === undefined ? '—' : GLYPH[cell.result]}
+                              </span>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
             {/* obligations */}
-            <div className="ds-card" style={{ padding: 20 }}>
+            <div className="ds-card" style={{ padding: 20, marginBottom: 22 }}>
               <h2 className="ds-h4" style={{ marginBottom: 14 }}>Obligations instantiated · {result.obligations.length}</h2>
               {result.obligations.slice(0, 6).map((o, i) => (
                 <div key={`${o.templateId}-${o.scopeId}`} style={{ borderTop: i === 0 ? '1px solid var(--ds-ink)' : '1px solid var(--ds-hairline-1)', padding: '13px 0', display: 'flex', gap: 12, alignItems: 'baseline', flexWrap: 'wrap' }}>
@@ -132,6 +284,81 @@ export default function DashboardPage() {
                   + {result.obligations.length - 6} MORE · EACH TRACING BACK TO THE DETERMINATION THAT CREATED IT
                 </p>
               ) : null}
+              {result.obligations.length === 0 ? (
+                <p className="ds-micro">NONE INSTANTIATED · AN OBLIGATION FIRES ONLY FROM AN IN-FORCE REQUIREMENT THAT APPLIES</p>
+              ) : null}
+            </div>
+
+            {/* stated facts */}
+            <details className="ds-card" style={{ padding: 20, marginBottom: 22 }}>
+              <summary className="ds-h4" style={{ cursor: 'pointer' }}>Stated facts · {facts.length}</summary>
+              <p className="ds-micro" style={{ margin: '8px 0 14px' }}>
+                EVERY FACT AS STATED, WITH ITS SOURCE · A STATED UNKNOWN STAYS UNKNOWN · AN UNCONFIRMED FACT IS NEVER SEEN BY THE EVALUATOR
+              </p>
+              <div className="ds-scroll-x">
+                <table style={cardTable}>
+                  <caption className="ds-vh">The facts of the profile, each with its source and confirmation.</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col" style={th}>Scope object</th>
+                      <th scope="col" style={th}>Fact</th>
+                      <th scope="col" style={th}>Value</th>
+                      <th scope="col" style={th}>Source</th>
+                      <th scope="col" style={th}>Standing</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {facts.map((fact, i) => (
+                      <tr key={`${fact.scopeId}-${fact.factType}-${i}`}>
+                        <td style={td}>{fact.scopeName}</td>
+                        <td style={td}>
+                          {fact.label}
+                          <br />
+                          <span className="ds-mono" style={{ fontSize: 10.5, color: 'var(--ds-text-faint)' }}>{fact.factType}</span>
+                        </td>
+                        <td style={td}>{fact.value}</td>
+                        <td style={td}>{fact.source}{fact.asOf ? ` · as of ${fact.asOf}` : ''}</td>
+                        <td style={td}>{fact.confirmed ? <NeutralChip>confirmed</NeutralChip> : <CapacityChip>unconfirmed · not used</CapacityChip>}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+
+            {/* verification evidence: the r5 dossier, labelled by what it binds */}
+            <div className="ds-card" style={{ padding: 20 }}>
+              <h2 className="ds-h4" style={{ marginBottom: 6 }}>Verification evidence · {S002_R5_DOSSIER.requirementId}</h2>
+              <p className="ds-micro" style={{ marginBottom: 14 }}>
+                THE ONE MODEL-PRODUCED VERIFICATION RECORD ON FILE · READ AND DISPOSITIONED BY THE AUTHOR · SHOWN FOR WHAT IT BINDS
+              </p>
+              <p style={{ ...bannerStyle, marginBottom: 12 }}>
+                <strong>{notice.bindsCurrent ? 'Binds the current text.' : 'Historical evidence for version ' + notice.boundVersion + '.'}</strong>{' '}
+                {notice.headline}
+              </p>
+              <p style={{ fontSize: 13, lineHeight: 1.55, maxWidth: '86ch', marginBottom: 14 }}>{notice.standing}</p>
+              <dl className="ds-mono" style={{ fontSize: 11.5, display: 'grid', gridTemplateColumns: 'max-content 1fr', gap: '4px 14px', marginBottom: 14 }}>
+                <dt style={{ color: 'var(--ds-text-faint)' }}>execution</dt><dd style={{ margin: 0 }}>{S002_R5_DOSSIER.executionId} · {S002_R5_DOSSIER.startedAt} → {S002_R5_DOSSIER.finishedAt} · {S002_R5_DOSSIER.adapter}</dd>
+                <dt style={{ color: 'var(--ds-text-faint)' }}>manifest</dt><dd style={{ margin: 0, wordBreak: 'break-all' }}>{S002_R5_DOSSIER.manifestSha256}</dd>
+                <dt style={{ color: 'var(--ds-text-faint)' }}>run</dt><dd style={{ margin: 0, wordBreak: 'break-all' }}>{S002_R5_DOSSIER.runId}</dd>
+                <dt style={{ color: 'var(--ds-text-faint)' }}>pipeline</dt><dd style={{ margin: 0, wordBreak: 'break-all' }}>{S002_R5_DOSSIER.pipelineVersion}</dd>
+                <dt style={{ color: 'var(--ds-text-faint)' }}>bound input</dt><dd style={{ margin: 0, wordBreak: 'break-all' }}>version {notice.boundVersion} · {notice.boundInputSha256}</dd>
+                <dt style={{ color: 'var(--ds-text-faint)' }}>current input</dt><dd style={{ margin: 0, wordBreak: 'break-all' }}>version {notice.currentVersion} · {notice.currentInputSha256}</dd>
+                <dt style={{ color: 'var(--ds-text-faint)' }}>record</dt><dd style={{ margin: 0 }}>{S002_R5_DOSSIER.counts.readingElements} reading elements · {S002_R5_DOSSIER.counts.challenges} challenges · {S002_R5_DOSSIER.counts.evidenceSets} evidence sets · {S002_R5_DOSSIER.counts.quotes} quotes</dd>
+                <dt style={{ color: 'var(--ds-text-faint)' }}>verdicts</dt><dd style={{ margin: 0 }}>{S002_R5_DOSSIER.verdicts.confirmed} CONFIRMED · {S002_R5_DOSSIER.verdicts.mismatch} MISMATCH · {S002_R5_DOSSIER.verdicts.openQuestion} OPEN_QUESTION · the signing gate refuses MISMATCH and OPEN_QUESTION categorically</dd>
+              </dl>
+              <h3 className="ds-label" style={{ marginBottom: 8 }}>The twelve verdicts, dispositioned by the author (2026-10-19)</h3>
+              {S002_R5_DOSSIER.dispositions.map((d, i) => (
+                <div key={d.issue} style={{ borderTop: i === 0 ? '1px solid var(--ds-ink)' : '1px solid var(--ds-hairline-1)', padding: '10px 0', fontSize: 13, lineHeight: 1.5 }}>
+                  <span className="ds-mono" style={{ fontSize: 11, color: 'var(--ds-text-faint)', marginRight: 8 }}>{d.issue}</span>
+                  <strong>{d.title}</strong>
+                  <span className="ds-micro" style={{ display: 'block', margin: '3px 0' }}>{d.verdicts}</span>
+                  {d.disposition}
+                </div>
+              ))}
+              <p className="ds-micro" style={{ borderTop: '1px solid var(--ds-hairline-1)', marginTop: 12, paddingTop: 12 }}>
+                TRANSCRIBED FROM {S002_R5_DOSSIER.records.join(' AND ')} · THE SEALED EXECUTION RECORD IS HELD OUTSIDE THE REPOSITORY UNDER ITS ID AND MANIFEST DIGEST
+              </p>
             </div>
           </div>
 
@@ -168,9 +395,9 @@ export default function DashboardPage() {
               <EvidenceBar label="Requirements encoded" value={100} note={`${stats.requirements} OF ${stats.requirements}`} />
               <EvidenceBar label="Determinations cited" value={100} note={`${stats.sources} OFFICIAL SOURCES`} />
               <EvidenceBar
-                label="Expert ratification"
-                value={Math.round((stats.ratified / stats.requirements) * 100)}
-                note={`${stats.ratified} OF ${stats.requirements} · THE PROTOTYPE GATE`}
+                label="Governing signatures"
+                value={Math.round((signed / stats.requirements) * 100)}
+                note={`${signed} OF ${stats.requirements} SIGNED · ${summary.ratified} RATIFIED · THE PROTOTYPE GATE`}
               />
               <EvidenceBar
                 label="Country packs ratified"

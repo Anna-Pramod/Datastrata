@@ -48,7 +48,8 @@ export function Sidebar() {
   );
 }
 
-export function Topbar({ org, snapshot }: { org: string; snapshot: string }) {
+/** `label` names what kind of record this is — the page decides it from the record, never from copy here. */
+export function Topbar({ org, label, snapshot }: { org: string; label: string; snapshot: string }) {
   return (
     <header
       style={{
@@ -57,7 +58,7 @@ export function Topbar({ org, snapshot }: { org: string; snapshot: string }) {
       }}
     >
       <span className="ds-mono" style={{ fontSize: 12.5, fontWeight: 700 }}>{org}</span>
-      <span className="ds-chip ds-chip-capacity">Sample record</span>
+      <span className="ds-chip ds-chip-capacity">{label}</span>
       <span className="ds-micro" style={{ marginLeft: 'auto' }}>LEGAL SNAPSHOT {snapshot}</span>
       <span
         aria-hidden="true"

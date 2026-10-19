@@ -35,7 +35,7 @@ export function CrossSectionChart({ rows, columns }: { rows: ChartRow[]; columns
       <div className="ds-scroll-x">
         <table style={{ borderCollapse: 'collapse', minWidth: 680, width: '100%' }}>
           <caption className="ds-vh">
-            Cross-section of tracked regimes against the sample group&apos;s legal entities.
+            Cross-section of tracked regimes against the record&apos;s legal entities.
           </caption>
           <thead>
             <tr>

@@ -1,0 +1,617 @@
+{
+  "record": {
+    "kind": "synthetic",
+    "name": "Meridian Steelworks, EU lanes",
+    "note": "Synthetic development profile. Meridian Steelworks is a made-up group, authored to exercise the behaviours a buyer should see before trusting the product: a clear yes, a clear no, a band that straddles a threshold, and a missing fact. It renders only while no pilot profile is configured.",
+    "shortNames": {
+      "e-de": "Meridian GmbH · DE",
+      "e-hold": "Group HoldCo · DE",
+      "e-nl": "Rotterdam DC · NL",
+      "e-fr": "Lyon Works · FR",
+      "e-in": "Pune Works · IN",
+      "e-uk": "Sheffield · UK"
+    }
+  },
+  "context": {
+    "assessmentDate": "2026-08-19",
+    "financialYear": {
+      "start": "2027-01-01",
+      "end": "2027-12-31"
+    },
+    "subjectId": "org"
+  },
+  "profile": {
+    "scopeObjects": [
+      {
+        "id": "org",
+        "type": "organization",
+        "name": "Meridian Steelworks, EU lanes"
+      },
+      {
+        "id": "e-de",
+        "type": "legal_entity",
+        "name": "Meridian Steelworks GmbH",
+        "parentId": "org"
+      },
+      {
+        "id": "e-hold",
+        "type": "legal_entity",
+        "name": "Meridian Holdings SE",
+        "parentId": "org"
+      },
+      {
+        "id": "e-nl",
+        "type": "legal_entity",
+        "name": "Meridian Rotterdam BV",
+        "parentId": "org"
+      },
+      {
+        "id": "e-fr",
+        "type": "legal_entity",
+        "name": "Meridian France SAS",
+        "parentId": "org"
+      },
+      {
+        "id": "e-in",
+        "type": "legal_entity",
+        "name": "Meridian Pune Works Pvt Ltd",
+        "parentId": "org"
+      },
+      {
+        "id": "e-uk",
+        "type": "legal_entity",
+        "name": "Meridian UK Ltd",
+        "parentId": "org"
+      }
+    ],
+    "facts": [
+      {
+        "factType": "entity.incorporation_country",
+        "scopeId": "e-hold",
+        "value": {
+          "kind": "string",
+          "value": "DE"
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Handelsregister extract"
+        }
+      },
+      {
+        "factType": "entity.legal_form",
+        "scopeId": "e-hold",
+        "value": {
+          "kind": "string",
+          "value": "public_limited_company"
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Articles of association"
+        }
+      },
+      {
+        "factType": "entity.is_parent_undertaking",
+        "scopeId": "e-hold",
+        "value": {
+          "kind": "boolean",
+          "value": true
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Consolidation statement"
+        }
+      },
+      {
+        "factType": "entity.is_subsidiary",
+        "scopeId": "e-hold",
+        "value": {
+          "kind": "boolean",
+          "value": false
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Group structure"
+        }
+      },
+      {
+        "factType": "entity.governing_member_state",
+        "scopeId": "e-hold",
+        "value": {
+          "kind": "string",
+          "value": "DE"
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Registered office"
+        }
+      },
+      {
+        "factType": "entity.net_turnover_eur",
+        "scopeId": "e-hold",
+        "value": {
+          "kind": "number",
+          "value": 1240000000
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Annual Report 2025 p.41"
+        }
+      },
+      {
+        "factType": "entity.avg_employees",
+        "scopeId": "e-hold",
+        "value": {
+          "kind": "number",
+          "value": 4180
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Annual Report 2025 p.83"
+        }
+      },
+      {
+        "factType": "group.consolidated_net_turnover_eur",
+        "scopeId": "org",
+        "value": {
+          "kind": "number",
+          "value": 1240000000
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Consolidated accounts"
+        }
+      },
+      {
+        "factType": "group.avg_employees",
+        "scopeId": "org",
+        "value": {
+          "kind": "number",
+          "value": 4180
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Group employee note"
+        }
+      },
+      {
+        "factType": "entity.incorporation_country",
+        "scopeId": "e-de",
+        "value": {
+          "kind": "string",
+          "value": "DE"
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Handelsregister extract"
+        }
+      },
+      {
+        "factType": "entity.legal_form",
+        "scopeId": "e-de",
+        "value": {
+          "kind": "string",
+          "value": "private_limited_company"
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Articles of association"
+        }
+      },
+      {
+        "factType": "entity.is_parent_undertaking",
+        "scopeId": "e-de",
+        "value": {
+          "kind": "boolean",
+          "value": false
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Group structure"
+        }
+      },
+      {
+        "factType": "entity.is_subsidiary",
+        "scopeId": "e-de",
+        "value": {
+          "kind": "boolean",
+          "value": true
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Group structure"
+        }
+      },
+      {
+        "factType": "entity.governing_member_state",
+        "scopeId": "e-de",
+        "value": {
+          "kind": "string",
+          "value": "DE"
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Registered office"
+        }
+      },
+      {
+        "factType": "entity.net_turnover_eur",
+        "scopeId": "e-de",
+        "value": {
+          "kind": "number",
+          "value": 690000000
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Statutory accounts 2025"
+        }
+      },
+      {
+        "factType": "entity.avg_employees",
+        "scopeId": "e-de",
+        "value": {
+          "kind": "number",
+          "value": 1920
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Employee note 2025"
+        }
+      },
+      {
+        "factType": "parent.report_includes_entity",
+        "scopeId": "e-de",
+        "value": {
+          "kind": "boolean",
+          "value": true
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Group report perimeter"
+        }
+      },
+      {
+        "factType": "entity.incorporation_country",
+        "scopeId": "e-nl",
+        "value": {
+          "kind": "string",
+          "value": "NL"
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "KvK extract"
+        }
+      },
+      {
+        "factType": "entity.legal_form",
+        "scopeId": "e-nl",
+        "value": {
+          "kind": "string",
+          "value": "private_limited_company"
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Deed of incorporation"
+        }
+      },
+      {
+        "factType": "entity.is_parent_undertaking",
+        "scopeId": "e-nl",
+        "value": {
+          "kind": "boolean",
+          "value": false
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Group structure"
+        }
+      },
+      {
+        "factType": "entity.is_subsidiary",
+        "scopeId": "e-nl",
+        "value": {
+          "kind": "boolean",
+          "value": true
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Group structure"
+        }
+      },
+      {
+        "factType": "entity.governing_member_state",
+        "scopeId": "e-nl",
+        "value": {
+          "kind": "string",
+          "value": "NL"
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Registered office"
+        }
+      },
+      {
+        "factType": "entity.net_turnover_eur",
+        "scopeId": "e-nl",
+        "value": {
+          "kind": "number",
+          "value": 74000000
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Statutory accounts 2025"
+        }
+      },
+      {
+        "factType": "entity.avg_employees",
+        "scopeId": "e-nl",
+        "value": {
+          "kind": "number",
+          "value": 210
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Employee note 2025"
+        }
+      },
+      {
+        "factType": "entity.incorporation_country",
+        "scopeId": "e-fr",
+        "value": {
+          "kind": "string",
+          "value": "FR"
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "RCS Lyon extract"
+        }
+      },
+      {
+        "factType": "entity.legal_form",
+        "scopeId": "e-fr",
+        "value": {
+          "kind": "string",
+          "value": "private_limited_company"
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Statuts"
+        }
+      },
+      {
+        "factType": "entity.is_parent_undertaking",
+        "scopeId": "e-fr",
+        "value": {
+          "kind": "boolean",
+          "value": false
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Group structure"
+        }
+      },
+      {
+        "factType": "entity.is_subsidiary",
+        "scopeId": "e-fr",
+        "value": {
+          "kind": "boolean",
+          "value": true
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Group structure"
+        }
+      },
+      {
+        "factType": "entity.governing_member_state",
+        "scopeId": "e-fr",
+        "value": {
+          "kind": "string",
+          "value": "FR"
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Siège social"
+        }
+      },
+      {
+        "factType": "entity.net_turnover_eur",
+        "scopeId": "e-fr",
+        "value": {
+          "kind": "range",
+          "min": 400000000,
+          "max": 600000000
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Management estimate, exact figure requested"
+        }
+      },
+      {
+        "factType": "entity.avg_employees",
+        "scopeId": "e-fr",
+        "value": {
+          "kind": "number",
+          "value": 1460
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Employee note 2025"
+        }
+      },
+      {
+        "factType": "entity.incorporation_country",
+        "scopeId": "e-in",
+        "value": {
+          "kind": "string",
+          "value": "IN"
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "MCA master data"
+        }
+      },
+      {
+        "factType": "entity.legal_form",
+        "scopeId": "e-in",
+        "value": {
+          "kind": "string",
+          "value": "private_limited_company"
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Memorandum of association"
+        }
+      },
+      {
+        "factType": "entity.is_parent_undertaking",
+        "scopeId": "e-in",
+        "value": {
+          "kind": "boolean",
+          "value": false
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Group structure"
+        }
+      },
+      {
+        "factType": "entity.is_subsidiary",
+        "scopeId": "e-in",
+        "value": {
+          "kind": "boolean",
+          "value": true
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Group structure"
+        }
+      },
+      {
+        "factType": "entity.net_turnover_eur",
+        "scopeId": "e-in",
+        "value": {
+          "kind": "number",
+          "value": 96000000
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Statutory accounts FY25"
+        }
+      },
+      {
+        "factType": "entity.incorporation_country",
+        "scopeId": "e-uk",
+        "value": {
+          "kind": "string",
+          "value": "GB"
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Companies House extract"
+        }
+      },
+      {
+        "factType": "entity.legal_form",
+        "scopeId": "e-uk",
+        "value": {
+          "kind": "string",
+          "value": "private_limited_company"
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Articles of association"
+        }
+      },
+      {
+        "factType": "entity.is_parent_undertaking",
+        "scopeId": "e-uk",
+        "value": {
+          "kind": "boolean",
+          "value": false
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Group structure"
+        }
+      },
+      {
+        "factType": "entity.is_subsidiary",
+        "scopeId": "e-uk",
+        "value": {
+          "kind": "boolean",
+          "value": true
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Group structure"
+        }
+      },
+      {
+        "factType": "entity.net_turnover_eur",
+        "scopeId": "e-uk",
+        "value": {
+          "kind": "number",
+          "value": 512000000
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Statutory accounts 2025"
+        }
+      },
+      {
+        "factType": "entity.avg_employees",
+        "scopeId": "e-uk",
+        "value": {
+          "kind": "number",
+          "value": 1240
+        },
+        "confirmed": true,
+        "source": {
+          "kind": "document",
+          "ref": "Employee note 2025"
+        }
+      }
+    ]
+  }
+}

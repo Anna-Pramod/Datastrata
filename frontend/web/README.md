@@ -19,7 +19,7 @@ npm run typecheck
 |---|---|
 | `/` | Landing. Full 5a section order. Every figure read from the live CSRD pack. |
 | `/check` | The free check — 8 steps, then a cited report. Real `assess()` calls. |
-| `/dashboard` | "See a sample report". Real assessment over a sample group profile. |
+| `/dashboard` | The record. Real assessment over the profile `DATASTRATA_PILOT_PROFILE` names, or the synthetic development profile while nothing is configured; a profile that cannot be served is a refusal, never the sample. Dynamic. |
 | `/company` | About us — mission, principles, what we read, team, what's next. |
 | `/contact` | Contact form + direct email. |
 | `/login` | Visual shell. There is no auth; the screen says so rather than faking it. |
@@ -48,8 +48,8 @@ The mockup's placeholder numbers were explicitly discarded (user instruction, Au
 | `6 REGIMES READ` / `14 OBLIGATIONS FOUND` | `16 requirements encoded` / `17 official sources` | Read from the pack. Only one regime is encoded. |
 | Live trace: obligations accumulating 12→14 over invented months | Real accumulation: the 8 dated in-force instruments in the pack, stepping 2013 → 2026, with the 2 adopted-not-in-force acts as deposits **above** the final tread | The years come from the acts' own OJ numbers. Pending acts have no OJ number yet — which is exactly why they don't raise the count (product law 4). |
 | Coverage: six regimes as one list | `ENCODED: CSRD` / `WATCHED: CBAM · BRSR Core · IFRS S1–S2 · CSDDD · EUDR · ESPR` | A buyer is entitled to know which answer they're getting. |
-| Dashboard: invented A/N/J matrix | Real `assess()` over `lib/sample.ts`; CSRD row = each entity's CSRD-S-014 determination | The company is fake and labelled; the determinations are not. |
-| Evidence health 92/78/64 | Record health: requirements 100%, citations 100%, **expert ratification 0%** | There is no evidence subsystem. 0% ratified is the truth. |
+| Dashboard: invented A/N/J matrix | Real `assess()` over the configured profile document (`lib/record.ts`; the synthetic development profile by default); CSRD row = each entity's CSRD-S-014 determination; every requirement's verification status as loaded | The company is whichever record is configured, labelled as such; the determinations are not invented. |
+| Evidence health 92/78/64 | Record health: requirements 100%, citations 100%, **governing signatures 0 of 23** | There is no evidence subsystem. No signature is the truth, and the one model-produced dossier on file (r5, CSRD-S-002 version 4) is shown as historical evidence, not as verification of the current text. |
 | Deadline chip "CBAM Q3 — due 31 Oct" | The pack's one real dated expectation | The only orange surface in the system. |
 
 A fourth cell state, **`unencoded`**, was added to the cross-section chart. The design had
@@ -135,6 +135,64 @@ No packaging changes were made to the engine — it stays a plain library with n
 
 `lib/pack.ts` loads the pack once through the engine's own validating loader. If the content
 firewall rejects the pack, the site fails loudly rather than answering from a half-loaded record.
+
+## Pilot profile
+
+`/dashboard` renders one profile document, selected on the server:
+
+| `DATASTRATA_PILOT_PROFILE` | What renders |
+|---|---|
+| unset | `profiles/synthetic-meridian.json`, the synthetic development profile, labelled as such in the topbar and the banner |
+| a path to a readable, valid document | that company's record, labelled "Pilot record · evaluation" |
+| set but blank, unreadable, not JSON, or invalid | a refusal naming the variable, the kind of failure and every problem by field — never the sample |
+
+The variable is server-side only (never `NEXT_PUBLIC_`); the file is read per request through
+`lib/record.ts`; its path is logged on the server and never rendered. Keep a pilot's file outside
+the repository. Nothing under `public/` is involved, and the page is dynamic, so no company data is
+baked into a build.
+
+A document has three parts. `profile` and `context` are exactly what the engine's `assess()` takes
+(`backend/engine/examples/*.json` shows the shape); `record` is what the page labels it by:
+
+```json
+{
+  "record": {
+    "kind": "pilot",
+    "name": "Acme Holdings SE",
+    "note": "Facts as stated on the onboarding call of 2026-10-20; nothing inferred.",
+    "statedOn": "2026-10-20",
+    "shortNames": { "e-1": "Acme SE · DE" }
+  },
+  "context": { "assessmentDate": "2026-10-20", "financialYear": { "start": "2027-01-01", "end": "2027-12-31" }, "subjectId": "org" },
+  "profile": { "scopeObjects": [], "facts": [] }
+}
+```
+
+Every fact carries its `source` and its `confirmed` flag. A value `{ "kind": "unknown" }` is a
+stated unknown and stays one; an unconfirmed fact is kept in the record and never seen by the
+evaluator; nothing is inferred from a fact's absence. The loader (`lib/profile.ts`) is strict: an
+unknown key, a fact type the pack does not know, a fact stated on the wrong kind of scope object, a
+duplicate, a value kind that does not fit, or a dangling scope reference is refused, and every
+problem is listed at once.
+
+The page shows each requirement's verification status as the site loaded it (`draft`, `verified`
+or `ratified`, with reasons), the stated facts with their sources, and the r5 verification
+dossier for CSRD-S-002 labelled by what it binds (`lib/evidence.ts` compares its pinned input with
+the current requirement's at request time).
+
+Local start for a screen-shared evaluation, from this workspace directory (`frontend/web`, which
+owns the `dev` script), bound to the loopback interface only:
+
+```bash
+cd frontend/web
+DATASTRATA_PILOT_PROFILE=/absolute/path/to/pilot.json npm run dev -- -H 127.0.0.1 -p 3000
+```
+
+then open `http://127.0.0.1:3000/dashboard`. The file is read on every request, so editing it and
+reloading shows the new assessment. A refusal shows on the page; the reason with the path is on the
+terminal running the server. `next dev` fetches the layout's three Google fonts on first compile;
+offline, Next falls back to system fonts with a warning. From a production build, run the standalone
+server described under Deployment with the same variable in its environment.
 
 ## Deployment
 
