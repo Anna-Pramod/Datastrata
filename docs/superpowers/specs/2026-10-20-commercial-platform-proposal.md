@@ -293,3 +293,13 @@ Each stage ends with a checkpoint in `docs/superpowers/` and a reviewer hand-off
 - **Integrations, scenarios and grounded questions are scheduled (Stage 6), not removed.**
 - **No CBAM content in this cycle**: the architecture supports a second pack by construction; selling it needs the pack and its review.
 - **Operational register fields live in the platform database**, not in the engine's register schema, so the engine's strict schema and seven-hit rule stay untouched.
+
+---
+
+## 11. Addendum of 2026-10-20: accepted, with clarifications carried forward
+
+Revision 2 was accepted as the product direction on 2026-10-20, with Stage 1a authorised as the first bounded implementation (design: `2026-10-20-stage-1a-claims-and-access-gate-design.md`). The following clarifications bind the later designs and do not block Stage 1a:
+
+- **Reporting periods and impact.** Closing or archiving a reporting period does not itself resolve any judgment case and does not remove the period from impact analysis. Reassessment after a change, and outstanding duties, include prior periods wherever the change or the duty can still affect them; original assessment runs are preserved in every case, and a reassessed prior period produces a new run beside the old one.
+- **Non-evidence closures.** "Retained unknown" and "no longer relevant" are displayed as what they are: closures without evidence. No surface, export or count may present them as evidence-backed resolutions; the customer-facing status words and the obligation detail distinguish them from "resolved".
+- **Authentication choice before 1b.** Before increment 1b starts, the proposed custom authentication is compared with a maintained application authentication library for this stack, and the recommendation states the recovery, maintenance and security responsibilities each approach leaves with DataStrata. The comparison is a short note under `docs/superpowers/`, not a new proposal.
