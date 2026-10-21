@@ -94,7 +94,11 @@ export interface ResultWriterFs {
   writeFileSync(path: string, data: string): void;
   /** The publish. Atomic because both paths are in one directory. */
   renameSync(from: string, to: string): void;
-  /** Removes temp residue. Must not throw for an absent path. */
+  /**
+   * Removes temp residue. Must not throw for an absent path. It may throw for
+   * anything else, and the writer reports that beside the failure it was
+   * cleaning up after rather than letting it escape.
+   */
   rmSync(path: string, options: { force: true }): void;
 }
 
@@ -200,6 +204,12 @@ export type ResultWriteOutcome =
       status: 'write_failed';
       stage: ResultWriteStage;
       error: Error;
+      /**
+       * Present only when removing the temp file failed as well. Secondary: it
+       * can explain residue beside the destination, never why the write
+       * failed — that is always `error`. It carries the absolute temp path.
+       */
+      cleanupError?: Error;
     };
 
 /**
@@ -219,6 +229,26 @@ function tempPathFor(destination: string): string {
 
 function asError(thrown: unknown): Error {
   return thrown instanceof Error ? thrown : new Error(String(thrown));
+}
+
+/**
+ * Removes the temp file after a failed write, returning — never throwing — any
+ * failure to do so.
+ *
+ * It runs inside a stage's `catch`, where a throw would take the place of the
+ * failure that put the writer there: the caller would get an exception where
+ * the contract promises `write_failed`, about cleanup rather than about why the
+ * record was not written. `force` excuses only an absent path. A regular file
+ * where the destination needs a directory still fails the removal, with
+ * `ENOTDIR` from the `lstat` Node takes of the temp path first.
+ */
+function removeTemp(fs: ResultWriterFs, temp: string): Error | undefined {
+  try {
+    fs.rmSync(temp, { force: true });
+    return undefined;
+  } catch (thrown) {
+    return asError(thrown);
+  }
 }
 
 /**
@@ -286,8 +316,13 @@ export function writeVerificationResult(input: ResultWriteInput): ResultWriteOut
   } catch (thrown) {
     // The temp file may be absent or partial; either way it is not the record
     // and must not be left behind. The destination has not been touched at all.
-    fs.rmSync(temp, { force: true });
-    return { status: 'write_failed', stage: 'temp_write', error: asError(thrown) };
+    const cleanupError = removeTemp(fs, temp);
+    return {
+      status: 'write_failed',
+      stage: 'temp_write',
+      error: asError(thrown),
+      ...(cleanupError === undefined ? {} : { cleanupError }),
+    };
   }
 
   try {
@@ -295,8 +330,13 @@ export function writeVerificationResult(input: ResultWriteInput): ResultWriteOut
   } catch (thrown) {
     // The one atomic operation did not happen, so the destination is exactly
     // what it was — the previous result, or nothing.
-    fs.rmSync(temp, { force: true });
-    return { status: 'write_failed', stage: 'publish', error: asError(thrown) };
+    const cleanupError = removeTemp(fs, temp);
+    return {
+      status: 'write_failed',
+      stage: 'publish',
+      error: asError(thrown),
+      ...(cleanupError === undefined ? {} : { cleanupError }),
+    };
   }
 
   return {

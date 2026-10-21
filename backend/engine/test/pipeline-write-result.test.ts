@@ -30,6 +30,11 @@
  * path was never reached; a publish failure shows that once prepared bytes
  * exist, replacement is all-or-nothing.
  *
+ * A cleanup that fails as well is proved at both stages, on the real filesystem:
+ * the failure the stage hit is still the one the outcome returns, and the
+ * cleanup's own failure is kept beside it as secondary information rather than
+ * thrown in its place.
+ *
  * Every path below is inside a fresh `mkdtemp` root. Nothing in this file can
  * write into the repository.
  */
@@ -321,6 +326,9 @@ describe('case 4 — publication fails over an existing result', () => {
     if (outcome.status !== 'write_failed') return;
     expect(outcome.stage).toBe('publish');
     expect(String(outcome.error)).toContain('INJECTED publish failure');
+    // The temp file was removed, so nothing rides beside the failure. The
+    // cleanup-failure cases below are where something does.
+    expect(outcome.cleanupError).toBeUndefined();
   });
 });
 
@@ -339,6 +347,7 @@ describe('case 5 — publication fails with no existing result', () => {
     expect(outcome.status).toBe('write_failed');
     if (outcome.status !== 'write_failed') return;
     expect(outcome.stage).toBe('publish');
+    expect(outcome.cleanupError).toBeUndefined();
   });
 });
 
@@ -355,6 +364,7 @@ describe('a temp-write failure is a different stage from a publish failure', () 
     // did not happen".
     expect(outcome.stage).toBe('temp_write');
     expect(String(outcome.error)).toContain('INJECTED temp-write failure');
+    expect(outcome.cleanupError).toBeUndefined();
     expect.soft(readFileSync(destination, 'utf8')).toBe(priorBytes);
     expect.soft(entriesInResultDir()).toEqual([RESULT_FILE]);
   });
@@ -365,8 +375,122 @@ describe('a temp-write failure is a different stage from a publish failure', () 
     expect(outcome.status).toBe('write_failed');
     if (outcome.status !== 'write_failed') return;
     expect(outcome.stage).toBe('temp_write');
+    expect(outcome.cleanupError).toBeUndefined();
     expect.soft(existsSync(destination)).toBe(false);
     expect.soft(entriesInResultDir()).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A cleanup that fails as well never takes the stage failure's place
+// ---------------------------------------------------------------------------
+
+/**
+ * The write_failed outcome, narrowed, or a failure naming what came back instead.
+ *
+ * When the writer threw, the thrown error is the cause, so the red shows the
+ * escape *and* the call it escaped from.
+ */
+function writeFailed(
+  outcome: ResultWriteOutcome | { status: 'threw'; error: Error },
+): Extract<ResultWriteOutcome, { status: 'write_failed' }> {
+  if (outcome.status !== 'write_failed') {
+    const error = (outcome as { error?: Error }).error;
+    const what = outcome.status === 'threw' ? 'threw' : `returned ${outcome.status}`;
+    throw new Error(`expected the writer to return write_failed, and it ${what}: ${String(error)}`, { cause: error });
+  }
+  return outcome;
+}
+
+/** A filesystem error's own account of itself: what went wrong, in which call, on which paths. */
+function errnoOf(error: Error | undefined): { code?: string; syscall?: string; path?: string; dest?: string } | undefined {
+  if (error === undefined) return undefined;
+  const { code, syscall, path, dest } = error as NodeJS.ErrnoException & { dest?: string };
+  return { code, syscall, path, dest };
+}
+
+/** `<destination>.<random>.tmp` — the writer's temp path, whatever its random part. */
+function tempPathBeside(of: string): RegExp {
+  const literal = of.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`^${literal}\\.[^/]+\\.tmp$`);
+}
+
+/**
+ * The production filesystem, and one change to the world between the staged
+ * write and the publish: a directory on the destination's path becomes a
+ * regular file.
+ *
+ * A file planted before the call stops the writer at temp_write, so this is the
+ * only way to bring the publish stage's cleanup to the same failure. It changes
+ * the world, not the writer's calls: every one of them still runs on the real
+ * filesystem, so the rename's error and the cleanup's are the OS's own.
+ */
+function directoryBecomesFileBeforePublish(blocked: string, staged: string[]): ResultWriterFs {
+  return {
+    mkdirSync: (directory, options) => nodeResultWriterFs.mkdirSync(directory, options),
+    writeFileSync: (path, data) => {
+      nodeResultWriterFs.writeFileSync(path, data);
+      staged.push(path);
+    },
+    renameSync: (from, to) => {
+      // The staged temp file goes with the directory.
+      rmSync(blocked, { recursive: true, force: true });
+      writeFileSync(blocked, 'a regular file where a directory was\n', 'utf8');
+      nodeResultWriterFs.renameSync(from, to);
+    },
+    rmSync: (path, options) => nodeResultWriterFs.rmSync(path, options),
+  };
+}
+
+/**
+ * `rmSync(temp, { force: true })` excuses only an absent path. With a regular
+ * file where the destination needs a directory, the cleanup fails too —
+ * `ENOTDIR`, from the `lstat` Node takes of the temp path before removing it
+ * (Node v24.19.0) — and a cleanup that throws from inside a stage's `catch`
+ * takes the place of the failure that put the writer there: the caller gets an
+ * exception where the contract promises a value, and it is about cleanup rather
+ * than about why the record was not written.
+ *
+ * Each stage has its own cleanup, so each has its own case. The cleanup's
+ * failure is kept as secondary information, so each case asserts both that it
+ * is there and that it is not the error the outcome leads with. Its absence when
+ * the cleanup succeeds is asserted in cases 4 and 5 and the temp-write cases.
+ */
+describe('a cleanup that fails as well is reported beside the stage failure, never in its place', () => {
+  it('temp_write: a regular file above the destination returns the mkdir failure, with the cleanup failure secondary', async () => {
+    // `verification`, three directories above the destination, is a file.
+    writeFileSync(join(root, 'verification'), 'a regular file where a directory must go\n', 'utf8');
+
+    const outcome = writeFailed(await outcomeOrThrown(write()));
+
+    expect(outcome.stage).toBe('temp_write');
+    // What stopped the write, and what the caller must be told: the
+    // destination's directory cannot be created through a file.
+    expect(errnoOf(outcome.error)).toEqual({ code: 'ENOTDIR', syscall: 'mkdir', path: dirname(destination) });
+    // Kept rather than dropped, and not in the stage failure's place.
+    expect(outcome.cleanupError).toBeInstanceOf(Error);
+    expect(outcome.cleanupError).not.toBe(outcome.error);
+    expect(errnoOf(outcome.cleanupError)).toMatchObject({
+      code: 'ENOTDIR',
+      path: expect.stringMatching(tempPathBeside(destination)),
+    });
+  });
+
+  it('publish: a directory that becomes a file after the staged write returns the rename failure, with the cleanup failure secondary', async () => {
+    const staged: string[] = [];
+
+    const outcome = writeFailed(
+      await outcomeOrThrown(write({ fs: directoryBecomesFileBeforePublish(join(root, 'verification'), staged) })),
+    );
+
+    expect(outcome.stage).toBe('publish');
+    expect(staged).toHaveLength(1);
+    // The publish itself, refused through the file: the staged path to the
+    // destination.
+    expect(errnoOf(outcome.error)).toEqual({ code: 'ENOTDIR', syscall: 'rename', path: staged[0], dest: destination });
+    expect(outcome.cleanupError).toBeInstanceOf(Error);
+    expect(outcome.cleanupError).not.toBe(outcome.error);
+    expect(errnoOf(outcome.cleanupError)).toMatchObject({ code: 'ENOTDIR', path: staged[0] });
   });
 });
 
