@@ -153,6 +153,133 @@ export const isEu = (code?: string) => Boolean(code && EU_COUNTRIES.some((c) => 
 export const stepEightIsParentReport = (a: CheckerAnswers) =>
   a.groupPosition === 'subsidiary' || a.groupPosition === 'parent_and_subsidiary';
 
+/** A parent undertaking at either rung: the consolidated route and Q-045 turn on it. */
+export const isParentUndertaking = (a: CheckerAnswers) =>
+  a.groupPosition === 'parent' || a.groupPosition === 'parent_and_subsidiary';
+
+export type CheckStepId =
+  | 'country' | 'legalForm' | 'exclusion' | 'financialYear' | 'groupPosition' | 'holding'
+  | 'turnover' | 'employees' | 'reportedFy2024' | 'parentReport' | 'governing' | 'euTurnover';
+
+export interface CheckStep {
+  id: CheckStepId;
+  /** The question as asked. */
+  q: string;
+  /** The pack question it serves, and why the answer can move a determination. */
+  why: string;
+  /** Whether the answers so far settle this step. */
+  answered: (a: CheckerAnswers) => boolean;
+}
+
+const STEP: Record<CheckStepId, CheckStep> = {
+  country: {
+    id: 'country',
+    q: 'Where is the entity incorporated?',
+    why: 'Q-003 · routes EU / non-EU scope and the governing Member State.',
+    answered: (a) => Boolean(a.country),
+  },
+  legalForm: {
+    id: 'legalForm',
+    q: 'What is its legal form?',
+    why: 'Q-003 · the Accounting Directive perimeter is defined by legal form, not by size.',
+    answered: (a) => Boolean(a.legalForm),
+  },
+  exclusion: {
+    id: 'exclusion',
+    q: 'Is the entity the European Financial Stability Facility, or a financial product listed in point (b) or (f) of Article 2(12) of Regulation (EU) 2019/2088?',
+    why: 'Q-039 · Article 1(4) removes both from Articles 19a and 29a. ‘Not sure’ leaves the size tests unresolved until clarified.',
+    answered: (a) => Boolean(a.exclusion),
+  },
+  financialYear: {
+    id: 'financialYear',
+    q: 'Which financial year are you assessing?',
+    why: 'Q-004 · determines the threshold period, the wave and any transitional option.',
+    answered: (a) => Boolean(a.financialYear),
+  },
+  groupPosition: {
+    id: 'groupPosition',
+    q: 'Where does it sit in a group?',
+    why: 'Q-005 · selects the individual, consolidated and exemption routes.',
+    answered: (a) => Boolean(a.groupPosition),
+  },
+  holding: {
+    id: 'holding',
+    q: 'Is the entity a financial holding undertaking?',
+    why: 'Q-045 · Article 2(15): an undertaking whose sole object is to acquire and manage holdings in other undertakings. Article 29a(7a) lets such a holding choose not to include the consolidated sustainability information; ‘Not sure’ leaves the consolidated duty unresolved until clarified.',
+    answered: (a) => Boolean(a.holding),
+  },
+  turnover: {
+    id: 'turnover',
+    q: 'Net turnover for that financial year',
+    why: 'Q-007 · Article 19a turns on EUR 450 million. A band that crosses it stays unresolved, deliberately.',
+    answered: (a) => Boolean(a.turnover),
+  },
+  employees: {
+    id: 'employees',
+    q: 'Average number of employees',
+    why: 'Q-008 · the second cumulative threshold: 1,000 employees during the financial year.',
+    answered: (a) => Boolean(a.employees),
+  },
+  reportedFy2024: {
+    id: 'reportedFy2024',
+    q: 'Did this entity report under CSRD for financial year 2024?',
+    why: 'Q-011 · identifies first-wave status and the FY2025-26 transition questions.',
+    answered: (a) => Boolean(a.reportedFy2024),
+  },
+  parentReport: {
+    id: 'parentReport',
+    q: "Is the entity included in a parent's qualifying consolidated sustainability report?",
+    why: 'Q-014 · the subsidiary exemption route. An exempt subsidiary must not be handed reporting obligations.',
+    answered: (a) => Boolean(a.parentReport),
+  },
+  governing: {
+    id: 'governing',
+    q: "Which Member State's accounting law governs the entity?",
+    why: 'Q-012 · selects national transposition, options, filing and publication rules.',
+    answered: (a) => a.governingChoice === 'same' || a.governingChoice === 'unknown' || (a.governingChoice === 'other' && Boolean(a.governingState)),
+  },
+  euTurnover: {
+    id: 'euTurnover',
+    q: 'Does the group generate more than €450 million of turnover inside the EU?',
+    why: 'Q-016 · Article 40a. A non-EU group comes into scope through EU turnover, not through this entity\'s own thresholds, and the test must be met in each of the last two financial years.',
+    answered: (a) => Boolean(a.euTurnover),
+  },
+};
+
+/**
+ * The check's questions in the order they are asked, given the answers so far.
+ * `CheckFlow` renders exactly this list and attaches a control to each step by
+ * its id, so the questions the visitor sees and the count the site prints are
+ * one list. A parent undertaking is also asked Q-045; the last step takes one
+ * of three shapes — the subsidiary exemption route, the governing Member State
+ * for an EU entity, or the Article 40a test for a non-EU one.
+ */
+export function checkSteps(a: CheckerAnswers): CheckStep[] {
+  return [
+    STEP.country,
+    STEP.legalForm,
+    STEP.exclusion,
+    STEP.financialYear,
+    STEP.groupPosition,
+    ...(isParentUndertaking(a) ? [STEP.holding] : []),
+    STEP.turnover,
+    STEP.employees,
+    STEP.reportedFy2024,
+    stepEightIsParentReport(a) ? STEP.parentReport : isEu(a.country) ? STEP.governing : STEP.euTurnover,
+  ];
+}
+
+/**
+ * The number the copy prints, read from the step list rather than written into
+ * it: adding or removing a question moves the landing page and the check's
+ * metadata with it. The three shapes of the last step count once; parenthood
+ * adds Q-045.
+ */
+export const CHECK_QUESTION_COUNT = {
+  standard: checkSteps({ groupPosition: 'standalone' }).length,
+  parent: checkSteps({ groupPosition: 'parent' }).length,
+} as const;
+
 const OVER_450M = { kind: 'range', min: 450_000_001, max: 100_000_000_000 } as const;
 const UNDER_450M = { kind: 'range', min: 0, max: 450_000_000 } as const;
 
@@ -179,7 +306,7 @@ export function buildAssessmentInput(answers: CheckerAnswers, assessmentDate: st
   const entityId = 'e1';
   const orgId = 'org1';
   const facts: FactInput[] = [];
-  const isGroupParent = answers.groupPosition === 'parent' || answers.groupPosition === 'parent_and_subsidiary';
+  const isGroupParent = isParentUndertaking(answers);
 
   if (answers.country) {
     facts.push(stated('entity.incorporation_country', entityId, { kind: 'string', value: answers.country }));

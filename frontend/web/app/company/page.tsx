@@ -13,9 +13,10 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { MarketingNav } from '@/components/marketing/MarketingNav';
 import { Footer } from '@/components/marketing/Footer';
+import { answerable, planned } from '@/lib/coverage';
 import { packStats, sourceInstitutions } from '@/lib/pack';
 import { COMPANY, MISSION, NEXT, ORIGIN, PRINCIPLES, TEAM } from '@/lib/company';
-import { ENCODED, WATCHED } from '@/lib/regimes';
+import { siteCoverage } from '@/lib/site-coverage';
 
 export const metadata: Metadata = {
   title: 'Company · DataStrata',
@@ -26,6 +27,7 @@ export const metadata: Metadata = {
 export default function CompanyPage() {
   const stats = packStats();
   const institutions = sourceInstitutions();
+  const coverage = siteCoverage();
 
   return (
     <>
@@ -99,7 +101,7 @@ export default function CompanyPage() {
             ))}
           </div>
           <p className="ds-micro" style={{ marginTop: 20, maxWidth: '70ch' }}>
-            {ENCODED.length} REGIME ENCODED · {WATCHED.length} WATCHED · {stats.requirements} REQUIREMENTS ·
+            {answerable(coverage).length} REGIME ANSWERABLE AS DRAFT · {planned(coverage).length} PLANNED · {stats.requirements} REQUIREMENTS ·
             {' '}{stats.ratified} OF {stats.requirements} EXPERT-RATIFIED · THE GATE WE HAVE NOT YET PASSED.
           </p>
         </section>

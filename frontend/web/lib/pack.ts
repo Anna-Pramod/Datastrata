@@ -336,6 +336,43 @@ export function csrdPack(): KnowledgePack {
   return loadVerifiedCsrdPack(engineRoot());
 }
 
+/**
+ * The monitoring register for one root, validated against the pack it governs
+ * and memoised per root for the same reasons as the pack.
+ *
+ * `loadPack` parses the register to firewall the pack and then returns only the
+ * pack, so the site has no second handle on it. The coverage register
+ * (`siteCoverage`) needs the register's own rows — the surfaces that carry a
+ * cadence — to say whether anything is monitored, and the honest count is the
+ * register's, not the pack's cited-source list: the two differ (thirteen
+ * watched surfaces against seventeen cited sources today) and only the former
+ * has a cadence to be checked within.
+ *
+ * Read through `loadPackContext` with the options `loadVerifiedCsrdPack` passes,
+ * so the rows counted are the ones that passed `verifyRegisterIntegrity`
+ * against this pack — the same separate-but-vouched-for context the freshness
+ * resolver builds, and never a raw parse of the file.
+ */
+const registers = new Map<string, SourceRegister>();
+
+export function loadCsrdSourceRegister(root: string): SourceRegister {
+  const key = cacheKey(root);
+  const hit = registers.get(key);
+  if (hit !== undefined) return hit;
+
+  const verificationDir = verificationDirOf(root);
+  const { sourceRegister } = loadPackContext(packDirOf(root), {
+    versionRegistryDir: join(verificationDir, 'requirement-versions'),
+    ledgerPath: join(verificationDir, 'signatures.jsonl'),
+  });
+  registers.set(key, sourceRegister);
+  return sourceRegister;
+}
+
+export function csrdSourceRegister(): SourceRegister {
+  return loadCsrdSourceRegister(engineRoot());
+}
+
 export function sourceById(pack: KnowledgePack, id: string) {
   const s = pack.sources.find((x) => x.id === id);
   return s ? { id: s.id, title: s.title, url: s.url } : { id, title: id, url: '' };
@@ -359,6 +396,12 @@ export function packStats() {
     // the repository holds no signature, which is now a fact about the record
     // rather than a structural ceiling: a fresh governing signature moves it.
     ratified: pack.requirements.filter((r) => r.derivedStatus === 'ratified').length,
+    // Requirements carrying a fresh governing signature, at either rung:
+    // `verified` (signed by a named reviewer) or `ratified`. The coverage
+    // register prints this beside the requirement count ("0 of 23 requirements
+    // signed"); it is the same ledger-derived status as `ratified` above, read
+    // one rung lower.
+    signed: pack.requirements.filter((r) => r.derivedStatus === 'verified' || r.derivedStatus === 'ratified').length,
     sources: pack.sources.length,
     obligationTemplates: pack.obligationTemplates.length,
     questions: pack.questions.length,

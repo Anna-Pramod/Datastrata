@@ -12,8 +12,8 @@ Resume file. If a session ends mid-build, read this first, then continue at the 
 - **No specific legal dates in marketing copy** (they move; dates belong inside a cited determination).
 
 ## Real figures (verified from the pack — re-verify if the pack changes)
-16 requirements (all `in_force`, all `draft`/unratified) · 17 sources · 17 obligation templates ·
-38 questions · 51 fact types · 4 changeWatch items · 0 ratified country packs · pack 0.1.0, snapshot 2026-07-26.
+23 requirements (all `in_force`, all `draft`/unratified) · 17 sources · 17 obligation templates ·
+48 questions · 62 fact types · 4 changeWatch items · 0 ratified country packs · pack 0.1.0, snapshot 2026-07-26.
 
 ## Non-negotiable system rules (design-system.md §3)
 1. Orange (`--ds-orange`) = change-event marks + the deadline chip. NOWHERE else.
@@ -27,6 +27,7 @@ Resume file. If a session ends mid-build, read this first, then continue at the 
 ## Batches
 - [x] B1 — `app/tokens.css` (handoff verbatim) + `app/globals.css` (component layer, plain CSS not Tailwind)
 - [x] B2 — `app/layout.tsx` (Archivo/Inter/JetBrains Mono), `lib/pack.ts`, `lib/regimes.ts`, `components/ui/*`
+       (`lib/regimes.ts` has since been replaced by `lib/coverage.ts` — Stage 1a, 2026-10-20)
 - [x] B3 — `components/marketing/*`: MarketingNav, LiveTrace, StatShelf, CoverageStrip, Footer
 - [x] B4 — `app/page.tsx` (landing, 5a section order)
 - [x] B5 — `lib/checker.ts` (8 steps), `app/api/check/route.ts`, `app/check/*` (flow + report)
@@ -64,7 +65,8 @@ Resume file. If a session ends mid-build, read this first, then continue at the 
   with dashed extraction leaders, holds, and re-seats.
 - Dashboard = real `assess()` over a **sample multi-entity profile** authored in `lib/sample.ts`,
   labelled as a sample. Watched-regime rows render a distinct "not encoded" cell state.
-- Evidence Health card → "RECORD HEALTH" with real pack metrics (ratification 0/16 is the truth).
+- Evidence Health card → "RECORD HEALTH" with real pack metrics (ratification 0/23 is the truth; the two
+  fixed-100 bars were replaced by derived lines in Stage 1a).
 - Deadline chip (only orange surface) = a real dated changeWatch expectation, not an invented deadline.
 
 ## Engine connection (already working, keep)
@@ -98,3 +100,11 @@ cd frontend/web && npm run typecheck && npm run build
 cd ../../backend/engine && npm test        # must still be 45 passing
 ```
 Then drive the real UI (CDP scripts pattern used earlier) and LOOK at the screenshots.
+
+## Stage 1a (2026-10-20) — status language
+- The pack holds 23 requirements; the figures above were re-verified from the knowledge files.
+- `lib/regimes.ts` was replaced by `lib/coverage.ts` (+ `lib/site-coverage.ts`): supported / draft /
+  monitored / planned are derived from the record, and "encoded" / "watched" are no longer printed.
+- The check asks 9 questions, 10 for a parent undertaking; the count is read from the step list
+  (`CHECK_QUESTION_COUNT` in `lib/checker.ts`), never written into copy.
+- `/login` is a plain card; `/dashboard` sits behind the pilot-access passphrase (README, Pilot access).

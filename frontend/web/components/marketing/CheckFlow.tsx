@@ -1,14 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { Button, CapacityChip, NeutralChip, StatusChip } from '@/components/ui/primitives';
 import {
   EMPLOYEE_BANDS, EU_COUNTRIES, EU_TURNOVER_OPTIONS, FINANCIAL_YEARS, GOVERNING_CHOICES,
   GROUP_POSITIONS, LEGAL_FORMS, NON_EU_COUNTRIES, TURNOVER_BANDS, YES_NO_UNSURE,
-  isEu, stepEightIsParentReport, type CheckerAnswers, type Option,
+  checkSteps, type CheckerAnswers, type CheckStepId, type Option,
 } from '@/lib/checker';
-import { WATCHED } from '@/lib/regimes';
 
 interface Verdict {
   id: string; title: string; decisionArea: string;
@@ -71,147 +69,103 @@ function Chips({ options, value, onPick, name }: { options: Option[]; value?: st
   );
 }
 
-export function CheckFlow() {
+/**
+ * `plannedRegimes` arrives from the server page as the short names of the
+ * regimes the coverage register reads as planned: this is a client component,
+ * and the register's inputs are read from the pack on the server.
+ */
+export function CheckFlow({ plannedRegimes }: { plannedRegimes: string[] }) {
   const [a, setA] = useState<CheckerAnswers>({ financialYear: '2027' });
   const [step, setStep] = useState(0);
   const [report, setReport] = useState<CheckResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
 
-  const parentRoute = stepEightIsParentReport(a);
-  const isGroupParent = a.groupPosition === 'parent' || a.groupPosition === 'parent_and_subsidiary';
-
-  const steps = [
-    {
-      q: 'Where is the entity incorporated?',
-      why: 'Q-003 · routes EU / non-EU scope and the governing Member State.',
-      answered: Boolean(a.country),
-      node: (
-        <select
-          className="ds-input" style={{ maxWidth: 340 }} value={a.country ?? ''}
-          onChange={(e) => setA((p) => ({ ...p, country: e.target.value || undefined }))}
-          aria-label="Country of incorporation"
-        >
-          <option value="">Select a country…</option>
-          <optgroup label="EU Member States">
-            {EU_COUNTRIES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
-          </optgroup>
-          <optgroup label="Outside the EU">
-            {NON_EU_COUNTRIES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
-          </optgroup>
-        </select>
-      ),
-    },
-    {
-      q: 'What is its legal form?',
-      why: 'Q-003 · the Accounting Directive perimeter is defined by legal form, not by size.',
-      answered: Boolean(a.legalForm),
-      node: <Chips name="Legal form" options={LEGAL_FORMS} value={a.legalForm} onPick={(id) => setA((p) => ({ ...p, legalForm: id }))} />,
-    },
-    {
-      q: 'Is the entity the European Financial Stability Facility, or a financial product listed in point (b) or (f) of Article 2(12) of Regulation (EU) 2019/2088?',
-      why: 'Q-039 · Article 1(4) removes both from Articles 19a and 29a. ‘Not sure’ leaves the size tests unresolved until clarified.',
-      answered: Boolean(a.exclusion),
-      // Nothing preselected: the visitor states yes, no or not sure, and only a stated yes or no reaches the engine.
-      node: <Chips name="Article 1(4) exclusion" options={YES_NO_UNSURE} value={a.exclusion} onPick={(id) => setA((p) => ({ ...p, exclusion: id as CheckerAnswers['exclusion'] }))} />,
-    },
-    {
-      q: 'Which financial year are you assessing?',
-      why: 'Q-004 · determines the threshold period, the wave and any transitional option.',
-      answered: Boolean(a.financialYear),
-      node: <Chips name="Financial year" options={FINANCIAL_YEARS} value={a.financialYear} onPick={(id) => setA((p) => ({ ...p, financialYear: id }))} />,
-    },
-    {
-      q: 'Where does it sit in a group?',
-      why: 'Q-005 · selects the individual, consolidated and exemption routes.',
-      answered: Boolean(a.groupPosition),
-      node: <Chips name="Group position" options={GROUP_POSITIONS} value={a.groupPosition} onPick={(id) => setA((p) => ({ ...p, groupPosition: id as CheckerAnswers['groupPosition'] }))} />,
-    },
-    ...(isGroupParent
-      ? [{
-          q: 'Is the entity a financial holding undertaking?',
-          why: 'Q-045 · Article 2(15): an undertaking whose sole object is to acquire and manage holdings in other undertakings. Article 29a(7a) lets such a holding choose not to include the consolidated sustainability information; ‘Not sure’ leaves the consolidated duty unresolved until clarified.',
-          answered: Boolean(a.holding),
-          // Nothing preselected: the option is never assumed unexercised for a holding, and a non-holding is untouched.
-          node: <Chips name="Financial holding undertaking" options={YES_NO_UNSURE} value={a.holding} onPick={(id) => setA((p) => ({ ...p, holding: id as CheckerAnswers['holding'] }))} />,
-        }]
-      : []),
-    {
-      q: 'Net turnover for that financial year',
-      why: 'Q-007 · Article 19a turns on EUR 450 million. A band that crosses it stays unresolved, deliberately.',
-      answered: Boolean(a.turnover),
-      node: <Chips name="Net turnover" options={TURNOVER_BANDS} value={a.turnover} onPick={(id) => setA((p) => ({ ...p, turnover: id }))} />,
-    },
-    {
-      q: 'Average number of employees',
-      why: 'Q-008 · the second cumulative threshold: 1,000 employees during the financial year.',
-      answered: Boolean(a.employees),
-      node: <Chips name="Average employees" options={EMPLOYEE_BANDS} value={a.employees} onPick={(id) => setA((p) => ({ ...p, employees: id }))} />,
-    },
-    {
-      q: 'Did this entity report under CSRD for financial year 2024?',
-      why: 'Q-011 · identifies first-wave status and the FY2025-26 transition questions.',
-      answered: Boolean(a.reportedFy2024),
-      node: <Chips name="FY2024 reporting" options={YES_NO_UNSURE} value={a.reportedFy2024} onPick={(id) => setA((p) => ({ ...p, reportedFy2024: id }))} />,
-    },
-    parentRoute
-      ? {
-          q: "Is the entity included in a parent's qualifying consolidated sustainability report?",
-          why: 'Q-014 · the subsidiary exemption route. An exempt subsidiary must not be handed reporting obligations.',
-          answered: Boolean(a.parentReport),
-          node: <Chips name="Parent report" options={YES_NO_UNSURE} value={a.parentReport} onPick={(id) => setA((p) => ({ ...p, parentReport: id }))} />,
-        }
-      : isEu(a.country)
-      ? {
-          q: "Which Member State's accounting law governs the entity?",
-          why: 'Q-012 · selects national transposition, options, filing and publication rules.',
-          answered: a.governingChoice === 'same' || a.governingChoice === 'unknown' || (a.governingChoice === 'other' && Boolean(a.governingState)),
-          node: (
-            <>
-              <Chips
-                name="Governing Member State"
-                options={GOVERNING_CHOICES.map((o) =>
-                  o.id === 'same'
-                    ? { ...o, label: `${EU_COUNTRIES.find((c) => c.id === a.country)?.label ?? 'The country of incorporation'}` }
-                    : o,
-                )}
-                value={a.governingChoice}
-                onPick={(id) => setA((p) => ({ ...p, governingChoice: id as CheckerAnswers['governingChoice'], governingState: id === 'other' ? p.governingState : undefined }))}
-              />
-              {a.governingChoice === 'other' ? (
-                <select
-                  className="ds-input" style={{ maxWidth: 340, marginTop: 16 }}
-                  aria-label="Governing Member State"
-                  value={a.governingState ?? ''}
-                  onChange={(e) => setA((p) => ({ ...p, governingState: e.target.value || undefined }))}
-                >
-                  <option value="">Select a Member State…</option>
-                  {EU_COUNTRIES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
-                </select>
-              ) : null}
-              {a.governingChoice === 'unknown' ? (
-                <p className="ds-micro" style={{ marginTop: 14, maxWidth: '56ch' }}>
-                  Left unanswered, so the national-law gate stays unresolved rather than assuming an answer.
-                </p>
-              ) : null}
-            </>
-          ),
-        }
-      : {
-          q: 'Does the group generate more than €450 million of turnover inside the EU?',
-          why: 'Q-016 · Article 40a. A non-EU group comes into scope through EU turnover, not through this entity\'s own thresholds, and the test must be met in each of the last two financial years.',
-          answered: Boolean(a.euTurnover),
-          node: (
-            <>
-              <Chips name="EU turnover" options={EU_TURNOVER_OPTIONS} value={a.euTurnover} onPick={(id) => setA((p) => ({ ...p, euTurnover: id as CheckerAnswers['euTurnover'] }))} />
-              <p className="ds-micro" style={{ marginTop: 14, maxWidth: '58ch' }}>
-                A non-EU entity has no governing Member State for the CSRD test, so the engine looks at the
-                Article 40a third-country route instead.
+  // The step list comes from `lib/checker.ts`, which also derives the count the
+  // site prints; this component only attaches the control for each step.
+  function node(id: CheckStepId): React.ReactNode {
+    switch (id) {
+      case 'country':
+        return (
+          <select
+            className="ds-input" style={{ maxWidth: 340 }} value={a.country ?? ''}
+            onChange={(e) => setA((p) => ({ ...p, country: e.target.value || undefined }))}
+            aria-label="Country of incorporation"
+          >
+            <option value="">Select a country…</option>
+            <optgroup label="EU Member States">
+              {EU_COUNTRIES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+            </optgroup>
+            <optgroup label="Outside the EU">
+              {NON_EU_COUNTRIES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+            </optgroup>
+          </select>
+        );
+      case 'legalForm':
+        return <Chips name="Legal form" options={LEGAL_FORMS} value={a.legalForm} onPick={(id) => setA((p) => ({ ...p, legalForm: id }))} />;
+      case 'exclusion':
+        // Nothing preselected: the visitor states yes, no or not sure, and only a stated yes or no reaches the engine.
+        return <Chips name="Article 1(4) exclusion" options={YES_NO_UNSURE} value={a.exclusion} onPick={(id) => setA((p) => ({ ...p, exclusion: id as CheckerAnswers['exclusion'] }))} />;
+      case 'financialYear':
+        return <Chips name="Financial year" options={FINANCIAL_YEARS} value={a.financialYear} onPick={(id) => setA((p) => ({ ...p, financialYear: id }))} />;
+      case 'groupPosition':
+        return <Chips name="Group position" options={GROUP_POSITIONS} value={a.groupPosition} onPick={(id) => setA((p) => ({ ...p, groupPosition: id as CheckerAnswers['groupPosition'] }))} />;
+      case 'holding':
+        // Nothing preselected: the option is never assumed unexercised for a holding, and a non-holding is untouched.
+        return <Chips name="Financial holding undertaking" options={YES_NO_UNSURE} value={a.holding} onPick={(id) => setA((p) => ({ ...p, holding: id as CheckerAnswers['holding'] }))} />;
+      case 'turnover':
+        return <Chips name="Net turnover" options={TURNOVER_BANDS} value={a.turnover} onPick={(id) => setA((p) => ({ ...p, turnover: id }))} />;
+      case 'employees':
+        return <Chips name="Average employees" options={EMPLOYEE_BANDS} value={a.employees} onPick={(id) => setA((p) => ({ ...p, employees: id }))} />;
+      case 'reportedFy2024':
+        return <Chips name="FY2024 reporting" options={YES_NO_UNSURE} value={a.reportedFy2024} onPick={(id) => setA((p) => ({ ...p, reportedFy2024: id }))} />;
+      case 'parentReport':
+        return <Chips name="Parent report" options={YES_NO_UNSURE} value={a.parentReport} onPick={(id) => setA((p) => ({ ...p, parentReport: id }))} />;
+      case 'governing':
+        return (
+          <>
+            <Chips
+              name="Governing Member State"
+              options={GOVERNING_CHOICES.map((o) =>
+                o.id === 'same'
+                  ? { ...o, label: `${EU_COUNTRIES.find((c) => c.id === a.country)?.label ?? 'The country of incorporation'}` }
+                  : o,
+              )}
+              value={a.governingChoice}
+              onPick={(id) => setA((p) => ({ ...p, governingChoice: id as CheckerAnswers['governingChoice'], governingState: id === 'other' ? p.governingState : undefined }))}
+            />
+            {a.governingChoice === 'other' ? (
+              <select
+                className="ds-input" style={{ maxWidth: 340, marginTop: 16 }}
+                aria-label="Governing Member State"
+                value={a.governingState ?? ''}
+                onChange={(e) => setA((p) => ({ ...p, governingState: e.target.value || undefined }))}
+              >
+                <option value="">Select a Member State…</option>
+                {EU_COUNTRIES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+              </select>
+            ) : null}
+            {a.governingChoice === 'unknown' ? (
+              <p className="ds-micro" style={{ marginTop: 14, maxWidth: '56ch' }}>
+                Left unanswered, so the national-law gate stays unresolved rather than assuming an answer.
               </p>
-            </>
-          ),
-        },
-  ];
+            ) : null}
+          </>
+        );
+      case 'euTurnover':
+        return (
+          <>
+            <Chips name="EU turnover" options={EU_TURNOVER_OPTIONS} value={a.euTurnover} onPick={(id) => setA((p) => ({ ...p, euTurnover: id as CheckerAnswers['euTurnover'] }))} />
+            <p className="ds-micro" style={{ marginTop: 14, maxWidth: '58ch' }}>
+              A non-EU entity has no governing Member State for the CSRD test, so the engine looks at the
+              Article 40a third-country route instead.
+            </p>
+          </>
+        );
+    }
+  }
+
+  const steps = checkSteps(a).map((s) => ({ ...s, answered: s.answered(a), node: node(s.id) }));
 
   const total = steps.length;
   const current = steps[step];
@@ -233,7 +187,7 @@ export function CheckFlow() {
     } finally { setRunning(false); }
   }
 
-  if (report) return <Report data={report} onRestart={() => { setReport(null); setStep(0); }} />;
+  if (report) return <Report data={report} plannedRegimes={plannedRegimes} onRestart={() => { setReport(null); setStep(0); }} />;
 
   return (
     <div className="ds-gutter" style={{ paddingBlock: 'clamp(40px, 6vw, 72px)' }}>
@@ -316,7 +270,7 @@ function Group({ title, items }: { title: string; items: Verdict[] }) {
   );
 }
 
-function Report({ data, onRestart }: { data: CheckResponse; onRestart: () => void }) {
+function Report({ data, plannedRegimes, onRestart }: { data: CheckResponse; plannedRegimes: string[]; onRestart: () => void }) {
   const by = (r: Verdict['result']) => data.determinations.filter((d) => d.result === r);
   return (
     <div className="ds-gutter" style={{ paddingBlock: 'clamp(40px, 6vw, 72px)' }}>
@@ -395,16 +349,19 @@ function Report({ data, onRestart }: { data: CheckResponse; onRestart: () => voi
             Not evidenced. You stated these facts; a real profile replaces them with sourced, dated documents.
           </li>
           <li className="ds-body-sm">
-            Not the whole regulatory picture. This check covers CSRD only.{' '}
-            {WATCHED.map((r) => r.short).join(', ')} are watched but not yet encoded, so they are neither
-            included nor excluded here.
+            Not the whole regulatory picture. This check covers CSRD only.
+            {plannedRegimes.length > 0
+              ? ` ${plannedRegimes.join(', ')} are planned, with no knowledge pack yet, so they are neither included nor excluded here.`
+              : null}
           </li>
         </ul>
       </section>
 
       <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
         <Button variant="secondary" onClick={onRestart}>← Run another check</Button>
-        <Link className="ds-btn ds-btn-primary" href="/dashboard">See how this is maintained →</Link>
+        <p className="ds-body-sm" style={{ color: 'var(--ds-text-muted)', maxWidth: '58ch' }}>
+          A record built from a company&apos;s own profile is available to pilot evaluations by arrangement.
+        </p>
       </div>
     </div>
   );

@@ -9,10 +9,10 @@ const mono = JetBrains_Mono({ weight: ['400', '500', '700'], subsets: ['latin'],
 export const metadata: Metadata = {
   title: 'DataStrata: know what applies, what changed, and what to do by when',
   description:
-    'Sustainability regulation accumulates like sediment. DataStrata reads every layer for your company and returns one clear, cited, continuously maintained answer.',
+    "DataStrata evaluates CSRD applicability from your stated facts, cites each requirement's sources and shows what remains unresolved.",
   openGraph: {
     title: 'DataStrata: regulatory intelligence for market access',
-    description: 'One clear, cited, continuously maintained answer to what applies to you.',
+    description: "DataStrata evaluates CSRD applicability from your stated facts, cites each requirement's sources and shows what remains unresolved.",
     type: 'website',
   },
 };

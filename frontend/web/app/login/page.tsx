@@ -7,7 +7,7 @@ import { packStats, traceSeries } from '@/lib/pack';
 
 export const metadata: Metadata = {
   title: 'Sign in · DataStrata',
-  description: 'Sign in to DataStrata.',
+  description: 'Accounts are not live yet. Pilot evaluations use a passphrase, entered at /pilot-access.',
 };
 
 export default function LoginPage() {
@@ -20,12 +20,7 @@ export default function LoginPage() {
       </div>
 
       <main id="main" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px 20px' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 22 }}>
-          <LoginCard />
-          <p className="ds-mono" style={{ fontSize: 10.5, letterSpacing: '0.16em', color: 'var(--ds-text-faint)', textAlign: 'center' }}>
-            THE RECORD ACCUMULATES. NOTHING IS OVERWRITTEN.
-          </p>
-        </div>
+        <LoginCard />
       </main>
 
       {/* quiet foot trace — the same component, unlabelled */}

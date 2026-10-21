@@ -11,28 +11,49 @@
  * a refusal printed in full — the variable, the kind of failure, every problem
  * by field — and never the sample in its place.
  *
+ * The page decides access for itself, before it reads the profile.
+ * `middleware.ts` refuses a stranger before any page code runs; this is the
+ * second enforcement point, so that a routing change or a middleware regression
+ * cannot expose a configured profile. `gatedRecord` is handed `pilotRecord` as
+ * its reader and calls it for an allowed session only: the page never calls it
+ * itself, and a test holds that by reading this file. The gate's two refusals
+ * render only if the middleware is absent, so they are plain: they print the
+ * gate's own problems, which name variables and never values, and the fixed
+ * sentence for the reason, and read nothing else of the environment.
+ *
+ * Every page rendered for a session the gate has verified, the record and the
+ * refusal for a profile that cannot be served, shows in its topbar when that
+ * session ends and offers sign-out: the refusal prints profile text, and
+ * without the control nothing would end the session from that page. The gate's
+ * own two refusals show neither, since one has no verified session and the
+ * other cannot verify one.
+ *
  * Dynamic, so the profile file is read per request and nothing about a pilot
  * company is baked into the build. The file's path is read on the server and
  * is never rendered; only the variable's name is.
  */
 
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 import { Sidebar, Topbar } from '@/components/app/Shell';
 import { CrossSectionChart, type CellState, type ChartRow } from '@/components/app/CrossSectionChart';
 import { CapacityChip, DeadlineChip, EvidenceBar, NeutralChip, StatusChip } from '@/components/ui/primitives';
 import { entityColumns, factRows, requirementStatusRows, statusSummary, type EntityResult } from '@/lib/dashboard';
+import { gatedRecord } from '@/lib/dashboard-view';
 import { historicalEvidenceNotice, S002_R5_DOSSIER } from '@/lib/evidence';
 import { packStats } from '@/lib/pack';
+import { accessReasonMessage } from '@/lib/pilot-access-handler';
 import { PILOT_PROFILE_ENV } from '@/lib/profile';
 import { pilotRecord } from '@/lib/record';
-import { REGIMES } from '@/lib/regimes';
+import { siteCoverage } from '@/lib/site-coverage';
 
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'Record · DataStrata',
-  description: 'A maintained regulatory record, rendered from a real engine assessment over the configured profile.',
+  description: 'The regulatory record, rendered from a real engine assessment over the configured profile.',
 };
 
 /** The cell for an entity is its reporting-duty determination (CSRD-S-014). */
@@ -66,38 +87,87 @@ const cardTable = { borderCollapse: 'collapse', width: '100%', fontSize: 12.5 } 
 const th = { textAlign: 'left', padding: '6px 8px', borderBottom: '1px solid var(--ds-ink)', fontWeight: 600, whiteSpace: 'nowrap' } as const;
 const td = { padding: '6px 8px', borderBottom: '1px solid var(--ds-hairline-3)', verticalAlign: 'top' } as const;
 
-export default function DashboardPage() {
+/**
+ * The frame every refusal shares: the sidebar, a topbar that says "Refused", and one column of text. `session` is given only by a
+ * refusal rendered for a visitor whose session the gate has verified; the topbar then shows it and offers sign-out.
+ */
+function Refusal({
+  org, snapshot, session, children,
+}: { org: string; snapshot: string; session?: { expiresAt: Date }; children: ReactNode }) {
+  return (
+    <div className="ds-app" style={{ display: 'flex', minHeight: '100vh' }}>
+      <Sidebar />
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+        <Topbar org={org} label="Refused" snapshot={snapshot} session={session} />
+        <main id="main" className="ds-app-main" style={{ flex: 1, display: 'flex', minWidth: 0 }}>
+          <div style={{ flex: 1, minWidth: 0, padding: 24, maxWidth: '86ch' }}>{children}</div>
+        </main>
+      </div>
+    </div>
+  );
+}
+
+export default async function DashboardPage() {
+  // The gate comes first and is handed the reader, never given a record: nothing below runs the reader for a request it did not allow.
+  const gate = await gatedRecord(
+    { env: process.env, cookieHeader: (await headers()).get('cookie'), now: new Date() },
+    { record: pilotRecord },
+  );
   const stats = packStats();
-  const record = pilotRecord();
+
+  if (gate.status === 'unconfigured') {
+    return (
+      <Refusal org="Pilot access" snapshot={stats.legalSnapshot}>
+        <h1 className="ds-h4" style={{ marginBottom: 16 }}>Pilot access is not configured</h1>
+        <p style={bannerStyle}>
+          <strong>This server cannot check a session, so it shows no record to anyone.</strong>
+        </p>
+        <ul style={{ margin: '0 0 22px 18px', padding: 0, fontSize: 13, lineHeight: 1.6 }}>
+          {gate.problems.map((problem) => (
+            <li key={problem} className="ds-mono" style={{ fontSize: 12 }}>{problem}</li>
+          ))}
+        </ul>
+        <p className="ds-micro">NO PROFILE WAS READ · EACH PROBLEM NAMES A VARIABLE, NEVER ITS VALUE</p>
+      </Refusal>
+    );
+  }
+
+  if (gate.status === 'denied') {
+    const message = accessReasonMessage(gate.reason);
+    return (
+      <Refusal org="Pilot access" snapshot={stats.legalSnapshot}>
+        <h1 className="ds-h4" style={{ marginBottom: 16 }}>Sign in to view this record</h1>
+        {message === null ? null : <p style={bannerStyle}>{message}</p>}
+        <p style={{ marginBottom: 22 }}>
+          <Link className="ds-btn ds-btn-primary" href="/pilot-access">Go to pilot access</Link>
+        </p>
+        <p className="ds-micro">NO PROFILE WAS READ FOR THIS REQUEST</p>
+      </Refusal>
+    );
+  }
+
+  const record = gate.record;
 
   if (!record.ok) {
     const { error } = record;
     return (
-      <div className="ds-app" style={{ display: 'flex', minHeight: '100vh' }}>
-        <Sidebar />
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-          <Topbar org="No profile loaded" label="Refused" snapshot={stats.legalSnapshot} />
-          <main id="main" className="ds-app-main" style={{ flex: 1, display: 'flex', minWidth: 0 }}>
-            <div style={{ flex: 1, minWidth: 0, padding: 24, maxWidth: '86ch' }}>
-              <h1 className="ds-h4" style={{ marginBottom: 16 }}>No profile could be loaded</h1>
-              <p style={bannerStyle}>
-                <strong>{error.headline}</strong>
-              </p>
-              {error.problems.length > 0 ? (
-                <ul style={{ margin: '0 0 22px 18px', padding: 0, fontSize: 13, lineHeight: 1.6 }}>
-                  {error.problems.map((problem) => (
-                    <li key={problem} className="ds-mono" style={{ fontSize: 12 }}>{problem}</li>
-                  ))}
-                </ul>
-              ) : null}
-              <p className="ds-micro">
-                THE VARIABLE IS {PILOT_PROFILE_ENV} · THE SERVER LOG CARRIES THE PATH AND THE SYSTEM ERROR · NOTHING IS
-                SUBSTITUTED FOR THE CONFIGURED PROFILE
-              </p>
-            </div>
-          </main>
-        </div>
-      </div>
+      <Refusal org="No profile loaded" snapshot={stats.legalSnapshot} session={{ expiresAt: gate.expiresAt }}>
+        <h1 className="ds-h4" style={{ marginBottom: 16 }}>No profile could be loaded</h1>
+        <p style={bannerStyle}>
+          <strong>{error.headline}</strong>
+        </p>
+        {error.problems.length > 0 ? (
+          <ul style={{ margin: '0 0 22px 18px', padding: 0, fontSize: 13, lineHeight: 1.6 }}>
+            {error.problems.map((problem) => (
+              <li key={problem} className="ds-mono" style={{ fontSize: 12 }}>{problem}</li>
+            ))}
+          </ul>
+        ) : null}
+        <p className="ds-micro">
+          THE VARIABLE IS {PILOT_PROFILE_ENV} · THE SERVER LOG CARRIES THE PATH AND THE SYSTEM ERROR · NOTHING IS
+          SUBSTITUTED FOR THE CONFIGURED PROFILE
+        </p>
+      </Refusal>
     );
   }
 
@@ -116,19 +186,27 @@ export default function DashboardPage() {
     result.determinations.filter((d) => d.requirementId === 'CSRD-S-014').map((d) => [d.scopeId, d]),
   );
 
-  const chartRows: ChartRow[] = REGIMES.map((r) => ({
-    regime: r.short,
-    encoded: r.status === 'encoded',
-    cells: entities.map((e) => {
-      if (r.status !== 'encoded') return { entity: e.short, state: 'unencoded' as CellState };
-      const d = dutyByEntity.get(e.id);
-      return {
-        entity: e.short,
-        state: d ? CELL[d.result] : 'unencoded',
-        note: d?.reason,
-      };
-    }),
-  }));
+  // A row is drawn from the engine only for a regime the register says the
+  // engine answers for — supported or draft; a planned or monitored regime has
+  // no pack and no determinations, and its cells say so.
+  const coverage = siteCoverage();
+  const chartRows: ChartRow[] = coverage.map((r) => {
+    const encoded = r.status === 'draft' || r.status === 'supported';
+    return {
+      regime: r.short,
+      status: r.status,
+      encoded,
+      cells: entities.map((e) => {
+        if (!encoded) return { entity: e.short, state: 'unencoded' as CellState };
+        const d = dutyByEntity.get(e.id);
+        return {
+          entity: e.short,
+          state: d ? CELL[d.result] : 'unencoded',
+          note: d?.reason,
+        };
+      }),
+    };
+  });
 
   const counts = {
     applies: result.determinations.filter((d) => d.result === 'APPLIES').length,
@@ -136,9 +214,15 @@ export default function DashboardPage() {
     judgment: result.determinations.filter((d) => d.result === 'INDETERMINATE').length,
   };
 
-  // The one orange surface: a real dated expectation from the pack's watch list.
+  // The one orange surface: a real dated expectation from the pack's watch
+  // list, shown with the item's own title rather than a name written here.
   const dated = pack.changeWatch.find((c) => /\b\d{1,2} \w+ 20\d\d\b/.test(c.expected ?? ''));
   const datedText = dated?.expected?.match(/([A-Z][a-z]+ ?\w* ?)?(\d{1,2} \w+ 20\d\d)/)?.[2];
+  const nextDated = dated !== undefined && datedText !== undefined ? { title: dated.title, date: datedText } : undefined;
+
+  // Regimes the register reads as monitored: none until a scanner has checked
+  // every surface within cadence, so the count is derived, never a literal 0.
+  const monitored = coverage.filter((r) => r.status === 'monitored').length;
 
   const signed = summary.verified + summary.ratified;
 
@@ -146,7 +230,7 @@ export default function DashboardPage() {
     <div className="ds-app" style={{ display: 'flex', minHeight: '100vh' }}>
       <Sidebar />
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-        <Topbar org={document.record.name} label={label} snapshot={stats.legalSnapshot} />
+        <Topbar org={document.record.name} label={label} snapshot={stats.legalSnapshot} session={{ expiresAt: gate.expiresAt }} />
 
         <main id="main" className="ds-app-main" style={{ flex: 1, display: 'flex', minWidth: 0 }}>
           <div style={{ flex: 1, minWidth: 0, padding: 24 }}>
@@ -178,10 +262,10 @@ export default function DashboardPage() {
             </p>
 
             <p className="ds-mono" style={{ fontSize: 13, color: 'var(--ds-text-nav)', marginBottom: 4 }}>
-              You are current.
+              No change monitoring runs yet.
             </p>
             <p className="ds-micro" style={{ marginBottom: 24 }}>
-              {stats.pendingActs} ACTS WATCHED · NONE IN FORCE · NOTHING CHANGED WHAT BINDS YOU
+              {stats.pendingActs} PENDING ACTS LISTED FROM THE PACK · NONE IN FORCE · EACH CHANGES NOTHING UNTIL IT APPLIES
             </p>
 
             {/* posture — real counts */}
@@ -212,8 +296,7 @@ export default function DashboardPage() {
               <CrossSectionChart rows={chartRows} columns={entities.map((e) => e.short)} />
               <p className="ds-micro" style={{ borderTop: '1px solid var(--ds-hairline-1)', marginTop: 16, paddingTop: 12 }}>
                 {stats.sources} OFFICIAL SOURCES · PACK {stats.version} · ASSESSED {document.context.assessmentDate} · FY{' '}
-                {document.context.financialYear.start} → {document.context.financialYear.end} · DETERMINATIONS VERSIONED, NEVER
-                OVERWRITTEN
+                {document.context.financialYear.start} → {document.context.financialYear.end}
               </p>
             </div>
 
@@ -366,9 +449,9 @@ export default function DashboardPage() {
           <aside
             className="ds-app-rail"
             style={{ width: 320, flex: 'none', borderLeft: '1px solid var(--ds-ink)', background: 'var(--ds-panel)', padding: 20 }}
-            aria-label="This week's briefing"
+            aria-label="Pending acts and record health"
           >
-            <p className="ds-label" style={{ marginBottom: 14 }}>Watch list · pending acts</p>
+            <p className="ds-label" style={{ marginBottom: 14 }}>Pending acts · from the pack</p>
             {pack.changeWatch.map((c, i) => (
               <div key={c.id} style={{ borderTop: i === 0 ? '1px solid var(--ds-hairline-2)' : undefined, borderBottom: '1px solid var(--ds-hairline-3)', padding: '13px 0' }}>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', marginBottom: 5 }}>
@@ -380,11 +463,14 @@ export default function DashboardPage() {
               </div>
             ))}
 
-            {datedText ? (
+            {nextDated ? (
               <div style={{ marginTop: 20 }}>
                 <p className="ds-label" style={{ marginBottom: 10 }}>Next dated expectation</p>
-                <DeadlineChip>{`REVISED ESRS · EXPECTED ${datedText.toUpperCase()}`}</DeadlineChip>
-                <p className="ds-micro" style={{ marginTop: 8 }}>
+                {/* The chip never wraps and the item's title is a sentence, so the chip
+                    carries the date and the title is printed beneath it. */}
+                <DeadlineChip>{`EXPECTED ${nextDated.date.toUpperCase()}`}</DeadlineChip>
+                <p style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--ds-text-body)', marginTop: 8 }}>{nextDated.title}</p>
+                <p className="ds-micro" style={{ marginTop: 5 }}>
                   PENDING. IT CHANGES NOTHING UNTIL IT IS IN FORCE.
                 </p>
               </div>
@@ -392,8 +478,14 @@ export default function DashboardPage() {
 
             <div style={{ marginTop: 26, display: 'flex', flexDirection: 'column', gap: 16 }}>
               <p className="ds-label">Record health</p>
-              <EvidenceBar label="Requirements encoded" value={100} note={`${stats.requirements} OF ${stats.requirements}`} />
-              <EvidenceBar label="Determinations cited" value={100} note={`${stats.sources} OFFICIAL SOURCES`} />
+              {/* Derived lines, not bars at 100: "encoded" and "cited" are not grades
+                  the ledger or the register gives, so nothing here is scored. */}
+              <dl className="ds-mono" style={{ fontSize: 11.5, display: 'grid', gridTemplateColumns: 'max-content 1fr', gap: '4px 14px', margin: 0 }}>
+                <dt style={{ color: 'var(--ds-text-faint)' }}>requirements signed</dt><dd style={{ margin: 0 }}>{signed} OF {stats.requirements}</dd>
+                <dt style={{ color: 'var(--ds-text-faint)' }}>sources listed</dt><dd style={{ margin: 0 }}>{stats.sources}</dd>
+                <dt style={{ color: 'var(--ds-text-faint)' }}>regimes monitored</dt><dd style={{ margin: 0 }}>{monitored}</dd>
+                <dt style={{ color: 'var(--ds-text-faint)' }}>country packs ratified</dt><dd style={{ margin: 0 }}>{stats.ratifiedCountryPacks}</dd>
+              </dl>
               <EvidenceBar
                 label="Governing signatures"
                 value={Math.round((signed / stats.requirements) * 100)}

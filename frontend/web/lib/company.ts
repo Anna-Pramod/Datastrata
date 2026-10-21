@@ -2,7 +2,7 @@
  * Company facts, in one place.
  *
  * Anything marked TODO is a fact only DataStrata can supply — names, bios,
- * registration, address, the real inbox. They are left visibly unfilled rather
+ * registration, address. They are left visibly unfilled rather
  * than invented, because an About page that fabricates its own team is the exact
  * failure mode the product exists to prevent. Fill these in and the pages update;
  * no component needs touching.
@@ -14,8 +14,6 @@ export const COMPANY = {
   legalEntity: null as string | null,
   /** TODO: confirm operating location(s). */
   locations: [] as string[],
-  /** TODO: replace with the real monitored inbox. */
-  email: 'hello@datastrata.example',
   founded: '2026',
   scale: 'A two-person company, deliberately.',
 };
@@ -25,7 +23,7 @@ export const MISSION =
 
 export const ORIGIN = [
   'DataStrata started from a specific frustration: the rules that decide market access change faster than the people responsible for them can read. Consultancies answer once and invoice. Software mostly collects datapoints for a report that has already been scoped by someone else. Neither maintains the answer.',
-  'So we built the opposite way round. A deterministic engine decides applicability against versioned, cited regulatory content; the answer is maintained as the law moves; and nothing enters the record without a human putting their name to it.',
+  'So we built the engine the opposite way round: it decides applicability deterministically, against versioned, cited regulatory content. Keeping each answer current as the law moves, and a named reviewer signing every requirement before anyone relies on it, come next.',
 ];
 
 /** The laws the product is built to — these are engineering rules, not marketing. */
@@ -48,17 +46,17 @@ export const PRINCIPLES = [
   {
     n: '04',
     h: 'Pending law never binds',
-    p: 'An adopted act that is not yet in force changes nothing about what you owe today. It is watched, scoped to the requirements it would move, and applied on the day it actually applies.',
+    p: 'An adopted act that is not yet in force changes nothing about what you owe today. The pack lists it with the requirements it would move, and no determination changes until it is in force.',
   },
   {
     n: '05',
     h: 'Versions, not overwrites',
-    p: 'The record is appended like strata and never erased, so an answer given last year can still be reconstructed exactly as it stood.',
+    p: 'Every requirement carries a version, and every result names the pack version and legal snapshot it ran on. Storing each run, so that an answer given last year can be reconstructed exactly as it stood, is planned; no run is stored yet.',
   },
   {
     n: '06',
     h: 'We publish what we cannot yet answer',
-    p: 'One regime is encoded end-to-end. Six more are watched. We say which is which on the front page, because the difference is the whole product.',
+    p: 'CSRD is encoded as draft content for evaluation; further regimes are planned. We say which is which on the front page, because the difference is the whole product.',
   },
 ];
 
@@ -66,7 +64,7 @@ export const PRINCIPLES = [
 export const NEXT = [
   { h: 'Expert ratification', p: 'Every requirement in the pack is still draft. Sign-off by a named expert is the gate before any customer reliance.' },
   { h: 'A pilot country pack', p: 'CSRD is directive-based law. Until a Member State is encoded and ratified, every result correctly ends “national-law status requires review”.' },
-  { h: 'The change loop, live', p: 'Source monitoring exists as a tiered register. Turning it into dated briefings with selective re-evaluation is the next system.' },
+  { h: 'The change loop, live', p: 'A tiered source register exists; no scan runs yet, so nothing is monitored. Turning it into dated briefings with selective re-evaluation is a later system.' },
   { h: 'The second regime', p: 'CBAM is the architecture test: it must land as a new knowledge pack with no program-specific code in the engine.' },
 ];
 

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Wordmark } from '@/components/ui/primitives';
-import { REGIMES } from '@/lib/regimes';
+import { COVERAGE_WORDS } from '@/lib/coverage';
+import { siteCoverage } from '@/lib/site-coverage';
 
 export function Footer({ packVersion, legalSnapshot }: { packVersion: string; legalSnapshot: string }) {
   return (
@@ -32,10 +33,10 @@ export function Footer({ packVersion, legalSnapshot }: { packVersion: string; le
           </nav>
           <nav style={{ display: 'flex', flexDirection: 'column', gap: 12 }} aria-label="Coverage">
             <span className="ds-label">Coverage</span>
-            {REGIMES.map((r) => (
+            {siteCoverage().map((r) => (
               <span className="ds-body-sm" key={r.id} style={{ color: 'var(--ds-text-body)' }}>
                 {r.short}{' '}
-                <span className="ds-micro">{r.status === 'encoded' ? 'ENCODED' : 'WATCHED'}</span>
+                <span className="ds-micro">{COVERAGE_WORDS[r.status]}</span>
               </span>
             ))}
           </nav>

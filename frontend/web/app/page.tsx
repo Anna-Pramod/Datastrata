@@ -13,8 +13,10 @@ import { Footer } from '@/components/marketing/Footer';
 import { LiveTrace } from '@/components/marketing/LiveTrace';
 import { CoverageStrip, CoverageTable } from '@/components/marketing/CoverageStrip';
 import { SheetApplicability, SheetChange, SheetSchedule, StrataSection } from '@/components/marketing/Sheets';
+import { CHECK_QUESTION_COUNT } from '@/lib/checker';
+import { answerable, planned } from '@/lib/coverage';
 import { packStats, traceSeries } from '@/lib/pack';
-import { ENCODED, WATCHED } from '@/lib/regimes';
+import { siteCoverage } from '@/lib/site-coverage';
 
 const PAINS = [
   'A German buyer emails demanding verified CBAM emissions data by Friday.',
@@ -24,19 +26,28 @@ const PAINS = [
 
 const PROOF = [
   'Every determination carries its derivation trace and official sources.',
-  'Versions, not overwrites: the record is appended like strata, never erased.',
+  'Every result names the pack version and legal snapshot it ran on. Storing each run, so that a past answer can be reconstructed exactly, is planned.',
   'A deterministic core decides applicability; AI drafts and explains, but never decides, and never publishes into the record.',
 ];
 
 const HOW = [
   'Profile once',
   'Applicability determined and cited',
-  'A living calendar plus a weekly briefing',
+  'Obligations instantiated, each traced to its determination',
 ];
+
+/** The planned regimes, named from the register: "CBAM, … and ESPR are planned, not yet encoded." */
+function plannedSentence(names: string[]): string | null {
+  if (names.length === 0) return null;
+  const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+  return `${list} ${names.length === 1 ? 'is' : 'are'} planned, not yet encoded.`;
+}
 
 export default function Page() {
   const stats = packStats();
   const series = traceSeries();
+  const coverage = siteCoverage();
+  const plannedCopy = plannedSentence(planned(coverage).map((r) => r.short));
 
   return (
     <>
@@ -51,15 +62,14 @@ export default function Page() {
             Know what applies. What changed. And what to do, by when.
           </h1>
           <p className="ds-body-lg" style={{ maxWidth: '58ch', marginBottom: 32 }}>
-            Sustainability regulation accumulates like sediment (CSRD, CBAM, EUDR, BRSR, buyer codes), layer
-            upon shifting layer. DataStrata reads every layer for your company and returns one clear, cited,
-            continuously maintained answer.
+            Sustainability regulation accumulates like sediment, layer upon shifting layer. DataStrata
+            evaluates CSRD applicability from your stated facts, cites each requirement&apos;s sources and
+            shows what remains unresolved.{plannedCopy === null ? null : ` ${plannedCopy}`}
           </p>
           <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap', marginBottom: 56 }}>
             <Link className="ds-btn ds-btn-primary" href="/check">Check what applies to you - free</Link>
-            <Link className="ds-btn ds-btn-secondary" href="/dashboard">See a sample report</Link>
             <span className="ds-mono ds-faint" style={{ fontSize: 11.5, letterSpacing: '0.06em' }}>
-              8 QUESTIONS · 2 MIN · CITED RESULT
+              {CHECK_QUESTION_COUNT.standard} QUESTIONS, {CHECK_QUESTION_COUNT.parent} FOR A PARENT UNDERTAKING · CITED RESULT
             </span>
           </div>
 
@@ -76,8 +86,8 @@ export default function Page() {
             </div>
             <div className="ds-shelf-div" />
             <div className="ds-shelf-cell">
-              <div className="ds-stat-lg ds-oxide">1</div>
-              <div className="ds-stat-sub">Answer, maintained</div>
+              <div className="ds-stat-lg ds-oxide">{stats.signed}</div>
+              <div className="ds-stat-sub">of {stats.requirements} requirements signed</div>
             </div>
           </div>
 
@@ -124,20 +134,20 @@ export default function Page() {
           {[
             {
               step: 'STEP 01 · WHAT APPLIES TO YOU',
-              h: 'One core sample. Every layer, answered.',
-              p: 'Enter your profile once. The engine drills through every encoded regime and returns applies, does not apply, or requires judgment, with the why, cited to official sources. No silent “does not apply.”',
+              h: 'One core sample. Every CSRD requirement, evaluated.',
+              p: 'Enter your profile once. The engine evaluates every requirement in the CSRD pack and returns applies, does not apply, or requires judgment, with the why, cited to official sources. No silent “does not apply.”',
               sheet: <SheetApplicability />,
             },
             {
               step: 'STEP 02 · WHAT CHANGED',
-              h: 'New rules land like fresh sediment. You see them settle.',
-              p: 'Monitored sources become a dated briefing. Each change is traced to the specific requirements it would move, and until an act is actually in force, it changes nothing. When nothing needs you, it says so: “You are current.”',
+              h: 'New rules land like fresh sediment. These pending acts are listed in the pack; no automatic updates run yet.',
+              p: 'A tiered source register lists what each requirement cites; nothing scans it yet. Pending acts are listed from the pack with the requirements each would move, and until an act is actually in force, it changes nothing. Dated briefings and change monitoring are planned.',
               sheet: <SheetChange />,
             },
             {
               step: 'STEP 03 · WHAT TO DO, BY WHEN',
               h: 'From strata to schedule.',
-              p: 'Applicable requirements instantiate owned, dated obligations, each one traceable back to the determination that created it, and exportable to your calendar and inbox.',
+              p: 'Applicable requirements instantiate obligations, each with an owner role and a deadline rule, and each one traceable back to the determination that created it. Calendar export is planned.',
               sheet: <SheetSchedule />,
             },
           ].map((row, i) => (
@@ -170,7 +180,7 @@ export default function Page() {
               <p className="ds-label" style={{ marginBottom: 18 }}>03 · THE RECORD</p>
               <h2 className="ds-h2" style={{ marginBottom: 28 }}>Built to survive inspection.</h2>
               <div className="ds-card-quiet" style={{ background: 'var(--ds-paper)', padding: 10 }}>
-                <StrataSection encoded={ENCODED.length} watched={WATCHED.length} />
+                <StrataSection answerable={answerable(coverage).length} planned={planned(coverage).length} />
               </div>
             </div>
             <div style={{ gridColumn: 'span 7', display: 'flex', flexDirection: 'column' }} className="ds-problem-list">
@@ -213,11 +223,12 @@ export default function Page() {
         <section id="coverage" className="ds-gutter" style={{ paddingBottom: 'clamp(56px, 8vw, 96px)' }}>
           <p className="ds-label" style={{ marginBottom: 18 }}>05 · COVERAGE</p>
           <h2 className="ds-h2" style={{ maxWidth: '22ch', marginBottom: 12 }}>
-            What we can answer, and what we are still reading.
+            What we can answer, and what is planned.
           </h2>
           <p className="ds-body-lg" style={{ maxWidth: '62ch', marginBottom: 36 }}>
-            One regime is encoded end-to-end today. Six more are tracked, scoped and queued. We publish the
-            difference because you are entitled to know which answer you are getting.
+            CSRD is encoded as draft content for evaluation. Nothing is monitored or supported yet, and
+            further regimes are planned. We publish the difference because you are entitled to know which
+            answer you are getting.
           </p>
           <CoverageTable />
         </section>
@@ -232,7 +243,7 @@ export default function Page() {
               Check what applies →
             </Link>
             <span className="ds-mono ds-faint" style={{ fontSize: 11.5, letterSpacing: '0.06em' }}>
-              8 QUESTIONS · 2 MIN · CITED RESULT
+              {CHECK_QUESTION_COUNT.standard} QUESTIONS, {CHECK_QUESTION_COUNT.parent} FOR A PARENT UNDERTAKING · CITED RESULT
             </span>
           </div>
         </section>

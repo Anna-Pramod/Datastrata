@@ -6,8 +6,9 @@
  * incoming webhook, an internal endpoint — with no mail dependency here.
  *
  * If nothing is configured, the route says so honestly (503) instead of
- * accepting the message and dropping it. The form then offers the mailto
- * fallback with the text carried across, so a visitor is never silently lost.
+ * accepting the message and dropping it. The contact page does not render the
+ * form at all while the variable is unset (`lib/contact-delivery.ts`), so this
+ * refusal is the backstop for a direct request, not the visitor's experience.
  */
 
 import { NextResponse } from 'next/server';

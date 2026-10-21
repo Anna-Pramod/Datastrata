@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { Button, Field } from '@/components/ui/primitives';
-import { COMPANY } from '@/lib/company';
 
 type State = { kind: 'idle' } | { kind: 'sending' } | { kind: 'sent' } | { kind: 'undelivered'; message: string } | { kind: 'error'; message: string };
 
@@ -13,8 +12,6 @@ export function ContactForm() {
 
   const emailError = submitted && !form.email.includes('@') ? 'A valid email is required.' : undefined;
   const messageError = submitted && form.message.trim().length < 10 ? 'Tell us a little more than that.' : undefined;
-
-  const mailto = `mailto:${COMPANY.email}?subject=${encodeURIComponent(`Enquiry from ${form.name || 'the website'}`)}&body=${encodeURIComponent(`${form.message}\n\n${form.name}${form.company ? `, ${form.company}` : ''}\n${form.email}`)}`;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -69,10 +66,7 @@ export function ContactForm() {
       {state.kind === 'undelivered' || state.kind === 'error' ? (
         <p role="alert" style={{ border: '1px solid var(--ds-oxide)', background: 'var(--ds-oxide-wash)', padding: '12px 14px', fontSize: 13, lineHeight: 1.55 }}>
           <span aria-hidden="true" style={{ display: 'inline-block', width: 8, height: 8, background: 'var(--ds-oxide)', transform: 'rotate(45deg)', marginRight: 8 }} />
-          {state.message}{' '}
-          <a href={mailto} style={{ color: 'var(--ds-oxide)', borderBottom: '1px solid rgba(169,59,42,.4)' }}>
-            Send it by email instead
-          </a>; your message is carried across.
+          {state.message}
         </p>
       ) : null}
 

@@ -1,9 +1,12 @@
 import { LegendChip } from '@/components/ui/primitives';
+import { COVERAGE_WORDS, type CoverageStatus } from '@/lib/coverage';
 
 export type CellState = 'applies' | 'not' | 'judgment' | 'unencoded';
 
 export interface ChartRow {
   regime: string;
+  /** The register's status for the regime; a row the engine does not answer for prints its word. */
+  status: CoverageStatus;
   encoded: boolean;
   cells: { entity: string; state: CellState; note?: string }[];
 }
@@ -12,9 +15,11 @@ export interface ChartRow {
  * Regulatory universe — cross-section view.
  *
  * The CSRD row is real: each cell is that entity's reporting-duty determination
- * from the engine. The watched rows are drawn in a fourth state, `unencoded`,
- * which the legend names explicitly — an empty cell must never be mistaken for
- * "does not apply". That distinction is the product's first law.
+ * from the engine. A row for a regime the engine does not answer for is drawn in
+ * a fourth state, `unencoded`, which the legend names explicitly — an empty cell
+ * must never be mistaken for "does not apply". That distinction is the product's
+ * first law. Such a row is labelled with the register's own word for its status
+ * (`COVERAGE_WORDS`), never with a word written here.
  */
 export function CrossSectionChart({ rows, columns }: { rows: ChartRow[]; columns: string[] }) {
   const cellStyle = (state: CellState): React.CSSProperties => {
@@ -35,7 +40,7 @@ export function CrossSectionChart({ rows, columns }: { rows: ChartRow[]; columns
       <div className="ds-scroll-x">
         <table style={{ borderCollapse: 'collapse', minWidth: 680, width: '100%' }}>
           <caption className="ds-vh">
-            Cross-section of tracked regimes against the record&apos;s legal entities.
+            Cross-section of the regimes in the coverage register against the record&apos;s legal entities.
           </caption>
           <thead>
             <tr>
@@ -56,7 +61,7 @@ export function CrossSectionChart({ rows, columns }: { rows: ChartRow[]; columns
                   <span className="ds-mono" style={{ fontSize: 12, color: r.encoded ? 'var(--ds-ink)' : 'var(--ds-text-faint)' }}>
                     {r.regime}
                   </span>
-                  {!r.encoded ? <span className="ds-micro" style={{ display: 'block' }}>watched</span> : null}
+                  {!r.encoded ? <span className="ds-micro" style={{ display: 'block' }}>{COVERAGE_WORDS[r.status]}</span> : null}
                 </th>
                 {r.cells.map((c) => (
                   <td key={c.entity} style={{ padding: 3 }}>

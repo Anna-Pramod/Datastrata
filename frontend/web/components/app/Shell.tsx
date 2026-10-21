@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { Wordmark } from '@/components/ui/primitives';
+import { Button, Wordmark } from '@/components/ui/primitives';
+import { utcMinute } from '@/lib/dashboard-view';
 
 const NAV = [
   'Home', 'Regulatory Universe', 'Obligations', 'Changes',
@@ -48,8 +49,14 @@ export function Sidebar() {
   );
 }
 
-/** `label` names what kind of record this is — the page decides it from the record, never from copy here. */
-export function Topbar({ org, label, snapshot }: { org: string; label: string; snapshot: string }) {
+/**
+ * `label` names what kind of record this is — the page decides it from the record, never from copy here. `session` is given only by a
+ * page that holds a valid one: the topbar then says when it ends, in UTC, and offers the one way to end it in this browser, a plain form
+ * post to the sign-out route that needs no script. Without it the topbar is what it was.
+ */
+export function Topbar({
+  org, label, snapshot, session,
+}: { org: string; label: string; snapshot: string; session?: { expiresAt: Date } }) {
   return (
     <header
       style={{
@@ -60,16 +67,14 @@ export function Topbar({ org, label, snapshot }: { org: string; label: string; s
       <span className="ds-mono" style={{ fontSize: 12.5, fontWeight: 700 }}>{org}</span>
       <span className="ds-chip ds-chip-capacity">{label}</span>
       <span className="ds-micro" style={{ marginLeft: 'auto' }}>LEGAL SNAPSHOT {snapshot}</span>
-      <span
-        aria-hidden="true"
-        className="ds-mono"
-        style={{
-          width: 32, height: 32, border: '1px solid var(--ds-ink)', display: 'flex',
-          alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700,
-        }}
-      >
-        AK
-      </span>
+      {session === undefined ? null : (
+        <>
+          <span className="ds-micro">SESSION UNTIL {utcMinute(session.expiresAt)}</span>
+          <form method="post" action="/api/pilot-access/sign-out">
+            <Button type="submit" variant="secondary" small>Sign out</Button>
+          </form>
+        </>
+      )}
     </header>
   );
 }

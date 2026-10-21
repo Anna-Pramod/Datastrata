@@ -56,33 +56,41 @@ export function SheetApplicability() {
   );
 }
 
-/** Sheet 02 — a detected act, deposited but not binding. */
+/**
+ * Sheet 02 — a pending act, deposited but not binding. The act is one the pack
+ * lists, not one a scan found: nothing scans the source register yet, and the
+ * sheet's status line says so instead of reporting a check that never ran.
+ */
 export function SheetChange() {
   return (
     <Frame label="SHEET 02 · CHANGE EVENT, SETTLING">
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="A detected act shown resting above the record, not yet part of it.">
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="A pending act shown resting above the record, not yet part of it.">
         {[0, 1, 2, 3].map((i) => (
           <line key={i} x1="0" x2={W} y1={60 + i * 24} y2={60 + i * 24} stroke="var(--ds-hairline-1)" />
         ))}
         <rect x="150" y="34" width="10" height="10" fill="var(--ds-orange)" />
         <line x1="155" x2="155" y1="44" y2="156" stroke="var(--ds-orange)" strokeWidth="1.5" strokeDasharray="3 3" />
-        <text x="172" y="36" fontFamily="var(--ds-font-mono)" fontSize="10" fill="var(--ds-ink)">ACT DETECTED</text>
+        <text x="172" y="36" fontFamily="var(--ds-font-mono)" fontSize="10" fill="var(--ds-ink)">PENDING ACT</text>
         <text x="172" y="49" fontFamily="var(--ds-font-mono)" fontSize="8.5" fill="var(--ds-text-ghost)">scoped to the requirements it would move</text>
         <line x1="0" x2={W} y1="156" y2="156" stroke="var(--ds-oxide)" strokeWidth="1.8" />
         <text x="0" y="180" fontFamily="var(--ds-font-mono)" fontSize="9" letterSpacing="0.16em" fill="var(--ds-text-faint)">THE RECORD · UNCHANGED</text>
-        <text x="0" y="206" fontFamily="var(--ds-font-mono)" fontSize="10" letterSpacing="0.06em" fill="var(--ds-text-nav)">YOU ARE CURRENT</text>
+        <text x="0" y="206" fontFamily="var(--ds-font-mono)" fontSize="10" letterSpacing="0.06em" fill="var(--ds-text-nav)">NO CHANGE MONITORING RUNS YET</text>
         <text x="0" y="222" fontFamily="var(--ds-font-mono)" fontSize="8.5" fill="var(--ds-text-ghost)">pending law never binds; it waits above the line</text>
       </svg>
     </Frame>
   );
 }
 
-/** Sheet 03 — obligations becoming dated, owned work. */
+/**
+ * Sheet 03 — obligations as the engine instantiates them: each with an owner
+ * role and a deadline rule. Nobody is assigned and nothing exports to a
+ * calendar yet, so the sheet shows neither.
+ */
 export function SheetSchedule() {
   const rows = ['SUSTAINABILITY STATEMENT', 'LIMITED ASSURANCE ENGAGEMENT', 'DIGITAL TAGGING · ESEF'];
   return (
     <Frame label="SHEET 03 · SCHEDULE">
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="Obligations laid out as owned, dated work.">
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="Obligations laid out with an owner role and a deadline rule.">
         {rows.map((r, i) => {
           const y = 30 + i * 52;
           return (
@@ -90,7 +98,7 @@ export function SheetSchedule() {
               <text x="0" y={y} fontFamily="var(--ds-font-mono)" fontSize="9.5" letterSpacing="0.08em" fill="var(--ds-text-body)">{r}</text>
               <rect x="0" y={y + 10} width={W} height="6" fill="var(--ds-hairline-3)" />
               <rect x="0" y={y + 10} width={110 + i * 84} height="6" fill="var(--ds-oxide)" />
-              <text x="0" y={y + 32} fontFamily="var(--ds-font-mono)" fontSize="8.5" fill="var(--ds-text-ghost)">owner assigned · exportable to calendar</text>
+              <text x="0" y={y + 32} fontFamily="var(--ds-font-mono)" fontSize="8.5" fill="var(--ds-text-ghost)">owner role · deadline rule</text>
             </g>
           );
         })}
@@ -105,10 +113,10 @@ export function SheetSchedule() {
  * Strata section — the record as a cut core, in oblique projection.
  *
  * Five layers, not one per regime: this is a section drawing, not a chart. The
- * inked front layer is what is encoded and answerable; the layers receding
- * behind it are what is watched. The real counts live in the coverage table two
- * sections below, where they can be read precisely — a drawing that tried to be
- * both would do neither well.
+ * inked front layer is what the engine answers for, as draft; the layers
+ * receding behind it are what is planned. The real counts live in the coverage
+ * table two sections below, where they can be read precisely — a drawing that
+ * tried to be both would do neither well.
  *
  * Depth is carried by the extruded faces and their gradients, never by shadow —
  * the system is flat, and this is a drawing, not a raised surface.
@@ -118,11 +126,11 @@ export function SheetSchedule() {
  * 2px parallax drift; a scan travels the cut face; and the inked layer takes a
  * final, single emphasis before the cycle fades and repeats.
  */
-export function StrataSection({ encoded, watched }: { encoded: number; watched: number }) {
+export function StrataSection({ answerable, planned }: { answerable: number; planned: number }) {
   const W = 380, H = 214;
   const CYCLE = 8500;
   const LAYERS = 5;          // compositional, not one-per-regime
-  const INKED = 1;           // the front layer is the encoded record
+  const INKED = 1;           // the front layer is the answerable record
   const EASE_DRAW = 'cubic-bezier(.22,1,.36,1)';
 
   const DX = 14, DY = 22, DEPTH = 20;
@@ -146,7 +154,7 @@ export function StrataSection({ encoded, watched }: { encoded: number; watched: 
     `@keyframes strata-cycle{0%{opacity:0}5%{opacity:1}91%{opacity:1}100%{opacity:0}}`,
     // the block breathes — 2px, enough to feel alive, not enough to notice
     `@keyframes strata-drift{0%,100%{transform:translate3d(0,0,0)}50%{transform:translate3d(0,-2px,0)}}`,
-    // The closing gesture is an extraction, not a sweep: the encoded layer lifts
+    // The closing gesture is an extraction, not a sweep: the answerable layer lifts
     // clear of the stack, holds long enough to be read, and re-seats. That is the
     // claim of the section — any layer can be taken out and inspected — and it is
     // a different move from the live trace's travelling read.
@@ -165,7 +173,7 @@ export function StrataSection({ encoded, watched }: { encoded: number; watched: 
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img"
-      aria-label={`A cut section of the record: the inked front layer is the ${encoded} encoded regime, the layers receding behind it are the ${watched} that are watched.`}>
+      aria-label={`A cut section of the record: the inked front layer is the ${answerable} regime answerable as draft, the layers receding behind it are the ${planned} that are planned.`}>
       <defs>
         {Array.from({ length: LAYERS }, (_, i) => {
           const enc = i < INKED;
@@ -214,7 +222,7 @@ export function StrataSection({ encoded, watched }: { encoded: number; watched: 
           })}
         </g>
         <text x="16" y={H - 6} fontFamily="var(--ds-font-mono)" fontSize="8.5" letterSpacing="0.12em" fill="var(--ds-text-faint)">
-          INKED = ENCODED · BENEATH = WATCHED
+          INKED = ANSWERABLE AS DRAFT · BENEATH = PLANNED
         </text>
       </g>
     </svg>
