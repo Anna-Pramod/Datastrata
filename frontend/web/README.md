@@ -19,15 +19,15 @@ npm run typecheck
 |---|---|
 | `/` | Landing. Full 5a section order. Every figure read from the live CSRD pack. |
 | `/check` | The free check — 9 questions, 10 for a parent undertaking, then a cited report. Real `assess()` calls. |
-| `/dashboard` | The record, behind the pilot access gate (see Pilot access). Without a valid session the middleware refuses before any page code runs (a browser gets 303 to `/pilot-access`, a script 401, and every request 503 while the gate is not configured), and the page decides again before it reads the profile. Real assessment over the profile `DATASTRATA_PILOT_PROFILE` names, or the synthetic development profile while nothing is configured; a profile that cannot be served is a refusal, never the sample. Dynamic. |
+| `/dashboard` | The record, behind the pilot access gate (see Pilot access). Without a valid session the middleware refuses before any page code runs (a browser gets 303 to `/pilot-access` on the configured public origin, a script 401, and every request 503 while the gate or its public origin is not configured), and the page decides again before it reads the profile. Real assessment over the profile `DATASTRATA_PILOT_PROFILE` names, or the synthetic development profile while nothing is configured; a profile that cannot be served is a refusal, never the sample. Dynamic. |
 | `/company` | About us — mission, principles, what we read, team, what's next. |
 | `/contact` | Contact page. The form renders only when `CONTACT_WEBHOOK_URL` is set; no address is published. |
 | `/login` | A plain card: accounts are not live; pilot evaluations use a passphrase at `/pilot-access` (see Pilot access). |
 | `/pilot-access` | The public sign-in page for pilot evaluations: one passphrase field posting to `/api/pilot-access`. A refusal's reason is shown from a fixed set of sentences; the query string is never echoed. Dynamic, `no-store`. |
-| `/api/check` | POST → the engine. No lookup table, no model call in the path. |
-| `/api/contact` | POST → `CONTACT_WEBHOOK_URL`. 503 with an honest message when unset. |
-| `/api/pilot-access` | POST → the passphrase, compared with `DATASTRATA_PILOT_ACCESS_SECRET` in constant time. Accepted: a relative 303 to `/dashboard` with the 12-hour `ds_pilot_access` session cookie (`HttpOnly`, `SameSite=Strict`, `Path=/dashboard`). Refused: 401 (wrong passphrase), 429 (five failures in 15 minutes, one limit shared by everyone) or 503 (the gate is not configured), as a one-key JSON body to a script and as a relative 303 to `/pilot-access?reason=…` to a browser. `no-store`. |
-| `/api/pilot-access/sign-out` | POST → clears the session cookie on this browser and sends it to `/pilot-access`; the token itself stays valid until it expires or is revoked. `no-store`. |
+| `/api/check` | POST → the engine. No lookup table, no model call in the path. A body over 8 KiB is answered 413 before it is parsed. |
+| `/api/contact` | POST → `CONTACT_WEBHOOK_URL`. 503 with an honest message when unset. A body over 32 KiB is answered 413 before it is parsed. |
+| `/api/pilot-access` | POST → the passphrase, compared with `DATASTRATA_PILOT_ACCESS_SECRET` in constant time. Accepted: a relative 303 to `/dashboard` with the 12-hour `ds_pilot_access` session cookie (`HttpOnly`, `SameSite=Strict`, `Path=/dashboard`). Refused: 401 (wrong passphrase), 403 (a post from another site), 413 (a body over 4 KiB), 429 (five failures in 15 minutes, one limit shared by everyone) or 503 (the gate is not configured, or `DATASTRATA_PUBLIC_ORIGIN` is unusable), as a one-key JSON body to a script and as a relative 303 to `/pilot-access?reason=…` to a browser. Only a wrong or missing passphrase counts towards the limit. `no-store`. |
+| `/api/pilot-access/sign-out` | POST → clears the session cookie on this browser and sends it to `/pilot-access`; the token itself stays valid until it expires or is revoked. A sign-out from another site is refused with 403 (a relative 303 to `/pilot-access?reason=cross_site` for a browser) and clears nothing. `no-store`. |
 
 ## The backend really is connected
 
@@ -199,38 +199,74 @@ owns the `dev` script), bound to the loopback interface only:
 
 ```bash
 cd frontend/web
-DATASTRATA_PILOT_PROFILE=/absolute/path/to/pilot.json npm run dev -- -H 127.0.0.1 -p 3000
+DATASTRATA_PUBLIC_ORIGIN=http://localhost:3000 DATASTRATA_PILOT_PROFILE=/absolute/path/to/pilot.json npm run dev -- -H 127.0.0.1 -p 3000
 ```
 
-then open `/pilot-access` on the host you will use, for example `http://localhost:3000/pilot-access`,
-sign in, and stay on that host. A browser without a session that asks for `/dashboard` is sent to
-`/pilot-access` on `localhost`, because Next normalises a loopback host to `localhost` in the
-middleware's redirect, and the session cookie belongs to the host that set it. The file is read on
-every request, so editing it and reloading shows the new assessment. A refusal shows on the page;
-the reason with the path is on the terminal running the server. `next dev` fetches the layout's
-three Google fonts on first compile; offline, Next falls back to system fonts with a warning. From a
-production build, run the standalone server described under Deployment with the same variable in
-its environment.
+then open `http://localhost:3000/pilot-access`, the address `DATASTRATA_PUBLIC_ORIGIN` names, sign
+in, and stay on that address. A browser without a session that asks for `/dashboard` is sent to
+`/pilot-access` on the configured origin, whatever address it used, and the session cookie belongs
+to the host that set it, so open the site at exactly that address. Write `localhost`, not
+`127.0.0.1`: Next rewrites a loopback address to `localhost` in the middleware's redirect, so the
+gate refuses one as a value. The file is read on every request, so editing it and reloading shows
+the new assessment. A refusal shows on the page; the reason with the path is on the terminal running
+the server. `next dev` fetches the layout's three Google fonts on first compile; offline, Next falls
+back to system fonts with a warning. From a production build, run the standalone server described
+under Deployment with the same variables in its environment.
 
 ### Pilot access
 
 `/dashboard` is served only to a browser holding a valid access session, issued at `/pilot-access`
-from a passphrase checked on the server. Two variables, both server-side only (never `NEXT_PUBLIC_`):
+from a passphrase checked on the server. Three variables, all server-side only (never `NEXT_PUBLIC_`):
 
 | Variable | Meaning |
 |---|---|
 | `DATASTRATA_PILOT_ACCESS_SECRET` | The passphrase, at least 16 characters. Use a generated random secret, not a phrase, for example the output of `openssl rand -base64 32`, because a captured session token allows passphrase guesses to be tested offline, outside the sign-in limit. While it is unset (or blank, or shorter) every request under `/dashboard` is refused with 503: an unconfigured gate fails closed, never open. |
 | `DATASTRATA_PILOT_ACCESS_REVOKED_BEFORE` | Optional. An ISO-8601 instant (`YYYY-MM-DDTHH:MM:SSZ`); every session token issued before it is refused. It must not be later than the server's clock, or every request is refused with 503 naming this variable. |
+| `DATASTRATA_PUBLIC_ORIGIN` | The origin browsers use to reach the site, which the gate builds its redirects from: `https://<host>` or `https://<host>:<port>`, or `http://localhost:<port>` on one machine. Write it exactly as a browser writes an origin: lower case, no default port, and no path, trailing slash, query, fragment or user name. Plain `http` is accepted only on `localhost`, and a loopback address (`127.0.0.1`, `[::1]`) is refused, because Next rewrites it to `localhost` in a redirect and the browser would leave the host its cookie belongs to. While it is unset or unusable, every request under `/dashboard` is refused with 503 naming it, and sign-in answers 503. |
 
-Both variables are read from the server process's environment, so set them before the server starts;
+All three are read from the server process's environment, so set them before the server starts;
 a change made in the shell takes effect when the server restarts.
+
+**Why the origin is configured.** The middleware cannot answer with a relative redirect, and the URL
+Next hands it is built from the hostname the server was started with, not the one the browser used:
+Next ignores `Host` and `X-Forwarded-Host`, and turns the scheme to `https` for any
+`X-Forwarded-Proto` containing `https`. A server bound to `127.0.0.1` behind a proxy would otherwise
+send browsers to `https://localhost:<port>`. So the redirect goes to exactly
+`<DATASTRATA_PUBLIC_ORIGIN>/pilot-access?reason=…`, whatever the request says.
+
+- **On one machine,** set `http://localhost:<port>` with the port the server listens on, and open the
+  site at that address (see the local start above).
+- **Hosted,** set the `https` origin of the one public hostname, and make it the only one: have the
+  proxy redirect any other name that reaches the app (for example `<app>.fly.dev`) to it, because a
+  browser that signed in under another name is sent to the configured one without its cookie.
+- **Never set Next's undocumented `experimental.trustHostHeader`.** It makes Next build URLs from the
+  client's `Host` header.
+
+**Why a post from another site is refused.** A form on any website could otherwise post to sign-in
+from a visitor's browser, spending the five failures the limit allows everyone, or post to sign-out
+and sign the visitor out. Both routes compare the `Origin` a browser sends with
+`DATASTRATA_PUBLIC_ORIGIN`, exactly; a request without `Origin` must carry
+`Sec-Fetch-Site: same-origin`. Anything else is refused with 403, by sign-in before the body is
+read, and is not counted towards the limit. A browser that opened the site under any other address
+(`127.0.0.1` in place of `localhost`, say) is refused the same way, so open the site at exactly the
+configured origin.
+
+**A request with neither header is allowed, as a compatibility exception** for scripts and `curl`;
+the limit and the passphrase still apply to it. This rests on an assumption, not a guarantee:
+current versions of the major browsers send `Origin` on every POST, but an older browser, or one
+whose headers an extension or proxy strips, may send neither, and another site could then drive
+its posts here unjudged. Such a post cannot carry the session cookie, which is scoped to
+`/dashboard`. Through sign-in it can spend the shared limit, as any client can by posting directly;
+through sign-out it can clear that browser's session. Evaluators should use a current browser.
+Sign-out still works while the origin is unusable, for a browser that sends
+`Sec-Fetch-Site: same-origin`.
 
 A session lasts 12 hours from issue. Rotating the secret revokes every session at once; setting the
 revoked-before instant revokes every session issued before it without changing the passphrase. The
 passphrase is entered at `/pilot-access`. `POST /api/pilot-access/sign-out`, the topbar's Sign out,
 clears the session cookie on this browser only; the token itself stays valid until it expires or is
-revoked. The local start above needs `DATASTRATA_PILOT_ACCESS_SECRET` in the same environment, or
-`/dashboard` answers 503.
+revoked. The local start above needs `DATASTRATA_PILOT_ACCESS_SECRET` in the same environment as
+`DATASTRATA_PUBLIC_ORIGIN`, or `/dashboard` answers 503.
 
 ## Deployment
 
@@ -258,6 +294,58 @@ the repository is reachable, so neither can see a missing traced file — both w
 an artifact whose `/api/check` was a 500. CI runs this same recipe
 (`.github/workflows/standalone.yml`) on every PR touching `frontend/web/`, `backend/engine/` or
 the root build files, and on every push to `main`.
+
+### Container
+
+`Dockerfile` and `.dockerignore` at the repository root put this same artifact in an image, on
+Node 24.19.0 over Debian bookworm, pinned by digest. The build stage runs
+`npm ci --ignore-scripts` and `npm run build --workspace @datastrata/web`, then the two checks the
+harness's `buildStandalone` makes: the server entry is where it should be, and the artifact passes
+the harness's own hygiene check. The runtime stage holds only the standalone tree and `.next/static`.
+Its files belong to root, and only `.next/cache` is writable. It runs `node server.js` from
+`frontend/web` as the unprivileged `node` user, with `NODE_ENV=production`, listening on
+`0.0.0.0:3000`.
+
+**The image has never been built or run.** No container runtime is installed where it was
+written, so it has only been checked by reading it against `scripts/standalone-harness.mjs`. Build
+it from a clean checkout. `.dockerignore` keeps out installed and built state, env and secret
+files, `*.profile.json`, logs and docs, but any other untracked file in a working copy reaches the
+builder. The build needs network access: `npm ci` fetches from the npm registry, and the build
+downloads the layout's Google fonts.
+
+```bash
+docker build -t datastrata-web .
+docker run --rm -p 127.0.0.1:3000:3000 --env-file /path/outside/the/checkout/web.env datastrata-web
+```
+
+The host supplies the configuration when the container starts. None of it is in the image, and
+none of it is needed to build it:
+
+| Variable | Where it comes from |
+|---|---|
+| `DATASTRATA_PILOT_ACCESS_SECRET` | The host's secret store. |
+| `DATASTRATA_PUBLIC_ORIGIN` | The host's configuration: the `https` origin of the one public hostname (see Pilot access). |
+| `DATASTRATA_PILOT_ACCESS_REVOKED_BEFORE` | The host's configuration. Optional. |
+| `CONTACT_WEBHOOK_URL` | The host's secret store, because the URL is the credential. Optional. |
+| `DATASTRATA_PILOT_PROFILE` | Unset, so `/dashboard` shows the synthetic profile. If a pilot profile is ever served, it is a file mounted read-only into the container (`-v /host/path/pilot.json:/run/datastrata/pilot.json:ro`), and the variable names the path inside. It is never copied into the image or the build context. |
+
+**Never put a secret on a command line.** A value given as `-e NAME=value` or `--build-arg` lands in
+shell history and the process list, and a build argument also stays in the image's history. Use
+the host's secret store, or `--env-file` with a file of mode 600 (`chmod 600`) kept outside the
+checkout. Docker reads that file literally, one `NAME=value` per line, with no quotes: a quote
+becomes part of the value.
+
+**Run one instance.** The sign-in limit of five failures in 15 minutes is held in the server
+process's memory. Two instances would each allow five, and a restart clears it. If the platform
+overrides `HOSTNAME`, set it back to `0.0.0.0` there, or the server will not listen on every
+interface.
+
+**Production smoke check.** From the repository root, `node scripts/smoke-production.mjs` (add
+`--keep` to keep the isolated artifact) builds the standalone artifact, which fetches the Google
+fonts. It then starts the server on a free loopback port with synthetic values and prints PASS or
+FAIL for each check: the routes, the gate and its cookie, the security headers, the body limits,
+the cross-site refusals, and the fail-closed start without `DATASTRATA_PUBLIC_ORIGIN`. It is not
+part of `npm test`. It checks the standalone artifact on this machine, not the image.
 
 ## Company page — what still needs filling in
 
