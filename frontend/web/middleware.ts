@@ -11,22 +11,40 @@
  * reason this file reads no profile and imports neither the record, the pack
  * nor the filesystem: a defect here can wave a request through to the page,
  * which decides again, but cannot itself disclose a profile, and a test holds
- * its imports to `next/server` and the access module.
+ * its imports to `next/server`, the access module and the public-origin
+ * module, which imports nothing.
  *
  * **Why the answer is a pure function of the decision.** `decideResponse` maps
- * the decision and the client's `Accept` header to a status, a body and a
- * location as plain data, so the whole response policy is tested without the
- * Next runtime and the adapter below only translates it. An unconfigured gate
- * is the operator's fault, so it answers 503, never a redirect to a sign-in
- * page that could not succeed, and the body says what is wrong: "Pilot access
- * is not configured on this server." and then each problem the configuration
- * has, one per line. Each names its variable and none prints a value, so a
- * revocation setting at fault is reported as that, and a new secret is asked
- * for only when the secret is itself the problem. A refused browser
- * navigation goes to the sign-in page with 303, so that a refused POST is
- * retried as a GET; anything else (a script, a client-side navigation's
- * payload request) gets 401 and the reason as JSON, since a redirect would
- * answer a request for data with a page.
+ * the decision, the client's `Accept` header and the configured origin's
+ * verdict to a status, a body and a location as plain data, so the whole
+ * response policy is tested without the Next runtime and the adapter below
+ * only translates it. An unconfigured gate is the operator's fault, so it
+ * answers 503, never a redirect to a sign-in page that could not succeed, and
+ * the body says what is wrong: "Pilot access is not configured on this
+ * server." and then each problem the configuration has, one per line. Each
+ * names its variable and none prints a value, so a revocation setting at fault
+ * is reported as that, and a new secret is asked for only when the secret is
+ * itself the problem. A refused browser navigation goes to the sign-in page
+ * with 303, so that a refused POST is retried as a GET; anything else (a
+ * script, a client-side navigation's payload request) gets 401 and the reason
+ * as JSON, since a redirect would answer a request for data with a page.
+ *
+ * **Why the redirect goes to a configured origin, never to the request's.**
+ * Middleware cannot redirect relatively: `NextResponse.redirect` refuses a
+ * relative URL, and a hand-built relative `Location` is re-parsed by Next's
+ * adapter without a base and reaches the client as a 500. Nor is the request
+ * URL the browser's: Next builds it from the hostname the server was started
+ * with, ignores `Host` and `X-Forwarded-Host`, and takes its scheme from any
+ * `X-Forwarded-Proto` containing `https` (pilot readiness investigation,
+ * B3.1–B3.3), so a server bound to 127.0.0.1 behind a proxy would send real
+ * browsers to `https://localhost:<port>`. The 303 therefore goes to exactly
+ * `<DATASTRATA_PUBLIC_ORIGIN>/pilot-access?reason=<reason>`, built from the
+ * origin `lib/public-origin.ts` has validated, and nothing here reads the
+ * request's URL. An unusable origin fails the gate closed like an unusable
+ * secret: every request, a valid session's included, is answered 503 with the
+ * access module's problems (if any) and then the origin's, because a gate that
+ * could not send a refused browser anywhere sensible must not let anyone
+ * through on the strength of a configuration it already knows is wrong.
  *
  * **Why every response is private and varies on the cookie.** The answer
  * depends on a cookie, so no shared cache may replay a pass to a visitor
@@ -36,12 +54,13 @@
  * **Why the environment is read here, by name.** This runs on the Edge
  * runtime, which does not promise a complete `process.env` object: what a host
  * supplies there can be limited to the variables a file names as
- * `process.env.NAME`. The two variables are read by name for each request and
- * handed to the gate as a record. The values are those the server process
- * holds, its environment as taken when the server starts, so the secret must
- * be set before the server starts, and a change made in a shell takes effect
- * when the server restarts. `middlewareWith` takes that record and a clock,
- * which is how tests supply both.
+ * `process.env.NAME`. The two access variables and the public origin are read
+ * by name for each request and handed to the gate as a record. The values are
+ * those the server process holds, its environment as taken when the server
+ * starts, so the secret and the origin must be set before the server starts,
+ * and a change made in a shell takes effect when the server restarts.
+ * `middlewareWith` takes that record and a clock, which is how tests supply
+ * both.
  *
  * **Why the matcher is exact.** Next reads `config` without running this
  * module, so it must be a literal. `/pilot-access` and `/api/pilot-access`
@@ -51,11 +70,12 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { ACCESS_REVOKED_BEFORE_ENV, ACCESS_SECRET_ENV, accessDecision, type AccessDecision } from '@/lib/access';
+import { PUBLIC_ORIGIN_ENV, readPublicOrigin, type PublicOrigin } from '@/lib/public-origin';
 
 /** An answer as plain data, which is what lets the policy be tested without the Next runtime. */
 export interface ResponsePlan {
   status: 200 | 303 | 401 | 503;
-  /** Where a 303 points: a path and query on the request's own origin, resolved against the request URL by the adapter. */
+  /** Where a 303 points: an absolute URL on the configured public origin, handed to `NextResponse.redirect` as it is. */
   location?: string;
   body?: string;
   contentType?: string;
@@ -69,17 +89,26 @@ function wantsHtml(accept: string | null): boolean {
   return accept !== null && accept.toLowerCase().includes('text/html');
 }
 
+/** The 503: the first line, then each problem on a line of its own, in the order given. */
+function notConfigured(problems: string[]): ResponsePlan {
+  return { status: 503, body: [NOT_CONFIGURED, ...problems].join('\n'), contentType: 'text/plain; charset=utf-8' };
+}
+
 /**
- * What a decision is answered with. Only `accept` is read: the redirect target
- * is a path on the request's own origin, which the adapter resolves against
- * `url`.
+ * What a decision is answered with, given the client's `Accept` and the configured origin's verdict. An unusable origin is a 503
+ * for every decision, its problem after the access module's; a usable one is where a refused browser is sent, as an absolute URL.
  */
-export function decideResponse(decision: AccessDecision, request: { accept: string | null; url: string }): ResponsePlan {
+export function decideResponse(decision: AccessDecision, request: { accept: string | null; origin: PublicOrigin }): ResponsePlan {
+  if (!request.origin.ok) {
+    return notConfigured([...(decision.kind === 'unconfigured' ? decision.problems : []), request.origin.problem]);
+  }
   switch (decision.kind) {
     case 'unconfigured':
-      return { status: 503, body: [NOT_CONFIGURED, ...decision.problems].join('\n'), contentType: 'text/plain; charset=utf-8' };
+      return notConfigured(decision.problems);
     case 'denied':
-      if (wantsHtml(request.accept)) return { status: 303, location: `/pilot-access?reason=${decision.reason}` };
+      if (wantsHtml(request.accept)) {
+        return { status: 303, location: new URL(`/pilot-access?reason=${decision.reason}`, request.origin.origin).href };
+      }
       return { status: 401, body: JSON.stringify({ error: 'unauthorized', reason: decision.reason }), contentType: 'application/json' };
     case 'allowed':
       return { status: 200 };
@@ -87,25 +116,26 @@ export function decideResponse(decision: AccessDecision, request: { accept: stri
 }
 
 /**
- * The two variables the gate reads, named in full: the Edge runtime does not
+ * The three variables the gate reads, named in full: the Edge runtime does not
  * promise a complete `process.env` object, and a host may supply only the
  * variables a file names as `process.env.NAME`, so `process.env` is never handed
- * on as a whole. A test holds the names here to the access module's.
+ * on as a whole. A test holds the names here to the access and origin modules'.
  */
 function pilotEnvironment(): Record<string, string | undefined> {
   return {
     [ACCESS_SECRET_ENV]: process.env.DATASTRATA_PILOT_ACCESS_SECRET,
     [ACCESS_REVOKED_BEFORE_ENV]: process.env.DATASTRATA_PILOT_ACCESS_REVOKED_BEFORE,
+    [PUBLIC_ORIGIN_ENV]: process.env.DATASTRATA_PUBLIC_ORIGIN,
   };
 }
 
 /** The plan as a Next response. Every response, the pass-through included, is private and varies on the cookie. */
-function toResponse(plan: ResponsePlan, request: NextRequest): NextResponse {
+function toResponse(plan: ResponsePlan): NextResponse {
   let response: NextResponse;
   if (plan.status === 200) {
     response = NextResponse.next();
   } else if (plan.location !== undefined) {
-    response = NextResponse.redirect(new URL(plan.location, request.url), plan.status);
+    response = NextResponse.redirect(plan.location, plan.status);
   } else {
     response = new NextResponse(plan.body, {
       status: plan.status,
@@ -119,8 +149,10 @@ function toResponse(plan: ResponsePlan, request: NextRequest): NextResponse {
 
 /**
  * The middleware over an environment and a clock it is handed, which is how
- * the tests drive it: the decision is the access module's, the response is
- * `decideResponse`'s, and nothing here reads the machine it runs on.
+ * the tests drive it: the decision is the access module's, the origin's verdict
+ * is the origin module's, the response is `decideResponse`'s, and nothing here
+ * reads the machine it runs on. Of the request, only the `Cookie` and `Accept`
+ * headers are read.
  */
 export function middlewareWith(
   env: Readonly<Record<string, string | undefined>>,
@@ -128,7 +160,8 @@ export function middlewareWith(
 ): (request: NextRequest) => Promise<NextResponse> {
   return async (request) => {
     const decision = await accessDecision({ env, cookieHeader: request.headers.get('cookie'), now: now() });
-    return toResponse(decideResponse(decision, { accept: request.headers.get('accept'), url: request.url }), request);
+    const origin = readPublicOrigin(env[PUBLIC_ORIGIN_ENV]);
+    return toResponse(decideResponse(decision, { accept: request.headers.get('accept'), origin }));
   };
 }
 

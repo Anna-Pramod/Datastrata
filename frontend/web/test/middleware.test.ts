@@ -35,8 +35,8 @@
  * `/:path*` (the matcher case); the exported-middleware cases add a clock that
  * is a constant, two variables read under each other's names, and a body that
  * lets everything through. "Never reads the profile" is checked rather than
- * stated: the source's imports are held to `next/server` and the access module
- * (failure mode 6).
+ * stated: the source's imports are held to `next/server`, the access module
+ * and the public-origin module (failure mode 6).
  *
  * The 503 is the only thing the middleware says to an operator, so it says what
  * is wrong (final review, 2026-10-21): "Pilot access is not configured on this
@@ -50,6 +50,25 @@
  * them where it was sent (failure mode 7). A revocation instant later than the
  * request time is one of those problems, beside the equal instant, which is
  * usable.
+ *
+ * The redirect goes to a configured origin (pilot readiness B3, 2026-10-22).
+ * Middleware cannot redirect relatively, and the URL Next hands it carries the
+ * hostname the server was started with, not the one the browser used
+ * (investigation B3.1–B3.3), so a refused browser is sent to exactly
+ * `<DATASTRATA_PUBLIC_ORIGIN>/pilot-access?reason=<reason>`. The configured
+ * environment of every case therefore carries a usable origin,
+ * `https://gate.example.test`, which is unlike any host a request below
+ * arrives on, so a redirect built from the request cannot pass for one built
+ * from the origin. The exact `Location` is checked through `decideResponse` and
+ * through `middlewareWith` with a request whose URL is
+ * `http://localhost:3000/dashboard`, with none of and each of the headers a
+ * client could use to steer it (`Host`, `X-Forwarded-Host`,
+ * `X-Forwarded-Proto`), each shown to arrive on the request. An unusable
+ * origin makes the gate fail closed: every request, a valid session included,
+ * is answered 503 naming the variable, beside the same request answered 303,
+ * 401 or 200 once the variable is set. The source cases hold that the module
+ * no longer reads the request's URL and reads the variable by name. The
+ * validator's own rules are `public-origin.test.ts`'s.
  */
 
 import { readFileSync } from 'node:fs';
@@ -65,6 +84,7 @@ import {
   issueAccessToken,
   type AccessDecision,
 } from '@/lib/access';
+import { PUBLIC_ORIGIN_ENV } from '@/lib/public-origin';
 import { config, decideResponse, middleware, middlewareWith } from '../middleware';
 
 const SECRET = 'correct horse battery staple';
@@ -80,11 +100,17 @@ const DASHBOARD = `${ORIGIN}/dashboard`;
 const BROWSER_ACCEPT = 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8';
 /** The first line of every 503, the operator's headline; the configuration's own problems follow it, one per line. */
 const NOT_CONFIGURED = 'Pilot access is not configured on this server.';
+/** The origin the gate's redirects are built from: a reserved test name, and the host of no request in this file. */
+const PUBLIC_ORIGIN = 'https://gate.example.test';
+/** The variable alone, set to the origin above: what every configured environment here carries beside the secret. */
+const CONFIGURED_ORIGIN = { [PUBLIC_ORIGIN_ENV]: PUBLIC_ORIGIN };
+/** A request URL as Next builds it for a server on one machine: the hostname it was started with, not the configured origin. */
+const LOCAL_DASHBOARD = 'http://localhost:3000/dashboard';
 
 type Gate = ReturnType<typeof middlewareWith>;
 type DeniedReason = Extract<AccessDecision, { kind: 'denied' }>['reason'];
 
-const env = { [ACCESS_SECRET_ENV]: SECRET };
+const env = { [ACCESS_SECRET_ENV]: SECRET, ...CONFIGURED_ORIGIN };
 const gate: Gate = middlewareWith(env, () => NOW);
 
 /** The clock and the timers as they are before any case fakes anything, so a case can show what the fake left alone. */
@@ -130,12 +156,24 @@ function pathAndQuery(response: Response, base = ORIGIN): string {
 function expectRevocationDiagnostic(body: string): void {
   expect(body, 'revocation diagnostic: the 503 names DATASTRATA_PILOT_ACCESS_REVOKED_BEFORE').toContain(ACCESS_REVOKED_BEFORE_ENV);
   expect(body, 'revocation diagnostic: the 503 does not ask for a new secret').not.toContain(ACCESS_SECRET_ENV);
+  expect(body, 'revocation diagnostic: the 503 does not mention the public origin').not.toContain('DATASTRATA_PUBLIC_ORIGIN');
 }
 
-/** The control's diagnostic: a 503 caused by the secret names that variable and does not mention the revocation setting. */
+/** The control's diagnostic: a 503 caused by the secret names that variable and does not mention the revocation setting or the origin. */
 function expectSecretDiagnostic(body: string): void {
   expect(body, 'secret diagnostic: the 503 names DATASTRATA_PILOT_ACCESS_SECRET').toContain(ACCESS_SECRET_ENV);
   expect(body, 'secret diagnostic: the 503 does not mention the revocation setting').not.toContain(ACCESS_REVOKED_BEFORE_ENV);
+  expect(body, 'secret diagnostic: the 503 does not mention the public origin').not.toContain('DATASTRATA_PUBLIC_ORIGIN');
+}
+
+/** A 503 caused by the public origin alone: the first sentence, then one problem naming that variable, and neither access variable. */
+function expectOriginDiagnostic(body: string): void {
+  expect(body.split('\n'), 'origin diagnostic: the first sentence, then the origin problem on a line of its own').toEqual([
+    NOT_CONFIGURED,
+    expect.stringMatching(/^DATASTRATA_PUBLIC_ORIGIN /),
+  ]);
+  expect(body, 'origin diagnostic: the 503 does not ask for a new secret').not.toContain(ACCESS_SECRET_ENV);
+  expect(body, 'origin diagnostic: the 503 does not mention the revocation setting').not.toContain(ACCESS_REVOKED_BEFORE_ENV);
 }
 
 /** Every header and the body of a request or a response, as one string to search. */
@@ -168,7 +206,7 @@ async function refusedBy(reason: DeniedReason, accept: string): Promise<Response
 }
 
 describe('decideResponse', () => {
-  const asked = (accept: string | null) => ({ accept, url: DASHBOARD });
+  const asked = (accept: string | null) => ({ accept, origin: { ok: true, origin: PUBLIC_ORIGIN } as const });
   const denied = (reason: DeniedReason): AccessDecision => ({ kind: 'denied', reason });
 
   it('answers an unconfigured gate with 503 in plain text: the first sentence, then each problem on a line of its own, in order, whatever the client accepts', () => {
@@ -188,8 +226,47 @@ describe('decideResponse', () => {
     }
   });
 
-  it.each(REASONS)('sends a client that accepts HTML to the access page when the session fails as %s, with the reason in the query', (reason) => {
-    expect(decideResponse(denied(reason), asked(BROWSER_ACCEPT))).toEqual({ status: 303, location: `/pilot-access?reason=${reason}` });
+  it.each(REASONS)('sends a client that accepts HTML to the access page on the configured origin when the session fails as %s, with the reason in the query', (reason) => {
+    expect(decideResponse(denied(reason), asked(BROWSER_ACCEPT))).toEqual({
+      status: 303,
+      location: `https://gate.example.test/pilot-access?reason=${reason}`,
+    });
+  });
+
+  const origins: [string, string][] = [
+    ['https://gate.example.test', 'https://gate.example.test/pilot-access?reason=no_session'],
+    ['https://gate.example.test:8443', 'https://gate.example.test:8443/pilot-access?reason=no_session'],
+    ['http://localhost:3000', 'http://localhost:3000/pilot-access?reason=no_session'],
+  ];
+  it.each(origins)('builds the 303 on the configured origin %s exactly, as the absolute URL %s', (origin, location) => {
+    expect(decideResponse(denied('no_session'), { accept: BROWSER_ACCEPT, origin: { ok: true, origin } })).toEqual({ status: 303, location });
+  });
+
+  describe('under an unusable public origin', () => {
+    /** Whatever the origin module says; the middleware's job is where the line goes, not its wording. */
+    const ORIGIN_PROBLEM = 'DATASTRATA_PUBLIC_ORIGIN is not usable (a problem written for this test).';
+    const unusable = { ok: false, problem: ORIGIN_PROBLEM } as const;
+    const usable = { ok: true, origin: PUBLIC_ORIGIN } as const;
+    const allowed: AccessDecision = { kind: 'allowed', expiresAt: at(SESSION_MS) };
+    const unconfigured: AccessDecision = { kind: 'unconfigured', problems: ['The first access problem.', 'The second access problem.'] };
+
+    const decisions: [string, AccessDecision, string, number][] = [
+      ['a denied session', denied('no_session'), 'Pilot access is not configured on this server.\nDATASTRATA_PUBLIC_ORIGIN is not usable (a problem written for this test).', 303],
+      ['an allowed session', allowed, 'Pilot access is not configured on this server.\nDATASTRATA_PUBLIC_ORIGIN is not usable (a problem written for this test).', 200],
+      [
+        'an unconfigured gate',
+        unconfigured,
+        'Pilot access is not configured on this server.\nThe first access problem.\nThe second access problem.\nDATASTRATA_PUBLIC_ORIGIN is not usable (a problem written for this test).',
+        503,
+      ],
+    ];
+    it.each(decisions)('answers %s with 503 in plain text, whatever the client accepts: the first sentence, the access problems, then the origin problem', (_name, decision, body, usableStatus) => {
+      for (const accept of [BROWSER_ACCEPT, 'application/json', null]) {
+        expect(decideResponse(decision, { accept, origin: unusable }), String(accept)).toEqual({ status: 503, body, contentType: 'text/plain; charset=utf-8' });
+      }
+      // The control: the same decision for a browser under a usable origin is answered as the decision says, not 503 for everyone.
+      expect(decideResponse(decision, { accept: BROWSER_ACCEPT, origin: usable }).status).toBe(usableStatus);
+    });
   });
 
   it.each(REASONS)('answers any other client with 401 and the reason as JSON when the session fails as %s', (reason) => {
@@ -232,7 +309,7 @@ describe('decideResponse', () => {
 
 describe('middlewareWith', () => {
   it('answers 503 in plain text, and no redirect, when no secret is configured: the first sentence, then the problem naming the secret', async () => {
-    const response = await middlewareWith({}, () => NOW)(request({ accept: BROWSER_ACCEPT }));
+    const response = await middlewareWith(CONFIGURED_ORIGIN, () => NOW)(request({ accept: BROWSER_ACCEPT }));
     expect(response.status).toBe(503);
     expect(mediaType(response)).toBe('text/plain');
     const body = await response.text();
@@ -249,7 +326,7 @@ describe('middlewareWith', () => {
     expect(usable.status).toBe(200);
     expect(usable.headers.get('x-middleware-next')).toBe('1');
 
-    const shortSecret = await middlewareWith({ [ACCESS_SECRET_ENV]: FIFTEEN }, () => NOW)(request(headers));
+    const shortSecret = await middlewareWith({ ...CONFIGURED_ORIGIN, [ACCESS_SECRET_ENV]: FIFTEEN }, () => NOW)(request(headers));
     expect(shortSecret.status).toBe(503);
     const shortSecretBody = await shortSecret.text();
     expect(shortSecretBody.startsWith(NOT_CONFIGURED), 'the 503 begins with the first sentence').toBe(true);
@@ -268,16 +345,15 @@ describe('middlewareWith', () => {
     expect(pathAndQuery(response)).toBe('/pilot-access?reason=no_session');
   });
 
-  // A loopback address is not a row: `NextRequest` rewrites 127.0.0.1 to localhost in `url` (next/dist/server/web/next-url.js), so
-  // the origin a request to it reports is Next's, not the one it was sent to. The server then makes a same-origin Location relative.
-  it.each(['http://localhost:3000', 'https://pilot.example.test'])(
-    'redirects within the origin the request arrived on (%s) and carries nothing of the path or query it asked for',
+  // Before B3 this case held the opposite: the redirect stayed within the origin the request arrived on. That origin is Next's (the
+  // hostname it was started with, a loopback address rewritten to localhost), not the browser's, so the redirect now goes to the
+  // configured origin whatever the request's.
+  it.each(['http://localhost:3000', 'https://pilot.example.test', 'http://127.0.0.1:3000', 'http://0.0.0.0:3000'])(
+    'redirects to the configured origin, not the origin the request arrived on (%s), and carries nothing of the path or query it asked for',
     async (origin) => {
       const response = await gate(request({ accept: BROWSER_ACCEPT }, `${origin}/dashboard/records/42?tab=facts`));
       expect(response.status).toBe(303);
-      const target = locationOf(response, origin);
-      expect(target.origin).toBe(origin);
-      expect(target.pathname + target.search).toBe('/pilot-access?reason=no_session');
+      expect(response.headers.get('location')).toBe('https://gate.example.test/pilot-access?reason=no_session');
     },
   );
 
@@ -315,10 +391,10 @@ describe('middlewareWith', () => {
     },
   );
 
-  it.each(REASONS)('refuses a session that fails as %s: 303 to the access page for a browser, 401 JSON for anything else', async (reason) => {
+  it.each(REASONS)('refuses a session that fails as %s: 303 to the access page on the configured origin for a browser, 401 JSON for anything else', async (reason) => {
     const browser = await refusedBy(reason, BROWSER_ACCEPT);
     expect(browser.status).toBe(303);
-    expect(pathAndQuery(browser)).toBe(`/pilot-access?reason=${reason}`);
+    expect(browser.headers.get('location')).toBe(`https://gate.example.test/pilot-access?reason=${reason}`);
 
     const script = await refusedBy(reason, 'application/json');
     expect(script.status).toBe(401);
@@ -338,22 +414,108 @@ describe('middlewareWith', () => {
   });
 });
 
+describe('the configured public origin, through middlewareWith', () => {
+  /**
+   * Requests a client could send to steer a redirect, each on the URL Next would hand the middleware. In a running server Next
+   * ignores `Host` and `X-Forwarded-Host` and turns the scheme to https for any `X-Forwarded-Proto` containing `https` (investigation
+   * B3.3); the last two rows are the URLs it then builds, and the URL a standalone server started on 0.0.0.0 builds.
+   */
+  const steered: [string, string, Record<string, string>][] = [
+    ['no proxy header', LOCAL_DASHBOARD, {}],
+    ['Host: evil.example', LOCAL_DASHBOARD, { host: 'evil.example' }],
+    ['X-Forwarded-Host: evil.example', LOCAL_DASHBOARD, { 'x-forwarded-host': 'evil.example' }],
+    ['X-Forwarded-Proto: https', LOCAL_DASHBOARD, { 'x-forwarded-proto': 'https' }],
+    ['all three at once', LOCAL_DASHBOARD, { host: 'evil.example', 'x-forwarded-host': 'evil.example', 'x-forwarded-proto': 'https' }],
+    ['X-Forwarded-Proto: https on the https URL Next builds from it', 'https://localhost:3000/dashboard', { 'x-forwarded-proto': 'https' }],
+    ['the URL a server started on 0.0.0.0 builds', 'http://0.0.0.0:3000/dashboard', {}],
+  ];
+  it.each(steered)('sends a browser without a session to exactly the configured origin under %s', async (_name, url, headers) => {
+    const sent = request({ accept: BROWSER_ACCEPT, ...headers }, url);
+    // The control: the request carries every header as written, so the row tests what it names.
+    for (const [name, value] of Object.entries(headers)) expect(sent.headers.get(name), name).toBe(value);
+
+    const response = await gate(sent);
+    expect(response.status).toBe(303);
+    expect(response.headers.get('location')).toBe('https://gate.example.test/pilot-access?reason=no_session');
+  });
+
+  it('follows the variable and not the request: the same request is sent to whichever origin is configured', async () => {
+    const sent = () => request({ accept: BROWSER_ACCEPT }, LOCAL_DASHBOARD);
+    const onPort = await middlewareWith({ ...env, [PUBLIC_ORIGIN_ENV]: 'https://gate.example.test:8443' }, () => NOW)(sent());
+    expect(onPort.headers.get('location')).toBe('https://gate.example.test:8443/pilot-access?reason=no_session');
+    const local = await middlewareWith({ ...env, [PUBLIC_ORIGIN_ENV]: 'http://localhost:3000' }, () => NOW)(sent());
+    expect(local.headers.get('location')).toBe('http://localhost:3000/pilot-access?reason=no_session');
+  });
+
+  /** Requests the gate answers differently, each with the status it gets once the variable is set. */
+  const requests: [string, () => Promise<Record<string, string>>, number][] = [
+    ['a browser without a session', async () => ({ accept: BROWSER_ACCEPT }), 303],
+    ['a script without a session', async () => ({ accept: 'application/json' }), 401],
+    ['a browser with an expired session', async () => ({ accept: BROWSER_ACCEPT, cookie: await cookieFor(SECRET, at(-13 * HOUR_MS)) }), 303],
+    ['a browser with a valid session', async () => ({ accept: BROWSER_ACCEPT, cookie: await cookieFor(SECRET, at(-HOUR_MS)) }), 200],
+    ['a script with a valid session', async () => ({ accept: 'application/json', cookie: await cookieFor(SECRET, at(-HOUR_MS)) }), 200],
+  ];
+  it.each(requests)('answers %s 503 naming DATASTRATA_PUBLIC_ORIGIN while it is not set, private and varying on the cookie, and as the session says once it is', async (_name, headers, configured) => {
+    const unset = await middlewareWith({ [ACCESS_SECRET_ENV]: SECRET }, () => NOW)(request(await headers(), LOCAL_DASHBOARD));
+    expect(unset.status).toBe(503);
+    expect(mediaType(unset)).toBe('text/plain');
+    expect(unset.headers.get('location')).toBeNull();
+    expect(unset.headers.get('x-middleware-next')).toBeNull();
+    expect(unset.headers.get('cache-control')).toBe('private, no-store');
+    expect(unset.headers.get('vary')).toBe('Cookie');
+    const body = await unset.text();
+    expectOriginDiagnostic(body);
+    expect(body.split('\n')[1]).toMatch(/^DATASTRATA_PUBLIC_ORIGIN is not set\. /);
+
+    // The control: the same request, with the variable set.
+    const set = await gate(request(await headers(), LOCAL_DASHBOARD));
+    expect(set.status).toBe(configured);
+  });
+
+  const unusableOrigins: [string, string][] = [
+    ['blank', ''],
+    ['written with a trailing slash', 'https://gate.example.test/'],
+    ['plain http on a name other than localhost', 'http://gate.example.test'],
+    ['a loopback address over plain http', 'http://127.0.0.1:3000'],
+    ['a loopback address over https, which only the loopback rule refuses', 'https://127.0.0.1'],
+  ];
+  it.each(unusableOrigins)('answers a valid session 503 naming DATASTRATA_PUBLIC_ORIGIN when it is %s', async (_name, origin) => {
+    const headers = { accept: BROWSER_ACCEPT, cookie: await cookieFor(SECRET, at(-HOUR_MS)) };
+    const response = await middlewareWith({ ...env, [PUBLIC_ORIGIN_ENV]: origin }, () => NOW)(request(headers, LOCAL_DASHBOARD));
+    expect(response.status).toBe(503);
+    expectOriginDiagnostic(await response.text());
+  });
+
+  it('puts the origin problem after the access problems when both are unusable: the first sentence, the secret, then the origin', async () => {
+    const response = await middlewareWith({}, () => NOW)(request({ accept: BROWSER_ACCEPT }, LOCAL_DASHBOARD));
+    expect(response.status).toBe(503);
+    expect((await response.text()).split('\n')).toEqual([
+      NOT_CONFIGURED,
+      expect.stringMatching(/^DATASTRATA_PILOT_ACCESS_SECRET is not set\. /),
+      expect.stringMatching(/^DATASTRATA_PUBLIC_ORIGIN is not set\. /),
+    ]);
+  });
+});
+
 describe('the exported middleware', () => {
   // The export binds the real environment and the real clock to `middlewareWith`, so these cases give it synthetic values for both:
-  // the two access variables through `vi.stubEnv` and the clock through a fake `Date`. Every case calls `setUp` first, which stubs
-  // both variables, so nothing the real environment holds can reach the export; `afterEach` puts the environment and the clock back.
+  // the two access variables and the public origin through `vi.stubEnv` and the clock through a fake `Date`. Every case calls
+  // `setUp` first, which stubs all three variables, so nothing the real environment holds can reach the export; `afterEach` puts
+  // the environment and the clock back.
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.useRealTimers();
   });
 
   /**
-   * Both access variables set (`undefined` removes one) and the clock at `now`. `Date` alone is faked, and the fake is installed
-   * before the time is set: vitest refuses the install if the time was set first.
+   * The three variables set (`undefined` removes one; the origin is the usable one unless a case says otherwise) and the clock at
+   * `now`. `Date` alone is faked, and the fake is installed before the time is set: vitest refuses the install if the time was set
+   * first.
    */
-  function setUp(settings: { secret: string | undefined; revokedBefore?: string }, now: Date = NOW): void {
+  function setUp(settings: { secret: string | undefined; revokedBefore?: string; publicOrigin?: string | null }, now: Date = NOW): void {
     vi.stubEnv(ACCESS_SECRET_ENV, settings.secret);
     vi.stubEnv(ACCESS_REVOKED_BEFORE_ENV, settings.revokedBefore);
+    vi.stubEnv(PUBLIC_ORIGIN_ENV, settings.publicOrigin === undefined ? PUBLIC_ORIGIN : (settings.publicOrigin ?? undefined));
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(now);
   }
@@ -432,6 +594,31 @@ describe('the exported middleware', () => {
     expect(body.startsWith(NOT_CONFIGURED), 'the 503 begins with the first sentence').toBe(true);
     expectSecretDiagnostic(body);
   });
+
+  it('reads the public origin under its own name, for each request: the 303 goes to the origin the variable holds, and to the new one once it changes', async () => {
+    setUp({ secret: SECRET });
+    const first = await middleware(request({ accept: BROWSER_ACCEPT }, LOCAL_DASHBOARD));
+    expect(first.status).toBe(303);
+    expect(first.headers.get('location')).toBe('https://gate.example.test/pilot-access?reason=no_session');
+
+    vi.stubEnv(PUBLIC_ORIGIN_ENV, 'https://other-gate.example.test:8443');
+    const second = await middleware(request({ accept: BROWSER_ACCEPT }, LOCAL_DASHBOARD));
+    expect(second.headers.get('location')).toBe('https://other-gate.example.test:8443/pilot-access?reason=no_session');
+  });
+
+  it('answers 503 naming the public origin while it is not set, for a session it passes once the origin is set', async () => {
+    const headers = { accept: BROWSER_ACCEPT, cookie: await cookieFor(SECRET, at(-HOUR_MS)) };
+    setUp({ secret: SECRET, publicOrigin: null });
+
+    const unset = await middleware(request(headers, LOCAL_DASHBOARD));
+    expect(unset.status).toBe(503);
+    expectOriginDiagnostic(await unset.text());
+
+    vi.stubEnv(PUBLIC_ORIGIN_ENV, PUBLIC_ORIGIN);
+    const set = await middleware(request(headers, LOCAL_DASHBOARD));
+    expect(set.status).toBe(200);
+    expect(set.headers.get('x-middleware-next')).toBe('1');
+  });
 });
 
 describe('the 503 for an unusable configuration', () => {
@@ -471,8 +658,8 @@ describe('the 503 for an unusable configuration', () => {
   });
 
   const secretMistakes: [string, Record<string, string | undefined>][] = [
-    ['unset', {}],
-    ['15 characters', { [ACCESS_SECRET_ENV]: FIFTEEN }],
+    ['unset', CONFIGURED_ORIGIN],
+    ['15 characters', { ...CONFIGURED_ORIGIN, [ACCESS_SECRET_ENV]: FIFTEEN }],
   ];
   it.each(secretMistakes)('names the secret, and not the revocation setting, when the secret is %s and no revocation value is set: the control for the diagnostic above', async (_name, unusable) => {
     const response = await middlewareWith(unusable, () => NOW)(request(sent));
@@ -484,12 +671,14 @@ describe('the 503 for an unusable configuration', () => {
 
   /** Every 503 this block provokes, with the configured values it must not echo. Whitespace is not a marker, so the blank case has none of its own. */
   const every503: [string, Record<string, string | undefined>, string[]][] = [
-    ['a blank revocation value', { ...env, [ACCESS_REVOKED_BEFORE_ENV]: '   ' }, [SECRET]],
-    ['a revocation value that is a word', { ...env, [ACCESS_REVOKED_BEFORE_ENV]: 'soon-7f3a' }, [SECRET, 'soon-7f3a']],
-    ['a revocation value that is a date alone', { ...env, [ACCESS_REVOKED_BEFORE_ENV]: '2026-10-21' }, [SECRET, '2026-10-21']],
-    ['a revocation instant later than the request time', { ...env, [ACCESS_REVOKED_BEFORE_ENV]: LATE }, [SECRET, LATE]],
-    ['no secret', {}, []],
-    ['a 15-character secret', { [ACCESS_SECRET_ENV]: FIFTEEN }, [FIFTEEN]],
+    ['a blank revocation value', { ...env, [ACCESS_REVOKED_BEFORE_ENV]: '   ' }, [SECRET, PUBLIC_ORIGIN]],
+    ['a revocation value that is a word', { ...env, [ACCESS_REVOKED_BEFORE_ENV]: 'soon-7f3a' }, [SECRET, PUBLIC_ORIGIN, 'soon-7f3a']],
+    ['a revocation value that is a date alone', { ...env, [ACCESS_REVOKED_BEFORE_ENV]: '2026-10-21' }, [SECRET, PUBLIC_ORIGIN, '2026-10-21']],
+    ['a revocation instant later than the request time', { ...env, [ACCESS_REVOKED_BEFORE_ENV]: LATE }, [SECRET, PUBLIC_ORIGIN, LATE]],
+    ['no secret', CONFIGURED_ORIGIN, [PUBLIC_ORIGIN]],
+    ['a 15-character secret', { ...CONFIGURED_ORIGIN, [ACCESS_SECRET_ENV]: FIFTEEN }, [PUBLIC_ORIGIN, FIFTEEN]],
+    ['an origin with a path', { ...env, [PUBLIC_ORIGIN_ENV]: 'https://gate-7c41.example.test/p-3e9a' }, [SECRET, 'https://gate-7c41.example.test/p-3e9a']],
+    ['an origin over plain http', { ...env, [PUBLIC_ORIGIN_ENV]: 'http://gate-5d2b.example.test' }, [SECRET, 'http://gate-5d2b.example.test']],
   ];
   it.each(every503)('holds no configured value and not the submitted cookie in the body or any header of the 503 for %s', async (_name, configured, values) => {
     const response = await middlewareWith(configured, () => NOW)(request(sent));
@@ -505,15 +694,20 @@ describe('the 503 for an unusable configuration', () => {
       for (const value of values) expect(Object.values(configured), name).toContain(value);
     }
     // And the scan reads a header as well as the body.
-    const leaking = new Response(`${SECRET} ${LATE}`, { headers: { 'x-leak': `${COOKIE_MARKER} soon-7f3a 2026-10-21 ${FIFTEEN}` } });
+    const leaking = new Response(`${SECRET} ${LATE} ${PUBLIC_ORIGIN}`, {
+      headers: { 'x-leak': `${COOKIE_MARKER} soon-7f3a 2026-10-21 ${FIFTEEN} https://gate-7c41.example.test/p-3e9a http://gate-5d2b.example.test` },
+    });
     const found = await everythingIn(leaking);
-    for (const value of [SECRET, LATE, COOKIE_MARKER, 'soon-7f3a', '2026-10-21', FIFTEEN]) expect(found, value).toContain(value);
+    for (const value of [SECRET, LATE, PUBLIC_ORIGIN, COOKIE_MARKER, 'soon-7f3a', '2026-10-21', FIFTEEN, 'https://gate-7c41.example.test/p-3e9a', 'http://gate-5d2b.example.test']) {
+      expect(found, value).toContain(value);
+    }
   });
 });
 
 describe('every response the middleware returns', () => {
   const outcomes: [string, () => Promise<Response>, number][] = [
-    ['the 503 for an unconfigured gate', () => middlewareWith({}, () => NOW)(request({ accept: BROWSER_ACCEPT })), 503],
+    ['the 503 for an unconfigured gate', () => middlewareWith(CONFIGURED_ORIGIN, () => NOW)(request({ accept: BROWSER_ACCEPT })), 503],
+    ['the 503 for an unusable public origin', async () => middlewareWith({ [ACCESS_SECRET_ENV]: SECRET }, () => NOW)(request({ accept: BROWSER_ACCEPT, cookie: await cookieFor(SECRET, NOW) })), 503],
     ['the 303 to the access page', () => gate(request({ accept: BROWSER_ACCEPT })), 303],
     ['the 401 for a script', () => gate(request({ accept: 'application/json' })), 401],
     ['the pass-through of a valid session', async () => gate(request({ accept: BROWSER_ACCEPT, cookie: await cookieFor(SECRET, NOW) })), 200],
@@ -545,15 +739,31 @@ describe('the middleware module', () => {
     expect(config.matcher).toEqual(['/dashboard/:path*']);
   });
 
-  it('imports only next/server and the access module, so it can never reach a profile, the pack or the record', () => {
+  it('imports only next/server, the access module and the public-origin module, so it can never reach a profile, the pack or the record', () => {
     const imported = [...code().matchAll(/(?:\bfrom\s+|\bimport\s*\(?\s*|\brequire\s*\(\s*)['"]([^'"]+)['"]/g)].map((match) => match[1]).sort();
-    expect(imported).toEqual(['@/lib/access', 'next/server']);
+    expect(imported).toEqual(['@/lib/access', '@/lib/public-origin', 'next/server']);
   });
 
   // Which key each read feeds is not visible here, because the set of names is the same either way round; the exported-middleware
   // cases above hold that, by setting one variable at a time.
-  it('uses process.env only as static reads of the two access variables, each once, and never as a whole', () => {
+  it('uses process.env only as static reads of the two access variables and the public origin, each once, and never as a whole', () => {
     const reads = [...code().matchAll(/process\.env(?:\.\w+|\[|\b)/g)].map((match) => match[0]).sort();
-    expect(reads).toEqual([`process.env.${ACCESS_REVOKED_BEFORE_ENV}`, `process.env.${ACCESS_SECRET_ENV}`].sort());
+    expect(reads).toEqual([`process.env.${ACCESS_REVOKED_BEFORE_ENV}`, `process.env.${ACCESS_SECRET_ENV}`, 'process.env.DATASTRATA_PUBLIC_ORIGIN'].sort());
+  });
+
+  it('builds no URL from the request: it reads neither the request URL nor nextUrl, which carry the hostname Next was started with', () => {
+    const fromTheRequest = /\.url\b|\bnextUrl\b/;
+    // The pattern, and the control that it matches the reads it is there to forbid, the one this module made before B3 among them.
+    for (const read of ['new URL(plan.location, request.url)', 'request.nextUrl.origin', 'const { url } = request; req.url']) expect(read).toMatch(fromTheRequest);
+    expect(code()).not.toMatch(fromTheRequest);
+  });
+
+  it('reads request headers only by the names cookie and accept, so no Host or X-Forwarded-* header can choose where a redirect goes', () => {
+    const named = [...code().matchAll(/\.headers\s*\.\s*get\(\s*['"]([^'"]+)['"]\s*\)/g)].map((match) => match[1].toLowerCase()).sort();
+    expect(named).toEqual(['accept', 'cookie']);
+    expect([...code().matchAll(/\brequest\.headers\b/g)]).toHaveLength(2);
+    const steering = /forwarded|['"]host['"]/i;
+    for (const read of ["request.headers.get('x-forwarded-host')", "headers.get('Host')", "request.headers.get('X-Forwarded-Proto')"]) expect(read).toMatch(steering);
+    expect(code()).not.toMatch(steering);
   });
 });

@@ -30,6 +30,11 @@
  * a caller could mistake for an assessment. Every other error is rethrown,
  * because a refusal that swallows unrelated failures is a refusal that hides
  * them.
+ *
+ * **The body is read within 8 KiB** (`lib/request-body.ts`, pilot readiness
+ * B4), far above the thirteen short answers the check sends. A larger body is
+ * answered 413 before it is parsed; one within the limit is parsed by the same
+ * `request.json()` as before, over the bytes that were read.
  */
 
 import { NextResponse } from 'next/server';
@@ -39,6 +44,7 @@ import type { KnowledgePack } from '@datastrata/engine';
 import { csrdPack } from '@/lib/pack';
 import { buildCheckResponse } from '@/lib/checkResponse';
 import type { CheckerAnswers } from '@/lib/checker';
+import { CHECK_BODY_LIMIT, readBodyWithin, withBoundedBody } from '@/lib/request-body';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -60,9 +66,14 @@ const answersSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const body = await readBodyWithin(request, CHECK_BODY_LIMIT);
+  if (!body.ok) {
+    return NextResponse.json({ error: 'Request body too large.' }, { status: 413, headers: { 'Cache-Control': 'no-store' } });
+  }
+
   let answers: CheckerAnswers;
   try {
-    answers = answersSchema.parse(await request.json());
+    answers = answersSchema.parse(await withBoundedBody(request, body.bytes).json());
   } catch {
     return NextResponse.json({ error: 'Malformed check answers.' }, { status: 400 });
   }

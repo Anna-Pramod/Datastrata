@@ -43,6 +43,35 @@
  * `unconfigured`, no cookie is set and the limiter is neither asked nor charged. Without the rule, sign-in issued a session the
  * gate then refused as revoked, a loop that lasted until the instant passed. Beside it is the equal instant, which is usable: the
  * session issued at it is allowed by `accessDecision` at that instant, and one issued a millisecond earlier is revoked.
+ *
+ * A body too large to be a sign-in (pilot readiness B4, 2026-10-22) is refused before anything else is decided: 413 and
+ * `{"error":"too_large"}` to a script, a relative 303 to `too_large` to a browser, no cookie, and neither the configuration, the
+ * limiter nor the comparison reached. "Not charged" is paired with the wrong passphrase that fits, which the same route does ask
+ * about, compare and charge; through the exported `POST`, six oversize posts leave the next wrong passphrase answered 401 where six
+ * failures would have answered it 429. The declared path is shown unread by a stream that records its pulls, beside the same
+ * stream pulled and signed in at exactly 4096 bytes.
+ *
+ * An unusable public origin (pilot readiness B3, 2026-10-22) is answered as an unconfigured gate, first of all: 503 and
+ * `{"error":"unconfigured"}` to a script, a relative 303 to `unconfigured` to a browser, no cookie, the body never pulled, the
+ * limiter neither asked nor charged and nothing compared, beside the same recorded request signed in once the origin is usable. A
+ * body too large is answered 503 while the origin is unusable and 413 once it is usable. Through the exported `POST`, posts
+ * refused for the origin leave the next wrong passphrase answered 401, not 429. Every configured environment in this file carries
+ * a usable origin, `https://gate.example.test`, so a case about the secret, the limiter or the body still reaches what it is about;
+ * where a case means an unconfigured secret, the origin is set and only the secret is missing. The sign-in's own redirects stay
+ * relative: route handlers pass `Location` through untouched (investigation B3.2), so the origin decides whether sign-in is open,
+ * not where it sends anyone.
+ *
+ * A cross-site post (pilot readiness B2, 2026-10-22) is refused on both routes: 403 and `{"error":"cross_site"}` to a script, a
+ * relative 303 to `cross_site` to a browser, and no cookie, so a sign-out from another site clears nothing. It is cross-site by
+ * `Origin` alone, by `Sec-Fetch-Site` alone, or by both as a current browser sends them, and each request first shows it carries
+ * the headers its row names, so a platform that dropped them could not pass a row vacuously. Every refusal stands beside the same
+ * request from the site, with `Origin` and `Sec-Fetch-Site: same-origin`, and beside the request with neither header that scripts
+ * send, both of which go through. Sign-in judges the post after the origin and before the body: the recorded stream is never
+ * pulled, the limiter is neither asked nor charged and nothing is compared, beside the same recorded stream pulled, asked, charged
+ * and compared when it comes from the site. Through the exported `POST`, six cross-site posts leave the next wrong passphrase from
+ * the site answered 401, not 429. Sign-out is judged against the origin it reads by name; with an unusable one, a browser's
+ * `Sec-Fetch-Site: same-origin` still signs out and an `Origin` without it is refused. The verdict itself is tested row by row,
+ * directly, in `public-origin.test.ts`.
  */
 
 import { readFileSync } from 'node:fs';
@@ -72,6 +101,7 @@ import {
   type AccessOutcome,
   type AccessRouteDeps,
 } from '@/lib/pilot-access-handler';
+import { PUBLIC_ORIGIN_ENV } from '@/lib/public-origin';
 
 /**
  * Every passphrase the handler compares with the secret, recorded. The real comparison is called through unchanged: this is a
@@ -111,8 +141,9 @@ const BROWSER_ACCEPT = 'text/html,application/xhtml+xml,application/xml;q=0.9,im
 const COOKIE_TAIL = '; Path=/dashboard; Max-Age=43200; HttpOnly; SameSite=Strict';
 /** The session cookie as sign-out clears it: the same name and path, empty, expired. */
 const CLEARED_COOKIE = 'ds_pilot_access=; Path=/dashboard; Max-Age=0; HttpOnly; SameSite=Strict';
-const REFUSAL_BODIES: Record<401 | 429 | 503, string> = {
+const REFUSAL_BODIES: Record<401 | 403 | 429 | 503, string> = {
   401: '{"error":"refused"}',
+  403: '{"error":"cross_site"}',
   429: '{"error":"limited"}',
   503: '{"error":"unconfigured"}',
 };
@@ -124,7 +155,34 @@ const TRANSPORTS: [boolean, boolean, boolean][] = [
   [true, true, true],
 ];
 
-const ENV = { [ACCESS_SECRET_ENV]: SECRET };
+/** The configured public origin: a reserved test name. The sign-in's redirects stay relative, so it only has to be usable. */
+const PUBLIC_ORIGIN = 'https://gate.example.test';
+/** The variable alone, set to the origin above: an environment whose secret is not configured but whose origin is. */
+const CONFIGURED_ORIGIN = { [PUBLIC_ORIGIN_ENV]: PUBLIC_ORIGIN };
+const ENV = { [ACCESS_SECRET_ENV]: SECRET, ...CONFIGURED_ORIGIN };
+
+/** Another site, whose pages post to the gate in the cross-site cases. */
+const EVIL_ORIGIN = 'https://evil.example';
+/** What a browser sends with a form post from the configured origin itself. */
+const FROM_THE_SITE = { origin: PUBLIC_ORIGIN, 'sec-fetch-site': 'same-origin' };
+/** A post from another site, by each header alone and by both as a current browser sends them. */
+const CROSS_SITE: [string, Record<string, string>][] = [
+  ['by Origin alone', { origin: EVIL_ORIGIN }],
+  ['by Sec-Fetch-Site alone', { 'sec-fetch-site': 'cross-site' }],
+  ['by both, as a current browser sends them', { origin: EVIL_ORIGIN, 'sec-fetch-site': 'cross-site' }],
+];
+/** Every way a post that goes through can come: what a browser sends from the site, each header alone, and neither, the compatibility exception scripts rely on. */
+const SAME_SITE: [string, Record<string, string>][] = [
+  ['with Origin and Sec-Fetch-Site: same-origin', FROM_THE_SITE],
+  ['with Origin alone', { origin: PUBLIC_ORIGIN }],
+  ['with Sec-Fetch-Site: same-origin alone', { 'sec-fetch-site': 'same-origin' }],
+  ['with neither header', {}],
+];
+
+/** That `request` really carries each header its case names, so a header the platform dropped cannot make a case pass vacuously. */
+function expectCarries(request: Request, headers: Record<string, string>): void {
+  for (const [name, value] of Object.entries(headers)) expect(request.headers.get(name), `the request carries ${name}`).toBe(value);
+}
 
 function at(offsetMs: number): Date {
   return new Date(NOW.getTime() + offsetMs);
@@ -166,6 +224,53 @@ function multipartPost(passphrase: string, url = ACCESS_URL): Request {
   const body = new FormData();
   body.set('passphrase', passphrase);
   return new Request(url, { method: 'POST', body });
+}
+
+/** A url-encoded sign-in of exactly `bytes` bytes: the passphrase field, then padding in a field the handler does not read. */
+function paddedForm(passphrase: string, bytes: number): string {
+  const head = `${new URLSearchParams({ passphrase })}&pad=`;
+  if (head.length > bytes) throw new Error(`a sign-in for this passphrase needs more than ${bytes} bytes`);
+  return `${head}${'x'.repeat(bytes - head.length)}`;
+}
+
+/** A form post of `bytes` bytes that declares no length, so only the streamed count can find it too large. */
+function streamedPost(passphrase: string, bytes: number, headers: Record<string, string> = {}): Request {
+  return new Request(ACCESS_URL, {
+    method: 'POST',
+    body: paddedForm(passphrase, bytes),
+    headers: { 'content-type': 'application/x-www-form-urlencoded', ...headers },
+  });
+}
+
+/**
+ * A form post of `bytes` bytes that declares its true length, over a stream handed out a chunk per pull with every pull written
+ * down. The high-water mark of zero means nothing is pulled before a read, so a count of zero says the body was never read.
+ */
+function declaredPost(passphrase: string, bytes: number, headers: Record<string, string> = {}) {
+  const body = new TextEncoder().encode(paddedForm(passphrase, bytes));
+  const record = { pulls: 0 };
+  let offset = 0;
+  const stream = new ReadableStream<Uint8Array>(
+    {
+      pull(controller) {
+        record.pulls += 1;
+        if (offset >= body.byteLength) {
+          controller.close();
+          return;
+        }
+        controller.enqueue(body.slice(offset, offset + 1024));
+        offset += 1024;
+      },
+    },
+    { highWaterMark: 0 },
+  );
+  const init: RequestInit & { duplex: 'half' } = {
+    method: 'POST',
+    body: stream,
+    duplex: 'half',
+    headers: { 'content-type': 'application/x-www-form-urlencoded', 'content-length': String(bytes), ...headers },
+  };
+  return { request: new Request(ACCESS_URL, init), record };
 }
 
 /** The token and the attributes of the one cookie a success carries; a missing, doubled or misnamed `Set-Cookie` fails here, by name. */
@@ -226,9 +331,9 @@ afterEach(() => {
 describe('handleAccessRequest', () => {
   it('answers 503 under an unusable configuration, even to the passphrase that would have matched, and neither consults nor charges the limiter', async () => {
     const unusable: [string, Record<string, string | undefined>][] = [
-      ['no secret', {}],
-      ['a blank secret', { [ACCESS_SECRET_ENV]: '   ' }],
-      ['a 15-character secret', { [ACCESS_SECRET_ENV]: FIFTEEN }],
+      ['no secret', CONFIGURED_ORIGIN],
+      ['a blank secret', { ...CONFIGURED_ORIGIN, [ACCESS_SECRET_ENV]: '   ' }],
+      ['a 15-character secret', { ...CONFIGURED_ORIGIN, [ACCESS_SECRET_ENV]: FIFTEEN }],
       ['a revocation instant that is not an instant', { ...ENV, [ACCESS_REVOKED_BEFORE_ENV]: 'soon' }],
     ];
     for (const [name, env] of unusable) {
@@ -371,7 +476,7 @@ describe('handleAccessRequest', () => {
     const limiter = new RecordingLimiter();
     for (let i = 0; i < 5; i += 1) await handleAccessRequest(attempt({ passphrase: WRONG }), limiter);
     const askedBefore = limiter.asked.length;
-    await expect(handleAccessRequest(attempt({ env: {}, now: at(1) }), limiter)).resolves.toStrictEqual({ status: 503 });
+    await expect(handleAccessRequest(attempt({ env: CONFIGURED_ORIGIN, now: at(1) }), limiter)).resolves.toStrictEqual({ status: 503 });
     expect(limiter.asked).toHaveLength(askedBefore);
     await expect(handleAccessRequest(attempt({ now: at(2) }), limiter)).resolves.toStrictEqual({ status: 429 });
   });
@@ -447,6 +552,8 @@ describe('accessReasonMessage', () => {
     refused: 'That passphrase was not accepted.',
     limited: 'Too many passphrases were refused. Wait fifteen minutes, then try again.',
     unconfigured: 'Pilot access is not configured on this server, so no passphrase can be accepted.',
+    too_large: 'That request was too large to be a sign-in.',
+    cross_site: 'That request did not come from this site, so it was refused.',
   };
   const SENTENCES: [string, string][] = [...Object.entries(FROM_THE_MIDDLEWARE), ...Object.entries(FROM_THE_ROUTE)];
 
@@ -454,9 +561,9 @@ describe('accessReasonMessage', () => {
     expect(accessReasonMessage(reason)).toBe(sentence);
   });
 
-  it('knows exactly the eight reasons the gate and the route send, and says a different sentence for each', () => {
-    expect(SENTENCES).toHaveLength(8);
-    expect(new Set(SENTENCES.map(([, sentence]) => sentence)).size).toBe(8);
+  it('knows exactly the ten reasons the gate and the two routes send, and says a different sentence for each', () => {
+    expect(SENTENCES).toHaveLength(10);
+    expect(new Set(SENTENCES.map(([, sentence]) => sentence)).size).toBe(10);
   });
 
   it('tells a refused passphrase to wait fifteen minutes only when the limit is what refused it', () => {
@@ -614,8 +721,10 @@ describe('accessRoute', () => {
     const production = await routeWith({ production: () => true }).route(formPost(SECRET));
     expect(sessionOf(production).attributes).toBe(`${COOKIE_TAIL}; Secure`);
 
-    // A header the client writes is not evidence of TLS: the protocol is the request's own.
-    const claimed = await routeWith().route(formPost(SECRET, { 'x-forwarded-proto': 'https', forwarded: 'proto=https', 'x-forwarded-ssl': 'on' }));
+    // A header the client writes is not evidence of TLS: the handler reads the protocol from the request URL alone. In a running
+    // server Next has already folded any `X-Forwarded-Proto` containing `https` into that URL (investigation B3.3), which can add
+    // `Secure` to the client's own cookie and never remove it; this case holds the handler, not Next.
+    const claimed =await routeWith().route(formPost(SECRET, { 'x-forwarded-proto': 'https', forwarded: 'proto=https', 'x-forwarded-ssl': 'on' }));
     expect(sessionOf(claimed).attributes).toBe(COOKIE_TAIL);
   });
 
@@ -653,9 +762,9 @@ describe('accessRoute', () => {
   });
 
   const unusableSecrets: [string, Record<string, string | undefined>][] = [
-    ['not set', {}],
-    ['blank', { [ACCESS_SECRET_ENV]: '' }],
-    ['15 characters', { [ACCESS_SECRET_ENV]: FIFTEEN }],
+    ['not set', CONFIGURED_ORIGIN],
+    ['blank', { ...CONFIGURED_ORIGIN, [ACCESS_SECRET_ENV]: '' }],
+    ['15 characters', { ...CONFIGURED_ORIGIN, [ACCESS_SECRET_ENV]: FIFTEEN }],
   ];
   it.each(unusableSecrets)('answers 503 with no Set-Cookie when the secret is %s, to the passphrase that would have matched, and accepts it once the secret is usable', async (_name, env) => {
     let current: Record<string, string | undefined> = env;
@@ -695,7 +804,7 @@ describe('accessRoute', () => {
       expect(limited.headers.get('location')).toBe('/pilot-access?reason=limited');
       expect(limited.headers.getSetCookie()).toEqual([]);
 
-      const unconfigured = await routeWith({ env: () => ({}) }).route(formPost(SECRET, browser));
+      const unconfigured = await routeWith({ env: () => CONFIGURED_ORIGIN }).route(formPost(SECRET, browser));
       expect(unconfigured.status).toBe(303);
       expect(unconfigured.headers.get('location')).toBe('/pilot-access?reason=unconfigured');
       expect(unconfigured.headers.getSetCookie()).toEqual([]);
@@ -728,8 +837,16 @@ describe('accessRoute', () => {
       const locations = [(await route(formPost(WRONG, browser))).headers.get('location')];
       for (let i = 0; i < 4; i += 1) await route(formPost(WRONG, browser));
       locations.push((await route(formPost(SECRET, browser))).headers.get('location'));
-      locations.push((await routeWith({ env: () => ({}) }).route(formPost(SECRET, browser))).headers.get('location'));
-      expect(locations).toHaveLength(3);
+      locations.push((await routeWith({ env: () => CONFIGURED_ORIGIN }).route(formPost(SECRET, browser))).headers.get('location'));
+      locations.push((await routeWith().route(streamedPost(SECRET, 4097, browser))).headers.get('location'));
+      locations.push((await routeWith().route(formPost(SECRET, { ...browser, origin: EVIL_ORIGIN }))).headers.get('location'));
+      expect(locations).toEqual([
+        '/pilot-access?reason=refused',
+        '/pilot-access?reason=limited',
+        '/pilot-access?reason=unconfigured',
+        '/pilot-access?reason=too_large',
+        '/pilot-access?reason=cross_site',
+      ]);
       for (const location of locations) {
         const reason = new URL(location ?? '', ORIGIN).searchParams.get('reason');
         expect(accessReasonMessage(reason ?? undefined), String(location)).not.toBeNull();
@@ -737,13 +854,328 @@ describe('accessRoute', () => {
     });
   });
 
+  describe('a body too large to be a sign-in', () => {
+    const TOO_LARGE = '{"error":"too_large"}';
+    const browser = { accept: BROWSER_ACCEPT };
+
+    it('answers a script 413 with the refusal body, no-store, no cookie and no redirect when the body declares more than 4096 bytes, without reading it', async () => {
+      const { request, record } = declaredPost(SECRET, 4097);
+      const response = await routeWith().route(request);
+      expect(response.status).toBe(413);
+      expect(response.headers.get('content-type')).toBe('application/json');
+      expect(response.headers.get('cache-control')).toBe('no-store');
+      expect(response.headers.get('location')).toBeNull();
+      expect(response.headers.getSetCookie()).toEqual([]);
+      expect(await response.text()).toBe(TOO_LARGE);
+      expect(record.pulls).toBe(0);
+    });
+
+    it('reads the same right passphrase declaring exactly 4096 bytes and signs it in, which is what makes "without reading" above mean something', async () => {
+      const { request, record } = declaredPost(SECRET, 4096);
+      const response = await routeWith().route(request);
+      expect(response.status).toBe(303);
+      expect(response.headers.get('location')).toBe('/dashboard');
+      expect(sessionOf(response).attributes).toBe(COOKIE_TAIL);
+      expect(record.pulls).toBeGreaterThan(0);
+    });
+
+    it('answers a script 413 for 4097 bytes that declare no length or declare fewer, and signs in the same passphrase sent in exactly 4096', async () => {
+      const { route } = routeWith();
+      for (const [name, request] of [
+        ['undeclared', streamedPost(SECRET, 4097)],
+        ['declared as 64', streamedPost(SECRET, 4097, { 'content-length': '64' })],
+      ] as const) {
+        const response = await route(request);
+        expect(response.status, name).toBe(413);
+        expect(response.headers.get('cache-control'), name).toBe('no-store');
+        expect(response.headers.getSetCookie(), name).toEqual([]);
+        expect(await response.text(), name).toBe(TOO_LARGE);
+      }
+      const accepted = await route(streamedPost(SECRET, 4096));
+      expect(accepted.status).toBe(303);
+      expect(sessionOf(accepted).attributes).toBe(COOKIE_TAIL);
+    });
+
+    it('sends a browser to /pilot-access?reason=too_large by a relative 303 with no cookie, on the declared and the streamed path', async () => {
+      const { route } = routeWith();
+      for (const [name, request] of [
+        ['declared', declaredPost(SECRET, 4097, browser).request],
+        ['streamed', streamedPost(SECRET, 4097, browser)],
+      ] as const) {
+        const response = await route(request);
+        expect(response.status, name).toBe(303);
+        expect(response.headers.get('location'), name).toBe('/pilot-access?reason=too_large');
+        expect(response.headers.get('cache-control'), name).toBe('no-store');
+        expect(response.headers.getSetCookie(), name).toEqual([]);
+        expect(await response.text(), name).toBe('');
+      }
+    });
+
+    it('is refused before the limiter and the comparison and never charged: after six, the limiter was neither asked nor told and nothing was compared', async () => {
+      const { route, limiter } = routeWith();
+      for (let i = 0; i < 3; i += 1) {
+        expect((await route(declaredPost(WRONG, 4097).request)).status, `declared ${i + 1}`).toBe(413);
+        expect((await route(streamedPost(WRONG, 4097))).status, `streamed ${i + 1}`).toBe(413);
+      }
+      expect(limiter.asked).toEqual([]);
+      expect(limiter.recorded).toEqual([]);
+      expect(witness.compared).toEqual([]);
+
+      // The control: on the same route a wrong passphrase that fits is asked about, compared and charged.
+      expect((await route(formPost(WRONG))).status).toBe(401);
+      expect(limiter.asked).toEqual([{ key: 'local', at: NOW.getTime() }]);
+      expect(limiter.recorded).toEqual([{ key: 'local', at: NOW.getTime() }]);
+      expect(witness.compared).toEqual([WRONG]);
+    });
+
+    // "Unconfigured" here is the secret: the origin is usable, so the body is reached. An unusable origin is judged before the body
+    // (B3), and its case is in the block below.
+    it('is answered 413 by a gate whose secret is not configured too, which answers the same passphrase in a body that fits 503', async () => {
+      const { route, limiter } = routeWith({ env: () => CONFIGURED_ORIGIN });
+      expect((await route(streamedPost(SECRET, 4097))).status).toBe(413);
+      expect((await route(streamedPost(SECRET, 4096))).status).toBe(503);
+      expect(limiter.asked).toEqual([]);
+    });
+
+    it('holds no submitted value in its answer to a script or a browser, on either path', async () => {
+      const { route } = routeWith();
+      const responses: Response[] = [];
+      for (const passphrase of [SECRET, WRONG]) {
+        responses.push(await route(declaredPost(passphrase, 4097).request));
+        responses.push(await route(streamedPost(passphrase, 4097)));
+        responses.push(await route(declaredPost(passphrase, 4097, browser).request));
+        responses.push(await route(streamedPost(passphrase, 4097, browser)));
+      }
+      // What is scanned is the too-large refusal each time: a session or another refusal would make the silence below say nothing.
+      expect(responses.map((response) => `${response.status} ${response.headers.get('location')}`)).toEqual(
+        Array.from({ length: 2 }, () => ['413 null', '413 null', '303 /pilot-access?reason=too_large', '303 /pilot-access?reason=too_large']).flat(),
+      );
+      const seen = await Promise.all(responses.map(everythingIn));
+      expect(seen).toHaveLength(8);
+      expect(seen.join('\n')).not.toContain(SECRET);
+      expect(seen.join('\n')).not.toContain(WRONG);
+      expect(seen.join('\n')).not.toContain(new URLSearchParams({ passphrase: SECRET }).toString());
+    });
+  });
+
+  describe('an unusable public origin', () => {
+    const browser = { accept: BROWSER_ACCEPT };
+    /** The secret is usable in each; only the origin is not. */
+    const unusableOrigins: [string, Record<string, string | undefined>][] = [
+      ['not set', { [ACCESS_SECRET_ENV]: SECRET }],
+      ['blank', { [ACCESS_SECRET_ENV]: SECRET, [PUBLIC_ORIGIN_ENV]: '' }],
+      ['written with a trailing slash', { [ACCESS_SECRET_ENV]: SECRET, [PUBLIC_ORIGIN_ENV]: 'https://gate.example.test/' }],
+      ['plain http on a name other than localhost', { [ACCESS_SECRET_ENV]: SECRET, [PUBLIC_ORIGIN_ENV]: 'http://gate.example.test' }],
+      ['a loopback address over plain http', { [ACCESS_SECRET_ENV]: SECRET, [PUBLIC_ORIGIN_ENV]: 'http://127.0.0.1:3000' }],
+      ['a loopback address over https, which only the loopback rule refuses', { [ACCESS_SECRET_ENV]: SECRET, [PUBLIC_ORIGIN_ENV]: 'https://127.0.0.1' }],
+    ];
+
+    it.each(unusableOrigins)('answers the right passphrase 503 unconfigured with no cookie when the origin is %s, without pulling the body, asking or charging the limiter, or comparing', async (_name, env) => {
+      const { route, limiter } = routeWith({ env: () => env });
+      const { request, record } = declaredPost(SECRET, 64);
+      const response = await route(request);
+      expect(response.status).toBe(503);
+      expect(response.headers.get('content-type')).toBe('application/json');
+      expect(response.headers.get('cache-control')).toBe('no-store');
+      expect(response.headers.get('location')).toBeNull();
+      expect(response.headers.getSetCookie()).toEqual([]);
+      expect(await response.text()).toBe('{"error":"unconfigured"}');
+      expect(record.pulls).toBe(0);
+      expect(limiter.asked).toEqual([]);
+      expect(limiter.recorded).toEqual([]);
+      expect(witness.compared).toEqual([]);
+    });
+
+    it('pulls, asks about, compares and signs in the same recorded request once the origin is usable, which is what makes the silence above mean something', async () => {
+      const { route, limiter } = routeWith();
+      const { request, record } = declaredPost(SECRET, 64);
+      const response = await route(request);
+      expect(response.status).toBe(303);
+      expect(response.headers.get('location')).toBe('/dashboard');
+      expect(sessionOf(response).attributes).toBe(COOKIE_TAIL);
+      expect(record.pulls).toBeGreaterThan(0);
+      expect(limiter.asked).toEqual([{ key: 'local', at: NOW.getTime() }]);
+      expect(witness.compared).toEqual([SECRET]);
+    });
+
+    it('sends a browser to /pilot-access?reason=unconfigured by a relative 303 with no cookie, where the same browser is signed in once the origin is usable', async () => {
+      const refused = await routeWith({ env: () => ({ [ACCESS_SECRET_ENV]: SECRET }) }).route(formPost(SECRET, browser));
+      expect(refused.status).toBe(303);
+      expect(refused.headers.get('location')).toBe('/pilot-access?reason=unconfigured');
+      expect(refused.headers.get('cache-control')).toBe('no-store');
+      expect(refused.headers.getSetCookie()).toEqual([]);
+      expect(await refused.text()).toBe('');
+
+      const accepted = await routeWith().route(formPost(SECRET, browser));
+      expect(accepted.status).toBe(303);
+      expect(accepted.headers.get('location')).toBe('/dashboard');
+      expect(sessionOf(accepted).attributes).toBe(COOKIE_TAIL);
+    });
+
+    it('is judged before the size of the body: a body too large is answered 503 while the origin is unusable, and 413 once it is usable', async () => {
+      let env: Record<string, string | undefined> = { [ACCESS_SECRET_ENV]: SECRET };
+      const { route } = routeWith({ env: () => env });
+      const declared = declaredPost(SECRET, 4097);
+      expect((await route(declared.request)).status).toBe(503);
+      expect((await route(streamedPost(SECRET, 4097))).status).toBe(503);
+      expect(declared.record.pulls).toBe(0);
+      env = ENV;
+      expect((await route(streamedPost(SECRET, 4097))).status).toBe(413);
+    });
+
+    it('logs "pilot-access: refused (503)" and nothing that was submitted or configured', async () => {
+      const warn = vi.mocked(console.warn);
+      const origin = 'https://gate-7c41.example.test/p-3e9a';
+      const { route } = routeWith({ env: () => ({ [ACCESS_SECRET_ENV]: SECRET, [PUBLIC_ORIGIN_ENV]: origin }) });
+      await route(formPost(SECRET));
+      await route(formPost(WRONG, browser));
+      expect(warn.mock.calls).toEqual([['pilot-access: refused (503)'], ['pilot-access: refused (503)']]);
+      for (const value of [SECRET, WRONG, origin, 'gate-7c41']) expect(JSON.stringify(warn.mock.calls), value).not.toContain(value);
+    });
+
+    it('holds neither the passphrase, the secret nor the configured origin in any header or body of its answers', async () => {
+      const origin = 'https://gate-7c41.example.test/p-3e9a';
+      const { route } = routeWith({ env: () => ({ [ACCESS_SECRET_ENV]: SECRET, [PUBLIC_ORIGIN_ENV]: origin }) });
+      const responses = [await route(formPost(SECRET)), await route(formPost(WRONG, browser))];
+      // What is scanned is the origin refusal each time: a session or another refusal would make the silence below say nothing.
+      expect(responses.map((response) => `${response.status} ${response.headers.get('location')}`)).toEqual(['503 null', '303 /pilot-access?reason=unconfigured']);
+      const everything = (await Promise.all(responses.map(everythingIn))).join('\n');
+      for (const value of [SECRET, WRONG, origin, 'gate-7c41', 'p-3e9a']) expect(everything, value).not.toContain(value);
+      // The control: the scan finds each of them in an answer that carries them.
+      const leaking = await everythingIn(new Response(`${SECRET} ${WRONG}`, { headers: { 'x-leak': origin } }));
+      for (const value of [SECRET, WRONG, origin, 'gate-7c41', 'p-3e9a']) expect(leaking, value).toContain(value);
+    });
+  });
+
+  describe('a cross-site post', () => {
+    const browser = { accept: BROWSER_ACCEPT };
+
+    it.each(CROSS_SITE)('answers a script 403 cross_site with no-store, no cookie and no redirect when the post is cross-site %s, where the same post from the site signs in', async (_name, headers) => {
+      const { route } = routeWith();
+      const request = formPost(SECRET, headers);
+      expectCarries(request, headers);
+      const response = await route(request);
+      expect(response.status).toBe(403);
+      expect(response.headers.get('content-type')).toBe('application/json');
+      expect(response.headers.get('cache-control')).toBe('no-store');
+      expect(response.headers.get('location')).toBeNull();
+      expect(response.headers.getSetCookie()).toEqual([]);
+      expect(await response.text()).toBe('{"error":"cross_site"}');
+
+      const accepted = await route(formPost(SECRET, FROM_THE_SITE));
+      expect(accepted.status).toBe(303);
+      expect(accepted.headers.get('location')).toBe('/dashboard');
+      expect(sessionOf(accepted).attributes).toBe(COOKIE_TAIL);
+    });
+
+    it.each(CROSS_SITE)('sends a browser to /pilot-access?reason=cross_site by a relative 303 with no cookie when the post is cross-site %s, where the same browser from the site is signed in', async (_name, headers) => {
+      const { route } = routeWith();
+      const request = formPost(SECRET, { ...browser, ...headers });
+      expectCarries(request, headers);
+      const refused = await route(request);
+      expect(refused.status).toBe(303);
+      expect(refused.headers.get('location')).toBe('/pilot-access?reason=cross_site');
+      expect(refused.headers.get('cache-control')).toBe('no-store');
+      expect(refused.headers.getSetCookie()).toEqual([]);
+      expect(await refused.text()).toBe('');
+
+      const accepted = await route(formPost(SECRET, { ...browser, ...FROM_THE_SITE }));
+      expect(accepted.status).toBe(303);
+      expect(accepted.headers.get('location')).toBe('/dashboard');
+      expect(sessionOf(accepted).attributes).toBe(COOKIE_TAIL);
+    });
+
+    it.each(SAME_SITE)('signs in a browser posting from the site %s, as it signs in a script', async (_name, headers) => {
+      const request = formPost(SECRET, { ...browser, ...headers });
+      expectCarries(request, headers);
+      const response = await routeWith().route(request);
+      expect(response.status).toBe(303);
+      expect(response.headers.get('location')).toBe('/dashboard');
+      expect(sessionOf(response).attributes).toBe(COOKIE_TAIL);
+    });
+
+    it.each(CROSS_SITE)('never pulls the body of a post that is cross-site %s, where the same recorded stream from the site is pulled and signed in', async (_name, headers) => {
+      const refused = declaredPost(SECRET, 64, headers);
+      expectCarries(refused.request, headers);
+      expect((await routeWith().route(refused.request)).status).toBe(403);
+      expect(refused.record.pulls).toBe(0);
+
+      const accepted = declaredPost(SECRET, 64, FROM_THE_SITE);
+      const response = await routeWith().route(accepted.request);
+      expect(response.status).toBe(303);
+      expect(sessionOf(response).attributes).toBe(COOKIE_TAIL);
+      expect(accepted.record.pulls).toBeGreaterThan(0);
+    });
+
+    it('neither asks nor charges the limiter, nor compares, for a cross-site post of the right or a wrong passphrase, where a wrong passphrase from the site is asked about, compared and charged', async () => {
+      const { route, limiter } = routeWith();
+      for (const [name, headers] of CROSS_SITE) {
+        for (const passphrase of [SECRET, WRONG]) expect((await route(formPost(passphrase, headers))).status, name).toBe(403);
+      }
+      expect(limiter.asked).toEqual([]);
+      expect(limiter.recorded).toEqual([]);
+      expect(witness.compared).toEqual([]);
+
+      // The control: on the same route a wrong passphrase from the site is asked about, compared and charged.
+      expect((await route(formPost(WRONG, FROM_THE_SITE))).status).toBe(401);
+      expect(limiter.asked).toEqual([{ key: 'local', at: NOW.getTime() }]);
+      expect(limiter.recorded).toEqual([{ key: 'local', at: NOW.getTime() }]);
+      expect(witness.compared).toEqual([WRONG]);
+    });
+
+    it('is judged after the public origin and before the size of the body: an unusable origin answers it 503, and a cross-site body too large is answered 403 unread, where the same body from the site is 413', async () => {
+      const unconfigured = await routeWith({ env: () => ({ [ACCESS_SECRET_ENV]: SECRET }) }).route(formPost(SECRET, { origin: EVIL_ORIGIN }));
+      expect(unconfigured.status).toBe(503);
+
+      const { route } = routeWith();
+      const declared = declaredPost(SECRET, 4097, { origin: EVIL_ORIGIN });
+      expect((await route(declared.request)).status).toBe(403);
+      expect(declared.record.pulls).toBe(0);
+      expect((await route(streamedPost(SECRET, 4097, { 'sec-fetch-site': 'cross-site' }))).status).toBe(403);
+      expect((await route(streamedPost(SECRET, 4097, FROM_THE_SITE))).status).toBe(413);
+    });
+
+    it('logs "pilot-access: refused (403)" and nothing that was submitted or sent', async () => {
+      const warn = vi.mocked(console.warn);
+      const { route } = routeWith();
+      for (const [, headers] of CROSS_SITE) await route(formPost(WRONG, headers));
+      await route(formPost(SECRET, { ...browser, origin: EVIL_ORIGIN }));
+      expect(warn.mock.calls).toEqual(Array.from({ length: 4 }, () => ['pilot-access: refused (403)']));
+      for (const value of [SECRET, WRONG, EVIL_ORIGIN, 'evil']) expect(JSON.stringify(warn.mock.calls), value).not.toContain(value);
+    });
+
+    it('holds neither the passphrase nor the Origin it was sent in any header or body of its answers to a script or a browser', async () => {
+      const { route } = routeWith();
+      const responses: Response[] = [];
+      for (const passphrase of [SECRET, WRONG]) {
+        responses.push(await route(formPost(passphrase, { origin: EVIL_ORIGIN })));
+        responses.push(await route(formPost(passphrase, { ...browser, origin: EVIL_ORIGIN })));
+      }
+      // What is scanned is the cross-site refusal each time: a session or another refusal would make the silence below say nothing.
+      expect(responses.map((response) => `${response.status} ${response.headers.get('location')}`)).toEqual(
+        Array.from({ length: 2 }, () => ['403 null', '303 /pilot-access?reason=cross_site']).flat(),
+      );
+      const everything = (await Promise.all(responses.map(everythingIn))).join('\n');
+      for (const value of [SECRET, WRONG, EVIL_ORIGIN, 'evil']) expect(everything, value).not.toContain(value);
+      // The control: the scan finds each of them in an answer that carries them.
+      const leaking = await everythingIn(new Response(`${SECRET} ${WRONG}`, { headers: { 'x-leak': EVIL_ORIGIN } }));
+      for (const value of [SECRET, WRONG, EVIL_ORIGIN, 'evil']) expect(leaking, value).toContain(value);
+    });
+  });
+
   describe('every response', () => {
     const outcomes: [string, () => Promise<Response>, number][] = [
+      ['the 503 for an unusable public origin', () => routeWith({ env: () => ({ [ACCESS_SECRET_ENV]: SECRET }) }).route(formPost(SECRET)), 503],
+      ['the 303 back to the access page for an unusable public origin', () => routeWith({ env: () => ({ [ACCESS_SECRET_ENV]: SECRET }) }).route(formPost(SECRET, { accept: BROWSER_ACCEPT })), 303],
       ['the 303 that carries the session', () => routeWith().route(formPost(SECRET)), 303],
       ['the 303 back to the access page', () => routeWith().route(formPost(WRONG, { accept: BROWSER_ACCEPT })), 303],
+      ['the 303 back to the access page for a body too large', () => routeWith().route(streamedPost(SECRET, 4097, { accept: BROWSER_ACCEPT })), 303],
+      ['the 403 for a cross-site post', () => routeWith().route(formPost(SECRET, { origin: EVIL_ORIGIN })), 403],
+      ['the 303 back to the access page for a cross-site post', () => routeWith().route(formPost(SECRET, { accept: BROWSER_ACCEPT, 'sec-fetch-site': 'cross-site' })), 303],
       ['the 401 for a wrong passphrase', () => routeWith().route(formPost(WRONG)), 401],
+      ['the 413 for a body too large', () => routeWith().route(streamedPost(SECRET, 4097)), 413],
       ['the 429 for too many attempts', async () => { const { route } = routeWith(); await lockOut(route); return route(formPost(SECRET)); }, 429],
-      ['the 503 for an unconfigured gate', () => routeWith({ env: () => ({}) }).route(formPost(SECRET)), 503],
+      ['the 503 for an unconfigured gate', () => routeWith({ env: () => CONFIGURED_ORIGIN }).route(formPost(SECRET)), 503],
     ];
 
     it.each(outcomes)('%s is uncacheable', async (_name, run, status) => {
@@ -759,7 +1191,7 @@ describe('accessRoute', () => {
       for (let i = 0; i < 4; i += 1) seen.push(await everythingIn(await route(formPost(WRONG))));
       seen.push(await everythingIn(await route(formPost(SECRET))));
       seen.push(await everythingIn(await route(formPost(WRONG, { accept: BROWSER_ACCEPT }))));
-      seen.push(await everythingIn(await routeWith({ env: () => ({}) }).route(formPost(SECRET))));
+      seen.push(await everythingIn(await routeWith({ env: () => CONFIGURED_ORIGIN }).route(formPost(SECRET))));
       seen.push(await everythingIn(await routeWith().route(formPost(SECRET))));
       seen.push(await everythingIn(await routeWith().route(formPost(SECRET, { accept: BROWSER_ACCEPT }))));
       expect(seen).toHaveLength(10);
@@ -789,7 +1221,7 @@ describe('accessRoute', () => {
       await route(formPost(SECRET));
       expect(warn.mock.calls.at(-1)).toEqual(['pilot-access: refused (429)']);
 
-      env = {};
+      env = CONFIGURED_ORIGIN;
       await route(formPost(SECRET));
       expect(warn.mock.calls.at(-1)).toEqual(['pilot-access: refused (503)']);
       expect(warn).toHaveBeenCalledTimes(7);
@@ -812,12 +1244,112 @@ describe('accessRoute', () => {
       expect(warn.mock.calls).toEqual([['pilot-access: refused (401)']]);
       expect(JSON.stringify(warn.mock.calls)).not.toContain(token);
     });
+
+    it('says "pilot-access: refused (413)" for a body too large, a script\'s or a browser\'s, and nothing that was in it', async () => {
+      const warn = vi.mocked(console.warn);
+      const { route } = routeWith();
+      await route(declaredPost(SECRET, 4097).request);
+      await route(streamedPost(WRONG, 4097, { accept: BROWSER_ACCEPT }));
+      expect(warn.mock.calls).toEqual([['pilot-access: refused (413)'], ['pilot-access: refused (413)']]);
+      expect(JSON.stringify(warn.mock.calls)).not.toContain(SECRET);
+      expect(JSON.stringify(warn.mock.calls)).not.toContain(WRONG);
+    });
   });
 });
 
 describe('signOutRoute', () => {
-  const signOut = (production = false) => signOutRoute({ production: () => production });
+  /**
+   * The sign-out over injected values: `signOutWith` hands it exactly the origin given, unset included, and `signOut` the configured
+   * `PUBLIC_ORIGIN`. Two functions rather than a defaulted parameter, because a default would turn an explicit `undefined` (the
+   * unset row below) into the configured origin, and that row would pass without testing an unset origin at all.
+   */
+  const signOutWith = (publicOrigin: string | undefined, production = false) =>
+    signOutRoute({ publicOrigin: () => publicOrigin, production: () => production });
+  const signOut = (production = false) => signOutWith(PUBLIC_ORIGIN, production);
   const post = (url = SIGN_OUT_URL, headers: Record<string, string> = {}) => new Request(url, { method: 'POST', headers });
+  const browser = { accept: BROWSER_ACCEPT };
+
+  it.each(CROSS_SITE)('refuses a sign-out that is cross-site %s with 403 cross_site to a script and a relative 303 to cross_site to a browser, with no Set-Cookie, so the cookie is not cleared', async (_name, headers) => {
+    const request = post(SIGN_OUT_URL, headers);
+    expectCarries(request, headers);
+    const script = await signOut()(request);
+    expect(script.status).toBe(403);
+    expect(script.headers.get('content-type')).toBe('application/json');
+    expect(script.headers.get('cache-control')).toBe('no-store');
+    expect(script.headers.get('location')).toBeNull();
+    expect(script.headers.getSetCookie()).toEqual([]);
+    expect(await script.text()).toBe('{"error":"cross_site"}');
+
+    const page = await signOut()(post(SIGN_OUT_URL, { ...browser, ...headers }));
+    expect(page.status).toBe(303);
+    expect(page.headers.get('location')).toBe('/pilot-access?reason=cross_site');
+    expect(page.headers.get('cache-control')).toBe('no-store');
+    expect(page.headers.getSetCookie()).toEqual([]);
+    expect(await page.text()).toBe('');
+  });
+
+  it.each(SAME_SITE)('clears the cookie for a sign-out from the site %s, to a script and to a browser: the control for the refusals above', async (_name, headers) => {
+    const request = post(SIGN_OUT_URL, headers);
+    expectCarries(request, headers);
+    for (const response of [await signOut()(request), await signOut()(post(SIGN_OUT_URL, { ...browser, ...headers }))]) {
+      expect(response.status).toBe(303);
+      expect(response.headers.get('location')).toBe('/pilot-access');
+      expect(response.headers.getSetCookie()).toEqual([CLEARED_COOKIE]);
+    }
+  });
+
+  describe('with an unusable public origin', () => {
+    const unusableOrigins: [string, string | undefined][] = [
+      ['not set', undefined],
+      ['blank', ''],
+      ['written with a trailing slash', 'https://gate.example.test/'],
+      ['a loopback address', 'http://127.0.0.1:3000'],
+    ];
+    /** What a sign-out from the site sends where no origin can be compared: each is cleared. */
+    const clears: [string, Record<string, string>][] = [
+      ['Origin and Sec-Fetch-Site: same-origin, as a current browser sends from the site', FROM_THE_SITE],
+      ['Sec-Fetch-Site: same-origin alone', { 'sec-fetch-site': 'same-origin' }],
+      ['neither header', {}],
+    ];
+    /** What cannot be judged without an origin, or says it came from elsewhere: each is refused. */
+    const refuses: [string, Record<string, string>][] = [
+      ['Origin without Sec-Fetch-Site', { origin: PUBLIC_ORIGIN }],
+      ['another site by Origin alone', { origin: EVIL_ORIGIN }],
+      ['Origin with Sec-Fetch-Site: same-site', { origin: PUBLIC_ORIGIN, 'sec-fetch-site': 'same-site' }],
+      ['Sec-Fetch-Site: cross-site alone', { 'sec-fetch-site': 'cross-site' }],
+    ];
+
+    it.each(unusableOrigins)('still signs out a browser that sends Sec-Fetch-Site: same-origin, and a request with neither header, when the origin is %s', async (_name, publicOrigin) => {
+      for (const [name, headers] of clears) {
+        const response = await signOutWith(publicOrigin)(post(SIGN_OUT_URL, headers));
+        expect(response.status, name).toBe(303);
+        expect(response.headers.get('location'), name).toBe('/pilot-access');
+        expect(response.headers.getSetCookie(), name).toEqual([CLEARED_COOKIE]);
+      }
+    });
+
+    it.each(unusableOrigins)('refuses an Origin it cannot judge without Sec-Fetch-Site: same-origin, with 403 and no Set-Cookie, when the origin is %s', async (_name, publicOrigin) => {
+      for (const [name, headers] of refuses) {
+        const response = await signOutWith(publicOrigin)(post(SIGN_OUT_URL, headers));
+        expect(response.status, name).toBe(403);
+        expect(response.headers.getSetCookie(), name).toEqual([]);
+        expect(await response.text(), name).toBe('{"error":"cross_site"}');
+      }
+    });
+  });
+
+  it('logs "pilot-access: refused (403)" for a cross-site sign-out, and nothing for one it clears', async () => {
+    const warn = vi.mocked(console.warn);
+    await signOut()(post(SIGN_OUT_URL, FROM_THE_SITE));
+    await signOut()(post());
+    expect(warn).not.toHaveBeenCalled();
+
+    // The control: the same spy sees the refusal, so its silence above is not an unplugged spy.
+    await signOut()(post(SIGN_OUT_URL, { origin: EVIL_ORIGIN }));
+    await signOut()(post(SIGN_OUT_URL, { ...browser, 'sec-fetch-site': 'cross-site' }));
+    expect(warn.mock.calls).toEqual([['pilot-access: refused (403)'], ['pilot-access: refused (403)']]);
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('evil');
+  });
 
   it('answers 303 to /pilot-access with the cookie emptied and expired on its own name and path, and an empty body', async () => {
     const response = await signOut()(post());
@@ -849,18 +1381,20 @@ describe('signOutRoute', () => {
 
 describe('the exported routes', () => {
   // The route files bind the real environment, clock, mode and limiter to the factories. Every case calls `setUp` first, which stubs
-  // all three variables the routes read and fakes `Date` alone, so nothing the real environment holds can reach a route; `afterEach`
+  // all four variables the routes read and fakes `Date` alone, so nothing the real environment holds can reach a route; `afterEach`
   // puts the environment and the clock back. Each case then loads a fresh copy of the module, so every case starts with an empty limiter.
   interface Wiring {
     secret: string | null;
     revokedBefore: string | null;
+    publicOrigin: string | null;
     nodeEnv: string;
   }
 
   function setUp(wiring: Partial<Wiring> = {}, now: Date = NOW): void {
-    const { secret, revokedBefore, nodeEnv }: Wiring = { secret: SECRET, revokedBefore: null, nodeEnv: 'test', ...wiring };
+    const { secret, revokedBefore, publicOrigin, nodeEnv }: Wiring = { secret: SECRET, revokedBefore: null, publicOrigin: PUBLIC_ORIGIN, nodeEnv: 'test', ...wiring };
     vi.stubEnv(ACCESS_SECRET_ENV, secret ?? undefined);
     vi.stubEnv(ACCESS_REVOKED_BEFORE_ENV, revokedBefore ?? undefined);
+    vi.stubEnv(PUBLIC_ORIGIN_ENV, publicOrigin ?? undefined);
     vi.stubEnv('NODE_ENV', nodeEnv);
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(now);
@@ -1109,6 +1643,123 @@ describe('the exported routes', () => {
       expect(script.status).toBe(401);
       expect(script.headers.get('location')).toBeNull();
     });
+
+    it('answers a body too large with 413 to a script and a relative 303 to too_large for a browser, on the declared and the streamed path, and signs in a body of exactly 4096', async () => {
+      setUp();
+      const { POST } = await freshAccessRoute();
+      const declared = declaredPost(SECRET, 4097);
+      const script = await POST(declared.request);
+      expect(script.status).toBe(413);
+      expect(await script.text()).toBe('{"error":"too_large"}');
+      expect(script.headers.getSetCookie()).toEqual([]);
+      expect(declared.record.pulls).toBe(0);
+
+      const streamed = await POST(streamedPost(SECRET, 4097));
+      expect(streamed.status).toBe(413);
+      expect(await streamed.text()).toBe('{"error":"too_large"}');
+      expect(streamed.headers.getSetCookie()).toEqual([]);
+
+      for (const request of [declaredPost(SECRET, 4097, { accept: BROWSER_ACCEPT }).request, streamedPost(SECRET, 4097, { accept: BROWSER_ACCEPT })]) {
+        const browser = await POST(request);
+        expect(browser.status).toBe(303);
+        expect(browser.headers.get('location')).toBe('/pilot-access?reason=too_large');
+        expect(browser.headers.getSetCookie()).toEqual([]);
+      }
+
+      const accepted = await POST(streamedPost(SECRET, 4096));
+      expect(accepted.status).toBe(303);
+      expect(accepted.headers.get('location')).toBe('/dashboard');
+      expect(sessionOf(accepted).attributes).toBe(COOKIE_TAIL);
+    });
+
+    it('never charges a body too large to the limiter: after six, a wrong passphrase is answered 401 and not 429, and it then takes four more to lock', async () => {
+      setUp();
+      const { POST } = await freshAccessRoute();
+      for (let i = 0; i < 3; i += 1) {
+        expect((await POST(declaredPost(WRONG, 4097).request)).status, `declared ${i + 1}`).toBe(413);
+        expect((await POST(streamedPost(WRONG, 4097))).status, `streamed ${i + 1}`).toBe(413);
+      }
+      expect((await POST(formPost(WRONG))).status).toBe(401);
+
+      // The control: this module's limiter is live, and it is the five wrong passphrases, not the six bodies, that lock it.
+      for (let i = 0; i < 4; i += 1) expect((await POST(formPost(WRONG))).status, `wrong passphrase ${i + 2}`).toBe(401);
+      expect((await POST(formPost(SECRET))).status).toBe(429);
+    });
+
+    it('reads the public origin under its own name, for each request: while it is not set or is unusable the right passphrase is answered 503 with no session, and once it is usable the same passphrase is accepted', async () => {
+      setUp({ publicOrigin: null });
+      const { POST } = await freshAccessRoute();
+
+      const script = await POST(formPost(SECRET));
+      expect(script.status).toBe(503);
+      expect(await script.text()).toBe(REFUSAL_BODIES[503]);
+      expect(script.headers.getSetCookie()).toEqual([]);
+      const browser = await POST(formPost(SECRET, { accept: BROWSER_ACCEPT }));
+      expect(browser.status).toBe(303);
+      expect(browser.headers.get('location')).toBe('/pilot-access?reason=unconfigured');
+      expect(browser.headers.getSetCookie()).toEqual([]);
+
+      vi.stubEnv(PUBLIC_ORIGIN_ENV, 'https://gate.example.test/');
+      expect((await POST(formPost(SECRET))).status).toBe(503);
+
+      vi.stubEnv(PUBLIC_ORIGIN_ENV, PUBLIC_ORIGIN);
+      const accepted = await POST(formPost(SECRET));
+      expect(accepted.status).toBe(303);
+      expect(accepted.headers.get('location')).toBe('/dashboard');
+      expect(sessionOf(accepted).attributes).toBe(COOKIE_TAIL);
+    });
+
+    it('never charges a post refused for the origin to the limiter: after six, a wrong passphrase is answered 401 and not 429, and it then takes four more to lock', async () => {
+      setUp({ publicOrigin: null });
+      const { POST } = await freshAccessRoute();
+      for (let i = 0; i < 6; i += 1) expect((await POST(formPost(WRONG))).status, `refused for the origin ${i + 1}`).toBe(503);
+
+      vi.stubEnv(PUBLIC_ORIGIN_ENV, PUBLIC_ORIGIN);
+      expect((await POST(formPost(WRONG))).status).toBe(401);
+      // The control: this module's limiter is live, and it is the five wrong passphrases, not the six refusals, that lock it.
+      for (let i = 0; i < 4; i += 1) expect((await POST(formPost(WRONG))).status, `wrong passphrase ${i + 2}`).toBe(401);
+      expect((await POST(formPost(SECRET))).status).toBe(429);
+    });
+
+    it('refuses a cross-site post against the public origin it reads by name, for each request: another site gets 403 or a 303 to cross_site, the configured origin is signed in, and once the variable names another origin the first is another site', async () => {
+      setUp();
+      const { POST } = await freshAccessRoute();
+
+      const script = await POST(formPost(SECRET, { origin: EVIL_ORIGIN }));
+      expect(script.status).toBe(403);
+      expect(await script.text()).toBe(REFUSAL_BODIES[403]);
+      expect(script.headers.getSetCookie()).toEqual([]);
+      const browser = await POST(formPost(SECRET, { accept: BROWSER_ACCEPT, 'sec-fetch-site': 'cross-site' }));
+      expect(browser.status).toBe(303);
+      expect(browser.headers.get('location')).toBe('/pilot-access?reason=cross_site');
+      expect(browser.headers.getSetCookie()).toEqual([]);
+
+      const accepted = await POST(formPost(SECRET, { accept: BROWSER_ACCEPT, ...FROM_THE_SITE }));
+      expect(accepted.status).toBe(303);
+      expect(accepted.headers.get('location')).toBe('/dashboard');
+      expect(sessionOf(accepted).attributes).toBe(COOKIE_TAIL);
+
+      const moved = 'https://moved.example.test';
+      vi.stubEnv(PUBLIC_ORIGIN_ENV, moved);
+      expect((await POST(formPost(SECRET, FROM_THE_SITE))).status).toBe(403);
+      const followed = await POST(formPost(SECRET, { origin: moved, 'sec-fetch-site': 'same-origin' }));
+      expect(followed.status).toBe(303);
+      expect(sessionOf(followed).attributes).toBe(COOKIE_TAIL);
+    });
+
+    it('never charges a cross-site post to the limiter: after six, a wrong passphrase from the site is answered 401 and not 429, and it then takes four more to lock', async () => {
+      setUp();
+      const { POST } = await freshAccessRoute();
+      for (let i = 0; i < 6; i += 1) {
+        const [name, headers] = CROSS_SITE[i % CROSS_SITE.length];
+        expect((await POST(formPost(WRONG, headers))).status, `cross-site ${i + 1}, ${name}`).toBe(403);
+      }
+
+      expect((await POST(formPost(WRONG, FROM_THE_SITE))).status).toBe(401);
+      // The control: this module's limiter is live, and it is the five wrong passphrases, not the six cross-site posts, that lock it.
+      for (let i = 0; i < 4; i += 1) expect((await POST(formPost(WRONG, FROM_THE_SITE))).status, `wrong passphrase ${i + 2}`).toBe(401);
+      expect((await POST(formPost(SECRET, FROM_THE_SITE))).status).toBe(429);
+    });
   });
 
   describe('the sign-out route', () => {
@@ -1133,6 +1784,47 @@ describe('the exported routes', () => {
       expect(response.status).toBe(303);
       expect(response.headers.getSetCookie()).toEqual([CLEARED_COOKIE]);
     });
+
+    it('signs out on a server whose public origin is not set, for a request with neither header and for a browser that sends Sec-Fetch-Site: same-origin, and refuses an Origin it cannot judge', async () => {
+      setUp({ publicOrigin: null });
+      const { POST } = await freshSignOutRoute();
+      for (const [name, headers] of [['neither header', {}], ['what a browser sends from the site', FROM_THE_SITE]] as const) {
+        const response = await POST(new Request(SIGN_OUT_URL, { method: 'POST', headers }));
+        expect(response.status, name).toBe(303);
+        expect(response.headers.get('location'), name).toBe('/pilot-access');
+        expect(response.headers.getSetCookie(), name).toEqual([CLEARED_COOKIE]);
+      }
+
+      const refused = await POST(new Request(SIGN_OUT_URL, { method: 'POST', headers: { origin: PUBLIC_ORIGIN } }));
+      expect(refused.status).toBe(403);
+      expect(refused.headers.getSetCookie()).toEqual([]);
+    });
+
+    it('refuses a cross-site sign-out against the public origin it reads by name, for each request, with no Set-Cookie, and clears the cookie for a sign-out from that origin', async () => {
+      setUp();
+      const { POST } = await freshSignOutRoute();
+
+      const script = await POST(new Request(SIGN_OUT_URL, { method: 'POST', headers: { origin: EVIL_ORIGIN } }));
+      expect(script.status).toBe(403);
+      expect(await script.text()).toBe(REFUSAL_BODIES[403]);
+      expect(script.headers.getSetCookie()).toEqual([]);
+      const browser = await POST(new Request(SIGN_OUT_URL, { method: 'POST', headers: { accept: BROWSER_ACCEPT, 'sec-fetch-site': 'cross-site' } }));
+      expect(browser.status).toBe(303);
+      expect(browser.headers.get('location')).toBe('/pilot-access?reason=cross_site');
+      expect(browser.headers.getSetCookie()).toEqual([]);
+
+      const cleared = await POST(new Request(SIGN_OUT_URL, { method: 'POST', headers: { accept: BROWSER_ACCEPT, ...FROM_THE_SITE } }));
+      expect(cleared.status).toBe(303);
+      expect(cleared.headers.get('location')).toBe('/pilot-access');
+      expect(cleared.headers.getSetCookie()).toEqual([CLEARED_COOKIE]);
+
+      const moved = 'https://moved.example.test';
+      vi.stubEnv(PUBLIC_ORIGIN_ENV, moved);
+      expect((await POST(new Request(SIGN_OUT_URL, { method: 'POST', headers: { origin: PUBLIC_ORIGIN } }))).status).toBe(403);
+      const followed = await POST(new Request(SIGN_OUT_URL, { method: 'POST', headers: { origin: moved } }));
+      expect(followed.status).toBe(303);
+      expect(followed.headers.getSetCookie()).toEqual([CLEARED_COOKIE]);
+    });
   });
 });
 
@@ -1142,6 +1834,8 @@ describe('the sign-in modules', () => {
   const ACCESS_ROUTE = '../app/api/pilot-access/route.ts';
   const SIGN_OUT_ROUTE = '../app/api/pilot-access/sign-out/route.ts';
   const PAGE = '../app/pilot-access/page.tsx';
+  const REQUEST_BODY = '../lib/request-body.ts';
+  const PUBLIC_ORIGIN_MODULE = '../lib/public-origin.ts';
 
   /** The module's code with its comments removed, so prose that names a forbidden module or header is not taken for using it. */
   function code(relative: string): string {
@@ -1155,12 +1849,14 @@ describe('the sign-in modules', () => {
     ...new Set([...code(relative).matchAll(/(?:\bfrom\s+|\bimport\s*\(?\s*|\brequire\s*\(\s*)['"]([^'"]+)['"]/g)].map((match) => match[1])),
   ].sort();
 
-  it('keeps the handler to the access module, so nothing here can reach a profile, the pack or the record', () => {
-    expect(importsOf(HANDLER)).toEqual(['@/lib/access']);
+  it('keeps the handler to the access module, the public-origin module and the body reader, the last two importing nothing, so nothing here can reach a profile, the pack or the record', () => {
+    expect(importsOf(HANDLER)).toEqual(['@/lib/access', '@/lib/public-origin', '@/lib/request-body']);
+    expect(importsOf(REQUEST_BODY)).toEqual([]);
+    expect(importsOf(PUBLIC_ORIGIN_MODULE)).toEqual([]);
   });
 
-  it('keeps each route to the access module and the handler', () => {
-    expect(importsOf(ACCESS_ROUTE)).toEqual(['@/lib/access', '@/lib/pilot-access-handler']);
+  it('keeps the sign-in route to the access module, the handler and the public-origin module, and the sign-out route to the handler', () => {
+    expect(importsOf(ACCESS_ROUTE)).toEqual(['@/lib/access', '@/lib/pilot-access-handler', '@/lib/public-origin']);
     expect(importsOf(SIGN_OUT_ROUTE)).toEqual(['@/lib/pilot-access-handler']);
   });
 
@@ -1168,14 +1864,16 @@ describe('the sign-in modules', () => {
     expect(importsOf(PAGE)).toEqual(['@/components/ui/primitives', '@/lib/pilot-access-handler', 'next', 'next/link']);
   });
 
-  it('reads a request header only by the names accept and content-type, so no address header can be the limiter key', () => {
+  it('reads a request header only by the names accept (in sign-in and in sign-out), content-type, origin and sec-fetch-site, and the body reader only content-length and content-type, so no address header can be the limiter key', () => {
     const named = (relative: string) =>
       [...code(relative).matchAll(/\.headers\s*\.\s*get\(\s*['"]([^'"]+)['"]\s*\)/g)].map((match) => match[1].toLowerCase()).sort();
-    // Every use of `.headers` is one of the two named reads: the handler holds no other.
+    // Every use of `.headers` is one of the named reads: the handler holds no other, and neither does the body reader.
     const uses = (relative: string) => [...code(relative).matchAll(/\.headers\b/g)].length;
-    expect(named(HANDLER)).toEqual(['accept', 'content-type']);
-    expect(uses(HANDLER)).toBe(2);
-    for (const route of [ACCESS_ROUTE, SIGN_OUT_ROUTE]) {
+    expect(named(HANDLER)).toEqual(['accept', 'accept', 'content-type', 'origin', 'sec-fetch-site']);
+    expect(uses(HANDLER)).toBe(5);
+    expect(named(REQUEST_BODY)).toEqual(['content-length', 'content-type']);
+    expect(uses(REQUEST_BODY)).toBe(2);
+    for (const route of [ACCESS_ROUTE, SIGN_OUT_ROUTE, PUBLIC_ORIGIN_MODULE]) {
       expect(named(route)).toEqual([]);
       expect(uses(route)).toBe(0);
     }
@@ -1184,16 +1882,20 @@ describe('the sign-in modules', () => {
     for (const read of ["request.headers.get('x-forwarded-for')", "headers.get('X-Real-IP')", "headers.get('cf-connecting-ip')", "headers.get('true-client-ip')", 'request.ip']) {
       expect(read).toMatch(addressHeader);
     }
-    for (const relative of [HANDLER, ACCESS_ROUTE, SIGN_OUT_ROUTE]) {
+    for (const relative of [HANDLER, ACCESS_ROUTE, SIGN_OUT_ROUTE, REQUEST_BODY, PUBLIC_ORIGIN_MODULE]) {
       expect(code(relative), relative).not.toMatch(addressHeader);
     }
   });
 
-  it('reads process.env only as static reads of the two access variables and NODE_ENV in the access route, of NODE_ENV alone in the sign-out route, and not at all in the handler', () => {
+  it('reads process.env only as static reads of the two access variables, the public origin and NODE_ENV in the access route, of the public origin and NODE_ENV in the sign-out route, and not at all in the handler, the body reader or the public-origin module', () => {
     const reads = (relative: string) => [...code(relative).matchAll(/process\.env(?:\.\w+|\[|\b)/g)].map((match) => match[0]).sort();
     expect(reads(HANDLER)).toEqual([]);
-    expect(reads(ACCESS_ROUTE)).toEqual([`process.env.${ACCESS_REVOKED_BEFORE_ENV}`, `process.env.${ACCESS_SECRET_ENV}`, 'process.env.NODE_ENV'].sort());
-    expect(reads(SIGN_OUT_ROUTE)).toEqual(['process.env.NODE_ENV']);
+    expect(reads(REQUEST_BODY)).toEqual([]);
+    expect(reads(PUBLIC_ORIGIN_MODULE)).toEqual([]);
+    expect(reads(ACCESS_ROUTE)).toEqual(
+      [`process.env.${ACCESS_REVOKED_BEFORE_ENV}`, `process.env.${ACCESS_SECRET_ENV}`, 'process.env.DATASTRATA_PUBLIC_ORIGIN', 'process.env.NODE_ENV'].sort(),
+    );
+    expect(reads(SIGN_OUT_ROUTE)).toEqual(['process.env.DATASTRATA_PUBLIC_ORIGIN', 'process.env.NODE_ENV']);
   });
 
   describe('the page', () => {

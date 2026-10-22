@@ -9,10 +9,16 @@
  * accepting the message and dropping it. The contact page does not render the
  * form at all while the variable is unset (`lib/contact-delivery.ts`), so this
  * refusal is the backstop for a direct request, not the visitor's experience.
+ *
+ * The body is read within 32 KiB (`lib/request-body.ts`, pilot readiness B4):
+ * a 5,000-character message at up to four bytes per character, and the other
+ * fields. A larger body is answered 413 in this route's own shape before it is
+ * parsed or delivered; one within the limit is parsed as before.
  */
 
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { CONTACT_BODY_LIMIT, readBodyWithin, withBoundedBody } from '@/lib/request-body';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -27,9 +33,17 @@ const schema = z.object({
 });
 
 export async function POST(request: Request) {
+  const bounded = await readBodyWithin(request, CONTACT_BODY_LIMIT);
+  if (!bounded.ok) {
+    return NextResponse.json(
+      { ok: false, message: 'Your message is too long.' },
+      { status: 413, headers: { 'Cache-Control': 'no-store' } },
+    );
+  }
+
   let body: z.infer<typeof schema>;
   try {
-    body = schema.parse(await request.json());
+    body = schema.parse(await withBoundedBody(request, bounded.bytes).json());
   } catch {
     return NextResponse.json({ ok: false, message: 'Please check the form and try again.' }, { status: 400 });
   }

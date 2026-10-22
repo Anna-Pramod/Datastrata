@@ -6,7 +6,7 @@
  * loaded, and a refused browser is sent back here with the reason in the query string.
  *
  * **Why the reason is a sentence from a map and never the query string itself.** Anyone can write a link to this page with any
- * text in `reason`. `accessReasonMessage` answers only for the eight reasons the gate and the route send and gives null for
+ * text in `reason`. `accessReasonMessage` answers only for the ten reasons the gate and the routes send and gives null for
  * everything else, so nothing a visitor writes into a link can appear here as the gate's own words. A reason given twice is
  * ignored rather than guessed at.
  *
