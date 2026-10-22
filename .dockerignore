@@ -1,0 +1,37 @@
+# What `docker build .` must not send to the builder. The image is built from
+# a clean checkout; these lines also keep a working copy's local state out.
+# Patterns follow Docker's rules: relative to the repository root, `**` spans
+# any number of directories, and an excluded directory takes its contents with
+# it. A bare name such as `docs` means the root's `docs` only.
+
+# Installed and built state. The build stage installs its own dependencies for
+# Linux and builds afresh; a host's would be for the wrong platform, or stale.
+**/node_modules
+**/.next
+**/*.tsbuildinfo
+**/next-env.d.ts
+
+# Repository metadata and CI, which the build does not read.
+.git
+.github
+
+# Anything that could hold a secret or a private profile. The image carries
+# neither: the host supplies them when the container starts.
+.env
+.env.*
+**/.env
+**/.env.*
+**/secrets
+**/*.profile.json
+
+# Local noise.
+**/*.log
+**/.DS_Store
+
+# Documentation and design sources, which the build does not read.
+docs
+New website design
+
+# The build definition itself.
+Dockerfile
+.dockerignore
