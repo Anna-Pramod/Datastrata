@@ -1,5 +1,7 @@
-# DataStrata vision, version 1
+# DataStrata vision, version 1.1 (proposed)
 
+> **Version 1.1, PROPOSED on 2026-10-23 at your direction; not yet approved.** It adds **E8, delivery phases ordered for the earliest deployment**: each phase ends integrated and deployed, and the hand-over's separate document stages are folded into the phases that need them. It also updates E1, E4 (constraint 11), choice 8's timing and the board's phase map. No capability is added, removed or re-scoped. Version 1 stays the approved reference until you approve version 1.1.
+> **Version 1.1, corrected on 2026-10-23 before approval, at your direction.** AI rule drafting (RUL-2) now goes live only after the legal evaluation (CNF-3), whose reference-judgement author is people decision P4: CNF-3 moves from DP7 to DP6, and P4 becomes a DP6 gate. Professional-indemnity insurance (DEP-9) is now a prerequisite to the first paid contract, a DP7 gate, while the rest of DEP-9 stays in DP8; it is business decision 9 in E6. The deployment-first order and the scope are unchanged: no capability is added, removed or re-scoped.
 > **Version 1, approved by you on 2026-10-23.** This approves the product vision only, not sequencing, implementation or runtime work. Still open: the people decisions P1–P5 (E6); the eight board rows marked Suggested, each needing your approval; and every design marked PROVISIONAL, among them the confidence mechanism (C6), hosting (D5, choice 8), the subscription check (D4) and the discovery feed list (C2). Approval makes the behaviour marked PROPOSED the agreed product direction; each part still needs its own plan and approvals before it is built.
 > **Version 1 changes from draft 3:** substantive support is judged only by recorded AI or human judgments; DEP-9 has no demand condition and separates SOC 2 readiness from certification; behaviour while the MacBook is off and the subscription check are consistent throughout; DEP-7 refers to the operating authority P2 will name.
 > This document and its register, [`VISION-BOARD.md`](VISION-BOARD.md), are DataStrata's reference for what we build and why: the "bible" every plan and task must cite. Nothing in either file authorises building, sequencing, installing, spending, buying, creating an account, sending a live communication or running an agent.
@@ -14,7 +16,7 @@
 - **Part B:** the customer: sign-in, the journey, the regulation checker, history and notifications.
 - **Part C:** DataStrata's staff: the acts you perform, sources and scanning, the approval workbench, adjudication, the confidence level, the admin dashboard and the agents.
 - **Part D:** the foundation that exists (Opus 5.5, Qwen), where rule and source updates live, data protection and the platform.
-- **Part E:** the three tracks, what is settled, the boundaries still in force, the constraints the build plan inherits, the choices open with my recommendations, and the corrections to the hand-over.
+- **Part E:** the three tracks, what is settled, the boundaries still in force, the constraints the build plan inherits, the choices open with my recommendations, the corrections to the hand-over, and the delivery phases (E8, proposed in version 1.1).
 
 `VISION-BOARD.md` lists every capability with an ID, its disposition, its implementation status, its verification evidence (kept separate), its source and its end-to-end acceptance. IDs such as **[CHK-1]** point into it.
 
@@ -64,6 +66,7 @@ The rule that keeps the vision from drifting. [U23; wording PROPOSED]
 | CPR | `docs/superpowers/CHECKPOINT-pilot-readiness.md` |
 | MSG | Your message to Codex of 2026-10-22, quoted in the audit §1.4 |
 | U23 | Your direction of 2026-10-23, quoted in the hand-over §1 |
+| U23-P | Your direction of 2026-10-23 on phases: "it should be in an order that is aimed at deployment at the earliest. phases have to be defined and vision document to be updated accordingly" |
 | AUDIT | `audits/2026-10-22-vision-and-implementation-audit.md` (outside the repository) |
 | CODEX | Codex's read-only review of the audit and the hand-over, 2026-10-22T20:37Z |
 | LW, F1B | The paused drafts `specs/2026-10-22-local-product-workflow-sequence.md` and `plans/2026-10-22-increment-1b-i-local-platform-foundation.md` (inputs only, not approved) |
@@ -510,7 +513,7 @@ Two further inputs are shown but are not signals: objections from a second, non-
 | Discovery | Instruments the feeds announced in the past | Relevant instruments missed; irrelevant ones proposed |
 | Case proposals | Resolved cases with reference answers | Correct, wrong, abstained |
 
-Each set is written before any model output for it is seen, kept away from prompts and tuning, scored per class and never folded into one number (TRUST §3.2–§3.3). TRUST gives the legal set's reference judgements to a named expert; who writes them now is people decision P4. A cheaper path (a Qwen pre-pass, fewer prosecutors, a cheaper model) replaces a baseline only after it shows non-inferiority on that task's set (TRUST §3.4).
+Each set is written before any model output for it is seen, kept away from prompts and tuning, scored per class and never folded into one number (TRUST §3.2–§3.3). TRUST gives the legal set's reference judgements to a named expert; who writes them now is people decision P4. AI rule drafting goes live only after its drafts meet the legal set's thresholds, stated in advance (E8, rule 4). A cheaper path (a Qwen pre-pass, fewer prosecutors, a cheaper model) replaces a baseline only after it shows non-inferiority on that task's set (TRUST §3.4).
 
 **What customers see.** One form only, as the UX brief specifies for extraction review (UX phase 1): on each candidate fact they confirm, the page, the passage and how exactly the value matched. Never a level on a result or in an export.
 
@@ -717,6 +720,8 @@ Every paid run starts within a recorded approval (law 23): a standing approval w
 
 Passing tests establish none of the three on their own.
 
+The delivery phases of E8 order the software and deployment tracks, so that each phase ends integrated and deployed. The content track runs alongside them and joins the product in delivery phase 7. [PROPOSED, version 1.1; U23-P]
+
 ### E2. Already settled
 
 From your direction of 2026-10-23 and earlier approvals:
@@ -759,6 +764,7 @@ The vision plans features that need each of these. None is lifted by this docume
 8. Code runs only in a clean clone with its own dependencies, never through the candidate's linked `node_modules`.
 9. The UX brief's acceptance criteria (UX §17) become end-to-end product tests (EXP-12).
 10. The data design leaves room for later-phase items, such as suppliers as records and voluntary programs as requirements, so they arrive without a redesign (GTD-1, GTD-12).
+11. **Every delivery phase ends integrated and deployed** on the hosted environment, with its end-to-end acceptance passing against that environment, never against a local build only (E8). [PROPOSED, version 1.1; U23-P]
 
 ### E5. The choices, as settled
 
@@ -869,7 +875,10 @@ Today 0 of 23 requirements are verified or ratified. Signing is unreachable (no 
 - **(D) EU-only providers** (Scaleway, STACKIT, IONOS, Hetzner), if customers demand no US-parent processors. The heaviest operations load.
 - **Email, recommended:** Brevo for both transactional mail and the newsletter (one EU vendor with double opt-in), with every consent also recorded in DataStrata's own consent ledger. Fallback: Amazon SES in Frankfurt with our own double opt-in. PROP allows one transactional-email client; Brevo covers both streams under it.
 - **Before committing:** read the Neon and Brevo agreements and sub-processor lists; confirm Frankfurt in the Vercel-to-Neon set-up; test row-level security through the pooled connection; run a week's delivery trial to Gmail, Outlook and German business mail; and have German counsel review the consent text and the privacy notice, and say whether the weekly briefing is a service message or advertising.
-- **Timing** is a plan question. Your direction of 2026-10-22 builds the complete product locally first; PROP needs hosting only for continuous scanning. But the email-gated registration and scheduled scanning only work for real once hosted, so the plan should set up hosting before those phases finish.
+- **Timing** (updated in version 1.1, proposed): deployment comes first. Delivery phase 1 deploys the stateless public site and free checker, and each later phase deploys its own workflow (E8). This replaces your direction of 2026-10-22 to build the complete product locally before hosting [U23-P]. D5's four conditions apply as the phases bring what they protect:
+  - the complete data-flow check from delivery phase 1;
+  - row-level security through the pooled connection, and residency wording that matches the flows, from delivery phase 2, before any company data is stored;
+  - the scanning runtime's enforced isolation from delivery phase 4, when scanning first runs.
 
 ### E6. Decisions that stay open (yours, not mine to recommend)
 
@@ -877,7 +886,7 @@ Today 0 of 23 requirements are verified or ratified. Signing is unreachable (no 
 - **P1.** Who the second person is, and whether both of you hold every staff permission, subject to the two-person publication rule.
 - **P2.** Who gives the operating approval for an environment (law 23): you alone, or both of you.
 - **P3.** Whether, and when, to engage a professional legal expert to ratify: at least the launch country's national-law pack, without which national-law conclusions stay "requires review" and nothing is "Supported".
-- **P4.** Who writes the reference judgements for the legal evaluation, which TRUST assigns to a named expert.
+- **P4.** Who writes the reference judgements for the legal evaluation, which TRUST assigns to a named expert. It is needed before DP6 starts, because AI rule drafting goes live only after that evaluation (E8, rule 4). TRUST §3.2 names "the same authority that ratifies pack content". If you follow it, the expert of P3 is engaged before DP6, while ratification itself stays a DP7 gate.
 - **P5.** Who holds the sealed break-glass for when both of you are locked out.
 
 **Suggestions:** the eight board rows marked Suggested each need your approval before they are planned.
@@ -891,6 +900,7 @@ Today 0 of 23 requirements are verified or ratified. Signing is unreachable (no 
 6. Whether to pursue signing of the launch requirements, including promoting a pipeline identity and lifting the 2026-10-19 freeze (PROP §9.3; RUL-9; E3).
 7. Sales and marketing channels (P1; P3).
 8. Who the pilot audience is. Audience, access and data stay three separate decisions; accounts never follow from audience size [APPROVED: your correction of 2026-10-22].
+9. Professional-indemnity insurance (DEP-9): the cover to buy. It must be in force before the first paid contract, whichever phase that contract comes in; under E8's order that is a DP7 gate [your correction of 2026-10-23].
 
 Hosting (choice 8) is decided with your co-founder once D5's conditions are demonstrated.
 
@@ -918,3 +928,60 @@ From Codex's review of 2026-10-22T20:37Z, each checked here, and from the resear
 13. **Proposed behaviour was written in the present tense** in draft 1 (for example "the deploy refuses"). It is now labelled as proposed; nothing in this vision exists unless the board marks it Built.
 14. **Draft 2 made later capabilities conditional on gates such as customer demand.** Corrected: every agreed capability is committed for phased delivery (choice 5b).
 15. **Draft 2 routed AI on company data to a hosted API.** Replaced by your decision that AI runs on your MacBook, through your subscription and local Qwen (choice 7, D4).
+
+### E8. Delivery phases: deployment first (PROPOSED, version 1.1)
+
+[U23-P. Every phase's order, scope, exit criteria and gates is PROPOSED for your approval.]
+
+This replaces the hand-over's step list, in which document stages came first and integration and deployment came last. Finishing every one of those stages would not have produced a deployed product.
+
+Delivery phases are not the customer journey's phases of B2. They are numbered **DP0 to DP8**, here and on the board, so they never collide with the journey's phases 0 to 6 or with people decisions P1 to P5.
+
+#### Rules for every phase
+
+1. **Done means deployed.** A phase ends only when all four hold:
+   - its release runs on the hosted environment;
+   - its end-to-end acceptance passes against that environment;
+   - a rollback has been rehearsed;
+   - monitoring alerts reach a person.
+
+   Local tests alone never close a phase.
+2. **A complete workflow per phase.** Each phase adds a workflow a customer or a staff member can use end to end, on top of what is already live. Foundations (accounts, database, storage, jobs, email) are built inside the first phase that needs them, never as a stage of their own.
+3. **One plan per phase, written at its start.** The plan specifies behaviour and carries teeth checks (`TEST-EVIDENCE-STANDARD.md`); Codex reviews it and you approve it. It replaces one build plan for everything.
+4. **Designs arrive just in time.**
+   - The confidence design's approval prerequisites (CNF-5) come before DP4; its signals, levels and calibration before DP6.
+   - The Opus and Qwen foundation note, with the subscription check (D4), comes before DP6.
+   - The legal evaluation (CNF-3) comes before AI rule drafting (RUL-2) goes live [your correction of 2026-10-23]:
+     - who writes its reference judgements (people decision P4) is decided before DP6 starts;
+     - the judgements are written before any drafting output for their cases is seen (TRUST §3.2);
+     - AI rule drafting goes live only after its drafts meet the set's thresholds, stated in advance.
+
+     Until then a person drafts each rule change, as in DP4.
+5. **Each permission comes at its own phase.** Public exposure, real company data, automated messages, scheduled jobs, AI jobs and paid plans each start only with their own approval, at the phase that brings them (E3; law 23; D5). Approving one phase lifts nothing for a later one. The first paid contract also needs professional-indemnity insurance in force (DEP-9), whichever phase that contract comes in. Under this order paid plans arrive in DP7, so the insurance is a DP7 gate; the rest of DEP-9, SOC 2 readiness, stays in DP8 [your correction of 2026-10-23].
+6. **The order is fixed; dates are not.** The timeline is hypothetical: no date is committed until a phase's plan estimates its own work.
+7. **Every board row belongs to exactly one phase:** the first phase that delivers it (the phase map at the end of `VISION-BOARD.md`). Experience requirements first delivered in DP1 also apply to every later phase's screens. When an earlier phase needs one part of a row, that part is named among the earlier phase's gates and the row stays where it is (DEP-9's insurance, a DP7 gate).
+8. **The content track runs alongside.** Verification and ratification can start once sources are monitored (DP4). They join the product in DP7 and never hold up DP1 to DP6. The legal evaluation (CNF-3) is not part of this track: it measures the AI, and it gates AI rule drafting in DP6 (rule 4).
+
+#### The phases
+
+| Phase | What goes live | Done when | Gates (your decisions) | Board rows |
+|---|---|---|---|---|
+| **DP0 Ready to build** | Nothing | Version 1.1 is approved; the questionnaire decisions are answered; DP1's gates are decided; DP1's plan is approved | Version 1.1; QD-1, QD-4, QD-8, QD-10, QD-12, QD-13 (the checker and the content corrections it relies on) | None |
+| **DP1 Public site and free checker, live**: the first deployment | The public site and the revised free checker on DataStrata's domain. Stateless: no answers, emails or accounts are stored. Truthful content status, legal pages, monitoring | Production serves the site and the checker from the hosted environment. The checker's goldens and the public-route checks pass against it. The legal pages carry your approval. Alerts reach a person. A rollback has been rehearsed | Public exposure for this scope (E3). The host for a stateless site (choice 8, with D5's data-flow check). The domain (DEP-1, your purchase). The legal entity for the imprint (business decision 5). The legal-page texts | 31 rows, 7 already built: PUB-1, 2, 4, 5; CHK-1, 2, 3, 7; APP-1, 11; KNW-1, 5, 10; PLT-6 to 9; DEP-1 to 5 and 8; EXP-3 to 6 and 9; ACC-9; PRF-14; PRV-3 (if approved) |
+| **DP2 Accounts and saved profiles, live** | Registration by email, directly or from the checker's emailed link. Customer roles and two-factor codes. The versioned company profile per financial year, with guided onboarding and document upload. Stored, explained results (the "Why?" drawer). Customer administration, export and deletion | A registered company builds its profile and sees its stored, cited results on the hosted app. A second synthetic tenant proves isolation. Row-level security works through the pooled connection. Backups restore. The independent authentication review is done | The operating approval for automated messages (P2; law 23). The retention policy (PRV-1). The email provider (choice 8). The authentication approach (ACC-10). Real company data for a pilot (business decision 8). QD-3, QD-5, QD-7 | 57 rows; the full list is in the phase map. Among them: ACC-1 to 4, 6, 8, 10; CHK-4 to 6, 8, 9; PRF-1 to 3, 5 to 7, 9 to 12, 15; APP-2 to 4, 6 to 10, 12, 13; RC-1; NTF-1; CAD-1 to 5; PLT-1, 3 to 5, 10, 13; PRV-1; DEP-6, 7 |
+| **DP3 Staff area and judgment cases, live** | Staff accounts at their own sign-in address and the admin dashboard's first regions. Adjudication queue 2: a missing fact, a contested result or a judgment question becomes a case. A reviewer resolves it through a fact the customer confirms, or a recorded interpretation, and the customer sees the outcome (E4, constraint 1) | On the hosted system a case runs from opening to a customer-visible outcome, with every decision recorded | People decisions P1 (the second person and permissions) and P5 (break-glass) | 10 rows: ACC-5, 7; ADJ-2, 4, 5, 7; APP-14; ADM-1, 3; OBL-14 |
+| **DP4 The regulation checker loop, live** | The source register and scheduled scanning. Change review. Rule changes drafted by a person in the approval workbench. Publication in three records. Reassessment of every affected company and period. Notifications and the weekly briefing | On the hosted system a real official change runs from detection through review, approval, authorisation by the other person, a matching deploy, reassessment and notices. A failed check writes a coverage gap and withholds the all-clear | The operating approval covering scheduled jobs. Standing permissions for each message template (law 23). The scanning runtime's isolation (D5). The approval prerequisites (CNF-5) | 52 rows, 1 already built; the full list is in the phase map. Among them: SRC-1 to 5; SCN-1 to 7; RUL-1, 3, 5 to 7, 10 to 12; RC-2 to 10; CHG-1 to 5; NTF-2 to 4; WB-1, 2, 4; ADJ-1; KNW-2, 9; PLT-2, 12 |
+| **DP5 Obligations to evidence, live** | Obligations with owners, tasks, deadlines and reminders. The gap ledger and exposure. The evidence registry, with acceptance and expiry. Readiness. Dated reports. The Universe Map | On the hosted system a company moves from its results to owned obligations and tasks, accepted evidence, readiness and a dated, reproducible report. The UX brief's acceptance criteria run as end-to-end tests | Your approval of the plan; QD-6 | 27 rows: OBL-1 to 13; EVD-1 to 10, 12; APP-5; ASK-2; EXP-12 |
+| **DP6 AI assistance, live** | The worker on your MacBook and the hosted job queue. Extraction of facts from reports (with the company's AI setting), change triage, AI drafting, discovery of new instruments, briefing prose and Ask DataStrata, each with its evaluation and confidence signals | Each AI job runs from the hosted queue under its standing approval, after passing its own evaluation; for AI rule drafting, that is the legal evaluation (CNF-3). Every output keeps its maker. When the worker is off, work waits and overdue work alerts a person | P4 (who writes the legal evaluation's reference judgements), decided before DP6 starts. AI rule drafting live only after it meets the legal evaluation's thresholds (CNF-3). The subscription check (D4). Each other task's evaluation (CNF-7). The Qwen preconditions (AI-4). Choice 1b's rules. The budgets | 28 rows: AI-1 to 8, 10, 11; CNF-1 to 4, 6, 7; PRF-4, 8, 13; RUL-2; SRC-6, 7; WB-3; ASK-1; PRV-2, 4; ADJ-6 and ADM-5 (if approved) |
+| **DP7 Supported content and the first national pack** | The verification route end to end: fresh captures, dispositions, signing, promotion. The release policy. The first national-law pack, ratified. "Supported" shown for one scenario. Paid plans | One release scenario meets the release policy, and the site shows "Supported" for that scope only | P3 (a professional legal expert). Lifting the 2026-10-19 freeze, run by run (business decision 6). The launch country (business decision 2). Pricing (business decision 3). Professional-indemnity insurance in force before the first paid contract (DEP-9; business decision 9) | 12 rows: KNW-3, 4, 6, 7, 11; RUL-4, 8, 9, 13; ADJ-3; PLT-11; ASK-3 |
+| **DP8 CBAM, then the later phases** | The CBAM pack, the agreed second pack (KNW-8, KNW-12). Then the rest of the wider destination (choice 5b), in the order its own plan sets. Suggested rows such as GTD-10 and GTD-11 come only with your approval, and after CBAM | Per item, under its own plan | Your approval of each later item's plan; QD-11 | 20 rows: KNW-8, 12; GTD-1 to 16; EVD-11; DEP-9 (its insurance is a DP7 gate, rule 5) |
+
+#### Where the hand-over's steps went
+
+- **Step 2, the questionnaire research,** closes with revision 3 of the proposal. It feeds DP1 (the checker) and DP2 (onboarding).
+- **Step 3, the Opus and Qwen foundation note,** is written before DP6.
+- **Step 4, the confidence design,** splits: its approval prerequisites before DP4, the rest before DP6.
+- **Step 5, one phased build plan,** is replaced by one plan per phase.
+- **Step 6, build,** is the phases themselves.
+
+**What approving version 1.1 does, and does not, do.** It approves the order, the rules and each phase's scope. It approves no phase plan, no gate and no implementation; each is asked for when its phase starts.
