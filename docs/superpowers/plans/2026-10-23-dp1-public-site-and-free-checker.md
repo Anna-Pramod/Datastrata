@@ -22,6 +22,13 @@
 > - **Execution.** You told me to start only Task 1 and Task 9, in parallel sessions, with their prescribed verification. No other task starts until you say so.
 > - **Git.** You run every `git add`, commit and push.
 > - **History.** Written on 2026-10-23 against the candidate at `363011f` (branch `feature/opus55-subscription-migration`). Four documents from the previous session were still uncommitted (§11). This plan is uncommitted too: you commit it.
+> - **Corrections carried from Task 9 (2026-10-23, your instruction; the design is unchanged).** Four changes, each in the instructions named:
+>   1. **Precise storage statements.** The blanket storage statements become a precise one about checker answers, with hosting records and contact correspondence described separately. The mailbox provider is included under either DG-4 option (§0, §1, §4.3, DG-4, Task 9, Task 10, Appendix A.2).
+>   2. **Cookie expectations by authentication method** on protected deployments. Preview protection after DG-1 is explicit. A fresh, unauthenticated production-browser check with no bypass credentials is added (§4.2, §4.3, Task 13 check 6, Task 14).
+>   3. **The bypass token travels only as a header** (§1, Tasks 11 and 13).
+>   4. **The Observability Plus setting is recorded, set, read back and matched** by the privacy notice's retention (Task 11, Task 13 check 11, Appendix B, B-5).
+>
+>   Source: the data-flow record, `specs/2026-10-23-dp1-data-flow-record.md`, revision 2.
 > **Delivers** the 32 board rows of DP1 (`VISION.md` E8; the phase map in `VISION-BOARD.md`), and nothing else.
 > **What approval covers.** Approving the plan approves its tasks and their order. It does not give any gate in §2. Each gate is asked for in the words §2 gives, at the point §2 names. Approving one gate lifts nothing for a later phase (E8, rule 5).
 > **Not authorised by this document:** implementation, pack edits, deployment, purchases, account creation, accepting terms, runtime work, agent runs, live communication.
@@ -42,7 +49,7 @@
 
 **Architecture:** The existing Next.js 15.5 application is deployed to a managed host from `main`, behind CI checks. It stays one application, and the engine is wrapped and never changed. The host is chosen at DG-2; provisionally Vercel Pro, with functions in Frankfurt.
 
-The checker runs the engine once for each start year from 2025 to 2028 over the visitor's answers. It returns one row per legal route. DataStrata stores nothing about a visitor.
+The checker runs the engine once for each start year from 2025 to 2028 over the visitor's answers. It returns one row per legal route. DataStrata does not store the visitor's answers.
 
 Two pack corrections, E-1 and E-2, land first, so the checker's routes are right before anyone sees them.
 
@@ -78,7 +85,7 @@ Two pack corrections, E-1 and E-2, land first, so the checker's routes are right
 
 **What goes live.**
 - The public site and the revised free checker, on DataStrata's domain.
-- Stateless: no answers, emails, accounts, cookies or IP addresses are stored by DataStrata.
+- Stateless: DataStrata stores no checker answers, accounts, cookies or IP addresses, and the site collects no email address. Hosting records and any correspondence a visitor chooses to send are described separately (Task 9).
 - Truthful content status, legal pages and monitoring.
 - The pilot gate (ACC-9) stays available for local screen-shares and is switched off on the host (DG-10).
 
@@ -180,10 +187,11 @@ Every task's requirements include this section.
 - **Data.** Synthetic only.
   - Never read, hash, copy or stat the SAP SE profile or its notes.
   - Never touch `b1b-record`, `pilot-evidence`, any `secrets/` folder or the demo copy `demo-15.5.28`.
-- **Nothing about a visitor is stored by DataStrata.** No answers, email addresses, accounts, cookies, browser storage or IP addresses.
-  - Answers travel only in a POST body, never in a URL.
+- **DataStrata stores no checker answers, and the site stores nothing in the visitor's browser.** No answers, accounts, cookies, browser storage or IP addresses, and the site collects no email address.
+  - Answers travel only in a POST body, never in a URL. They are used in memory for one request and not kept.
   - Logs carry no answers.
-  - What the host and providers keep is listed in the data-flow record (Task 9) and in the privacy notice.
+  - What the host and providers keep (hosting records) is listed in the data-flow record (Task 9) and in the privacy notice.
+  - **Contact correspondence** is described separately. A visitor may email the imprint's address or call its number (DG-4). That correspondence is kept in DataStrata's mailbox, at the provider DG-4 names: under option A, the provider of the address you already run; under option B, the new mailbox. The privacy notice names it under either option.
 - **No live communication.** DataStrata sends no email or message in DP1. Alerts come from providers to staff only (DG-12).
 - **No early exposure.** Until DG-1, Vercel Authentication protects all deployments, production included. Its settings are verified before Git is connected, and anonymous and authorised URL checks run once deployments exist (§4.2). It is removed from production only under DG-1, and previews stay protected after DG-1.
 - **The 2026-10-19 freeze** stays in force for capture packages and cycles, live runs, promotion, signing, and publishing verification results (DG-11).
@@ -199,6 +207,7 @@ Every task's requirements include this section.
 - **Accounts, purchases, terms and agreements** are your acts (Appendix B).
   - An executor never holds an account password, or a token that can change the host's settings.
   - It may hold the preview-access token (Task 11) for the session.
+  - The token is sent only in the `x-vercel-protection-bypass` header, never in a URL: the host's runtime logs keep query parameters (Task 9, record V4).
 
 ---
 
@@ -266,7 +275,7 @@ The database, storage, email and worker parts of choice 8 are decided at DP2 onw
 - § 5 DDG requires an email address and a second fast, direct channel (CJEU C-298/07) [V; Appendix A].
 - A contact form would be a new processing operation, and the form is PUB-3, in DP2. A telephone number is the simpler second channel.
 - **The email address:**
-  - **(A) An address you already run (recommended for DP1).** No new provider joins. The new domain publishes no-mail records (null MX, `v=spf1 -all`, DMARC `p=reject`) until DP2 brings the email provider.
+  - **(A) An address you already run (recommended for DP1).** No new provider joins the hosting. The new domain publishes no-mail records (null MX, `v=spf1 -all`, DMARC `p=reject`) until DP2 brings the email provider. The provider of that address still receives and stores what visitors send there, so Task 9's record and the privacy notice name it.
   - **(B) A mailbox on the new domain.** A mailbox provider joins the processors, and DEP-2's records then include its MX, SPF, DKIM and DMARC.
 - Whatever the imprint publishes is public, and stays in web archives.
 - If the entity is a UG, its name must carry "UG (haftungsbeschränkt)" (§ 5a GmbHG) [V].
@@ -290,6 +299,11 @@ These are judgements for counsel. The imprint and the terms carry lower risk and
 ### DG-8. The golden changes it authorises
 
 1. **Task 1 (E-1).** `backend/engine/test/golden/provenance-engine-golden.json` and `frontend/web/test/golden/provenance-public-golden.json`, rewritten for S-007 version 4: the version, the new locator, the trace, and every result flip that E-1 explains.
+   - *Correction found in execution (2026-10-23):* only the public golden changes.
+     - The engine artefact's fixed profile is a standalone EU entity with no organisation scope, so the artefact holds no S-007 determination and no versions. S-008's reference cannot reach S-007's condition.
+     - The engine artefact is byte-identical after E-1 (`7a9cd1ad…`), and it is not rewritten.
+     - The public golden changes in 2 hunks, with one result flip: S-007 goes from INDETERMINATE to DOES_NOT_APPLY. Its counts and headline move with it.
+     - Evidence: `side-session-notes/local_043075c1-…/2026-10-23T1704Z-dp1-task1/`.
 2. **Task 2 (E-2).** The same two files, for S-024: a new determination, and the counts and any next questions that move with it.
 3. **Tasks 4 and 6 (the checker).** Two parts:
    - **Task 4** records a new public generation, `checker-timeline-public-golden.json`, once.
@@ -557,7 +571,9 @@ Named so that no task builds them:
      - an authorised request, with the automation token, is served, the positive control.
 
   Task 13 repeats the URL checks on the deployments it uses.
-- **Removed only under DG-1.** After DG-1 you change production's protection to Standard Protection, which still protects previews. That change is the act that exposes the release, and nothing else lifts the protection.
+- **Removed only under DG-1.** After DG-1 you change production's protection to Standard Protection. That change is the act that exposes the release, and nothing else lifts the protection.
+  - **Preview protection stays after DG-1.** Standard Protection (`prod_deployment_urls_and_all_previews`) leaves only the production domain public. Every preview, and every generated production deployment URL, stays behind Vercel Authentication (Task 9, record §9).
+  - **Then a fresh, unauthenticated production-browser check** runs (Task 14, step 4). It uses a new browser profile that has never signed in to Vercel and carries no bypass header, query parameter or cookie.
 - **The pilot surface stays disabled on the host** (DG-10, Task 7), both behind the protection and after it.
 
 **If a check finds a deployment answering without authentication before DG-1:**
@@ -568,11 +584,17 @@ Named so that no task builds them:
 
 ### 4.3 What is stored, and by whom
 
-- **DataStrata, in DP1:** nothing about a visitor.
+- **DataStrata, in DP1: no checker answers.**
   - The check's answers exist only in the browser's memory and in the function's memory for one request.
   - Logs carry an event name, the route, the status, the duration and the release, nothing else (Task 8).
-- **The host and providers** keep what Task 9 lists: request records with IP addresses at the host, the firewall's records, build logs, monitor probes. The privacy notice names each one.
-- **The visitor's browser:** nothing. No cookie, no web storage. Fonts are self-hosted at build, so no request leaves for a third party. Task 13 checks this.
+- **Hosting records.** The host and providers keep what Task 9 lists: request records with IP addresses at the host, the firewall's records, build logs, monitor probes. The privacy notice names each one.
+- **Contact correspondence**, described separately. Correspondence a visitor chooses to send by email or telephone is kept in DataStrata's mailbox, at the provider DG-4 names: under option A, the provider of the address you already run; under option B, the new mailbox. How long it is kept is your decision, for the privacy notice (Task 9).
+- **The visitor's browser.** The site sets no cookie and no web storage. Fonts are self-hosted at build, so no request leaves for a third party.
+  - On a protected deployment, Vercel's own cookies depend on the authentication method (Task 9, record §9):
+    - none with the bypass header alone;
+    - Vercel's bypass cookie alone with `x-vercel-set-bypass-cookie`;
+    - Vercel's authentication cookie alone for a signed-in team member.
+  - Task 13 checks this on the protected preview, and Task 14 on production, in a fresh, unauthenticated browser.
 
 ### 4.4 The hosted release
 
@@ -599,9 +621,10 @@ Named so that no task builds them:
 | `backend/engine/knowledge/csrd/requirements.json` | Modify | 1, 2 | S-007 version 4; S-024 version 1 |
 | `backend/engine/knowledge/csrd/catalogues.json` | Modify | 2 | `encoded_issuer_routes`, with no entries |
 | `backend/engine/verification/requirement-versions/csrd.json` | Modify (append) | 1, 2 | Registry entries for S-007 v4 and S-024 v1; history kept |
-| `backend/engine/test/historical-requirements/CSRD-S-007.v3.json` | Create, if the registry's procedure requires it (as S-001 v3 did in E) | 1 | The superseded text, pinned |
+| `backend/engine/test/historical-requirements/CSRD-S-007.v3.json` | Create, if the registry's procedure requires it (as S-001 v3 did in E) | 1 | The superseded text, pinned. *Not needed in execution (2026-10-23): no S-007 recording exists, and no registry test asks for it* |
 | `backend/engine/test/golden-profiles.test.ts` | Modify | 1, 2 | P-011, P-012 |
-| `backend/engine/test/golden/provenance-engine-golden.json`, `frontend/web/test/golden/provenance-public-golden.json` | Rewrite (DG-8) | 1, 2 | |
+| `backend/engine/test/golden/provenance-engine-golden.json`, `frontend/web/test/golden/provenance-public-golden.json` | Rewrite (DG-8) | 1 (public only, as executed), 2 | |
+| `backend/engine/test/audit-expected-provenance.ts`, `min-status.test.ts`, `pipeline-source-completeness.test.ts`, `corpus-src002-ingestion.test.ts`; `frontend/web/test/provenance-public-golden.test.ts`, `pilot-record.test.ts` | Modify | 1 (added in execution, authorised by you on 2026-10-23, oracle option A) | E-1's citation, kept in a separate post-audit corrections table, with the audit's table and count unchanged; S-007 at version 4; the SRC-002 population; E-1's one flip in the public transition; the pilot record's four flips |
 | Count-pinning tests (`knowledge-integrity.test.ts:21`, `coverage.test.ts`, `pilot-dashboard.test.ts:44,71`, `status-truth-boundary-public.test.ts`, and any the red run names) | Modify | 2 | 23 becomes 24, each with its reason |
 | `frontend/web/lib/check-answers.ts` | Create | 3 | Questions, show-when rules, bands, the facts each answer sets, the answer schema |
 | `frontend/web/lib/countries.ts` | Create | 3 | ISO 3166-1 alpha-2 names for "Another country" |
@@ -685,6 +708,18 @@ Named so that no task builds them:
 - `backend/engine/test/golden-profiles.test.ts`;
 - the two provenance goldens (DG-8).
 
+*Correction found in execution (2026-10-23).* The change touches ten files:
+- **The four from the list above that change:**
+  - `requirements.json`;
+  - the registry;
+  - `golden-profiles.test.ts`;
+  - the public provenance golden.
+- **Not changed:**
+  - the engine provenance golden, which is unchanged (DG-8, part 1);
+  - the historical record, which is not needed.
+- **Six supporting test files, authorised by you on 2026-10-23 with oracle option A** (§5).
+  - E-1's `SRC-002` citation is recorded in a separate `POST_AUDIT_CORRECTIONS` table. The audit's table and its count of 18 are unchanged.
+
 **Behaviour.** Exactly as QD-4 §2 drafts it:
 - version 3 becomes 4;
 - `condition.of` gains a first conjunct, `{ "op": "fy_starts_on_or_after", "date": "2028-01-01" }`;
@@ -703,6 +738,15 @@ Named so that no task builds them:
 
 For example, S-007, S-008 or S-009 may move from "cannot decide yet" to "does not apply", and the counts or next questions may move with them. Each flip is explained by the Directive's own 2028 date. A flip that E-1 does not explain stops the task.
 
+*Correction found in execution (2026-10-23).* Of S-007's version, its locator and its trace child, the engine golden carries none, and it does not change. The public golden carries the locator and the flip, but no version and no trace.
+
+The observed flips, all for FY2027:
+- **Public golden:** S-007, from INDETERMINATE (`missing_fact`) to DOES_NOT_APPLY. The counts go from 6 / 11 / 3 to 6 / 12 / 2, and the headline from 2 to 1 unresolved.
+- **The synthetic pilot record:**
+  - S-007 on `org`;
+  - S-008 on `e-de`, `e-nl` and `e-fr`, which follow it.
+  - Its counts go from 60 / 44 to 64 / 40. Q-006 moves down the next questions.
+
 **Teeth.** The new conjunct deleted.
 - P-011 must fail on its own assertion.
 - The two rewritten provenance goldens must also go red, because they pin the conjunct's trace. That is expected.
@@ -710,7 +754,35 @@ For example, S-007, S-008 or S-009 may move from "cannot decide yet" to "does no
 
 *Correction to QD-4's wording,* which said "nothing else may": the goldens rewritten under DG-8 detect the same change.
 
+*Correction found in execution (2026-10-23), confirmed by the run:*
+
+**How the mutation must be made.** Deleting the conjunct alone leaves S-007 declaring version 4 with content that no longer hashes to version 4's entry. `loadPack` then refuses the pack with `VersionIntegrityError` before any assertion runs. The literal run collected "no tests", the standard's failure mode 2.
+- So the mutant deletes the conjunct **and** re-registers version 4 under the mutant's own digest.
+- Both files are copied first, restored from the copies, and confirmed by sha256.
+
+**What goes red: five tests, each on its own assertion.**
+- **P-011's two FY2027 tests:**
+  - `expected 'APPLIES' to be 'DOES_NOT_APPLY'`;
+  - `expected 'APPLIES' not to be 'APPLIES'`.
+- **The public golden, byte for byte:** exactly E-1's flip, reversed.
+- **The named E-1 case in `provenance-public-golden.test.ts`:** `expected 'INDETERMINATE' to be 'DOES_NOT_APPLY'`.
+- **The pilot record's count:** `to have a length of 64 but got 60`.
+
+**What stays green:**
+- the engine provenance golden, which never reaches S-007's condition;
+- P-011's FY2028 control;
+- every source and registry test;
+- the public transition tests, which compare the two artefacts on disk and so cannot see a pack mutation.
+
+A second mutation removed E-1's `SRC-002` citation, to prove the new oracle entry can fail. It reddened exactly five tests, each naming S-007's missing source:
+- `pipeline-source-completeness`;
+- `corpus-src002-ingestion`;
+- the public byte test;
+- the public oracle test;
+- the named E-1 case.
+
 **Baseline:** the counts recorded at the start commit. **Finishing count:** the baseline plus P-011's tests.
+- *As executed (2026-10-23):* engine 84 / 3,310 → 84 / 3,313 (P-011's three); frontend 25 / 664 → 25 / 665 (the named E-1 case).
 
 **Commit message** (the QD-4 draft): "Start the Article 40a route in 2028 so non-EU groups are not told it applies to earlier financial years (CSRD Art 5(2), second subparagraph)"
 
@@ -1314,8 +1386,8 @@ The route and the old modules are untouched until Task 6.
 - **GitHub:** the code and CI logs. No visitor data.
 - **GoDaddy:** the DNS zone and the registrant's data.
 - **The uptime monitor:** its probe records and the alert recipients.
-- **The mailbox provider,** if DG-4 is option B.
-- **The visitor's browser:** nothing stored. Fonts self-hosted at build. Links to EUR-Lex followed only on a click.
+- **The mailbox provider,** under either DG-4 option: under option A, the provider of the address you already run; under option B, the new mailbox. Its contact correspondence is described apart from the hosting records.
+- **The visitor's browser:** no cookie or web storage set by the site. Fonts self-hosted at build. Links to EUR-Lex followed only on a click. On protected deployments, Vercel's cookies by authentication method.
 
 **The provider block.** The document ends with one fenced `json` block listing each provider:
 - `provider`, `role` and `records`;
@@ -1324,7 +1396,12 @@ The route and the old modules are untouched until Task 6.
 
 Task 10's test reads it.
 
-**Residency wording** for the privacy notice, matching the flows (D5, "Residency, honestly"): "Nothing about you is stored by DataStrata. The host processes request data, including your IP address, at its edge in the region nearest to you and in Frankfurt, and keeps request logs for [the retention]. Its parent company is in the United States, under the EU-US Data Privacy Framework and standard contractual clauses." This wording is a draft for counsel.
+**Residency wording** for the privacy notice, matching the flows (D5, "Residency, honestly"), in three parts described separately (corrected from Task 9):
+- **Checker answers:** "DataStrata does not store the answers you give the free check. Your browser sends them to our host in the body of a single request. Our application uses them in memory to calculate your result and keeps no copy once it has answered."
+- **Hosting records:** "The host processes request data, including your IP address, at its edge in the region nearest to you and in Frankfurt, and keeps request logs for [the retention]. Its parent company is in the United States, under the EU-US Data Privacy Framework and standard contractual clauses."
+- **Contact correspondence:** what DataStrata keeps when a visitor emails or calls, for how long, and the mailbox provider under either DG-4 option.
+
+This wording is a draft for counsel. The record's §13 gives the full draft, and where the hosting sentence differs from the flows.
 
 **Teeth.** The defect to detect is a record or a host that the record omits. It is detected in Task 13, which needs the protected preview:
 - the browser's network log for every page and every check path must show requests only to the deployment's origin;
@@ -1358,6 +1435,9 @@ Task 10's test reads it.
   - Only the approved version is installed. Its sha256 is pinned by the test, so an unapproved edit fails.
 - **The imprint** carries every item of Appendix A §A.1 that applies to the entity you name. The second channel is a telephone number (DG-4).
 - **The privacy notice** carries every item of Appendix A §A.2, names every provider in Task 9's provider block, and has a `cookies` section stating that the site stores nothing on, or reads nothing from, the visitor's device.
+  - It describes checker answers, hosting records and contact correspondence separately (Task 9, record §13).
+  - It names the mailbox provider under the DG-4 option chosen, including the existing address's provider under option A.
+  - It states the request-log retention that matches the host's Observability Plus setting as Task 11 records it.
 - **The terms** are as Appendix A §A.4: information only, not legal advice; for businesses; liability drafted with counsel.
 - **The footer** on every page links to the imprint, the privacy notice, the cookies section, the terms and the pricing page. It drops the link to `/login`.
 - **The About page** shows your names, roles and biographies, the entity and the location (DG-18). With them filled in, no fallback text can render.
@@ -1411,6 +1491,7 @@ Task 10's test reads it.
   - Deployment Protection: Vercel Authentication for All Deployments, production included, until DG-1; then Standard Protection, so previews stay protected;
   - the toolbar off for previews and production;
   - the host's analytics and speed tools off;
+  - **Observability Plus:** its intended state, on, off, or this project excluded, as you decide. It sets the request-log retention, 30 days or 1 day (Task 9, record V4), which the privacy notice states. It is read back with the other settings;
   - Deployment Checks on the three jobs;
   - the firewall rule of DG-15;
   - notifications and the spend budget;
@@ -1427,7 +1508,8 @@ Task 10's test reads it.
 **Tests (red first),** for the scripts' pure parts:
 - the check functions against recorded response fixtures;
 - the comparison against case fixtures;
-- the secret never appearing in their output.
+- the secret never appearing in their output;
+- the secret sent only in the `x-vercel-protection-bypass` header, never in a URL they build.
 
 **Teeth:**
 - **T11a.** Against a local production server with `X-Frame-Options` removed from a copy of the config, the smoke run must report a failure per response (as P6b did).
@@ -1489,14 +1571,20 @@ Each check is recorded verbatim in `PRE-EXPOSURE-EVIDENCE.md`, with its positive
      - an authorised request with the automation token is served, the positive control.
    - Any production deployment found is recorded.
    - The pilot surface answers 404 on the preview (Task 7).
-2. **Protection.** A request without the bypass token is refused. The same request with it is served (the positive control).
-3. **Smoke** (`--url`, with the bypass token): every check passes.
+2. **Protection.** A request without the bypass token is refused. The same request with it is served (the positive control). The token is sent only as the `x-vercel-protection-bypass` header, here and in every check below, never as a query parameter.
+3. **Smoke** (`--url`, with the bypass token in the header): every check passes.
 4. **The checker's goldens** pass against the preview's `/api/check`. Positive control: one expectation flipped in a temporary copy is reported.
 5. **`/healthz` agreement:** `release` equals the commit, and every `inputs` digest equals the one computed in the clean clone at that commit.
 6. **The browser checks,** at 320, 375 and 1280 pixels, on every page and on a check down each visitor path:
    - no horizontal scrolling;
    - requests only to the preview's origin (Task 9's teeth, with its positive control);
-   - no cookie, `localStorage`, `sessionStorage` or IndexedDB entry. Positive control: an entry set by hand is reported;
+   - cookies as Task 9's record (§9) expects for the authentication method the check uses, recorded with the result:
+     - none with the bypass header alone;
+     - Vercel's bypass cookie alone with `x-vercel-set-bypass-cookie`;
+     - Vercel's authentication cookie alone for a signed-in team member.
+
+     Any other cookie fails;
+   - no `localStorage`, `sessionStorage` or IndexedDB entry under any method. Positive control: an entry set by hand is reported;
    - no host toolbar or analytics script.
 7. **Accessibility:** a WCAG 2.2 AA review of each DP1 screen, recorded as a checklist (EXP-5).
 8. **The legal pages:**
@@ -1510,7 +1598,8 @@ Each check is recorded verbatim in `PRE-EXPOSURE-EVIDENCE.md`, with its positive
 10. **No placeholder** on any rendered page. Positive control: a local page with a name set to `null` is reported.
 11. **The data-flow reconciliation:**
     - every request host, cookie and storage observation is in Task 9's record;
-    - every provider in the record is named in the privacy notice.
+    - every provider in the record is named in the privacy notice;
+    - the host's Observability Plus setting reads back as Task 11 records, and the privacy notice states the matching request-log retention.
 12. **PLT-7, the rotation:**
     - you regenerate the bypass token;
     - the old one is refused;
@@ -1536,6 +1625,12 @@ The evidence goes to you for DG-1, with every failure fixed and re-run first. A 
    - `check-dns.mjs` passes against the live answers;
    - the domain is served over HTTPS (DEP-1, DEP-2).
 4. **Task 13's checks 3 to 6, again,** against the production domain with no bypass token: smoke, goldens, `/healthz` and the browser checks.
+   - **The browser checks run in a fresh, unauthenticated profile:** never signed in to Vercel, with no bypass header, query parameter or cookie. On every page and down each visitor path, the expectation is:
+     - no cookie;
+     - no `localStorage`, `sessionStorage` or IndexedDB entry;
+     - requests only to the production origin.
+   - Positive control: an entry set by hand in that profile is reported.
+   - Step 2's preview refusal is a plain request outside this profile, so Vercel's login page cannot add its cookies to the profile.
 5. **The burst test** (PLT-9, CHK-7): 40 checks in 30 seconds from one address.
    - Up to 30 are answered 200, and the rest 429.
    - One check from the browser after the window succeeds (the positive control), and the page shows the 429 wording while limited.
@@ -1742,7 +1837,7 @@ From the research of 2026-10-23. **Not legal advice.** Tags: [V] read on the off
 - **For each processing:** its purpose, its legal basis, and the concrete legitimate interest wherever Art. 6(1)(f) is used. The processing to cover:
   - hosting and request logs: IP address, time, URL, user agent and status, for delivery, security and error analysis (Breyer, C-582/14);
   - the check: answers processed transiently and not stored; they are personal data for a sole trader, and the legal basis is for counsel;
-  - contact by email or telephone.
+  - contact by email or telephone: the correspondence DataStrata keeps, for how long, and the mailbox provider under either DG-4 option, including the existing address's provider under option A. This is described apart from the hosting records (Task 9).
 - **Recipients and processors:** every provider in Task 9's block. The host's DPA and its "service-generated data" are for counsel.
 - **Third-country transfer:** the EU-US Data Privacy Framework (adequacy decision (EU) 2023/1795, in force; appeal C-703/25 P pending), with the standard contractual clauses named as a fallback.
 - **Retention,** for each record, from Task 9.
@@ -1772,7 +1867,7 @@ From the research of 2026-10-23. **Not legal advice.** Tags: [V] read on the off
 | B-2 | Commit the plan and the previous session's documents (§11) | — |
 | B-3 | With your co-founder, choose the host after reading Task 9's record | DG-2 |
 | B-4 | Buy the domain at GoDaddy; turn on two-factor authentication | DG-3 |
-| B-5 | Create the host account on Pro: accept the terms and the DPA, turn on two-factor authentication, set the spend budget and notifications. Create the project, and **before connecting Git** set Vercel Authentication for All Deployments, production included; turn the toolbar and analytics off; set no `DATASTRATA_PILOT_GATE`. Read each setting back with the executor (stage 1 of §4.2). Create the protection-bypass token for automation and give it to the executor for the session; create no shareable link | DG-2, PLT-7 |
+| B-5 | Create the host account on Pro: accept the terms and the DPA, turn on two-factor authentication, set the spend budget and notifications. Create the project, and **before connecting Git** set Vercel Authentication for All Deployments, production included; turn the toolbar and analytics off; set no `DATASTRATA_PILOT_GATE`; set Observability Plus to the state Task 11 records. Read each setting back with the executor (stage 1 of §4.2). Create the protection-bypass token for automation and give it to the executor for the session; create no shareable link | DG-2, PLT-7 |
 | B-6 | Connect the GitHub repository; production branch `main`; Deployment Checks on the three jobs. Push the feature branch. Once the first deployments exist, the executor runs the anonymous and authorised URL checks (stage 2 of §4.2). Open the pull request to `main` | DG-16 |
 | B-7 | Publish the firewall rule | DG-15 |
 | B-8 | Choose and create the uptime monitor; its checks and recipients as Task 11 records | DG-13 |
