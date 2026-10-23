@@ -5,10 +5,13 @@
 > **Written** 2026-10-23 (UTC), from vendor documentation read that day and from the candidate's code at `363011f` (no file read here changed in `ee2d2d7`). The topology is the plan's provisional one: Vercel Pro, functions in `fra1`, DNS at GoDaddy, CI on GitHub Actions, one external uptime monitor (provider open, DG-13), and the mailbox that receives visitors' email (DG-4): under option A the provider of the address you already run, under option B a new mailbox on the domain.
 > **Not legal advice.** The record states what the providers' own pages say and where they are silent. Which records are personal data, who controls them and what the notice must say are judgements for counsel.
 > **Status, recorded separately** (§11):
-> - **This document: complete** on 2026-10-23, revision 2, with its checks passing. Uncommitted: you commit it.
-> - **Your DG-2 review with your co-founder: pending.**
-> - **Task 13's hosted verification: pending.** It needs the protected preview.
-> - **Task 14's fresh, unauthenticated production-browser check: pending.** It needs DG-1.
+> - **This document: complete.** Revision 2 was committed as `2c7d500`, with its checks passing.
+> - **Codex's focused review of this document: closed** (2026-10-23, as you recorded).
+> - **Still pending, each on its own:**
+>   - **the host decision (DG-2),** yours with your co-founder;
+>   - **the unresolved provider details** (§14), among them the uptime monitor (DG-13), the mailbox provider (DG-4), the domain (DG-3), Vercel's unstated retentions and regions, and how long correspondence is kept;
+>   - **the privacy approval:** your approval of the privacy notice (Task 10), with counsel's review if DG-5 says so;
+>   - **the hosted checks:** Task 13's verification on the protected preview, including Task 9's teeth, and Task 14's fresh, unauthenticated production-browser check after DG-1.
 >
 > **Revision 2** (2026-10-23) makes your two corrections, and nothing else:
 > 1. The blanket storage claim is replaced by a precise statement about checker answers. Hosting records and contact correspondence are described separately, and the existing mailbox's provider under DG-4 option A is included throughout (§2, §3, §8, §12, §13).
@@ -242,10 +245,13 @@ Items 1, 2, 3, 9 and 10 are carried into the plan's instructions (its note of 20
 
 | Item | State | What closes it |
 |---|---|---|
-| This document, Task 9's deliverable | **Complete** on 2026-10-23, revision 2. Its checks pass (below). Uncommitted | You commit it |
-| DG-2: you and your co-founder read it and choose the host | **Pending** | Your decision (Appendix B, B-3) |
-| Task 13's hosted verification, including Task 9's teeth | **Pending** | The protected preview, after your acts B-5 to B-10 |
-| Task 14's fresh, unauthenticated production-browser check (§9) | **Pending** | DG-1 |
+| This document, Task 9's deliverable | **Complete.** Revision 2 committed as `2c7d500`. Its checks pass (below) | — |
+| Codex's focused review of this document | **Closed** (2026-10-23, as you recorded) | — |
+| The host decision (DG-2): you and your co-founder read the record and choose the host | **Pending** | Your decision (Appendix B, B-3) |
+| The unresolved provider details (§14) | **Pending** | DG-3, DG-4 and DG-13; readings on the account (Appendix B); providers' answers |
+| The privacy approval: the privacy notice drafted from this record | **Pending** | Task 10; your approval of the text, and counsel's review if DG-5 says so |
+| The hosted checks: Task 13's verification, including Task 9's teeth | **Pending** | The protected preview, after your acts B-5 to B-10 |
+| The hosted checks: Task 14's fresh, unauthenticated production-browser check (§9) | **Pending** | DG-1 |
 
 **Teeth (pending in Task 13).** The defect this record must not have is a record or a host it omits. That is detected in Task 13 against the protected preview, which does not exist yet. It was not attempted here:
 - the browser's network log for every page and every check path must show requests only to the deployment's origin;
@@ -274,13 +280,9 @@ In revision 1, control B first passed, because the row check read the Unconfirme
 - the unconfirmed items are listed (§14): **met**;
 - you and your co-founder have read it for DG-2: **pending**, yours.
 
-**The commit** (you run it; one file):
-```bash
-git add docs/superpowers/specs/2026-10-23-dp1-data-flow-record.md
-```
-```bash
-git commit -m "Record every place DP1's hosting keeps data, so the host is chosen and the privacy notice written against what the flows actually are"
-```
+**Commits** (you run them):
+- Revision 2 of this record is `2c7d500`.
+- Later status updates to this record are committed on their own. They are kept apart from the plan's amendments and from Task 1's implementation files.
 
 ---
 
