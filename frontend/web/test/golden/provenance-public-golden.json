@@ -11,12 +11,12 @@
     "program": "CSRD"
   },
   "containsDraftContent": true,
-  "headline": "Reporting duty active for Your entity. 2 determination(s) unresolved and awaiting input. national-law status requires review — this is NOT a final legal conclusion.",
+  "headline": "Reporting duty active for Your entity. 1 determination(s) unresolved and awaiting input. national-law status requires review — this is NOT a final legal conclusion.",
   "nationalLawResolved": false,
   "counts": {
     "applies": 6,
-    "doesNotApply": 11,
-    "indeterminate": 3
+    "doesNotApply": 12,
+    "indeterminate": 2
   },
   "determinations": [
     {
@@ -145,34 +145,25 @@
       "id": "CSRD-S-007",
       "title": "Article 40a third-country group gate",
       "decisionArea": "Third-country scope",
-      "result": "INDETERMINATE",
-      "reason": "missing_fact",
-      "reasonCopy": "A fact we need is missing",
+      "result": "DOES_NOT_APPLY",
       "severity": "high",
       "relationshipClass": "direct_legal",
-      "needs": [
-        {
-          "factType": "group.ultimate_parent_country",
-          "label": "Ultimate parent's country"
-        },
-        {
-          "factType": "third_country.eu_turnover_year_1_eur",
-          "label": "Group EU turnover, prior year"
-        },
-        {
-          "factType": "third_country.eu_turnover_year_2_eur",
-          "label": "Group EU turnover, year before that"
-        }
-      ],
+      "needs": [],
       "sources": [
         {
           "id": "SRC-001",
           "title": "Directive 2013/34/EU — Accounting Directive (host instrument)",
           "url": "https://eur-lex.europa.eu/eli/dir/2013/34/oj/eng"
+        },
+        {
+          "id": "SRC-002",
+          "title": "Directive (EU) 2022/2464 — CSRD",
+          "url": "https://eur-lex.europa.eu/eli/dir/2022/2464/oj/eng"
         }
       ],
       "locators": [
-        "Article 40a"
+        "Article 40a",
+        "Article 5(2), second subparagraph"
       ]
     },
     {

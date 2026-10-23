@@ -58,9 +58,30 @@ export const POST_AUDIT_SOURCES: Readonly<Record<string, readonly string[]>> = {
   'CSRD-S-023': ['SRC-001'],
 };
 
-/** What every requirement the pack holds should cite: the audit for the sixteen, the design for the seven. */
+/**
+ * Audited requirements whose cited sources an approved content change has
+ * moved since the audit. Each entry's authority is that change, not the audit,
+ * so the audit's table above keeps what the audit decided, and its arithmetic
+ * (`AUDIT_EXPECTED_CITATION_COUNT`) is untouched; this table overrides it only
+ * where an oracle must say what the pack cites today.
+ *
+ * `CSRD-S-007`: QD-4 draft E-1 (`docs/superpowers/specs/2026-10-23-qd4-content-corrections-for-dp1.md`
+ * §2), applied as drafted under DG-6 on 2026-10-23. The group gate's 2028
+ * start rests on CSRD Art 5(2), second subparagraph, so `SRC-002` is cited
+ * beside Article 40a's `SRC-001`.
+ */
+export const POST_AUDIT_CORRECTIONS: Readonly<Record<string, readonly string[]>> = {
+  'CSRD-S-007': ['SRC-001', 'SRC-002'],
+};
+
+/**
+ * What every requirement the pack holds should cite: the audit for the
+ * sixteen, as corrected since by approved content changes, and the design for
+ * the seven.
+ */
 export const EXPECTED_SOURCES: Readonly<Record<string, readonly string[]>> = {
   ...AUDIT_EXPECTED_SOURCES,
+  ...POST_AUDIT_CORRECTIONS,
   ...POST_AUDIT_SOURCES,
 };
 
@@ -84,4 +105,16 @@ export const CORRECTED_CASE = {
   sources: ['SRC-002'] as const,
   locator: 'Article 5(2), fifth subparagraph',
   absentSource: 'SRC-004',
+} as const;
+
+/**
+ * E-1's post-audit correction, named on its own for the same reason: the
+ * audit's value it overrides, the value it sets, and the locator that carries
+ * the new citation.
+ */
+export const E1_CORRECTED_CASE = {
+  requirementId: 'CSRD-S-007',
+  auditSources: ['SRC-001'] as const,
+  sources: ['SRC-001', 'SRC-002'] as const,
+  locator: 'Article 5(2), second subparagraph',
 } as const;

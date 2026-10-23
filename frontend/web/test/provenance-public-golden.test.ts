@@ -37,7 +37,9 @@ import {
   AUDIT_EXPECTED_SOURCES,
   AUDIT_EXPECTED_UNIVERSE,
   CORRECTED_CASE,
+  E1_CORRECTED_CASE,
   EXPECTED_SOURCES,
+  POST_AUDIT_CORRECTIONS,
   POST_AUDIT_SOURCES,
 } from '../../../backend/engine/test/audit-expected-provenance';
 
@@ -136,7 +138,8 @@ describe('what a customer is shown, checked against the audit and the pack', () 
     const live = payload();
     expect(live.determinations.length).toBeGreaterThan(0);
     for (const determination of live.determinations) {
-      // The audit for the sixteen; the C/G design (2026-10-20) for the seven after it.
+      // The audit for the sixteen, as corrected since (E-1 for S-007); the C/G
+      // design (2026-10-20) for the seven after it.
       expect(
         determination.sources.map((source) => source.id),
         determination.id,
@@ -179,6 +182,24 @@ describe('what a customer is shown, checked against the audit and the pack', () 
     expect(corrected!.sources[0]!.title).toContain('2022/2464');
     expect(readFileSync(PROVENANCE, 'utf8')).not.toContain(CORRECTED_CASE.absentSource);
   });
+
+  it('E-1’s correction reaches the customer surface, named on its own', () => {
+    // QD-4 E-1 (DG-6, 2026-10-23): the Article 40a group gate starts with
+    // financial years beginning on or after 1 January 2028 (CSRD Art 5(2),
+    // second subparagraph). The fixed answers are FY2027, so the gate is a
+    // definitive no, and the customer is shown the CSRD beside Article 40a.
+    const live = payload();
+    const corrected = live.determinations.find((d) => d.id === E1_CORRECTED_CASE.requirementId);
+    expect(corrected, `${E1_CORRECTED_CASE.requirementId} is in the fixed payload`).toBeDefined();
+    expect(corrected!.result).toBe('DOES_NOT_APPLY');
+    expect(corrected!.reason).toBeUndefined();
+    expect(corrected!.needs).toEqual([]);
+    expect(corrected!.sources.map((s) => s.id)).toEqual([...E1_CORRECTED_CASE.sources]);
+    expect(corrected!.sources[1]!.title).toContain('2022/2464');
+    expect(corrected!.locators).toContain(E1_CORRECTED_CASE.locator);
+    // The audit's own entry is not rewritten by the correction.
+    expect(AUDIT_EXPECTED_SOURCES[E1_CORRECTED_CASE.requirementId]).toEqual([...E1_CORRECTED_CASE.auditSources]);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -186,7 +207,7 @@ describe('what a customer is shown, checked against the audit and the pack', () 
 // ---------------------------------------------------------------------------
 
 describe('the transition from the historical public generation to this one', () => {
-  it('leaves every field outside the determinations identical, except the counts the seven C/G determinations add', () => {
+  it('leaves every field outside the determinations identical, except the counts the seven C/G determinations add and the one result E-1 settles', () => {
     const outside = (path: string) => {
       const { determinations: _dropped, counts, ...rest } = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown> & {
         counts: CheckResponse['counts'];
@@ -198,13 +219,23 @@ describe('the transition from the historical public generation to this one', () 
     // exactly the seven determinations the C/G composition adds for the fixed
     // standalone profile: CSRD-S-017 and CSRD-S-020 apply; CSRD-S-018, S-019,
     // S-021, S-022 and S-023 do not; nothing new is unresolved.
+    //
+    // On 2026-10-23 E-1 (QD-4, DG-6) settled one more: CSRD-S-007, the Article
+    // 40a group gate, moves from unresolved to does-not-apply for this FY2027
+    // profile, because the route applies only from financial years starting on
+    // or after 1 January 2028 (CSRD Art 5(2), second subparagraph). The
+    // headline's unresolved count falls by exactly that one, and nothing else
+    // outside the determinations moves.
+    const E1_UNRESOLVED_BEFORE = '2 determination(s) unresolved';
+    const E1_UNRESOLVED_AFTER = '1 determination(s) unresolved';
     const before = outside(HISTORICAL);
     const after = outside(PROVENANCE);
-    expect(after.rest).toBe(before.rest);
+    expect(before.rest).toContain(E1_UNRESOLVED_BEFORE);
+    expect(after.rest).toBe(before.rest.replace(E1_UNRESOLVED_BEFORE, E1_UNRESOLVED_AFTER));
     expect(after.counts).toEqual({
       applies: before.counts.applies + 2,
-      doesNotApply: before.counts.doesNotApply + 5,
-      indeterminate: before.counts.indeterminate,
+      doesNotApply: before.counts.doesNotApply + 5 + 1,
+      indeterminate: before.counts.indeterminate - 1,
     });
   });
 
@@ -226,7 +257,7 @@ describe('the transition from the historical public generation to this one', () 
     expect(determinationsOf(HISTORICAL).every((d) => !('locators' in d))).toBe(true);
   });
 
-  it('changes cited instruments only where the audited migration says it may', () => {
+  it('changes cited instruments only where the audited migration, or an approved correction since, says it may', () => {
     const before = new Map(determinationsOf(HISTORICAL).map((d) => [d.id, d.sources.map((s) => s.id)]));
     const moved: string[] = [];
     for (const determination of determinationsOf(PROVENANCE)) {
@@ -236,12 +267,19 @@ describe('the transition from the historical public generation to this one', () 
         expect(now, determination.id).toEqual([...POST_AUDIT_SOURCES[determination.id]!]);
         continue;
       }
-      expect(now, determination.id).toEqual([...AUDIT_EXPECTED_SOURCES[determination.id]!]);
+      // The audit's value, unless an approved correction has moved it since.
+      const expected = POST_AUDIT_CORRECTIONS[determination.id] ?? AUDIT_EXPECTED_SOURCES[determination.id]!;
+      expect(now, determination.id).toEqual([...expected]);
       if (JSON.stringify(before.get(determination.id)) !== JSON.stringify(now)) {
         moved.push(determination.id);
       }
     }
     expect(moved.length).toBeGreaterThan(0);
+    // E-1 is the one correction, named on its own: this generation cites what
+    // E-1 set, which is not what the audit decided.
+    expect(Object.keys(POST_AUDIT_CORRECTIONS)).toEqual([E1_CORRECTED_CASE.requirementId]);
+    expect([...E1_CORRECTED_CASE.sources]).not.toEqual(AUDIT_EXPECTED_SOURCES[E1_CORRECTED_CASE.requirementId]);
+    expect(moved).toContain(E1_CORRECTED_CASE.requirementId);
   });
 
   it('preserves the historical artifact’s bytes while doing so', () => {

@@ -430,12 +430,12 @@
   },
   {
     "id": "CSRD-S-007",
-    "version": 3,
+    "version": 4,
     "ruleRef": "R-009",
     "title": "Article 40a third-country group gate",
     "program": "CSRD",
     "decisionArea": "Third-country scope",
-    "plainEnglish": "A non-EU ultimate parent enters the Article 40a route where it generated more than EUR 450 million net turnover in the EU in each of the last two consecutive financial years. The two years are tested separately, never averaged.",
+    "plainEnglish": "A non-EU ultimate parent enters the Article 40a route where it generated more than EUR 450 million net turnover in the EU in each of the last two consecutive financial years. The two years are tested separately, never averaged. The route applies for financial years starting on or after 1 January 2028.",
     "scopeType": "organization",
     "relationshipClass": "direct_legal",
     "severity": "high",
@@ -443,6 +443,10 @@
     "condition": {
       "op": "all",
       "of": [
+        {
+          "op": "fy_starts_on_or_after",
+          "date": "2028-01-01"
+        },
         {
           "op": "not",
           "of": {
@@ -473,6 +477,15 @@
           {
             "kind": "provision",
             "text": "Article 40a"
+          }
+        ]
+      },
+      {
+        "sourceId": "SRC-002",
+        "locators": [
+          {
+            "kind": "provision",
+            "text": "Article 5(2), second subparagraph"
           }
         ]
       }

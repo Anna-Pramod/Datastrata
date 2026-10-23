@@ -672,7 +672,10 @@ describe('the real CSRD pack, partitioned by what a live run could reach', () =>
    * actual `serves` — a measurement, not a target.
    */
   const AUDITED_SOURCES = AUDIT_EXPECTED_SOURCES;
-  /** The audited sixteen and the seven of the C/G composition, each cited as its authority says. */
+  /**
+   * The audited sixteen (as corrected since by approved content changes) and
+   * the seven of the C/G composition, each cited as its authority says.
+   */
   const ALL_SOURCES = EXPECTED_SOURCES;
 
   it('the migrated pack cites exactly what the audit determined', () => {
@@ -688,11 +691,14 @@ describe('the real CSRD pack, partitioned by what a live run could reach', () =>
       // exclusion branch, 2026-10-19) and is at 5; CSRD-S-001 gained the same
       // branch and is at 4; the C/G composition (2026-10-20) took CSRD-S-005,
       // CSRD-S-006 and CSRD-S-014 to 4 and authored CSRD-S-017 to CSRD-S-023 at
-      // 1. The audited sixteen's cited sources, the audit's concern here, are
-      // unchanged: a new locator on SRC-001 is not a new source.
+      // 1; E-1 (QD-4, DG-6, 2026-10-23) took CSRD-S-007 to 4 with its 2028
+      // start. A new locator on SRC-001 is not a new source, so the audited
+      // sixteen's cited sources are unchanged but one: E-1 cites SRC-002 for
+      // S-007, recorded in `POST_AUDIT_CORRECTIONS`, not in the audit's table,
+      // whose arithmetic below stays the audit's.
       const expectedVersion =
         requirement.id === 'CSRD-S-002' ? 5
-        : ['CSRD-S-001', 'CSRD-S-005', 'CSRD-S-006', 'CSRD-S-014'].includes(requirement.id) ? 4
+        : ['CSRD-S-001', 'CSRD-S-005', 'CSRD-S-006', 'CSRD-S-007', 'CSRD-S-014'].includes(requirement.id) ? 4
         : requirement.id >= 'CSRD-S-017' ? 1
         : 3;
       expect(requirement.version, requirement.id).toBe(expectedVersion);

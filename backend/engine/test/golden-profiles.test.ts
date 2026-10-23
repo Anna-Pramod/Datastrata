@@ -1,7 +1,8 @@
 /**
  * Golden profile regression suite — "regression testing for law" (Pass 2 §4).
  *
- * These are the pack's 10 golden company profiles (sheet 08). Every content or
+ * These are the pack's 10 golden company profiles (sheet 08), and P-011, added
+ * with the Article 40a start date (QD-4 E-1). Every content or
  * engine change must keep this suite green; an unexpected flip blocks
  * publication until a human reviews the legal justification.
  *
@@ -312,5 +313,43 @@ describe('P-010 former FY2024 reporter below new thresholds, national option unk
     expect(r.summary.statusFlags).toContain('national_review_required');
     expect(r.summary.statusFlags).not.toContain('no_direct_duty_identified');
     expect(r.obligations).toHaveLength(0);
+  });
+});
+
+// CSRD Art 5(2), second subparagraph: Member States apply Article 40a "for
+// financial years starting on or after 1 January 2028" (QD-4 E-1).
+describe('P-011 third-country subsidiary gateway before 2028', () => {
+  // P-006's facts, unchanged; only the financial year differs.
+  const p = new ProfileBuilder()
+    .org('grp', 'Lakeshore Holdings Inc. group')
+    .euEntity('sub', 'Lakeshore Europe GmbH', 'DE', { parentId: 'grp', isSubsidiary: true })
+    .str('grp', 'group.ultimate_parent_country', 'US')
+    .num('grp', 'third_country.eu_turnover_year_1_eur', 480_000_000)
+    .num('grp', 'third_country.eu_turnover_year_2_eur', 470_000_000)
+    .bool('grp', 'third_country.qualifying_eu_subsidiary_exists', true)
+    .num('sub', 'third_country.eu_subsidiary_turnover_eur', 240_000_000)
+    .num('sub', 'entity.net_turnover_eur', 240_000_000)
+    .num('sub', 'entity.avg_employees', 600)
+    .str('sub', 'entity.governing_member_state', 'DE');
+  const r = assess(csrdPack(), p.build(), ctx(...FY2027, 'grp'));
+  const control = assess(csrdPack(), p.build(), ctx('2028-01-01', '2028-12-31', 'grp'));
+
+  it('the group gate and the subsidiary gateway do not apply for FY2027 — a definitive no on the Directive’s date', () => {
+    expect(det(r, 'CSRD-S-007', 'grp').result).toBe('DOES_NOT_APPLY');
+    expect(det(r, 'CSRD-S-007', 'grp').reason).toBeUndefined();
+    expect(det(r, 'CSRD-S-008', 'sub').result).toBe('DOES_NOT_APPLY');
+  });
+
+  it('MUST NOT apply either gate before 2028 — no third-country obligations', () => {
+    expect(det(r, 'CSRD-S-007', 'grp').result).not.toBe('APPLIES');
+    expect(det(r, 'CSRD-S-008', 'sub').result).not.toBe('APPLIES');
+    expect(templateIds(r)).not.toContain('O-012');
+    expect(templateIds(r)).not.toContain('O-013');
+  });
+
+  it('positive control: the same facts for FY2028 still apply through the gateway', () => {
+    expect(det(control, 'CSRD-S-007', 'grp').result).toBe('APPLIES');
+    expect(det(control, 'CSRD-S-008', 'sub').result).toBe('APPLIES');
+    expect(templateIds(control)).toEqual(expect.arrayContaining(['O-012', 'O-013']));
   });
 });

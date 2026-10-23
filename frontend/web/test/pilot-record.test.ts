@@ -30,8 +30,18 @@ describe('resolvePilotRecord', () => {
     const { determinations, obligations, containsDraftContent, nextQuestions, gaps } = record.assessment;
     expect(determinations).toHaveLength(110);
     expect(determinations.filter((d) => d.result === 'APPLIES')).toHaveLength(6);
-    expect(determinations.filter((d) => d.result === 'DOES_NOT_APPLY')).toHaveLength(60);
-    expect(determinations.filter((d) => d.result === 'INDETERMINATE')).toHaveLength(44);
+    // The sample's figures were 60 and 44. On 2026-10-23 E-1 (QD-4, DG-6) gave
+    // the Article 40a route its 2028 start (CSRD Art 5(2), second
+    // subparagraph), so for this FY2027 document four determinations move from
+    // unresolved to does-not-apply: CSRD-S-007 on the group, and CSRD-S-008,
+    // which follows it, on e-de, e-nl and e-fr. The document is unchanged.
+    expect(determinations.filter((d) => d.result === 'DOES_NOT_APPLY')).toHaveLength(64);
+    expect(determinations.filter((d) => d.result === 'INDETERMINATE')).toHaveLength(40);
+    const gate = (id: string, scopeId: string) => determinations.find((d) => d.requirementId === id && d.scopeId === scopeId);
+    for (const [id, scopeId] of [['CSRD-S-007', 'org'], ['CSRD-S-008', 'e-de'], ['CSRD-S-008', 'e-nl'], ['CSRD-S-008', 'e-fr']] as const) {
+      expect(gate(id, scopeId)?.result, `${id} on ${scopeId}`).toBe('DOES_NOT_APPLY');
+      expect(gate(id, scopeId)?.reason, `${id} on ${scopeId}`).toBeUndefined();
+    }
     expect(obligations).toHaveLength(0);
     expect(nextQuestions).toHaveLength(16);
     expect(gaps).toHaveLength(0);

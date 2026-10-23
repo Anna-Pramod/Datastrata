@@ -422,14 +422,15 @@ describe('the version registry after the bump', () => {
    * CSRD-S-001 at 4. On 2026-10-20 the C/G composition
    * (`knowledge-timing-and-exemption-composition.test.ts`) took CSRD-S-005,
    * CSRD-S-006 and CSRD-S-014 to 4 and authored CSRD-S-017 to CSRD-S-023 at
-   * version 1 — the first requirements with no pre-migration history. Every
-   * other requirement is still at 3. Stated as a table rather than a blanket
-   * number so that a further re-authoring has to be declared here.
+   * version 1 — the first requirements with no pre-migration history. On
+   * 2026-10-23 QD-4's E-1 (DG-6) gave CSRD-S-007 its 2028 start, at version 4.
+   * Every other requirement is still at 3. Stated as a table rather than a
+   * blanket number so that a further re-authoring has to be declared here.
    */
   const AUTHORED_AFTER_MIGRATION = ['CSRD-S-017', 'CSRD-S-018', 'CSRD-S-019', 'CSRD-S-020', 'CSRD-S-021', 'CSRD-S-022', 'CSRD-S-023'];
   const CURRENT_VERSION = (id: string): number =>
     id === 'CSRD-S-002' ? 5
-    : ['CSRD-S-001', 'CSRD-S-005', 'CSRD-S-006', 'CSRD-S-014'].includes(id) ? 4
+    : ['CSRD-S-001', 'CSRD-S-005', 'CSRD-S-006', 'CSRD-S-007', 'CSRD-S-014'].includes(id) ? 4
     : AUTHORED_AFTER_MIGRATION.includes(id) ? 1
     : 3;
 
@@ -504,8 +505,8 @@ describe('the version registry after the bump', () => {
     // A stray higher version would mean some requirement was re-authored
     // without being declared in `CURRENT_VERSION` above; a missing lower one
     // would mean history was dropped. Only S-002 has a version 5; S-001,
-    // S-005, S-006 and S-014 have a version 4; the seven C/G requirements have
-    // version 1 alone; the next requirement is the control.
+    // S-005, S-006, S-007 and S-014 have a version 4; the seven C/G
+    // requirements have version 1 alone; the next requirement is the control.
     for (const r of csrdPack().requirements) {
       const expected = Array.from({ length: CURRENT_VERSION(r.id) }, (_, i) => String(i + 1));
       expect(Object.keys(registry[r.id] ?? {}).sort(), r.id).toEqual(expected);
@@ -514,5 +515,10 @@ describe('the version registry after the bump', () => {
     expect(registry['CSRD-S-001']?.['4']).toMatch(/^[0-9a-f]{64}$/);
     expect(registry['CSRD-S-001']?.['5']).toBeUndefined();
     expect(registry['CSRD-S-003']?.['4']).toBeUndefined();
+    // E-1 appended S-007's version 4 and kept version 3 as committed at
+    // `363011f`, the literal taken from that registry, not recomputed.
+    expect(registry['CSRD-S-007']?.['4']).toMatch(/^[0-9a-f]{64}$/);
+    expect(registry['CSRD-S-007']?.['3']).toBe('a38b89b93061ceedc12cbc18ebcf41482d9acb78405c0823736f67f38fd8aa30');
+    expect(registry['CSRD-S-007']?.['5']).toBeUndefined();
   });
 });

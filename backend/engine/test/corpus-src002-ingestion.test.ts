@@ -290,14 +290,14 @@ describe('the SRC-002 artefact earns its source, and may become evidence', () =>
   });
 });
 
-describe('the affected population — S-003 and S-004 at T9, joined on 2026-10-20 by the C/G requirements that cite Article 5(2)', () => {
+describe('the affected population — S-003 and S-004 at T9, joined on 2026-10-20 by the C/G requirements that cite Article 5(2), and on 2026-10-23 by the Article 40a gate (E-1)', () => {
   const pack = csrdPack();
 
   it('serves the only source the T9 two cite, and one of the two the composition\'s timing and duty requirements cite', () => {
     const citing = pack.requirements
       .filter((r) => r.sources.includes('SRC-002'))
       .map((r) => r.id);
-    expect(citing).toEqual(['CSRD-S-003', 'CSRD-S-004', 'CSRD-S-017', 'CSRD-S-018', 'CSRD-S-020', 'CSRD-S-021', 'CSRD-S-022']);
+    expect(citing).toEqual(['CSRD-S-003', 'CSRD-S-004', 'CSRD-S-007', 'CSRD-S-017', 'CSRD-S-018', 'CSRD-S-020', 'CSRD-S-021', 'CSRD-S-022']);
     // The T9 population, and the consolidated derogation, cite nothing else.
     for (const id of ['CSRD-S-003', 'CSRD-S-004', 'CSRD-S-022']) {
       expect(pack.requirements.find((r) => r.id === id)!.sources, id).toEqual(['SRC-002']);
@@ -306,6 +306,9 @@ describe('the affected population — S-003 and S-004 at T9, joined on 2026-10-2
     for (const id of ['CSRD-S-017', 'CSRD-S-018', 'CSRD-S-020', 'CSRD-S-021']) {
       expect(pack.requirements.find((r) => r.id === id)!.sources.sort(), id).toEqual(['SRC-001', 'SRC-002']);
     }
+    // E-1 (QD-4, DG-6): the Article 40a group gate cites Article 5(2)'s second
+    // subparagraph for its 2028 start, beside Article 40a in the host directive.
+    expect(pack.requirements.find((r) => r.id === 'CSRD-S-007')!.sources).toEqual(['SRC-001', 'SRC-002']);
     expect(docsForSources(loadCorpus(corpusDir).index, ['SRC-002'])).toEqual([DOC]);
   });
 
