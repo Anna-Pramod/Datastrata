@@ -15,7 +15,7 @@
   "nationalLawResolved": false,
   "counts": {
     "applies": 6,
-    "doesNotApply": 12,
+    "doesNotApply": 13,
     "indeterminate": 2
   },
   "determinations": [
@@ -481,6 +481,27 @@
         "Article 2(15)"
       ],
       "caution": "Deferred encoding: the Member State's implementation of the option, the content an opted-out parent still reports and any national conditions are not encoded and resolve through CSRD-S-013 and analyst review; a relief recorded here is an EU-level screen, not a final legal conclusion."
+    },
+    {
+      "id": "CSRD-S-024",
+      "title": "Third-country issuer route (Transparency Directive): not yet encoded",
+      "decisionArea": "Issuer scope",
+      "result": "DOES_NOT_APPLY",
+      "severity": "high",
+      "relationshipClass": "direct_legal",
+      "needs": [],
+      "sources": [
+        {
+          "id": "SRC-002",
+          "title": "Directive (EU) 2022/2464 — CSRD",
+          "url": "https://eur-lex.europa.eu/eli/dir/2022/2464/oj/eng"
+        }
+      ],
+      "locators": [
+        "Article 2",
+        "Article 5(2), third subparagraph"
+      ],
+      "caution": "Coverage gap (KNW-14). Never read as 'does not apply'. Encoding the route is a separate content change (CG-1, NF-2, C-12)."
     }
   ],
   "obligations": [

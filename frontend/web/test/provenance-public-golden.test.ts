@@ -38,7 +38,9 @@ import {
   AUDIT_EXPECTED_UNIVERSE,
   CORRECTED_CASE,
   E1_CORRECTED_CASE,
+  E2_ADDED_CASE,
   EXPECTED_SOURCES,
+  POST_AUDIT_ADDITIONS,
   POST_AUDIT_CORRECTIONS,
   POST_AUDIT_SOURCES,
 } from '../../../backend/engine/test/audit-expected-provenance';
@@ -139,7 +141,7 @@ describe('what a customer is shown, checked against the audit and the pack', () 
     expect(live.determinations.length).toBeGreaterThan(0);
     for (const determination of live.determinations) {
       // The audit for the sixteen, as corrected since (E-1 for S-007); the C/G
-      // design (2026-10-20) for the seven after it.
+      // design (2026-10-20) for the seven after it; E-2 for S-024.
       expect(
         determination.sources.map((source) => source.id),
         determination.id,
@@ -200,6 +202,25 @@ describe('what a customer is shown, checked against the audit and the pack', () 
     // The audit's own entry is not rewritten by the correction.
     expect(AUDIT_EXPECTED_SOURCES[E1_CORRECTED_CASE.requirementId]).toEqual([...E1_CORRECTED_CASE.auditSources]);
   });
+
+  it('E-2’s addition reaches the customer surface, named on its own', () => {
+    // QD-4 E-2 (DG-7, option A, 2026-10-23): the third-country issuer route
+    // (CSRD Art 2 and Art 5(2), third subparagraph) is not encoded. The fixed
+    // answers are a DE company, so the gate is closed — a definitive no, as for
+    // every EU issuer, whose duty runs through S-001, S-002, S-017 and S-018 —
+    // and the customer is shown the CSRD with both provisions.
+    const live = payload();
+    const added = live.determinations.find((d) => d.id === E2_ADDED_CASE.requirementId);
+    expect(added, `${E2_ADDED_CASE.requirementId} is in the fixed payload`).toBeDefined();
+    expect(added!.result).toBe('DOES_NOT_APPLY');
+    expect(added!.reason).toBeUndefined();
+    expect(added!.needs).toEqual([]);
+    expect(added!.sources.map((s) => s.id)).toEqual([...E2_ADDED_CASE.sources]);
+    expect(added!.sources[0]!.title).toContain('2022/2464');
+    expect(added!.locators).toEqual([...E2_ADDED_CASE.locators]);
+    // An addition, not a correction: the audit holds no entry for it.
+    expect(AUDIT_EXPECTED_SOURCES[E2_ADDED_CASE.requirementId]).toBeUndefined();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -207,7 +228,7 @@ describe('what a customer is shown, checked against the audit and the pack', () 
 // ---------------------------------------------------------------------------
 
 describe('the transition from the historical public generation to this one', () => {
-  it('leaves every field outside the determinations identical, except the counts the seven C/G determinations add and the one result E-1 settles', () => {
+  it('leaves every field outside the determinations identical, except the counts the seven C/G determinations add, the one result E-1 settles and the one determination E-2 adds', () => {
     const outside = (path: string) => {
       const { determinations: _dropped, counts, ...rest } = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown> & {
         counts: CheckResponse['counts'];
@@ -226,6 +247,10 @@ describe('the transition from the historical public generation to this one', () 
     // or after 1 January 2028 (CSRD Art 5(2), second subparagraph). The
     // headline's unresolved count falls by exactly that one, and nothing else
     // outside the determinations moves.
+    //
+    // On 2026-10-23 E-2 (QD-4, DG-7) added CSRD-S-024, the third-country issuer
+    // route. The fixed answers are a DE company, so it does not apply: one more
+    // does-not-apply, and nothing unresolved, so the headline does not move.
     const E1_UNRESOLVED_BEFORE = '2 determination(s) unresolved';
     const E1_UNRESOLVED_AFTER = '1 determination(s) unresolved';
     const before = outside(HISTORICAL);
@@ -234,16 +259,17 @@ describe('the transition from the historical public generation to this one', () 
     expect(after.rest).toBe(before.rest.replace(E1_UNRESOLVED_BEFORE, E1_UNRESOLVED_AFTER));
     expect(after.counts).toEqual({
       applies: before.counts.applies + 2,
-      doesNotApply: before.counts.doesNotApply + 5 + 1,
+      doesNotApply: before.counts.doesNotApply + 5 + 1 + 1,
       indeterminate: before.counts.indeterminate - 1,
     });
   });
 
-  it('keeps the sixteen historical determinations in order as a prefix; the seven of the C/G composition follow, in id order', () => {
+  it('keeps the sixteen historical determinations in order as a prefix; the seven of the C/G composition follow, then E-2’s addition, in id order', () => {
     const ids = determinationsOf(PROVENANCE).map((d) => d.id);
     const historical = determinationsOf(HISTORICAL).map((d) => d.id);
     expect(ids.slice(0, historical.length)).toEqual(historical);
-    expect(ids.slice(historical.length)).toEqual(Object.keys(POST_AUDIT_SOURCES));
+    // E-2 (QD-4, DG-7, 2026-10-23) appended CSRD-S-024 after the seven.
+    expect(ids.slice(historical.length)).toEqual([...Object.keys(POST_AUDIT_SOURCES), ...Object.keys(POST_AUDIT_ADDITIONS)]);
   });
 
   it('replaces provisions with locators, everywhere and only there', () => {
@@ -263,8 +289,10 @@ describe('the transition from the historical public generation to this one', () 
     for (const determination of determinationsOf(PROVENANCE)) {
       const now = determination.sources.map((s) => s.id);
       if (!before.has(determination.id)) {
-        // Authored after the audit: the design's sources, and nothing moved.
-        expect(now, determination.id).toEqual([...POST_AUDIT_SOURCES[determination.id]!]);
+        // Authored after the audit: the design's sources (or, for E-2's
+        // CSRD-S-024, its own change's), and nothing moved.
+        const authored = POST_AUDIT_SOURCES[determination.id] ?? POST_AUDIT_ADDITIONS[determination.id];
+        expect(now, determination.id).toEqual([...authored!]);
         continue;
       }
       // The audit's value, unless an approved correction has moved it since.

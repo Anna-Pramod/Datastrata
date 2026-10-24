@@ -614,8 +614,9 @@ describe('the CSRD pack — false-positive control', () => {
   const pack = csrdPack();
   const packCtx = { factTypes: pack.factTypes, catalogues: pack.catalogues };
 
-  it('has twenty-three requirements', () => {
-    expect(pack.requirements).toHaveLength(23);
+  it('has twenty-four requirements', () => {
+    // Twenty-four since E-2 (QD-4, DG-7, 2026-10-23) added CSRD-S-024.
+    expect(pack.requirements).toHaveLength(24);
   });
 
   for (const r of pack.requirements) {

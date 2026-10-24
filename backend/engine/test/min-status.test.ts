@@ -104,16 +104,17 @@ describe('the empty-ledger invariant', () => {
   const pack = csrdPack();
   const result = assess(pack, wideProfile(), CTX());
 
-  it('reads all twenty-three requirements as draft', () => {
-    expect(pack.requirements).toHaveLength(23);
+  it('reads all twenty-four requirements as draft', () => {
+    // Twenty-four since E-2 (QD-4, DG-7, 2026-10-23) added CSRD-S-024.
+    expect(pack.requirements).toHaveLength(24);
     for (const r of pack.requirements) {
       expect(r.derivedStatus, r.id).toBe('draft');
       expect(r.statusReasons, r.id).toEqual([]);
     }
   });
 
-  it('evaluates all twenty-three at the default floor', () => {
-    expect(evaluatedIds(result)).toHaveLength(23);
+  it('evaluates all twenty-four at the default floor', () => {
+    expect(evaluatedIds(result)).toHaveLength(24);
   });
 
   it('reports that the answer contains draft content', () => {
@@ -137,7 +138,7 @@ describe('minStatus, one test per level', () => {
   });
 
   it('draft yields every requirement', () => {
-    expect(evaluatedIds(at('draft'))).toHaveLength(23);
+    expect(evaluatedIds(at('draft'))).toHaveLength(24);
   });
 
   it('verified yields verified plus ratified, and nothing draft', () => {
@@ -423,11 +424,13 @@ describe('the version registry after the bump', () => {
    * (`knowledge-timing-and-exemption-composition.test.ts`) took CSRD-S-005,
    * CSRD-S-006 and CSRD-S-014 to 4 and authored CSRD-S-017 to CSRD-S-023 at
    * version 1 — the first requirements with no pre-migration history. On
-   * 2026-10-23 QD-4's E-1 (DG-6) gave CSRD-S-007 its 2028 start, at version 4.
+   * 2026-10-23 QD-4's E-1 (DG-6) gave CSRD-S-007 its 2028 start, at version 4,
+   * and QD-4's E-2 (DG-7) authored CSRD-S-024, the third-country issuer route,
+   * at version 1 with no history.
    * Every other requirement is still at 3. Stated as a table rather than a
    * blanket number so that a further re-authoring has to be declared here.
    */
-  const AUTHORED_AFTER_MIGRATION = ['CSRD-S-017', 'CSRD-S-018', 'CSRD-S-019', 'CSRD-S-020', 'CSRD-S-021', 'CSRD-S-022', 'CSRD-S-023'];
+  const AUTHORED_AFTER_MIGRATION = ['CSRD-S-017', 'CSRD-S-018', 'CSRD-S-019', 'CSRD-S-020', 'CSRD-S-021', 'CSRD-S-022', 'CSRD-S-023', 'CSRD-S-024'];
   const CURRENT_VERSION = (id: string): number =>
     id === 'CSRD-S-002' ? 5
     : ['CSRD-S-001', 'CSRD-S-005', 'CSRD-S-006', 'CSRD-S-007', 'CSRD-S-014'].includes(id) ? 4
@@ -442,7 +445,7 @@ describe('the version registry after the bump', () => {
     }
     // The version-3 digests are still bound to version 3 for every pre-migration
     // requirement, S-002 included: a later version appends, it never rewrites.
-    // The seven authored at version 1 have no version 3 to keep.
+    // The eight authored at version 1 (the seven, and E-2's CSRD-S-024) have no version 3 to keep.
     for (const r of pack.requirements) {
       if (AUTHORED_AFTER_MIGRATION.includes(r.id)) expect(registry[r.id]?.['3'], r.id).toBeUndefined();
       else expect(registry[r.id]?.['3'], r.id).toMatch(/^[0-9a-f]{64}$/);
@@ -468,7 +471,8 @@ describe('the version registry after the bump', () => {
     // The table covers the pre-migration pack rather than a subset of it:
     // sixteen requirements, each at both historical versions. Without this,
     // deleting rows from the oracle would weaken the check silently and stay
-    // green. The seven authored on 2026-10-20 have no history to freeze.
+    // green. The seven authored on 2026-10-20, and CSRD-S-024 (E-2, 2026-10-23),
+    // have no history to freeze.
     const covered = new Map<string, string[]>();
     for (const [id, version] of FROZEN_HISTORICAL_DIGESTS) {
       covered.set(id, [...(covered.get(id) ?? []), version].sort());
@@ -505,7 +509,7 @@ describe('the version registry after the bump', () => {
     // A stray higher version would mean some requirement was re-authored
     // without being declared in `CURRENT_VERSION` above; a missing lower one
     // would mean history was dropped. Only S-002 has a version 5; S-001,
-    // S-005, S-006, S-007 and S-014 have a version 4; the seven C/G
+    // S-005, S-006, S-007 and S-014 have a version 4; the seven C/G and E-2's CSRD-S-024
     // requirements have version 1 alone; the next requirement is the control.
     for (const r of csrdPack().requirements) {
       const expected = Array.from({ length: CURRENT_VERSION(r.id) }, (_, i) => String(i + 1));

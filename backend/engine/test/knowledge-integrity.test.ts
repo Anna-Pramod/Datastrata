@@ -18,7 +18,8 @@ describe('CSRD knowledge pack integrity', () => {
     // Sixteen requirements until the C/G composition of 2026-10-20 added seven
     // (CSRD-S-017 to CSRD-S-023), with nine questions and ten facts after the
     // review corrections (the reporting parent's country, the Article 37 alternative).
-    expect(pack.requirements).toHaveLength(23);
+    // E-2 (QD-4, DG-7, 2026-10-23) added CSRD-S-024, the third-country issuer route.
+    expect(pack.requirements).toHaveLength(24);
     expect(pack.sources).toHaveLength(17);
     expect(pack.obligationTemplates).toHaveLength(17);
     expect(pack.gapTests).toHaveLength(16);

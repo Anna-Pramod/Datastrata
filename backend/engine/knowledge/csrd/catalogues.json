@@ -32,5 +32,10 @@
     "entries": {},
     "missReason": "national_law_unresolved",
     "note": "A Member State appears here (value true) ONLY after its country pack is expert-ratified. Until then S-013 keeps every final legal status at 'requires national review'. IE and DE stub packs exist under country-packs/ but are NOT ratified."
+  },
+  "encoded_issuer_routes": {
+    "entries": {},
+    "missReason": "source_status_unresolved",
+    "note": "Third-country issuer routes under the Transparency Directive (CSRD Article 2; Article 5(2), third subparagraph) that are encoded. No country's issuer route is encoded yet, so every lookup misses and CSRD-S-024 stays INDETERMINATE with source_status_unresolved: not yet covered, requires review (KNW-14). A country is added here only by the content change that encodes its route (CG-1); until then a non-EU result must never read 'does not apply'."
   }
 }

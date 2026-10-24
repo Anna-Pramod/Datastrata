@@ -28,22 +28,38 @@ describe('resolvePilotRecord', () => {
     expect(record.origin).toEqual({ kind: 'synthetic' });
     expect(record.document.record.kind).toBe('synthetic');
     const { determinations, obligations, containsDraftContent, nextQuestions, gaps } = record.assessment;
-    expect(determinations).toHaveLength(110);
+    // The sample's 110, plus six from E-2 (QD-4, DG-7, 2026-10-23): CSRD-S-024
+    // is assessed on each of the document's six legal entities.
+    expect(determinations).toHaveLength(116);
     expect(determinations.filter((d) => d.result === 'APPLIES')).toHaveLength(6);
     // The sample's figures were 60 and 44. On 2026-10-23 E-1 (QD-4, DG-6) gave
     // the Article 40a route its 2028 start (CSRD Art 5(2), second
     // subparagraph), so for this FY2027 document four determinations move from
     // unresolved to does-not-apply: CSRD-S-007 on the group, and CSRD-S-008,
     // which follows it, on e-de, e-nl and e-fr. The document is unchanged.
-    expect(determinations.filter((d) => d.result === 'DOES_NOT_APPLY')).toHaveLength(64);
-    expect(determinations.filter((d) => d.result === 'INDETERMINATE')).toHaveLength(40);
+    // E-2's six (CSRD Art 2 and Art 5(2), third subparagraph; the route is not
+    // encoded): the four EU-registered entities do not apply, and e-in (IN) and
+    // e-uk (GB) read not yet covered, so 64 / 40 become 68 / 42.
+    expect(determinations.filter((d) => d.result === 'DOES_NOT_APPLY')).toHaveLength(68);
+    expect(determinations.filter((d) => d.result === 'INDETERMINATE')).toHaveLength(42);
     const gate = (id: string, scopeId: string) => determinations.find((d) => d.requirementId === id && d.scopeId === scopeId);
     for (const [id, scopeId] of [['CSRD-S-007', 'org'], ['CSRD-S-008', 'e-de'], ['CSRD-S-008', 'e-nl'], ['CSRD-S-008', 'e-fr']] as const) {
       expect(gate(id, scopeId)?.result, `${id} on ${scopeId}`).toBe('DOES_NOT_APPLY');
       expect(gate(id, scopeId)?.reason, `${id} on ${scopeId}`).toBeUndefined();
     }
+    for (const scopeId of ['e-de', 'e-hold', 'e-nl', 'e-fr']) {
+      expect(gate('CSRD-S-024', scopeId)?.result, `CSRD-S-024 on ${scopeId}`).toBe('DOES_NOT_APPLY');
+      expect(gate('CSRD-S-024', scopeId)?.reason, `CSRD-S-024 on ${scopeId}`).toBeUndefined();
+    }
+    for (const scopeId of ['e-in', 'e-uk']) {
+      expect(gate('CSRD-S-024', scopeId)?.result, `CSRD-S-024 on ${scopeId}`).toBe('INDETERMINATE');
+      expect(gate('CSRD-S-024', scopeId)?.reason, `CSRD-S-024 on ${scopeId}`).toBe('source_status_unresolved');
+    }
     expect(obligations).toHaveLength(0);
-    expect(nextQuestions).toHaveLength(16);
+    // Sixteen in the sample; seventeen since E-2, because the two non-EU
+    // entities' CSRD-S-024 needs their country again, which brings Q-003 back.
+    expect(nextQuestions).toHaveLength(17);
+    expect(nextQuestions.find((q) => q.question.id === 'Q-003')?.blockedDeterminations).toEqual(['CSRD-S-024']);
     expect(gaps).toHaveLength(0);
     expect(containsDraftContent).toBe(true);
     const duty = new Map(determinations.filter((d) => d.requirementId === 'CSRD-S-014').map((d) => [d.scopeId, d]));

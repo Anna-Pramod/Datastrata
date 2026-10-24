@@ -46,6 +46,7 @@ import {
   AUDIT_EXPECTED_UNIVERSE,
   CORRECTED_CASE,
   EXPECTED_SOURCES,
+  POST_AUDIT_ADDITIONS,
   POST_AUDIT_SOURCES,
 } from './audit-expected-provenance';
 
@@ -165,7 +166,8 @@ describe('what the generation contains, checked against the audit and the pack',
     expect(live.determinations.length).toBeGreaterThan(0);
     for (const determination of live.determinations) {
       // The audit for the sixteen; the C/G design (2026-10-20) for the seven
-      // authored after it, kept apart in `POST_AUDIT_SOURCES`.
+      // authored after it, kept apart in `POST_AUDIT_SOURCES`; E-2's CSRD-S-024
+      // in `POST_AUDIT_ADDITIONS`.
       expect(determination.sources, determination.requirementId).toEqual([
         ...EXPECTED_SOURCES[determination.requirementId]!,
       ]);
@@ -262,15 +264,16 @@ describe('the transition from the historical generation to this one', () => {
     expect(strip(PROVENANCE)).toBe(strip(HISTORICAL));
   });
 
-  it('keeps the sixteen historical determinations in order as a prefix; the seven of the C/G composition follow, in id order', () => {
+  it('keeps the sixteen historical determinations in order as a prefix; the seven of the C/G composition follow, then E-2’s addition, in id order', () => {
     // Order is meaning here — it is the order determinations are decided in —
     // so this is a sequence comparison, not a set comparison. Since the C/G
     // composition (2026-10-20) the pack holds seven more requirements, appended
     // after CSRD-S-016, so the historical sequence is a prefix of the current one.
+    // E-2 (QD-4, DG-7, 2026-10-23) appended CSRD-S-024 after them.
     const ids = provenanceDeterminations().map((d) => d.requirementId);
     const historical = historicalDeterminations().map((d) => d.requirementId);
     expect(ids.slice(0, historical.length)).toEqual(historical);
-    expect(ids.slice(historical.length)).toEqual(Object.keys(POST_AUDIT_SOURCES));
+    expect(ids.slice(historical.length)).toEqual([...Object.keys(POST_AUDIT_SOURCES), ...Object.keys(POST_AUDIT_ADDITIONS)]);
   });
 
   it('replaces provisions with locators, everywhere and only there', () => {
@@ -298,8 +301,10 @@ describe('the transition from the historical generation to this one', () => {
     for (const determination of provenanceDeterminations()) {
       const old = before.get(determination.requirementId);
       if (old === undefined) {
-        // Authored after the audit: its sources are the design's, and it moved nothing.
-        expect(determination.sources, determination.requirementId).toEqual([...POST_AUDIT_SOURCES[determination.requirementId]!]);
+        // Authored after the audit: its sources are the design's (or, for E-2's
+        // CSRD-S-024, its own change's), and it moved nothing.
+        const authored = POST_AUDIT_SOURCES[determination.requirementId] ?? POST_AUDIT_ADDITIONS[determination.requirementId];
+        expect(determination.sources, determination.requirementId).toEqual([...authored!]);
         continue;
       }
       const expected = [...AUDIT_EXPECTED_SOURCES[determination.requirementId]!];

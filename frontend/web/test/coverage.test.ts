@@ -176,12 +176,13 @@ describe('coverageRegister', () => {
 });
 
 describe('siteCoverage', () => {
-  it('reads the repository as CSRD draft with 0 of 23 signed, six regimes planned, nothing supported or monitored', () => {
+  it('reads the repository as CSRD draft with 0 of 24 signed, six regimes planned, nothing supported or monitored', () => {
     const entries = siteCoverage();
     expect(entries.map((e) => e.id)).toEqual(SEVEN);
     const csrd = entry(entries, 'csrd');
     expect(csrd.status).toBe('draft');
-    expect(csrd.detail).toBe('0 of 23 requirements signed');
+    // Derived from the pack: twenty-four since E-2 (QD-4, DG-7, 2026-10-23) added CSRD-S-024.
+    expect(csrd.detail).toBe('0 of 24 requirements signed');
     expect(answerable(entries).map((e) => e.id)).toEqual(['csrd']);
     expect(planned(entries).map((e) => e.id)).toEqual(SIX_PLANNED);
     expect(entries.filter((e) => e.status === 'supported' || e.status === 'monitored')).toEqual([]);

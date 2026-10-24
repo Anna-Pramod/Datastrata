@@ -1,8 +1,9 @@
 /**
  * Golden profile regression suite — "regression testing for law" (Pass 2 §4).
  *
- * These are the pack's 10 golden company profiles (sheet 08), and P-011, added
- * with the Article 40a start date (QD-4 E-1). Every content or
+ * These are the pack's 10 golden company profiles (sheet 08), P-011, added
+ * with the Article 40a start date (QD-4 E-1), and P-012, added with the
+ * third-country issuer route read as not yet covered (QD-4 E-2). Every content or
  * engine change must keep this suite green; an unexpected flip blocks
  * publication until a human reviews the legal justification.
  *
@@ -351,5 +352,68 @@ describe('P-011 third-country subsidiary gateway before 2028', () => {
     expect(det(control, 'CSRD-S-007', 'grp').result).toBe('APPLIES');
     expect(det(control, 'CSRD-S-008', 'sub').result).toBe('APPLIES');
     expect(templateIds(control)).toEqual(expect.arrayContaining(['O-012', 'O-013']));
+  });
+});
+
+// CSRD Article 2 amends the Transparency Directive, and Art 5(2), third
+// subparagraph, applies it to issuers under Directive 2004/109/EC, Art 2(1)(d),
+// on the same size tests: a company registered outside the EU with securities
+// on an EU regulated market can have the duty. The route is not encoded
+// (KNW-14), so a non-EU result reads "not yet covered: requires review", never
+// "does not apply" (QD-4 E-2, DG-7 option A). EU issuers are assessed through
+// CSRD-S-001, S-002, S-017 and S-018, so the gate is closed for them.
+describe('P-012 third-country issuer route not yet encoded', () => {
+  // Explicit facts, not a helper whose name says "EU". The two companies are
+  // identical except for the country of incorporation.
+  const company = (id: string, name: string) =>
+    new ProfileBuilder()
+      .entity(id, name)
+      .str(id, 'entity.legal_form', 'public_limited_company')
+      .bool(id, 'entity.is_parent_undertaking', false)
+      .bool(id, 'entity.is_subsidiary', false)
+      .num(id, 'entity.net_turnover_eur', 520_000_000)
+      .num(id, 'entity.avg_employees', 1350)
+      .bool(id, 'entity.excluded_by_article_1_4', false);
+  const us = assess(csrdPack(), company('e-us', 'Lakeshore Holdings Inc.').str('e-us', 'entity.incorporation_country', 'US').build(), ctx(...FY2027, 'e-us'));
+  const fr = assess(csrdPack(), company('e-fr', 'Alpine Industrie SA').str('e-fr', 'entity.incorporation_country', 'FR').build(), ctx(...FY2027, 'e-fr'));
+  // The checker's "Not sure" records the fact as unknown; a fact never asked is absent.
+  const unknown = assess(csrdPack(), company('e-x', 'Unnamed Holdings').fact('e-x', 'entity.incorporation_country', { kind: 'unknown' }).build(), ctx(...FY2027, 'e-x'));
+  const absent = assess(csrdPack(), company('e-y', 'Unnamed Holdings').build(), ctx(...FY2027, 'e-y'));
+
+  it('a US-registered company reads the route as not yet covered: indeterminate, source_status_unresolved, asking for the country', () => {
+    const d = det(us, 'CSRD-S-024', 'e-us');
+    expect(d.result).toBe('INDETERMINATE');
+    expect(d.reason).toBe('source_status_unresolved');
+    expect(d.needs).toEqual([{ factType: 'entity.incorporation_country', scopeId: 'e-us', reason: 'source_status_unresolved' }]);
+  });
+
+  it('MUST NOT read as does not apply for a non-EU company, nor as no direct duty, and instantiates no obligation', () => {
+    expect(det(us, 'CSRD-S-024', 'e-us').result).not.toBe('DOES_NOT_APPLY');
+    expect(us.summary.statusFlags).not.toContain('no_direct_duty_identified');
+    expect(us.obligations.flatMap((o) => o.derivedFrom)).not.toContain('CSRD-S-024');
+  });
+
+  it('positive control: an FR-registered company reads does not apply, with no reason — the gate evaluates', () => {
+    const d = det(fr, 'CSRD-S-024', 'e-fr');
+    expect(d.result).toBe('DOES_NOT_APPLY');
+    expect(d.reason).toBeUndefined();
+    expect(d.needs).toEqual([]);
+    // The obligation seam the US case reads is populated here, so its "none from S-024" is not vacuous.
+    expect(fr.obligations.flatMap((o) => o.derivedFrom)).toContain('CSRD-S-014');
+    expect(fr.obligations.flatMap((o) => o.derivedFrom)).not.toContain('CSRD-S-024');
+  });
+
+  it('a country recorded as unknown reads missing_fact, never does not apply', () => {
+    const d = det(unknown, 'CSRD-S-024', 'e-x');
+    expect(d.result).toBe('INDETERMINATE');
+    expect(d.reason).toBe('missing_fact');
+    expect(new Set(d.needs.map((n) => `${n.factType}/${n.reason}`))).toEqual(new Set(['entity.incorporation_country/missing_fact']));
+  });
+
+  it('a country never asked reads missing_fact, never does not apply', () => {
+    const d = det(absent, 'CSRD-S-024', 'e-y');
+    expect(d.result).toBe('INDETERMINATE');
+    expect(d.reason).toBe('missing_fact');
+    expect(new Set(d.needs.map((n) => `${n.factType}/${n.reason}`))).toEqual(new Set(['entity.incorporation_country/missing_fact']));
   });
 });

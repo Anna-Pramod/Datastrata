@@ -331,6 +331,7 @@ describe('closing one gap is not becoming readable — CSRD-S-012', () => {
       .filter((r) => r.sources.some((s) => !served.has(s)))
       .map((r) => r.id);
     expect(bearing).toContain('CSRD-S-012');
-    expect(pack.requirements).toHaveLength(23);
+    // Twenty-four since E-2 (QD-4, DG-7, 2026-10-23) added CSRD-S-024.
+    expect(pack.requirements).toHaveLength(24);
   });
 });

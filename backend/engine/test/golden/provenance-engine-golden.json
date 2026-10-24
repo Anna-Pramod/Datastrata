@@ -1909,6 +1909,84 @@
         "op": "all",
         "truth": "DOES_NOT_APPLY"
       }
+    },
+    {
+      "caution": "Coverage gap (KNW-14). Never read as 'does not apply'. Encoding the route is a separate content change (CG-1, NF-2, C-12).",
+      "decisionArea": "Issuer scope",
+      "derivedStatus": "draft",
+      "evaluatedAt": "2026-07-26",
+      "legalStatus": "in_force",
+      "locators": [
+        "Article 2",
+        "Article 5(2), third subparagraph"
+      ],
+      "needs": [],
+      "packVersion": "csrd@0.1.0 (legal snapshot 2026-07-26)",
+      "program": "CSRD",
+      "relationshipClass": "direct_legal",
+      "requirementId": "CSRD-S-024",
+      "requirementTitle": "Third-country issuer route (Transparency Directive): not yet encoded",
+      "result": "DOES_NOT_APPLY",
+      "scopeId": "e1",
+      "scopeName": "Alpine Industrie SAS",
+      "severity": "high",
+      "sources": [
+        "SRC-002"
+      ],
+      "statusReasons": [],
+      "trace": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": "entity.incorporation_country (FR) in catalogue eu_member_states",
+                "factsUsed": [
+                  {
+                    "factType": "entity.incorporation_country",
+                    "scopeId": "e1",
+                    "source": {
+                      "kind": "customer_statement",
+                      "ref": "test fixture"
+                    },
+                    "value": {
+                      "kind": "string",
+                      "value": "FR"
+                    }
+                  }
+                ],
+                "op": "in_catalogue",
+                "truth": "APPLIES"
+              }
+            ],
+            "detail": "not",
+            "op": "not",
+            "truth": "DOES_NOT_APPLY"
+          },
+          {
+            "detail": "entity.incorporation_country (FR) in catalogue encoded_issuer_routes",
+            "factsUsed": [
+              {
+                "factType": "entity.incorporation_country",
+                "scopeId": "e1",
+                "source": {
+                  "kind": "customer_statement",
+                  "ref": "test fixture"
+                },
+                "value": {
+                  "kind": "string",
+                  "value": "FR"
+                }
+              }
+            ],
+            "op": "in_catalogue",
+            "reason": "source_status_unresolved",
+            "truth": "INDETERMINATE"
+          }
+        ],
+        "detail": "all of 2",
+        "op": "all",
+        "truth": "DOES_NOT_APPLY"
+      }
     }
   ],
   "gaps": [

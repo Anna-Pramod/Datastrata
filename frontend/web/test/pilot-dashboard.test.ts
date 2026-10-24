@@ -41,7 +41,8 @@ describe('requirementStatusRows', () => {
 
   it('carries every requirement with its status as loaded: all draft over the real repository', () => {
     const rows = requirementStatusRows(pack, assessment, entityIds);
-    expect(rows).toHaveLength(23);
+    // Twenty-four rows since E-2 (QD-4, DG-7, 2026-10-23) added CSRD-S-024.
+    expect(rows).toHaveLength(24);
     expect(rows.every((r) => r.status === 'draft')).toBe(true);
     const duty = rows.find((r) => r.id === 'CSRD-S-014');
     expect(duty?.version).toBe(4);
@@ -62,13 +63,14 @@ describe('requirementStatusRows', () => {
     expect(rows.find((r) => r.id === 'CSRD-S-001')?.status).toBe('draft');
     expect(rows.filter((r) => r.status !== 'draft')).toHaveLength(1);
     expect(signedAssessment.containsDraftContent).toBe(true);
-    expect(statusSummary(signedPack)).toEqual({ draft: 22, verified: 0, ratified: 1 });
+    expect(statusSummary(signedPack)).toEqual({ draft: 23, verified: 0, ratified: 1 });
   });
 });
 
 describe('statusSummary', () => {
   it('counts the pack as loaded', () => {
-    expect(statusSummary(pack)).toEqual({ draft: 23, verified: 0, ratified: 0 });
+    // Twenty-four since E-2 (QD-4, DG-7, 2026-10-23) added CSRD-S-024.
+    expect(statusSummary(pack)).toEqual({ draft: 24, verified: 0, ratified: 0 });
   });
 });
 

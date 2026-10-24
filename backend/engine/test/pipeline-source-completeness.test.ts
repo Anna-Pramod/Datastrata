@@ -673,8 +673,9 @@ describe('the real CSRD pack, partitioned by what a live run could reach', () =>
    */
   const AUDITED_SOURCES = AUDIT_EXPECTED_SOURCES;
   /**
-   * The audited sixteen (as corrected since by approved content changes) and
-   * the seven of the C/G composition, each cited as its authority says.
+   * The audited sixteen (as corrected since by approved content changes), the
+   * seven of the C/G composition and E-2's CSRD-S-024, each cited as its
+   * authority says.
    */
   const ALL_SOURCES = EXPECTED_SOURCES;
 
@@ -682,7 +683,9 @@ describe('the real CSRD pack, partitioned by what a live run could reach', () =>
     const authored = z
       .array(requirementSchema)
       .parse(JSON.parse(readFileSync(join(REAL, 'knowledge', PACK_ID, 'requirements.json'), 'utf8')));
-    expect(authored).toHaveLength(23);
+    // Twenty-four since E-2 (QD-4, DG-7, 2026-10-23) added CSRD-S-024, whose
+    // SRC-002 citation is recorded in `POST_AUDIT_ADDITIONS`.
+    expect(authored).toHaveLength(24);
     for (const requirement of authored) {
       expect(sourceIdsOf(requirement), requirement.id).toEqual([...ALL_SOURCES[requirement.id]!]);
       // The audit's pack stood at version 3 throughout. CSRD-S-002 has since
@@ -692,7 +695,7 @@ describe('the real CSRD pack, partitioned by what a live run could reach', () =>
       // branch and is at 4; the C/G composition (2026-10-20) took CSRD-S-005,
       // CSRD-S-006 and CSRD-S-014 to 4 and authored CSRD-S-017 to CSRD-S-023 at
       // 1; E-1 (QD-4, DG-6, 2026-10-23) took CSRD-S-007 to 4 with its 2028
-      // start. A new locator on SRC-001 is not a new source, so the audited
+      // start; E-2 (QD-4, DG-7, 2026-10-23) authored CSRD-S-024 at 1. A new locator on SRC-001 is not a new source, so the audited
       // sixteen's cited sources are unchanged but one: E-1 cites SRC-002 for
       // S-007, recorded in `POST_AUDIT_CORRECTIONS`, not in the audit's table,
       // whose arithmetic below stays the audit's.
@@ -739,9 +742,10 @@ describe('the real CSRD pack, partitioned by what a live run could reach', () =>
     // gaps, and why reachability is asserted from an observed request rather
     // than from this list.
     // Twenty-one since the C/G composition: its seven requirements cite SRC-001
-    // and SRC-002, both served, so none joins the gap-bearing two.
+    // and SRC-002, both served, so none joins the gap-bearing two. Twenty-two
+    // since E-2 (QD-4, DG-7, 2026-10-23): CSRD-S-024 cites SRC-002, served.
     expect(DETERMINISTIC_GAP).toEqual(['CSRD-S-011', 'CSRD-S-012']);
-    expect(MODEL_REACHABLE).toHaveLength(21);
+    expect(MODEL_REACHABLE).toHaveLength(22);
     expect([...MODEL_REACHABLE, ...DETERMINISTIC_GAP].sort()).toEqual(
       Object.keys(ALL_SOURCES).sort(),
     );

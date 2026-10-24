@@ -9,10 +9,10 @@
  * the projection into the payload the route hands back.
  *
  * ```
- * 1. signed + fresh fixture           -> ratified count 23, no draft banner
+ * 1. signed + fresh fixture           -> ratified count 24, no draft banner
  * 2. mutate pinned vs current result  -> ratified count 0, banner back
  * 3. suppress freshness resolution    -> ratified count 0, banner back
- * 4. restore                          -> ratified count 23, banner gone
+ * 4. restore                          -> ratified count 24, banner gone
  * ```
  *
  * **`csrdPack()` is the real entry point and is not replaced.** The site loads
@@ -70,8 +70,8 @@ vi.mock('@datastrata/engine', async (importOriginal) => {
 
 const HASH = (c: string): string => c.repeat(64);
 
-/** Every requirement the pack holds: sixteen, plus the seven of the C/G composition (2026-10-20). */
-const ALL_IDS = Array.from({ length: 23 }, (_, i) => `CSRD-S-${String(i + 1).padStart(3, '0')}`);
+/** Every requirement the pack holds: sixteen, plus the seven of the C/G composition (2026-10-20), plus CSRD-S-024 (E-2, 2026-10-23). */
+const ALL_IDS = Array.from({ length: 24 }, (_, i) => `CSRD-S-${String(i + 1).padStart(3, '0')}`);
 
 /** The corpus, closure and pinned result as they stood when the pack was signed. */
 function pristineWorld(): CurrentState {
@@ -198,7 +198,7 @@ describe('the customer-facing surface, through the four stages', () => {
   it('stage 1 — an evaluated, current signature reads ratified and clears the banner', async () => {
     const { stats, response } = await publicSurface(fresh());
 
-    expect(stats.ratified).toBe(23);
+    expect(stats.ratified).toBe(24);
     expect(response.containsDraftContent).toBe(false);
 
     expect(response.counts).toEqual(invariantCounts);
@@ -241,7 +241,7 @@ describe('the customer-facing surface, through the four stages', () => {
       ledgerPath: LEDGER,
       freshnessResolver: resolverOver(world),
     });
-    expect(stats.ratified).toBe(23);
+    expect(stats.ratified).toBe(24);
     expect(response.containsDraftContent).toBe(false);
     expect(response.counts).toEqual(invariantCounts);
   });
@@ -272,6 +272,7 @@ describe('what the site does with no resolver anywhere', () => {
 
     expect(stats.ratified).toBe(0);
     expect(response.containsDraftContent).toBe(true);
-    expect(stats.requirements).toBe(23);
+    // Twenty-four since E-2 (QD-4, DG-7, 2026-10-23) added CSRD-S-024.
+    expect(stats.requirements).toBe(24);
   });
 });

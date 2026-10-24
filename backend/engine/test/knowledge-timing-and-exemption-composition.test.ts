@@ -976,8 +976,10 @@ describe('the version registry after the composition', () => {
     expect(Object.keys(reg['CSRD-S-003'] ?? {}).sort()).toEqual(['1', '2', '3']);
   });
 
-  it('the pack holds twenty-three requirements, the seven appended in id order after CSRD-S-016', () => {
-    expect(pack().requirements.map((r) => r.id).slice(16)).toEqual(NEW);
-    expect(pack().requirements).toHaveLength(23);
+  it('the pack holds twenty-four requirements: the seven appended in id order after CSRD-S-016, then CSRD-S-024', () => {
+    expect(pack().requirements.map((r) => r.id).slice(16, 23)).toEqual(NEW);
+    // E-2 (QD-4, DG-7, 2026-10-23) appended the third-country issuer route after the seven.
+    expect(pack().requirements.map((r) => r.id).slice(23)).toEqual(['CSRD-S-024']);
+    expect(pack().requirements).toHaveLength(24);
   });
 });

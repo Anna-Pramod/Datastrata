@@ -290,16 +290,17 @@ describe('the SRC-002 artefact earns its source, and may become evidence', () =>
   });
 });
 
-describe('the affected population — S-003 and S-004 at T9, joined on 2026-10-20 by the C/G requirements that cite Article 5(2), and on 2026-10-23 by the Article 40a gate (E-1)', () => {
+describe('the affected population — S-003 and S-004 at T9, joined on 2026-10-20 by the C/G requirements that cite Article 5(2), and on 2026-10-23 by the Article 40a gate (E-1) and the third-country issuer route (E-2)', () => {
   const pack = csrdPack();
 
   it('serves the only source the T9 two cite, and one of the two the composition\'s timing and duty requirements cite', () => {
     const citing = pack.requirements
       .filter((r) => r.sources.includes('SRC-002'))
       .map((r) => r.id);
-    expect(citing).toEqual(['CSRD-S-003', 'CSRD-S-004', 'CSRD-S-007', 'CSRD-S-017', 'CSRD-S-018', 'CSRD-S-020', 'CSRD-S-021', 'CSRD-S-022']);
-    // The T9 population, and the consolidated derogation, cite nothing else.
-    for (const id of ['CSRD-S-003', 'CSRD-S-004', 'CSRD-S-022']) {
+    expect(citing).toEqual(['CSRD-S-003', 'CSRD-S-004', 'CSRD-S-007', 'CSRD-S-017', 'CSRD-S-018', 'CSRD-S-020', 'CSRD-S-021', 'CSRD-S-022', 'CSRD-S-024']);
+    // The T9 population, the consolidated derogation and E-2's third-country
+    // issuer route (QD-4, DG-7: CSRD Art 2 and Art 5(2), third subparagraph) cite nothing else.
+    for (const id of ['CSRD-S-003', 'CSRD-S-004', 'CSRD-S-022', 'CSRD-S-024']) {
       expect(pack.requirements.find((r) => r.id === id)!.sources, id).toEqual(['SRC-002']);
     }
     // The first-application rules and the route duties cite the host directive beside it.
@@ -330,9 +331,10 @@ describe('the affected population — S-003 and S-004 at T9, joined on 2026-10-2
       .filter((r) => r.sources.some((s) => !served.has(s)))
       .map((r) => r.id);
     expect(bearing).toEqual(['CSRD-S-011', 'CSRD-S-012']);
-    // Twenty-three since the C/G composition (2026-10-20), every new one over served sources.
-    expect(pack.requirements).toHaveLength(23);
-    expect(pack.requirements.length - bearing.length).toBe(21);
+    // Twenty-three since the C/G composition (2026-10-20), every new one over served sources;
+    // twenty-four since E-2 (QD-4, DG-7, 2026-10-23), CSRD-S-024 over SRC-002, served.
+    expect(pack.requirements).toHaveLength(24);
+    expect(pack.requirements.length - bearing.length).toBe(22);
   });
 
   it('changes nothing for the requirements that do not cite SRC-002', () => {

@@ -75,14 +75,30 @@ export const POST_AUDIT_CORRECTIONS: Readonly<Record<string, readonly string[]>>
 };
 
 /**
+ * Requirements added to the pack after the audit and after the C/G
+ * composition, each by its own approved content change. Like the seven, the
+ * audit never saw them; unlike a correction, they override nothing. Kept apart
+ * from both tables above so neither's authority or arithmetic moves.
+ *
+ * `CSRD-S-024`: QD-4 draft E-2 (`docs/superpowers/specs/2026-10-23-qd4-content-corrections-for-dp1.md`
+ * §3), applied with reason-code option A under DG-7 on 2026-10-23. The
+ * third-country issuer route rests on CSRD Article 2 and Article 5(2), third
+ * subparagraph, so it cites `SRC-002` alone.
+ */
+export const POST_AUDIT_ADDITIONS: Readonly<Record<string, readonly string[]>> = {
+  'CSRD-S-024': ['SRC-002'],
+};
+
+/**
  * What every requirement the pack holds should cite: the audit for the
- * sixteen, as corrected since by approved content changes, and the design for
- * the seven.
+ * sixteen, as corrected since by approved content changes, the design for
+ * the seven, and each later addition's own change.
  */
 export const EXPECTED_SOURCES: Readonly<Record<string, readonly string[]>> = {
   ...AUDIT_EXPECTED_SOURCES,
   ...POST_AUDIT_CORRECTIONS,
   ...POST_AUDIT_SOURCES,
+  ...POST_AUDIT_ADDITIONS,
 };
 
 /** The audited universe: five sources, and `SRC-004` is not among them. */
@@ -117,4 +133,14 @@ export const E1_CORRECTED_CASE = {
   auditSources: ['SRC-001'] as const,
   sources: ['SRC-001', 'SRC-002'] as const,
   locator: 'Article 5(2), second subparagraph',
+} as const;
+
+/**
+ * E-2's post-audit addition, named on its own: the requirement, what it cites,
+ * and both locators that carry the citation. The audit holds no entry for it.
+ */
+export const E2_ADDED_CASE = {
+  requirementId: 'CSRD-S-024',
+  sources: ['SRC-002'] as const,
+  locators: ['Article 2', 'Article 5(2), third subparagraph'] as const,
 } as const;
