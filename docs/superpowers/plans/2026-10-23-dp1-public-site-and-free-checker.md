@@ -187,6 +187,8 @@ Every task's requirements include this section.
 - **Data.** Synthetic only.
   - Never read, hash, copy or stat the SAP SE profile or its notes.
   - Never touch `b1b-record`, `pilot-evidence`, any `secrets/` folder or the demo copy `demo-15.5.28`.
+  - **Searches are explicitly scoped** (your rule, 2026-10-24). Every `find`, `ls`, `grep` or glob, including a subagent's, names an absolute path inside the task's clean clone, the candidate's own tracked tree, or the notes folder. None runs without a path, or from `/Users/vivin/Documents/DataStrata` or above. Every worker brief repeats this rule.
+    - *Why:* in Task 2 on 2026-10-23, an implementer ran `find` from `/Users/vivin/Documents/DataStrata`, and it listed directory entries under the protected folders. Nothing there was read, hashed, copied or changed, and the folders were not inspected afterwards.
 - **DataStrata stores no checker answers, and the site stores nothing in the visitor's browser.** No answers, accounts, cookies, browser storage or IP addresses, and the site collects no email address.
   - Answers travel only in a POST body, never in a URL. They are used in memory for one request and not kept.
   - Logs carry no answers.
@@ -935,6 +937,20 @@ The old `lib/checker.ts`, the route and the page are untouched until Task 6. Eve
 
 **Commit message:** "Ask the free checker's plain questions and store each answer exactly, so group and company figures never stand in for each other and every unknown stays unknown"
 
+*As executed (2026-10-23; committed `3ec4e21`; routine corrections accepted by you on 2026-10-24).*
+- **Counts:** frontend 25 / 665 → 27 / 906 (two new files, 241 tests); engine unchanged at 84 / 3,313; typecheck exit 0; csrd grep 7.
+- **Teeth:** the parent re-ran T3a to T3f, and each failed on its intended assertion. Evidence: `side-session-notes/local_043075c1-…/2026-10-23T1824Z-dp1-task3/`.
+- **Rulings where this text left a gap:**
+  - **C-6 with a typed figure.** It is shown when C-4 could exceed 500, so a typed figure from 451 to 500 hides it (law 16). For bands this is exactly "not 450 or fewer".
+  - **A fund's legal form.** "Investment fund" sets `entity.legal_form` as unknown, because the answer names no legal form.
+  - **The "not an investment fund" label.** Every other kind's exclusion `false` carries the source "Free check answer: not an investment fund".
+  - **Cross-field refusals in the schema:**
+    - `countryOther` is required with "Another country" and refused otherwise;
+    - C-9 and C-10 are refused unless the group answer is a parent or both. Otherwise the engine silently keeps the last of two facts for one key;
+    - money is checked to two decimals on its printed form.
+  - **C-8 and the ultimate parent's country.** C-8 sets `group.ultimate_parent_country` for "no group" and for a parent, mirroring C-1's stored value.
+- **Correction:** C-9 and C-10 are not offered to a fund. Article 1(4) settles the company's own route whatever its figures (law 16). It is carried into Task 4 below.
+
 ### Task 4: the start-year timeline and the route rows (proposal §4.2; rule R; §9.2)
 
 **Delivers:** CHK-1, CHK-2 (the contract), CHK-3 (the data), APP-11, KNW-10, KNW-14.
@@ -990,7 +1006,7 @@ The route and the old modules are untouched until Task 6.
 | Row | Shown for | Lines |
 |---|---|---|
 | `individual` | An EU company with no group, an owned company, or group "Not sure" | `first_application` S-017; `duty` S-020 |
-| `parent_own` | An EU parent or intermediate parent | `first_application` S-017; `duty` S-020. Both are `not_checked` until C-9 and C-10 are answered, because group figures never stand in |
+| `parent_own` | An EU parent or intermediate parent | `first_application` S-017; `duty` S-020. Both are `not_checked` until C-9 and C-10 are answered, because group figures never stand in, except a cell their answers cannot change (see `not_checked` below) |
 | `consolidated` | An EU parent or intermediate parent; group "Not sure" | `first_application` S-018; `duty` S-021 |
 | `exemption` | An EU owned company or intermediate parent; group "Not sure" | **Owned, or group "Not sure":** `exemption` S-005 (an EU parent's report) and `exemption` S-006 (a non-EU parent's report).<br>**Intermediate parent:** `exemption` S-019 (a higher parent's report covering the group), plus S-005 and S-006, which are `not_checked` until C-9 and C-10 are answered.<br>Every exemption line is `not_checked` while C-7 is not asked |
 | `art_40a` | A non-EU company | `group_test` S-007. Which EU subsidiary or branch reports (S-008, S-009) needs facts the checker does not ask (CG-3), so the row's next step points to onboarding, not to `needs` |
@@ -1022,6 +1038,12 @@ The route and the old modules are untouched until Task 6.
   No line shows another requirement's result, reason or needs.
 - **The exceptions,** each tied to one line kind:
   - **`coverage_gap`.** INDETERMINATE with reason R gives `not_yet_covered`. For a non-EU company S-024 can only be R. An unknown country gives `missing_fact`, which reads `cannot_decide`.
+    - *Correction found in the combined check (2026-10-24).* "Can only be R" holds for a country the pack catalogues as non-EU.
+    - A typed "Another country" code that `eu_member_states` does not list (for example AR) gives INDETERMINATE with `catalogue_unknown`, in every year. That reads `cannot_decide`, never `does_not_apply`.
+    - The KNW-14 cases cover both, each with its own reason.
+    - *Carried from Task 2 (your direction of 2026-10-24): a known-country coverage gap needs DataStrata's review, not another answer.* For a catalogued non-EU country, S-024's determination still carries a need on `entity.incorporation_country`, with reason R, although the visitor has answered it. Task 2's evidence shows this: Q-003, the country question, re-enters the pilot record's next questions.
+      - A `not_yet_covered` cell therefore carries reason R and **no `needs`**. Its next step is Task 5's DataStrata-review step for the row and state.
+      - A `cannot_decide` cell keeps its needs. For a typed code the pack does not catalogue (`catalogue_unknown`), Task 5 words the next step as DataStrata's review too, never as the question again.
   - **`national`.** Any result other than APPLIES gives `requires_review`, keeping the engine's reason.
     - APPLIES is unreachable in DP1: the checker never sets `entity.governing_member_state` (Task 3 asserts it), and no country pack is ratified.
     - Should it occur, the route refuses with 503 rather than invent a label.
@@ -1030,6 +1052,11 @@ The route and the old modules are untouched until Task 6.
     - every exemption line while C-7 is not asked.
 
     The engine's result for such a line is not sent.
+  - *Carried from Task 3 (your direction of 2026-10-24): `not_checked` never hides a settled determination.* A `parent_own` cell is `not_checked` only while some answer to C-9 and C-10 would change its engine determination for that start year. Otherwise the cell carries its engine determination, mapped as usual. Measured on the merged Task 2 and 3 tree (evidence `…/2026-10-24T2134Z-dp1-tasks2-3-combined-task3-session/`, log 10):
+    - **A fund parent or intermediate parent:** S-017 and S-020 are DOES_NOT_APPLY in all four years whatever C-9 and C-10 say, through Article 1(4). Task 3 therefore never offers it C-9 and C-10, and both `parent_own` lines read `does_not_apply` "at EU level", beside the national line.
+    - **A parent that answered C-6 "No":** S-017 and S-020 are DOES_NOT_APPLY for 2025 and 2026, because the first-wave route needs public-interest status. Those cells read `does_not_apply`; 2027 and 2028 stay `not_checked`.
+    - **Every other combination measured:** C-9 and C-10 change the cell in every year, and it stays `not_checked`.
+    - **Scope of the rule.** It covers the `parent_own` lines and C-9 and C-10 only. The intermediate parent's S-005 and S-006, and every exemption line while C-7 is not asked, keep the rule above unchanged.
 - **EU wording.** Every `applies` or `does_not_apply` on an EU line is worded "at EU level", and the national line stands beside it (law 6). No EU line reads a bare "does not apply".
 - **No inversion.** The checker never turns an INDETERMINATE into a definitive state, and never invents a cell.
 - **Integrity.** `buildCheckTimeline` lets the pack loader's `IntegrityFailureError` propagate. It never catches it, so Task 6's route can refuse exactly as today.
@@ -1059,6 +1086,11 @@ The route and the old modules are untouched until Task 6.
     - In that year, C-7's answer changes S-005 and S-006 (or S-019): "No" gives DOES_NOT_APPLY, while "Yes" leaves them INDETERMINATE.
     - The guard fails only where C-7 is shown and the relieved route is not met in every year shown.
   - **The C-7 rule check.** For every reachable combination, C-7 is shown exactly when the relieved route's first-application determination is not "does not apply" for some start year shown. That is Task 3's rule, in engine terms. Both directions are checked, so the rule can neither show C-7 needlessly nor hide it where the approved rule shows it.
+  - **The `not_checked` rule check** (carried from Task 3, 2026-10-24). It covers every reachable parent or intermediate-parent combination with C-9 and C-10 unanswered, and each `parent_own` cell.
+    - The cell is `not_checked` exactly when some C-9/C-10 answer changes that cell's engine determination. The answers are the bands, typed figures at each threshold and one unit either side, and "Not sure".
+    - Otherwise the cell is the mapping of its engine determination.
+    - Both directions are checked: a settled cell never reads `not_checked`, and an open one is never evaluated early.
+    - *Reachable for C-9 and C-10:* the schema refuses them except for a parent or both (Task 3). Their hidden direction therefore runs over fund parents only, where no answer changes a cell.
   - **The genuine-change rule, directly.**
     - A unit test gives the guard's comparison two evaluations whose engine determinations are identical and whose displayed lines differ only by `not_checked`, and expects no change.
     - The positive control: a sibling case whose engine result differs expects a change.
@@ -1077,17 +1109,24 @@ The route and the old modules are untouched until Task 6.
     - the exemption lines are `not_checked`;
     - the duty line is `does_not_apply` (no reporting duty at EU level).
   - A fund: "does not apply" through Article 1(4) (§4.6.5).
+  - *Carried from Task 3:* an EU fund parent, and an EU fund intermediate parent:
+    - C-9 and C-10 are not offered;
+    - both `parent_own` lines are `does_not_apply` in all four years, never `not_checked`;
+    - the `consolidated` lines are `does_not_apply` too.
+  - *Carried from Task 3:* an EU parent with C-6 answered "No", above both thresholds as a group, without C-9 and C-10. The `parent_own` lines are `does_not_apply` for 2025 and 2026, and `not_checked` for 2027 and 2028.
   - A bank in a form outside Annexes I and II, above both thresholds in 2027: "applies" through Article 1(3) (§4.6.6).
   - "Not sure" on each question, giving §4.4's routes left open (§4.6.7).
   - A non-EU group:
     - the `art_40a` group-test line reads `does_not_apply` for 2025–27 (E-1), and in 2028 follows C-8's answer;
-    - the `issuer` line is `not_yet_covered` in every year, never `does_not_apply` (KNW-14).
+    - the `issuer` line is `not_yet_covered` in every year, never `does_not_apply` (KNW-14);
+    - *added 2026-10-24:* for a typed country the pack does not catalogue (AR), the `issuer` line is `cannot_decide` with `catalogue_unknown` in every year, never `does_not_apply`;
+    - *carried from Task 2:* each `not_yet_covered` cell carries no `needs`. The positive control is an unknown country, whose `issuer` cells carry the need on `entity.incorporation_country` (`missing_fact`).
   - An EU owned company: the `art_40a_gateway` line reads `does_not_apply` for 2025–27 and `cannot_decide` for 2028.
   - Every visitor type of §9.2, with its rows and lines.
   - Every EU result carries the `national` line as `requires_review`.
 - **One requirement per line.** For every fixture and every line, the payload is checked against the raw engine output for the line's named requirement:
   - the cell's state is the mapping of that determination;
-  - the cell's reason and needs are that determination's own.
+  - the cell's reason and needs are that determination's own, except that a `not_yet_covered` cell carries no needs (carried from Task 2).
 
   The raw output comes from calling `assess` directly in the test, not from `buildCheckTimeline`.
 - **The contract.** For a fixture set that between them populate every row, state and optional field:
@@ -1119,8 +1158,13 @@ The route and the old modules are untouched until Task 6.
 - **T4f2.** For an EU owned company, the hidden C-8 sets both EU-turnover facts to "No". The guard's hidden direction must fail, naming C-8 and the `art_40a` row's 2028 column.
   - *Why not C-6:* C-6 is hidden only where its answer cannot change a cell (a fund, a non-EU company, or 450 employees or fewer). A default there flips nothing, so that mutation would pass the guard and prove nothing (failure mode 2).
 - **T4g.** `hypothetical` is set to `false`. The new golden must fail byte for byte, and its case in `checker-cases.json` must fail too.
+- **T4j** (carried from Task 3). The `parent_own` lines are made `not_checked` whenever C-9 and C-10 are unanswered, which was the rule before 2026-10-24.
+  - The `not_checked` rule check must fail, naming a fund-parent combination and the cell.
+  - The fund-parent case must fail.
+  - A second mutant evaluates every `parent_own` cell without C-9 and C-10. The rule check's other direction must fail, naming a cell that C-9 and C-10 can change.
+- **T4k** (carried from Task 2). S-024's needs are passed through to its `not_yet_covered` cells. The KNW-14 non-EU case must fail, naming the `issuer` cell and the country fact.
 
-**Baseline:** Task 3's finishing count.
+**Baseline:** Task 3's finishing count. On the merged Task 2 and 3 tree (2026-10-24) that is engine 84 / 3,320 and frontend 27 / 907, with typecheck exit 0 and csrd grep 7. Task 4 starts from the commit that holds both tasks, so Task 2 is committed first.
 
 **Commit message:** "Show the checker's answer as a dated timeline of separate routes, so each route is assessed on its own and no unencoded or unasked route reads as no duty"
 
@@ -1153,8 +1197,16 @@ The route and the old modules are untouched until Task 6.
 - **Within a line kind, no state shares another's words or glyph.** Every state carries a glyph as well as words, never colour alone (EXP-3).
 - **Orange marks only change events and deadlines.** DP1 has neither, so no state uses it.
 - **The words name no unbuilt capability as available** (A4; the Stage 1a claims test).
+- *Carried from Task 2 (your direction of 2026-10-24), as routine presentation corrections:*
+  - **A known answer is never asked for again.** `nextStep(factType, reason)` is DataStrata's review step for `source_status_unresolved` (R) and `catalogue_unknown`. It asks the visitor nothing, for example "DataStrata reviews this route for your company; nothing more is needed from you here". Only `missing_fact` and `range_crosses_threshold` give a step that asks for an answer. The issuer row's `not_yet_covered` step says the same: the gap is DataStrata's to close.
+  - **S-024's caution is not DP1 wording.** Its text, "Never read as 'does not apply'…", is a note to content authors.
+    - In DP1 it never stands beside a result: cautions are not sent (CHK-2), and the `issuer` row is shown only for a non-EU company or C-1 "Not sure".
+    - The `issuer` row's words come from this module only.
+    - Today's pre-DP1 payload shows the caution beside a DE company's "does not apply" (Task 2's public golden). Task 6 retires that payload.
+    - When DP2's full cited result brings cautions back, S-024's caution shows only with its unresolved state.
 
 **Tests (red first):**
+- *Carried from Task 2:* **review steps ask nothing.** For every fact type that can appear in `needs`, `nextStep` with R and with `catalogue_unknown` returns the review step. The counterexample in the same test: `nextStep('entity.incorporation_country', 'missing_fact')` asks for the country. No wording entry contains the caution's "Never read as".
 - **Every engine reason code has an entry.** The codes are read from the engine's runtime reason schema, not from a list.
 - **Every reachable pair of line kind and state has words and a glyph.** The reachable pairs are read from Task 4's line-kind rules, not from a list.
 - **Every row and line in `CHECK_ROWS` has a label.**
@@ -1172,8 +1224,15 @@ The route and the old modules are untouched until Task 6.
 - **T5c.** The next step for `entity.avg_employees` is removed. The test must name the fact type.
 - **T5d.** The `exemption` kind's `applies` words are set to "Applies". The kind-distinctness test must name the pair.
 - **T5e.** "at EU level" is dropped from the `duty` kind's `does_not_apply` words. The EU-level test must name it.
+- **T5f** (carried from Task 2). `nextStep('entity.incorporation_country', 'catalogue_unknown')` returns the question step. The review-step test must name the fact type and the reason.
 
 **The stop.** The draft wording goes to you as a table: line kind, then state, then words, then glyph, with the row and line labels. Task 6 starts only after your approval, quoted in the evidence.
+
+*Carried from Task 3 (2026-10-24), for the same table.* The question wording that Task 3 drafted where §4.1 gives none comes for approval with the states:
+- **C-5:** "About how much turnover does your company have in a year?"; for a parent, "… does the whole group have …"; for an intermediate parent, "… do your company and the companies it owns have …";
+- **C-4's expanded parent and intermediate-parent sentences;**
+- **C-6's "For a parent" variant,** which Task 3 applies to a parent only;
+- **the typed-figure labels** "Type the number" and "Type the figure".
 
 **Baseline:** Task 4's finishing count.
 
@@ -1233,6 +1292,8 @@ The route and the old modules are untouched until Task 6.
   - a reason and a next step in each `cannot_decide` cell (APP-11);
   - the national line, with the country of registration and its note.
 - **The offer** "Check the parent company on its own too" asks C-9 and C-10, posts again, and replaces the result.
+  - *Carried from Task 3:* the offer appears only where `visibleQuestions` lists C-9 and C-10, so never for a fund.
+  - `countryOther` is sent as the upper-case ISO code; the schema refuses lower case.
 - **The errors** 400, 413, 429, 503, a network failure and a timeout each show their standard wording. None of them shows an earlier result as current (EXP-6). A 429 says to try again in a minute.
 - **The width.** No horizontal scrolling at 320 and 375 CSS pixels (EXP-4; WCAG 2.2, criterion 1.4.10).
 - **Accessibility:**
