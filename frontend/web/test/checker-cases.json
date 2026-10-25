@@ -1,0 +1,769 @@
+{
+  "$comment": [
+    "The free checker's authored oracle (DP1 plan, Task 4; proposal §4.2, §4.3, §4.4, §4.6, §9.2; rule R; KNW-14).",
+    "Written from the proposal's tables and the law before lib/check-timeline.ts existed, and never from running the engine.",
+    "Each case gives the answers, the rows shown in order, each row's lines in order, and per start year the state, the reason code and the first need.",
+    "One file, two runners: test/checker-cases.test.ts in the repository, and later the hosted runner against /api/check (Task 11)."
+  ],
+  "$format": {
+    "cells": "Four strings per line, for the start years 2025, 2026, 2027 and 2028 in that order.",
+    "cell": "'<state>' | '<state> <reason>' | '<state> <reason> <firstNeed>' | '<state> <reason> <firstNeed>:<needReason>'. A cell written without a reason carries none; one written without a first need carries no needs.",
+    "firstNeed": "The fact type of the cell's first need, after the payload's rule: identical needs (fact type and reason) once each, and the facts behind a straddled range first (plan Task 4, the payload table; proposal §4.6.1).",
+    "needReason": "When written, the first need's own reason is asserted too."
+  },
+  "assessmentDate": "2026-10-23",
+  "startYears": [2025, 2026, 2027, 2028],
+  "every": {
+    "basis": "start_year",
+    "startYears": [2025, 2026, 2027, 2028],
+    "hypothetical": true,
+    "preliminary": true,
+    "contentThreshold": "draft_labelled"
+  },
+  "cases": [
+    {
+      "id": "band-employees-450-or-fewer",
+      "cites": "§4.6.1; §4.3 Average employees ('450 or fewer': No at 500, No at 1,000); §4.1 C-6 hidden for this band",
+      "why": "A band below both headcount thresholds settles the individual route as a definitive no in every year, whatever the answers left unasked (Art 5(2)(a) 500; Art 19a(1) 1,000).",
+      "answers": { "country": "DE", "group": "none", "organisation": "private_limited", "employees": "450_or_fewer", "turnover": "over_500m" },
+      "country": "DE",
+      "routes": [
+        { "id": "individual", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-017", "cells": ["does_not_apply", "does_not_apply", "does_not_apply", "does_not_apply"] },
+          { "kind": "duty", "requirement": "CSRD-S-020", "cells": ["does_not_apply", "does_not_apply", "does_not_apply", "does_not_apply"] }
+        ] },
+        { "id": "national", "lines": [
+          { "kind": "national", "requirement": "CSRD-S-013", "cells": ["requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state"] }
+        ] }
+      ]
+    },
+    {
+      "id": "band-employees-450-to-550",
+      "cites": "§4.6.1; §4.3 ('about 500': Cannot tell at 500, No at 1,000); §9.1 (2025–26 large status open, Q-041)",
+      "why": "The band straddles 500, so 2025–26 cannot be decided and the headcount is ranked first among the needs. The first-wave route also needs large-undertaking status, which the checker does not ask (§9.1), so the line's own reason is missing_fact while the figure's need carries range_crosses_threshold. From 2027 the band is below 1,000: a definitive no. Note (b): the plan's case list says 'range_crosses_threshold' for every cannot-tell band; §4.6.1 says only 'cannot decide yet with the exact figure ranked first', and the range reason is the first need's.",
+      "answers": { "country": "DE", "group": "none", "organisation": "private_limited", "employees": "over_450_up_to_550", "turnover": "over_500m", "pie": "yes" },
+      "country": "DE",
+      "routes": [
+        { "id": "individual", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-017", "cells": ["cannot_decide missing_fact entity.avg_employees:range_crosses_threshold", "cannot_decide missing_fact entity.avg_employees:range_crosses_threshold", "does_not_apply", "does_not_apply"] },
+          { "kind": "duty", "requirement": "CSRD-S-020", "cells": ["cannot_decide upstream_indeterminate entity.avg_employees:range_crosses_threshold", "cannot_decide upstream_indeterminate entity.avg_employees:range_crosses_threshold", "does_not_apply", "does_not_apply"] }
+        ] },
+        { "id": "national", "lines": [
+          { "kind": "national", "requirement": "CSRD-S-013", "cells": ["requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state"] }
+        ] }
+      ]
+    },
+    {
+      "id": "band-employees-550-to-900",
+      "cites": "§4.6.1; §4.3 ('550–900': Yes at 500, No at 1,000); §9.1",
+      "why": "Above 500 the first wave turns on large-undertaking status, not asked (§9.1); below 1,000 the route is a definitive no from 2027.",
+      "answers": { "country": "DE", "group": "none", "organisation": "private_limited", "employees": "over_550_up_to_900", "turnover": "over_500m", "pie": "yes" },
+      "country": "DE",
+      "routes": [
+        { "id": "individual", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-017", "cells": ["cannot_decide missing_fact entity.is_large_undertaking", "cannot_decide missing_fact entity.is_large_undertaking", "does_not_apply", "does_not_apply"] },
+          { "kind": "duty", "requirement": "CSRD-S-020", "cells": ["cannot_decide upstream_indeterminate entity.is_large_undertaking", "cannot_decide upstream_indeterminate entity.is_large_undertaking", "does_not_apply", "does_not_apply"] }
+        ] },
+        { "id": "national", "lines": [
+          { "kind": "national", "requirement": "CSRD-S-013", "cells": ["requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state"] }
+        ] }
+      ]
+    },
+    {
+      "id": "band-employees-900-to-1100",
+      "cites": "§4.6.1; §4.3 ('about 1,000': Yes at 500, Cannot tell at 1,000); §9.1",
+      "why": "The band straddles 1,000, so 2027–28 cannot be decided, with the headcount ranked first. The 2027 route reaches the figure through the Article 19a scope test, so the line's own reason is upstream_indeterminate. The duty in 2025–26 also meets the national transition option's own 1,000 test, so the straddled headcount ranks first there too.",
+      "answers": { "country": "DE", "group": "none", "organisation": "private_limited", "employees": "over_900_up_to_1100", "turnover": "over_500m", "pie": "yes" },
+      "country": "DE",
+      "routes": [
+        { "id": "individual", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-017", "cells": ["cannot_decide missing_fact entity.is_large_undertaking", "cannot_decide missing_fact entity.is_large_undertaking", "cannot_decide upstream_indeterminate entity.avg_employees:range_crosses_threshold", "cannot_decide upstream_indeterminate entity.avg_employees:range_crosses_threshold"] },
+          { "kind": "duty", "requirement": "CSRD-S-020", "cells": ["cannot_decide upstream_indeterminate entity.avg_employees:range_crosses_threshold", "cannot_decide upstream_indeterminate entity.avg_employees:range_crosses_threshold", "cannot_decide upstream_indeterminate entity.avg_employees:range_crosses_threshold", "cannot_decide upstream_indeterminate entity.avg_employees:range_crosses_threshold"] }
+        ] },
+        { "id": "national", "lines": [
+          { "kind": "national", "requirement": "CSRD-S-013", "cells": ["requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state"] }
+        ] }
+      ]
+    },
+    {
+      "id": "band-employees-over-1100-turnover-over-500m",
+      "cites": "§4.6.1; §4.3 ('More than 1,100': Yes, Yes; 'More than €500 million': Yes); Art 19a(1)",
+      "why": "Definitively above both thresholds: the route applies from 2027; 2025–26 waits on large-undertaking status (§9.1).",
+      "answers": { "country": "DE", "group": "none", "organisation": "private_limited", "employees": "over_1100", "turnover": "over_500m", "pie": "yes" },
+      "country": "DE",
+      "routes": [
+        { "id": "individual", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-017", "cells": ["cannot_decide missing_fact entity.is_large_undertaking", "cannot_decide missing_fact entity.is_large_undertaking", "applies", "applies"] },
+          { "kind": "duty", "requirement": "CSRD-S-020", "cells": ["cannot_decide upstream_indeterminate entity.is_large_undertaking", "cannot_decide upstream_indeterminate entity.is_large_undertaking", "applies", "applies"] }
+        ] },
+        { "id": "national", "lines": [
+          { "kind": "national", "requirement": "CSRD-S-013", "cells": ["requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state"] }
+        ] }
+      ]
+    },
+    {
+      "id": "band-turnover-up-to-400m",
+      "cites": "§4.6.1; §4.3 Net turnover ('Up to €400 million': No at €450m)",
+      "why": "Turnover at or below €450m settles the 2027–28 route as a definitive no; the first wave does not read turnover.",
+      "answers": { "country": "DE", "group": "none", "organisation": "private_limited", "employees": "over_1100", "turnover": "up_to_400m", "pie": "yes" },
+      "country": "DE",
+      "routes": [
+        { "id": "individual", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-017", "cells": ["cannot_decide missing_fact entity.is_large_undertaking", "cannot_decide missing_fact entity.is_large_undertaking", "does_not_apply", "does_not_apply"] },
+          { "kind": "duty", "requirement": "CSRD-S-020", "cells": ["cannot_decide upstream_indeterminate entity.is_large_undertaking", "cannot_decide upstream_indeterminate entity.is_large_undertaking", "does_not_apply", "does_not_apply"] }
+        ] },
+        { "id": "national", "lines": [
+          { "kind": "national", "requirement": "CSRD-S-013", "cells": ["requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state"] }
+        ] }
+      ]
+    },
+    {
+      "id": "band-turnover-400m-to-500m",
+      "cites": "§4.6.1; §4.3 ('about €450m': Cannot tell)",
+      "why": "The band straddles €450m: 2027–28 cannot be decided with the turnover ranked first. In 2025–26 the duty meets the national option's €450m test, so the straddled turnover ranks first there too.",
+      "answers": { "country": "DE", "group": "none", "organisation": "private_limited", "employees": "over_1100", "turnover": "over_400m_up_to_500m", "pie": "yes" },
+      "country": "DE",
+      "routes": [
+        { "id": "individual", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-017", "cells": ["cannot_decide missing_fact entity.is_large_undertaking", "cannot_decide missing_fact entity.is_large_undertaking", "cannot_decide upstream_indeterminate entity.net_turnover_eur:range_crosses_threshold", "cannot_decide upstream_indeterminate entity.net_turnover_eur:range_crosses_threshold"] },
+          { "kind": "duty", "requirement": "CSRD-S-020", "cells": ["cannot_decide upstream_indeterminate entity.net_turnover_eur:range_crosses_threshold", "cannot_decide upstream_indeterminate entity.net_turnover_eur:range_crosses_threshold", "cannot_decide upstream_indeterminate entity.net_turnover_eur:range_crosses_threshold", "cannot_decide upstream_indeterminate entity.net_turnover_eur:range_crosses_threshold"] }
+        ] },
+        { "id": "national", "lines": [
+          { "kind": "national", "requirement": "CSRD-S-013", "cells": ["requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state"] }
+        ] }
+      ]
+    },
+    {
+      "id": "typed-employees-at-1000",
+      "cites": "§4.3 (a typed figure is exact; 'more than 1,000')",
+      "why": "Exactly 1,000 employees does not exceed 1,000: a definitive no from 2027.",
+      "answers": { "country": "DE", "group": "none", "organisation": "private_limited", "employees": { "exact": 1000 }, "turnover": "over_500m", "pie": "yes" },
+      "country": "DE",
+      "routes": [
+        { "id": "individual", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-017", "cells": ["cannot_decide missing_fact entity.is_large_undertaking", "cannot_decide missing_fact entity.is_large_undertaking", "does_not_apply", "does_not_apply"] },
+          { "kind": "duty", "requirement": "CSRD-S-020", "cells": ["cannot_decide upstream_indeterminate entity.is_large_undertaking", "cannot_decide upstream_indeterminate entity.is_large_undertaking", "does_not_apply", "does_not_apply"] }
+        ] },
+        { "id": "national", "lines": [
+          { "kind": "national", "requirement": "CSRD-S-013", "cells": ["requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state"] }
+        ] }
+      ]
+    },
+    {
+      "id": "typed-employees-1001",
+      "cites": "§4.3 (a typed figure is exact)",
+      "why": "One employee above 1,000 exceeds it: the route applies from 2027.",
+      "answers": { "country": "DE", "group": "none", "organisation": "private_limited", "employees": { "exact": 1001 }, "turnover": "over_500m", "pie": "yes" },
+      "country": "DE",
+      "routes": [
+        { "id": "individual", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-017", "cells": ["cannot_decide missing_fact entity.is_large_undertaking", "cannot_decide missing_fact entity.is_large_undertaking", "applies", "applies"] },
+          { "kind": "duty", "requirement": "CSRD-S-020", "cells": ["cannot_decide upstream_indeterminate entity.is_large_undertaking", "cannot_decide upstream_indeterminate entity.is_large_undertaking", "applies", "applies"] }
+        ] },
+        { "id": "national", "lines": [
+          { "kind": "national", "requirement": "CSRD-S-013", "cells": ["requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state"] }
+        ] }
+      ]
+    },
+    {
+      "id": "typed-turnover-at-450m",
+      "cites": "§4.3 (a typed figure is exact; 'above €450m')",
+      "why": "Exactly €450m does not exceed €450m: a definitive no from 2027.",
+      "answers": { "country": "DE", "group": "none", "organisation": "private_limited", "employees": "over_1100", "turnover": { "exact": 450000000 }, "pie": "yes" },
+      "country": "DE",
+      "routes": [
+        { "id": "individual", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-017", "cells": ["cannot_decide missing_fact entity.is_large_undertaking", "cannot_decide missing_fact entity.is_large_undertaking", "does_not_apply", "does_not_apply"] },
+          { "kind": "duty", "requirement": "CSRD-S-020", "cells": ["cannot_decide upstream_indeterminate entity.is_large_undertaking", "cannot_decide upstream_indeterminate entity.is_large_undertaking", "does_not_apply", "does_not_apply"] }
+        ] },
+        { "id": "national", "lines": [
+          { "kind": "national", "requirement": "CSRD-S-013", "cells": ["requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state"] }
+        ] }
+      ]
+    },
+    {
+      "id": "typed-turnover-450m-and-a-cent",
+      "cites": "§4.3 (a typed figure is exact; money in whole cents)",
+      "why": "One cent above €450m exceeds it: the route applies from 2027.",
+      "answers": { "country": "DE", "group": "none", "organisation": "private_limited", "employees": "over_1100", "turnover": { "exact": 450000000.01 }, "pie": "yes" },
+      "country": "DE",
+      "routes": [
+        { "id": "individual", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-017", "cells": ["cannot_decide missing_fact entity.is_large_undertaking", "cannot_decide missing_fact entity.is_large_undertaking", "applies", "applies"] },
+          { "kind": "duty", "requirement": "CSRD-S-020", "cells": ["cannot_decide upstream_indeterminate entity.is_large_undertaking", "cannot_decide upstream_indeterminate entity.is_large_undertaking", "applies", "applies"] }
+        ] },
+        { "id": "national", "lines": [
+          { "kind": "national", "requirement": "CSRD-S-013", "cells": ["requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state"] }
+        ] }
+      ]
+    },
+    {
+      "id": "eu-no-group-settled",
+      "cites": "§9.2 'EU company, no group: Settled'; §9.1 ('2025–26 is \"no\" when C-6 is no')",
+      "why": "A company that is not a public-interest entity is outside the 2025–26 first wave (Art 5(2)(a)); above both thresholds it is in scope from 2027 (Art 19a(1)). Every year settled.",
+      "answers": { "country": "DE", "group": "none", "organisation": "private_limited", "employees": "over_1100", "turnover": "over_500m", "pie": "no" },
+      "country": "DE",
+      "routes": [
+        { "id": "individual", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-017", "cells": ["does_not_apply", "does_not_apply", "applies", "applies"] },
+          { "kind": "duty", "requirement": "CSRD-S-020", "cells": ["does_not_apply", "does_not_apply", "applies", "applies"] }
+        ] },
+        { "id": "national", "lines": [
+          { "kind": "national", "requirement": "CSRD-S-013", "cells": ["requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state"] }
+        ] }
+      ]
+    },
+    {
+      "id": "parent-group-large-parent-unchecked",
+      "cites": "§4.6.2; §4.2 (a parent: the consolidated duty, and the parent on its own 'not checked'); rule R; plan Task 4 'not_checked'",
+      "why": "The group exceeds both thresholds, so the consolidated first application applies from 2027 (Art 29a(1)); 2025–26 waits on large-group status (Q-042). The parent's own lines are not checked: group figures never stand in for the parent's, and C-9 and C-10 could change every cell. The consolidated duty stays open from 2027 on the financial-holding option (Art 29a(7a), §9.1).",
+      "answers": { "country": "DE", "group": "parent", "organisation": "private_limited", "employees": "over_1100", "turnover": "over_500m", "pie": "yes" },
+      "country": "DE",
+      "routes": [
+        { "id": "parent_own", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-017", "cells": ["not_checked", "not_checked", "not_checked", "not_checked"] },
+          { "kind": "duty", "requirement": "CSRD-S-020", "cells": ["not_checked", "not_checked", "not_checked", "not_checked"] }
+        ] },
+        { "id": "consolidated", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-018", "cells": ["cannot_decide missing_fact group.is_large_group", "cannot_decide missing_fact group.is_large_group", "applies", "applies"] },
+          { "kind": "duty", "requirement": "CSRD-S-021", "cells": ["cannot_decide upstream_indeterminate group.is_large_group", "cannot_decide upstream_indeterminate group.is_large_group", "cannot_decide upstream_indeterminate entity.is_financial_holding_undertaking", "cannot_decide upstream_indeterminate entity.is_financial_holding_undertaking"] }
+        ] },
+        { "id": "national", "lines": [
+          { "kind": "national", "requirement": "CSRD-S-013", "cells": ["requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state"] }
+        ] }
+      ]
+    },
+    {
+      "id": "intermediate-parent-all-rows",
+      "cites": "§4.6.3; plan Task 4 row table (intermediate parent: S-019, then S-005 and S-006 not checked until C-9 and C-10); §9.2 'EU intermediate parent'",
+      "why": "An intermediate parent sees all five of its rows. The higher parent's report (C-7 'Yes') leaves S-019 open on conditions confirmed in onboarding; S-005 and S-006 relieve the company's own route and wait for C-9 and C-10. The Article 40a gateway is open in 2028 only (E-1; §9.2).",
+      "answers": { "country": "DE", "group": "both", "organisation": "private_limited", "employees": "over_1100", "turnover": "over_500m", "pie": "yes", "parentReport": "yes" },
+      "country": "DE",
+      "routes": [
+        { "id": "parent_own", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-017", "cells": ["not_checked", "not_checked", "not_checked", "not_checked"] },
+          { "kind": "duty", "requirement": "CSRD-S-020", "cells": ["not_checked", "not_checked", "not_checked", "not_checked"] }
+        ] },
+        { "id": "consolidated", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-018", "cells": ["cannot_decide missing_fact group.is_large_group", "cannot_decide missing_fact group.is_large_group", "applies", "applies"] },
+          { "kind": "duty", "requirement": "CSRD-S-021", "cells": ["cannot_decide upstream_indeterminate group.is_large_group", "cannot_decide upstream_indeterminate group.is_large_group", "cannot_decide upstream_indeterminate parent.report_includes_all_subsidiaries", "cannot_decide upstream_indeterminate parent.report_includes_all_subsidiaries"] }
+        ] },
+        { "id": "exemption", "lines": [
+          { "kind": "exemption", "requirement": "CSRD-S-019", "cells": ["cannot_decide missing_fact parent.report_includes_all_subsidiaries", "cannot_decide missing_fact parent.report_includes_all_subsidiaries", "cannot_decide missing_fact parent.report_includes_all_subsidiaries", "cannot_decide missing_fact parent.report_includes_all_subsidiaries"] },
+          { "kind": "exemption", "requirement": "CSRD-S-005", "cells": ["not_checked", "not_checked", "not_checked", "not_checked"] },
+          { "kind": "exemption", "requirement": "CSRD-S-006", "cells": ["not_checked", "not_checked", "not_checked", "not_checked"] }
+        ] },
+        { "id": "art_40a_gateway", "lines": [
+          { "kind": "gateway", "requirement": "CSRD-S-008", "cells": ["does_not_apply", "does_not_apply", "does_not_apply", "cannot_decide upstream_indeterminate group.ultimate_parent_country"] }
+        ] },
+        { "id": "national", "lines": [
+          { "kind": "national", "requirement": "CSRD-S-013", "cells": ["requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state"] }
+        ] }
+      ]
+    },
+    {
+      "id": "owned-above-both-parent-report-no",
+      "cites": "plan Task 4 cases (the counterexample that tells an exemption line from a duty line); Art 19a(9); Art 19a(1)",
+      "why": "Definitively above both thresholds from 2027 and no parent report: no exemption is available, so the duty applies. Not a public-interest entity, so 2025–26 is a definitive no.",
+      "answers": { "country": "DE", "group": "owned", "organisation": "private_limited", "employees": "over_1100", "turnover": "over_500m", "pie": "no", "parentReport": "no" },
+      "country": "DE",
+      "routes": [
+        { "id": "individual", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-017", "cells": ["does_not_apply", "does_not_apply", "applies", "applies"] },
+          { "kind": "duty", "requirement": "CSRD-S-020", "cells": ["does_not_apply", "does_not_apply", "applies", "applies"] }
+        ] },
+        { "id": "exemption", "lines": [
+          { "kind": "exemption", "requirement": "CSRD-S-005", "cells": ["does_not_apply", "does_not_apply", "does_not_apply", "does_not_apply"] },
+          { "kind": "exemption", "requirement": "CSRD-S-006", "cells": ["does_not_apply", "does_not_apply", "does_not_apply", "does_not_apply"] }
+        ] },
+        { "id": "art_40a_gateway", "lines": [
+          { "kind": "gateway", "requirement": "CSRD-S-008", "cells": ["does_not_apply", "does_not_apply", "does_not_apply", "cannot_decide upstream_indeterminate group.ultimate_parent_country"] }
+        ] },
+        { "id": "national", "lines": [
+          { "kind": "national", "requirement": "CSRD-S-013", "cells": ["requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state"] }
+        ] }
+      ]
+    },
+    {
+      "id": "owned-below-both",
+      "cites": "plan Task 4 cases (owned, definitively below both: C-7 not asked; exemption lines not checked; no reporting duty at EU level); §4.5 'EU subsidiary'",
+      "why": "Below every threshold the individual route is a definitive no in every year, so C-7 is not asked (law 16) and the exemption lines are not checked.",
+      "answers": { "country": "DE", "group": "owned", "organisation": "private_limited", "employees": "450_or_fewer", "turnover": "up_to_400m" },
+      "country": "DE",
+      "routes": [
+        { "id": "individual", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-017", "cells": ["does_not_apply", "does_not_apply", "does_not_apply", "does_not_apply"] },
+          { "kind": "duty", "requirement": "CSRD-S-020", "cells": ["does_not_apply", "does_not_apply", "does_not_apply", "does_not_apply"] }
+        ] },
+        { "id": "exemption", "lines": [
+          { "kind": "exemption", "requirement": "CSRD-S-005", "cells": ["not_checked", "not_checked", "not_checked", "not_checked"] },
+          { "kind": "exemption", "requirement": "CSRD-S-006", "cells": ["not_checked", "not_checked", "not_checked", "not_checked"] }
+        ] },
+        { "id": "art_40a_gateway", "lines": [
+          { "kind": "gateway", "requirement": "CSRD-S-008", "cells": ["does_not_apply", "does_not_apply", "does_not_apply", "cannot_decide upstream_indeterminate group.ultimate_parent_country"] }
+        ] },
+        { "id": "national", "lines": [
+          { "kind": "national", "requirement": "CSRD-S-013", "cells": ["requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state"] }
+        ] }
+      ]
+    },
+    {
+      "id": "fund-no-group",
+      "cites": "§4.6.5; Art 1(4); Regulation (EU) 2019/2088 Art 2(12)(b), (f)",
+      "why": "An investment fund is excluded by Article 1(4): a definitive no in every year, whatever its figures.",
+      "answers": { "country": "DE", "group": "none", "organisation": "fund", "employees": "over_1100", "turnover": "over_500m" },
+      "country": "DE",
+      "routes": [
+        { "id": "individual", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-017", "cells": ["does_not_apply", "does_not_apply", "does_not_apply", "does_not_apply"] },
+          { "kind": "duty", "requirement": "CSRD-S-020", "cells": ["does_not_apply", "does_not_apply", "does_not_apply", "does_not_apply"] }
+        ] },
+        { "id": "national", "lines": [
+          { "kind": "national", "requirement": "CSRD-S-013", "cells": ["requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state"] }
+        ] }
+      ]
+    },
+    {
+      "id": "fund-parent",
+      "cites": "plan Task 4 'Carried from Task 3' (fund parent: C-9 and C-10 not offered; parent_own does_not_apply in all four years, never not_checked); Art 1(4)",
+      "why": "Article 1(4) settles the parent's own route and the consolidated route whatever the figures, so no C-9/C-10 answer could change a cell: they read does_not_apply, never not_checked.",
+      "answers": { "country": "DE", "group": "parent", "organisation": "fund", "employees": "over_1100", "turnover": "over_500m" },
+      "country": "DE",
+      "routes": [
+        { "id": "parent_own", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-017", "cells": ["does_not_apply", "does_not_apply", "does_not_apply", "does_not_apply"] },
+          { "kind": "duty", "requirement": "CSRD-S-020", "cells": ["does_not_apply", "does_not_apply", "does_not_apply", "does_not_apply"] }
+        ] },
+        { "id": "consolidated", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-018", "cells": ["does_not_apply", "does_not_apply", "does_not_apply", "does_not_apply"] },
+          { "kind": "duty", "requirement": "CSRD-S-021", "cells": ["does_not_apply", "does_not_apply", "does_not_apply", "does_not_apply"] }
+        ] },
+        { "id": "national", "lines": [
+          { "kind": "national", "requirement": "CSRD-S-013", "cells": ["requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state"] }
+        ] }
+      ]
+    },
+    {
+      "id": "fund-intermediate-parent",
+      "cites": "plan Task 4 'Carried from Task 3' (fund intermediate parent); Art 1(4); plan Task 4 (every exemption line not_checked while C-7 is not asked)",
+      "why": "As the fund parent, with the intermediate parent's other rows: C-7 is never asked of a fund, so every exemption line is not checked; the gateway is open in 2028 only.",
+      "answers": { "country": "DE", "group": "both", "organisation": "fund", "employees": "over_1100", "turnover": "over_500m" },
+      "country": "DE",
+      "routes": [
+        { "id": "parent_own", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-017", "cells": ["does_not_apply", "does_not_apply", "does_not_apply", "does_not_apply"] },
+          { "kind": "duty", "requirement": "CSRD-S-020", "cells": ["does_not_apply", "does_not_apply", "does_not_apply", "does_not_apply"] }
+        ] },
+        { "id": "consolidated", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-018", "cells": ["does_not_apply", "does_not_apply", "does_not_apply", "does_not_apply"] },
+          { "kind": "duty", "requirement": "CSRD-S-021", "cells": ["does_not_apply", "does_not_apply", "does_not_apply", "does_not_apply"] }
+        ] },
+        { "id": "exemption", "lines": [
+          { "kind": "exemption", "requirement": "CSRD-S-019", "cells": ["not_checked", "not_checked", "not_checked", "not_checked"] },
+          { "kind": "exemption", "requirement": "CSRD-S-005", "cells": ["not_checked", "not_checked", "not_checked", "not_checked"] },
+          { "kind": "exemption", "requirement": "CSRD-S-006", "cells": ["not_checked", "not_checked", "not_checked", "not_checked"] }
+        ] },
+        { "id": "art_40a_gateway", "lines": [
+          { "kind": "gateway", "requirement": "CSRD-S-008", "cells": ["does_not_apply", "does_not_apply", "does_not_apply", "cannot_decide upstream_indeterminate group.ultimate_parent_country"] }
+        ] },
+        { "id": "national", "lines": [
+          { "kind": "national", "requirement": "CSRD-S-013", "cells": ["requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state"] }
+        ] }
+      ]
+    },
+    {
+      "id": "parent-pie-no-own-route-2025-26-settled",
+      "cites": "plan Task 4 'Carried from Task 3' (a parent that answered C-6 'No'); Art 5(2)(a)",
+      "why": "Without public-interest status the first wave cannot apply to the parent itself, whatever C-9 and C-10 say: its own 2025–26 cells read does_not_apply, and 2027–28 stay not checked. The consolidated route follows the group's figures.",
+      "answers": { "country": "DE", "group": "parent", "organisation": "private_limited", "employees": "over_1100", "turnover": "over_500m", "pie": "no" },
+      "country": "DE",
+      "routes": [
+        { "id": "parent_own", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-017", "cells": ["does_not_apply", "does_not_apply", "not_checked", "not_checked"] },
+          { "kind": "duty", "requirement": "CSRD-S-020", "cells": ["does_not_apply", "does_not_apply", "not_checked", "not_checked"] }
+        ] },
+        { "id": "consolidated", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-018", "cells": ["does_not_apply", "does_not_apply", "applies", "applies"] },
+          { "kind": "duty", "requirement": "CSRD-S-021", "cells": ["does_not_apply", "does_not_apply", "cannot_decide upstream_indeterminate entity.is_financial_holding_undertaking", "cannot_decide upstream_indeterminate entity.is_financial_holding_undertaking"] }
+        ] },
+        { "id": "national", "lines": [
+          { "kind": "national", "requirement": "CSRD-S-013", "cells": ["requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state"] }
+        ] }
+      ]
+    },
+    {
+      "id": "bank-article-1-3",
+      "cites": "§4.6.6; Art 1(3) as amended (credit institutions covered whatever their legal form)",
+      "why": "A bank above both thresholds is in scope from 2027 through Article 1(3), whatever its legal form; 2025–26 waits on large-undertaking status.",
+      "answers": { "country": "DE", "group": "none", "organisation": "bank", "employees": "over_1100", "turnover": "over_500m", "pie": "yes" },
+      "country": "DE",
+      "routes": [
+        { "id": "individual", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-017", "cells": ["cannot_decide missing_fact entity.is_large_undertaking", "cannot_decide missing_fact entity.is_large_undertaking", "applies", "applies"] },
+          { "kind": "duty", "requirement": "CSRD-S-020", "cells": ["cannot_decide upstream_indeterminate entity.is_large_undertaking", "cannot_decide upstream_indeterminate entity.is_large_undertaking", "applies", "applies"] }
+        ] },
+        { "id": "national", "lines": [
+          { "kind": "national", "requirement": "CSRD-S-013", "cells": ["requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state"] }
+        ] }
+      ]
+    },
+    {
+      "id": "not-sure-country",
+      "cites": "§4.4 C-1 ('Every route'; the checker stops after C-1 and C-2); §4.6.7; plan Task 4 (C-1 'Not sure' shows every row any country could bring); KNW-14 positive control",
+      "why": "With the country unknown, every route that needs it cannot be decided and needs the country. Note (b): the plan says every result needs the country; Article 40a is the exception by law, a definitive no for 2025–27 whatever the country (CSRD Art 5(2), second subparagraph; E-1), and in 2028 it needs the ultimate parent's country, which C-8 sets and the checker does not ask here.",
+      "answers": { "country": "not_sure", "group": "none" },
+      "country": "not_sure",
+      "routes": [
+        { "id": "individual", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-017", "cells": ["cannot_decide missing_fact entity.incorporation_country", "cannot_decide missing_fact entity.incorporation_country", "cannot_decide upstream_indeterminate entity.incorporation_country", "cannot_decide upstream_indeterminate entity.incorporation_country"] },
+          { "kind": "duty", "requirement": "CSRD-S-020", "cells": ["cannot_decide upstream_indeterminate entity.incorporation_country", "cannot_decide upstream_indeterminate entity.incorporation_country", "cannot_decide upstream_indeterminate entity.incorporation_country", "cannot_decide upstream_indeterminate entity.incorporation_country"] }
+        ] },
+        { "id": "art_40a", "lines": [
+          { "kind": "group_test", "requirement": "CSRD-S-007", "cells": ["does_not_apply", "does_not_apply", "does_not_apply", "cannot_decide missing_fact group.ultimate_parent_country"] }
+        ] },
+        { "id": "issuer", "lines": [
+          { "kind": "coverage_gap", "requirement": "CSRD-S-024", "cells": ["cannot_decide missing_fact entity.incorporation_country:missing_fact", "cannot_decide missing_fact entity.incorporation_country:missing_fact", "cannot_decide missing_fact entity.incorporation_country:missing_fact", "cannot_decide missing_fact entity.incorporation_country:missing_fact"] }
+        ] },
+        { "id": "national", "lines": [
+          { "kind": "national", "requirement": "CSRD-S-013", "cells": ["requires_review missing_fact entity.incorporation_country", "requires_review missing_fact entity.incorporation_country", "requires_review missing_fact entity.incorporation_country", "requires_review missing_fact entity.incorporation_country"] }
+        ] }
+      ]
+    },
+    {
+      "id": "not-sure-group",
+      "cites": "§4.4 C-2 (the consolidated route and both exemptions open; the individual route assessed on the company's own figures); plan Task 4 row table (group 'Not sure')",
+      "why": "The individual route uses the company's own figures and applies from 2027; its duty waits on the subsidiary question behind the exemptions. The consolidated route needs the group position. C-7 is never asked here, so the exemption lines are not checked.",
+      "answers": { "country": "DE", "group": "not_sure", "organisation": "private_limited", "employees": "over_1100", "turnover": "over_500m", "pie": "yes" },
+      "country": "DE",
+      "routes": [
+        { "id": "individual", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-017", "cells": ["cannot_decide missing_fact entity.is_large_undertaking", "cannot_decide missing_fact entity.is_large_undertaking", "applies", "applies"] },
+          { "kind": "duty", "requirement": "CSRD-S-020", "cells": ["cannot_decide upstream_indeterminate entity.is_large_undertaking", "cannot_decide upstream_indeterminate entity.is_large_undertaking", "cannot_decide upstream_indeterminate entity.is_subsidiary", "cannot_decide upstream_indeterminate entity.is_subsidiary"] }
+        ] },
+        { "id": "consolidated", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-018", "cells": ["cannot_decide missing_fact entity.is_parent_undertaking", "cannot_decide missing_fact entity.is_parent_undertaking", "cannot_decide upstream_indeterminate entity.is_parent_undertaking", "cannot_decide upstream_indeterminate entity.is_parent_undertaking"] },
+          { "kind": "duty", "requirement": "CSRD-S-021", "cells": ["cannot_decide upstream_indeterminate entity.is_parent_undertaking", "cannot_decide upstream_indeterminate entity.is_parent_undertaking", "cannot_decide upstream_indeterminate entity.is_parent_undertaking", "cannot_decide upstream_indeterminate entity.is_parent_undertaking"] }
+        ] },
+        { "id": "exemption", "lines": [
+          { "kind": "exemption", "requirement": "CSRD-S-005", "cells": ["not_checked", "not_checked", "not_checked", "not_checked"] },
+          { "kind": "exemption", "requirement": "CSRD-S-006", "cells": ["not_checked", "not_checked", "not_checked", "not_checked"] }
+        ] },
+        { "id": "national", "lines": [
+          { "kind": "national", "requirement": "CSRD-S-013", "cells": ["requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state"] }
+        ] }
+      ]
+    },
+    {
+      "id": "not-sure-organisation",
+      "cites": "§4.4 C-3 ('the individual and consolidated size routes'); §7 legal_ambiguity",
+      "why": "Without the kind of organisation the legal form is unknown, which the pack reads as a judgment (legal_ambiguity); every year of the size route stays open on it.",
+      "answers": { "country": "DE", "group": "none", "organisation": "not_sure", "employees": "over_1100", "turnover": "over_500m", "pie": "yes" },
+      "country": "DE",
+      "routes": [
+        { "id": "individual", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-017", "cells": ["cannot_decide legal_ambiguity entity.legal_form", "cannot_decide legal_ambiguity entity.legal_form", "cannot_decide upstream_indeterminate entity.legal_form", "cannot_decide upstream_indeterminate entity.legal_form"] },
+          { "kind": "duty", "requirement": "CSRD-S-020", "cells": ["cannot_decide upstream_indeterminate entity.legal_form", "cannot_decide upstream_indeterminate entity.legal_form", "cannot_decide upstream_indeterminate entity.legal_form", "cannot_decide upstream_indeterminate entity.legal_form"] }
+        ] },
+        { "id": "national", "lines": [
+          { "kind": "national", "requirement": "CSRD-S-013", "cells": ["requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state"] }
+        ] }
+      ]
+    },
+    {
+      "id": "not-sure-employees",
+      "cites": "§4.4 C-4 ('those size routes, in every year'; 'We need your headcount')",
+      "why": "An unknown headcount leaves the size route open in every year; from 2027 the headcount is the first need, and in 2025–26 large-undertaking status comes first.",
+      "answers": { "country": "DE", "group": "none", "organisation": "private_limited", "employees": "not_sure", "turnover": "over_500m", "pie": "yes" },
+      "country": "DE",
+      "routes": [
+        { "id": "individual", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-017", "cells": ["cannot_decide missing_fact entity.is_large_undertaking", "cannot_decide missing_fact entity.is_large_undertaking", "cannot_decide upstream_indeterminate entity.avg_employees", "cannot_decide upstream_indeterminate entity.avg_employees"] },
+          { "kind": "duty", "requirement": "CSRD-S-020", "cells": ["cannot_decide upstream_indeterminate entity.is_large_undertaking", "cannot_decide upstream_indeterminate entity.is_large_undertaking", "cannot_decide upstream_indeterminate entity.avg_employees", "cannot_decide upstream_indeterminate entity.avg_employees"] }
+        ] },
+        { "id": "national", "lines": [
+          { "kind": "national", "requirement": "CSRD-S-013", "cells": ["requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state"] }
+        ] }
+      ]
+    },
+    {
+      "id": "not-sure-turnover",
+      "cites": "§4.4 C-5 ('those size routes, in every year'; 'your turnover')",
+      "why": "An unknown turnover leaves the 2027–28 route open on the turnover; the first wave does not read turnover.",
+      "answers": { "country": "DE", "group": "none", "organisation": "private_limited", "employees": "over_1100", "turnover": "not_sure", "pie": "yes" },
+      "country": "DE",
+      "routes": [
+        { "id": "individual", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-017", "cells": ["cannot_decide missing_fact entity.is_large_undertaking", "cannot_decide missing_fact entity.is_large_undertaking", "cannot_decide upstream_indeterminate entity.net_turnover_eur", "cannot_decide upstream_indeterminate entity.net_turnover_eur"] },
+          { "kind": "duty", "requirement": "CSRD-S-020", "cells": ["cannot_decide upstream_indeterminate entity.is_large_undertaking", "cannot_decide upstream_indeterminate entity.is_large_undertaking", "cannot_decide upstream_indeterminate entity.net_turnover_eur", "cannot_decide upstream_indeterminate entity.net_turnover_eur"] }
+        ] },
+        { "id": "national", "lines": [
+          { "kind": "national", "requirement": "CSRD-S-013", "cells": ["requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state"] }
+        ] }
+      ]
+    },
+    {
+      "id": "not-sure-public-interest",
+      "cites": "§4.4 C-6 ('the 2025 and 2026 columns of the first-wave route')",
+      "why": "Public-interest status decides only the first wave: 2025–26 open on it, 2027–28 settled by the figures.",
+      "answers": { "country": "DE", "group": "none", "organisation": "private_limited", "employees": "over_1100", "turnover": "over_500m", "pie": "not_sure" },
+      "country": "DE",
+      "routes": [
+        { "id": "individual", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-017", "cells": ["cannot_decide missing_fact entity.is_public_interest_entity", "cannot_decide missing_fact entity.is_public_interest_entity", "applies", "applies"] },
+          { "kind": "duty", "requirement": "CSRD-S-020", "cells": ["cannot_decide upstream_indeterminate entity.is_public_interest_entity", "cannot_decide upstream_indeterminate entity.is_public_interest_entity", "applies", "applies"] }
+        ] },
+        { "id": "national", "lines": [
+          { "kind": "national", "requirement": "CSRD-S-013", "cells": ["requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state"] }
+        ] }
+      ]
+    },
+    {
+      "id": "not-sure-parent-report",
+      "cites": "§4.4 C-7 ('both exemptions'); Art 19a(9); onboarding Q-043, Q-044, Q-047, Q-048 (§4.1 C-7)",
+      "why": "With the parent's report unknown, both exemptions stay open on the conditions onboarding confirms, and so does the duty they relieve from 2027.",
+      "answers": { "country": "DE", "group": "owned", "organisation": "private_limited", "employees": "over_1100", "turnover": "over_500m", "pie": "yes", "parentReport": "not_sure" },
+      "country": "DE",
+      "routes": [
+        { "id": "individual", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-017", "cells": ["cannot_decide missing_fact entity.is_large_undertaking", "cannot_decide missing_fact entity.is_large_undertaking", "applies", "applies"] },
+          { "kind": "duty", "requirement": "CSRD-S-020", "cells": ["cannot_decide upstream_indeterminate entity.is_large_undertaking", "cannot_decide upstream_indeterminate entity.is_large_undertaking", "cannot_decide upstream_indeterminate parent.reporting_parent_country", "cannot_decide upstream_indeterminate parent.reporting_parent_country"] }
+        ] },
+        { "id": "exemption", "lines": [
+          { "kind": "exemption", "requirement": "CSRD-S-005", "cells": ["cannot_decide missing_fact parent.reporting_parent_country", "cannot_decide missing_fact parent.reporting_parent_country", "cannot_decide missing_fact parent.reporting_parent_country", "cannot_decide missing_fact parent.reporting_parent_country"] },
+          { "kind": "exemption", "requirement": "CSRD-S-006", "cells": ["cannot_decide missing_fact parent.reporting_parent_country", "cannot_decide missing_fact parent.reporting_parent_country", "cannot_decide missing_fact parent.reporting_parent_country", "cannot_decide missing_fact parent.reporting_parent_country"] }
+        ] },
+        { "id": "art_40a_gateway", "lines": [
+          { "kind": "gateway", "requirement": "CSRD-S-008", "cells": ["does_not_apply", "does_not_apply", "does_not_apply", "cannot_decide upstream_indeterminate group.ultimate_parent_country"] }
+        ] },
+        { "id": "national", "lines": [
+          { "kind": "national", "requirement": "CSRD-S-013", "cells": ["requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state"] }
+        ] }
+      ]
+    },
+    {
+      "id": "not-sure-eu-turnover",
+      "cites": "§4.4 C-8 ('Art 40a'); §4.3 EU turnover ('Not sure': Missing); E-1; KNW-14",
+      "why": "Article 40a starts in 2028 (E-1), so 2025–27 are definitive; 2028 needs the EU turnover. The issuer route is not yet covered, with no need: the country is known (Task 2).",
+      "answers": { "country": "US", "group": "none", "euTurnover": "not_sure" },
+      "country": "US",
+      "routes": [
+        { "id": "art_40a", "lines": [
+          { "kind": "group_test", "requirement": "CSRD-S-007", "cells": ["does_not_apply", "does_not_apply", "does_not_apply", "cannot_decide missing_fact third_country.eu_turnover_year_1_eur"] }
+        ] },
+        { "id": "issuer", "lines": [
+          { "kind": "coverage_gap", "requirement": "CSRD-S-024", "cells": ["not_yet_covered source_status_unresolved", "not_yet_covered source_status_unresolved", "not_yet_covered source_status_unresolved", "not_yet_covered source_status_unresolved"] }
+        ] }
+      ]
+    },
+    {
+      "id": "not-sure-parent-own-figures",
+      "cites": "§4.4 C-9 or C-10 ('the parent company's own route'); rule R",
+      "why": "C-9 and C-10 answered 'Not sure' are answered, so the parent's own lines are evaluated, and open on the parent's own figures; the group's figures never stand in.",
+      "answers": { "country": "DE", "group": "parent", "organisation": "private_limited", "employees": "over_1100", "turnover": "over_500m", "pie": "yes", "parentOwnEmployees": "not_sure", "parentOwnTurnover": "not_sure" },
+      "country": "DE",
+      "routes": [
+        { "id": "parent_own", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-017", "cells": ["cannot_decide missing_fact entity.is_large_undertaking", "cannot_decide missing_fact entity.is_large_undertaking", "cannot_decide upstream_indeterminate entity.net_turnover_eur", "cannot_decide upstream_indeterminate entity.net_turnover_eur"] },
+          { "kind": "duty", "requirement": "CSRD-S-020", "cells": ["cannot_decide upstream_indeterminate entity.is_large_undertaking", "cannot_decide upstream_indeterminate entity.is_large_undertaking", "cannot_decide upstream_indeterminate entity.net_turnover_eur", "cannot_decide upstream_indeterminate entity.net_turnover_eur"] }
+        ] },
+        { "id": "consolidated", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-018", "cells": ["cannot_decide missing_fact group.is_large_group", "cannot_decide missing_fact group.is_large_group", "applies", "applies"] },
+          { "kind": "duty", "requirement": "CSRD-S-021", "cells": ["cannot_decide upstream_indeterminate group.is_large_group", "cannot_decide upstream_indeterminate group.is_large_group", "cannot_decide upstream_indeterminate entity.is_financial_holding_undertaking", "cannot_decide upstream_indeterminate entity.is_financial_holding_undertaking"] }
+        ] },
+        { "id": "national", "lines": [
+          { "kind": "national", "requirement": "CSRD-S-013", "cells": ["requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state"] }
+        ] }
+      ]
+    },
+    {
+      "id": "non-eu-group-both-years",
+      "cites": "plan Task 4 cases (non-EU group); E-1 (Art 40a from 2028); Art 40a(1); KNW-14; §9.2 'Non-EU group'",
+      "why": "The group test is a definitive no before 2028 (E-1) and is met in 2028 on C-8 'Yes, both years'. The issuer route is not yet covered in every year, never 'does not apply', and asks nothing: the country is known.",
+      "answers": { "country": "US", "group": "none", "euTurnover": "both" },
+      "country": "US",
+      "routes": [
+        { "id": "art_40a", "lines": [
+          { "kind": "group_test", "requirement": "CSRD-S-007", "cells": ["does_not_apply", "does_not_apply", "does_not_apply", "applies"] }
+        ] },
+        { "id": "issuer", "lines": [
+          { "kind": "coverage_gap", "requirement": "CSRD-S-024", "cells": ["not_yet_covered source_status_unresolved", "not_yet_covered source_status_unresolved", "not_yet_covered source_status_unresolved", "not_yet_covered source_status_unresolved"] }
+        ] }
+      ]
+    },
+    {
+      "id": "non-eu-group-no",
+      "cites": "plan Task 4 cases ('in 2028 follows C-8's answer'); §4.3 EU turnover ('No': Not met)",
+      "why": "EU turnover at or below €450m: the group test is not met in any year.",
+      "answers": { "country": "US", "group": "none", "euTurnover": "no" },
+      "country": "US",
+      "routes": [
+        { "id": "art_40a", "lines": [
+          { "kind": "group_test", "requirement": "CSRD-S-007", "cells": ["does_not_apply", "does_not_apply", "does_not_apply", "does_not_apply"] }
+        ] },
+        { "id": "issuer", "lines": [
+          { "kind": "coverage_gap", "requirement": "CSRD-S-024", "cells": ["not_yet_covered source_status_unresolved", "not_yet_covered source_status_unresolved", "not_yet_covered source_status_unresolved", "not_yet_covered source_status_unresolved"] }
+        ] }
+      ]
+    },
+    {
+      "id": "non-eu-group-recent-only",
+      "cites": "§4.3 EU turnover ('Only the most recent year': Not met); Art 40a(1) ('in each of the last two consecutive financial years')",
+      "why": "Above €450m in one year only fails the two-year test.",
+      "answers": { "country": "US", "group": "none", "euTurnover": "recent_only" },
+      "country": "US",
+      "routes": [
+        { "id": "art_40a", "lines": [
+          { "kind": "group_test", "requirement": "CSRD-S-007", "cells": ["does_not_apply", "does_not_apply", "does_not_apply", "does_not_apply"] }
+        ] },
+        { "id": "issuer", "lines": [
+          { "kind": "coverage_gap", "requirement": "CSRD-S-024", "cells": ["not_yet_covered source_status_unresolved", "not_yet_covered source_status_unresolved", "not_yet_covered source_status_unresolved", "not_yet_covered source_status_unresolved"] }
+        ] }
+      ]
+    },
+    {
+      "id": "non-eu-parent-earlier-only",
+      "cites": "§4.3 EU turnover ('Only the year before': Not met); §9.2 'Non-EU group'; plan Task 4 row presence (no EU row for a non-EU company)",
+      "why": "A non-EU parent sees the Article 40a and issuer rows only; above €450m only in the earlier year fails the test.",
+      "answers": { "country": "GB", "group": "parent", "euTurnover": "earlier_only" },
+      "country": "GB",
+      "routes": [
+        { "id": "art_40a", "lines": [
+          { "kind": "group_test", "requirement": "CSRD-S-007", "cells": ["does_not_apply", "does_not_apply", "does_not_apply", "does_not_apply"] }
+        ] },
+        { "id": "issuer", "lines": [
+          { "kind": "coverage_gap", "requirement": "CSRD-S-024", "cells": ["not_yet_covered source_status_unresolved", "not_yet_covered source_status_unresolved", "not_yet_covered source_status_unresolved", "not_yet_covered source_status_unresolved"] }
+        ] }
+      ]
+    },
+    {
+      "id": "non-eu-uncatalogued-country",
+      "cites": "plan Task 4 cases (added 2026-10-24: a typed country the pack does not catalogue, AR); KNW-14; §4.1 C-8 ('an uncatalogued code still reads catalogue_unknown')",
+      "why": "AR is not in the pack's country catalogue, so whether it is outside the EU is not known to the pack: the issuer line is cannot_decide with catalogue_unknown in every year, never does_not_apply, and the 2028 group test cannot be decided on the parent's country.",
+      "answers": { "country": "other", "countryOther": "AR", "group": "none", "euTurnover": "both" },
+      "country": "AR",
+      "routes": [
+        { "id": "art_40a", "lines": [
+          { "kind": "group_test", "requirement": "CSRD-S-007", "cells": ["does_not_apply", "does_not_apply", "does_not_apply", "cannot_decide catalogue_unknown group.ultimate_parent_country:catalogue_unknown"] }
+        ] },
+        { "id": "issuer", "lines": [
+          { "kind": "coverage_gap", "requirement": "CSRD-S-024", "cells": ["cannot_decide catalogue_unknown entity.incorporation_country:catalogue_unknown", "cannot_decide catalogue_unknown entity.incorporation_country:catalogue_unknown", "cannot_decide catalogue_unknown entity.incorporation_country:catalogue_unknown", "cannot_decide catalogue_unknown entity.incorporation_country:catalogue_unknown"] }
+        ] }
+      ]
+    },
+    {
+      "id": "non-eu-typed-catalogued-country",
+      "cites": "§4.1 C-1 ('Another country'); KNW-14; Art 40a(1)",
+      "why": "A typed country the pack catalogues as non-EU (IL) reads as a listed one: the group test is met in 2028 on 'Yes, both years', and the issuer route is not yet covered.",
+      "answers": { "country": "other", "countryOther": "IL", "group": "none", "euTurnover": "both" },
+      "country": "IL",
+      "routes": [
+        { "id": "art_40a", "lines": [
+          { "kind": "group_test", "requirement": "CSRD-S-007", "cells": ["does_not_apply", "does_not_apply", "does_not_apply", "applies"] }
+        ] },
+        { "id": "issuer", "lines": [
+          { "kind": "coverage_gap", "requirement": "CSRD-S-024", "cells": ["not_yet_covered source_status_unresolved", "not_yet_covered source_status_unresolved", "not_yet_covered source_status_unresolved", "not_yet_covered source_status_unresolved"] }
+        ] }
+      ]
+    },
+    {
+      "id": "non-eu-owned",
+      "cites": "Art 40a(1) (a third-country undertaking's ultimate parent is outside the EU); §4.1 C-8 (the ultimate parent's country is set for 'no group' and a parent only)",
+      "why": "An owned non-EU company's ultimate parent may be in the EU, so the 2028 group test cannot be decided on 'Yes, both years' alone.",
+      "answers": { "country": "US", "group": "owned", "euTurnover": "both" },
+      "country": "US",
+      "routes": [
+        { "id": "art_40a", "lines": [
+          { "kind": "group_test", "requirement": "CSRD-S-007", "cells": ["does_not_apply", "does_not_apply", "does_not_apply", "cannot_decide missing_fact group.ultimate_parent_country"] }
+        ] },
+        { "id": "issuer", "lines": [
+          { "kind": "coverage_gap", "requirement": "CSRD-S-024", "cells": ["not_yet_covered source_status_unresolved", "not_yet_covered source_status_unresolved", "not_yet_covered source_status_unresolved", "not_yet_covered source_status_unresolved"] }
+        ] }
+      ]
+    },
+    {
+      "id": "non-eu-groups-eu-subsidiary",
+      "cites": "§9.2 'Non-EU group's EU subsidiary (checks as an EU subsidiary)'",
+      "why": "Checks as an EU subsidiary: its own duty from 2027 waits on the exemption conditions; the Article 40a gateway is open in 2028.",
+      "answers": { "country": "NL", "group": "owned", "organisation": "public_limited", "employees": "over_1100", "turnover": "over_500m", "pie": "yes", "parentReport": "yes" },
+      "country": "NL",
+      "routes": [
+        { "id": "individual", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-017", "cells": ["cannot_decide missing_fact entity.is_large_undertaking", "cannot_decide missing_fact entity.is_large_undertaking", "applies", "applies"] },
+          { "kind": "duty", "requirement": "CSRD-S-020", "cells": ["cannot_decide upstream_indeterminate entity.is_large_undertaking", "cannot_decide upstream_indeterminate entity.is_large_undertaking", "cannot_decide upstream_indeterminate parent.reporting_parent_country", "cannot_decide upstream_indeterminate parent.reporting_parent_country"] }
+        ] },
+        { "id": "exemption", "lines": [
+          { "kind": "exemption", "requirement": "CSRD-S-005", "cells": ["cannot_decide missing_fact parent.reporting_parent_country", "cannot_decide missing_fact parent.reporting_parent_country", "cannot_decide missing_fact parent.reporting_parent_country", "cannot_decide missing_fact parent.reporting_parent_country"] },
+          { "kind": "exemption", "requirement": "CSRD-S-006", "cells": ["cannot_decide missing_fact parent.reporting_parent_country", "cannot_decide missing_fact parent.reporting_parent_country", "cannot_decide missing_fact parent.reporting_parent_country", "cannot_decide missing_fact parent.reporting_parent_country"] }
+        ] },
+        { "id": "art_40a_gateway", "lines": [
+          { "kind": "gateway", "requirement": "CSRD-S-008", "cells": ["does_not_apply", "does_not_apply", "does_not_apply", "cannot_decide upstream_indeterminate group.ultimate_parent_country"] }
+        ] },
+        { "id": "national", "lines": [
+          { "kind": "national", "requirement": "CSRD-S-013", "cells": ["requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state"] }
+        ] }
+      ]
+    },
+    {
+      "id": "not-sure-country-intermediate-parent",
+      "cites": "plan Task 4 ('With C-1 \"Not sure\", every row that any country could bring for C-2's answer is shown, EU and non-EU alike, together with the national line'); §4.4 C-1",
+      "why": "An intermediate parent of unknown country sees every row either side could bring. C-7 is not asked, so the exemption lines are not checked; the parent's own lines wait for C-9 and C-10.",
+      "answers": { "country": "not_sure", "group": "both" },
+      "country": "not_sure",
+      "routes": [
+        { "id": "parent_own", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-017", "cells": ["not_checked", "not_checked", "not_checked", "not_checked"] },
+          { "kind": "duty", "requirement": "CSRD-S-020", "cells": ["not_checked", "not_checked", "not_checked", "not_checked"] }
+        ] },
+        { "id": "consolidated", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-018", "cells": ["cannot_decide missing_fact entity.incorporation_country", "cannot_decide missing_fact entity.incorporation_country", "cannot_decide upstream_indeterminate entity.incorporation_country", "cannot_decide upstream_indeterminate entity.incorporation_country"] },
+          { "kind": "duty", "requirement": "CSRD-S-021", "cells": ["cannot_decide upstream_indeterminate entity.incorporation_country", "cannot_decide upstream_indeterminate entity.incorporation_country", "cannot_decide upstream_indeterminate entity.incorporation_country", "cannot_decide upstream_indeterminate entity.incorporation_country"] }
+        ] },
+        { "id": "exemption", "lines": [
+          { "kind": "exemption", "requirement": "CSRD-S-019", "cells": ["not_checked", "not_checked", "not_checked", "not_checked"] },
+          { "kind": "exemption", "requirement": "CSRD-S-005", "cells": ["not_checked", "not_checked", "not_checked", "not_checked"] },
+          { "kind": "exemption", "requirement": "CSRD-S-006", "cells": ["not_checked", "not_checked", "not_checked", "not_checked"] }
+        ] },
+        { "id": "art_40a", "lines": [
+          { "kind": "group_test", "requirement": "CSRD-S-007", "cells": ["does_not_apply", "does_not_apply", "does_not_apply", "cannot_decide missing_fact group.ultimate_parent_country"] }
+        ] },
+        { "id": "art_40a_gateway", "lines": [
+          { "kind": "gateway", "requirement": "CSRD-S-008", "cells": ["does_not_apply", "does_not_apply", "does_not_apply", "cannot_decide upstream_indeterminate group.ultimate_parent_country"] }
+        ] },
+        { "id": "issuer", "lines": [
+          { "kind": "coverage_gap", "requirement": "CSRD-S-024", "cells": ["cannot_decide missing_fact entity.incorporation_country", "cannot_decide missing_fact entity.incorporation_country", "cannot_decide missing_fact entity.incorporation_country", "cannot_decide missing_fact entity.incorporation_country"] }
+        ] },
+        { "id": "national", "lines": [
+          { "kind": "national", "requirement": "CSRD-S-013", "cells": ["requires_review missing_fact entity.incorporation_country", "requires_review missing_fact entity.incorporation_country", "requires_review missing_fact entity.incorporation_country", "requires_review missing_fact entity.incorporation_country"] }
+        ] }
+      ]
+    },
+    {
+      "id": "golden-widest-slice",
+      "cites": "DG-8 part 3; plan Task 4 'The new public golden' (an EU intermediate parent whose figures show C-6, C-6 'Not sure', C-9 and C-10 answered)",
+      "why": "The golden's fixed answers, held here too so that a change to the payload's fixed flags fails both. The parent's own headcount straddles 1,000, so from 2027 its first need is that figure; public-interest status is open for 2025–26 on both the parent's own and the consolidated route.",
+      "answers": { "country": "DE", "group": "both", "organisation": "private_limited", "employees": "over_1100", "turnover": "over_500m", "pie": "not_sure", "parentReport": "yes", "parentOwnEmployees": "over_900_up_to_1100", "parentOwnTurnover": "over_500m" },
+      "country": "DE",
+      "routes": [
+        { "id": "parent_own", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-017", "cells": ["cannot_decide missing_fact entity.is_public_interest_entity", "cannot_decide missing_fact entity.is_public_interest_entity", "cannot_decide upstream_indeterminate entity.avg_employees:range_crosses_threshold", "cannot_decide upstream_indeterminate entity.avg_employees:range_crosses_threshold"] },
+          { "kind": "duty", "requirement": "CSRD-S-020", "cells": ["cannot_decide upstream_indeterminate entity.avg_employees:range_crosses_threshold", "cannot_decide upstream_indeterminate entity.avg_employees:range_crosses_threshold", "cannot_decide upstream_indeterminate entity.avg_employees:range_crosses_threshold", "cannot_decide upstream_indeterminate entity.avg_employees:range_crosses_threshold"] }
+        ] },
+        { "id": "consolidated", "lines": [
+          { "kind": "first_application", "requirement": "CSRD-S-018", "cells": ["cannot_decide missing_fact entity.is_public_interest_entity", "cannot_decide missing_fact entity.is_public_interest_entity", "applies", "applies"] },
+          { "kind": "duty", "requirement": "CSRD-S-021", "cells": ["cannot_decide upstream_indeterminate entity.is_public_interest_entity", "cannot_decide upstream_indeterminate entity.is_public_interest_entity", "cannot_decide upstream_indeterminate parent.report_includes_all_subsidiaries", "cannot_decide upstream_indeterminate parent.report_includes_all_subsidiaries"] }
+        ] },
+        { "id": "exemption", "lines": [
+          { "kind": "exemption", "requirement": "CSRD-S-019", "cells": ["cannot_decide missing_fact parent.report_includes_all_subsidiaries", "cannot_decide missing_fact parent.report_includes_all_subsidiaries", "cannot_decide missing_fact parent.report_includes_all_subsidiaries", "cannot_decide missing_fact parent.report_includes_all_subsidiaries"] },
+          { "kind": "exemption", "requirement": "CSRD-S-005", "cells": ["cannot_decide missing_fact parent.reporting_parent_country", "cannot_decide missing_fact parent.reporting_parent_country", "cannot_decide missing_fact parent.reporting_parent_country", "cannot_decide missing_fact parent.reporting_parent_country"] },
+          { "kind": "exemption", "requirement": "CSRD-S-006", "cells": ["cannot_decide missing_fact parent.reporting_parent_country", "cannot_decide missing_fact parent.reporting_parent_country", "cannot_decide missing_fact parent.reporting_parent_country", "cannot_decide missing_fact parent.reporting_parent_country"] }
+        ] },
+        { "id": "art_40a_gateway", "lines": [
+          { "kind": "gateway", "requirement": "CSRD-S-008", "cells": ["does_not_apply", "does_not_apply", "does_not_apply", "cannot_decide upstream_indeterminate group.ultimate_parent_country"] }
+        ] },
+        { "id": "national", "lines": [
+          { "kind": "national", "requirement": "CSRD-S-013", "cells": ["requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state", "requires_review national_law_unresolved entity.governing_member_state"] }
+        ] }
+      ]
+    }
+  ]
+}

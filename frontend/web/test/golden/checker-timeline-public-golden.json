@@ -1,0 +1,1324 @@
+{
+  "assessedAt": "2026-10-23",
+  "basis": "start_year",
+  "startYears": [
+    2025,
+    2026,
+    2027,
+    2028
+  ],
+  "hypothetical": true,
+  "preliminary": true,
+  "pack": {
+    "id": "csrd",
+    "version": "0.1.0",
+    "legalSnapshot": "2026-07-26"
+  },
+  "content": {
+    "draft": true,
+    "threshold": "draft_labelled"
+  },
+  "country": "DE",
+  "routes": [
+    {
+      "id": "parent_own",
+      "lines": [
+        {
+          "kind": "first_application",
+          "requirement": "CSRD-S-017",
+          "legalBasis": {
+            "sources": [
+              {
+                "id": "SRC-002",
+                "title": "Directive (EU) 2022/2464 — CSRD",
+                "url": "https://eur-lex.europa.eu/eli/dir/2022/2464/oj/eng"
+              },
+              {
+                "id": "SRC-001",
+                "title": "Directive 2013/34/EU — Accounting Directive (host instrument)",
+                "url": "https://eur-lex.europa.eu/eli/dir/2013/34/oj/eng"
+              }
+            ],
+            "locators": [
+              "Article 5(2), first subparagraph, point (a)(i)",
+              "Article 5(2), first subparagraph, point (b)(i)",
+              "Article 1(4)"
+            ]
+          },
+          "cells": [
+            {
+              "startYear": 2025,
+              "state": "cannot_decide",
+              "reason": "missing_fact",
+              "needs": [
+                {
+                  "factType": "entity.is_public_interest_entity",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.is_large_undertaking",
+                  "reason": "missing_fact"
+                }
+              ]
+            },
+            {
+              "startYear": 2026,
+              "state": "cannot_decide",
+              "reason": "missing_fact",
+              "needs": [
+                {
+                  "factType": "entity.is_public_interest_entity",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.is_large_undertaking",
+                  "reason": "missing_fact"
+                }
+              ]
+            },
+            {
+              "startYear": 2027,
+              "state": "cannot_decide",
+              "reason": "upstream_indeterminate",
+              "needs": [
+                {
+                  "factType": "entity.avg_employees",
+                  "reason": "range_crosses_threshold"
+                }
+              ]
+            },
+            {
+              "startYear": 2028,
+              "state": "cannot_decide",
+              "reason": "upstream_indeterminate",
+              "needs": [
+                {
+                  "factType": "entity.avg_employees",
+                  "reason": "range_crosses_threshold"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "duty",
+          "requirement": "CSRD-S-020",
+          "legalBasis": {
+            "sources": [
+              {
+                "id": "SRC-001",
+                "title": "Directive 2013/34/EU — Accounting Directive (host instrument)",
+                "url": "https://eur-lex.europa.eu/eli/dir/2013/34/oj/eng"
+              },
+              {
+                "id": "SRC-002",
+                "title": "Directive (EU) 2022/2464 — CSRD",
+                "url": "https://eur-lex.europa.eu/eli/dir/2022/2464/oj/eng"
+              }
+            ],
+            "locators": [
+              "Article 19a(1)",
+              "Article 5(2), first subparagraph"
+            ]
+          },
+          "cells": [
+            {
+              "startYear": 2025,
+              "state": "cannot_decide",
+              "reason": "upstream_indeterminate",
+              "needs": [
+                {
+                  "factType": "entity.avg_employees",
+                  "reason": "range_crosses_threshold"
+                },
+                {
+                  "factType": "entity.is_public_interest_entity",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.is_large_undertaking",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.member_state_transition_option",
+                  "reason": "national_law_unresolved"
+                },
+                {
+                  "factType": "parent.reporting_parent_country",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_includes_all_subsidiaries",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_standard",
+                  "reason": "legal_ambiguity"
+                },
+                {
+                  "factType": "parent.report_public_url",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.exemption_disclosures_in_management_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.article_37_exempt_publishing_consolidated_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.national_publication_conditions_met",
+                  "reason": "national_law_unresolved"
+                },
+                {
+                  "factType": "parent.assurance_opinion_available",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.taxonomy_information_included",
+                  "reason": "missing_fact"
+                }
+              ]
+            },
+            {
+              "startYear": 2026,
+              "state": "cannot_decide",
+              "reason": "upstream_indeterminate",
+              "needs": [
+                {
+                  "factType": "entity.avg_employees",
+                  "reason": "range_crosses_threshold"
+                },
+                {
+                  "factType": "entity.is_public_interest_entity",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.is_large_undertaking",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.member_state_transition_option",
+                  "reason": "national_law_unresolved"
+                },
+                {
+                  "factType": "parent.reporting_parent_country",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_includes_all_subsidiaries",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_standard",
+                  "reason": "legal_ambiguity"
+                },
+                {
+                  "factType": "parent.report_public_url",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.exemption_disclosures_in_management_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.article_37_exempt_publishing_consolidated_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.national_publication_conditions_met",
+                  "reason": "national_law_unresolved"
+                },
+                {
+                  "factType": "parent.assurance_opinion_available",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.taxonomy_information_included",
+                  "reason": "missing_fact"
+                }
+              ]
+            },
+            {
+              "startYear": 2027,
+              "state": "cannot_decide",
+              "reason": "upstream_indeterminate",
+              "needs": [
+                {
+                  "factType": "entity.avg_employees",
+                  "reason": "range_crosses_threshold"
+                },
+                {
+                  "factType": "parent.reporting_parent_country",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_includes_all_subsidiaries",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_standard",
+                  "reason": "legal_ambiguity"
+                },
+                {
+                  "factType": "parent.report_public_url",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.exemption_disclosures_in_management_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.article_37_exempt_publishing_consolidated_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.national_publication_conditions_met",
+                  "reason": "national_law_unresolved"
+                },
+                {
+                  "factType": "parent.assurance_opinion_available",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.taxonomy_information_included",
+                  "reason": "missing_fact"
+                }
+              ]
+            },
+            {
+              "startYear": 2028,
+              "state": "cannot_decide",
+              "reason": "upstream_indeterminate",
+              "needs": [
+                {
+                  "factType": "entity.avg_employees",
+                  "reason": "range_crosses_threshold"
+                },
+                {
+                  "factType": "parent.reporting_parent_country",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_includes_all_subsidiaries",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_standard",
+                  "reason": "legal_ambiguity"
+                },
+                {
+                  "factType": "parent.report_public_url",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.exemption_disclosures_in_management_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.article_37_exempt_publishing_consolidated_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.national_publication_conditions_met",
+                  "reason": "national_law_unresolved"
+                },
+                {
+                  "factType": "parent.assurance_opinion_available",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.taxonomy_information_included",
+                  "reason": "missing_fact"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "consolidated",
+      "lines": [
+        {
+          "kind": "first_application",
+          "requirement": "CSRD-S-018",
+          "legalBasis": {
+            "sources": [
+              {
+                "id": "SRC-002",
+                "title": "Directive (EU) 2022/2464 — CSRD",
+                "url": "https://eur-lex.europa.eu/eli/dir/2022/2464/oj/eng"
+              },
+              {
+                "id": "SRC-001",
+                "title": "Directive 2013/34/EU — Accounting Directive (host instrument)",
+                "url": "https://eur-lex.europa.eu/eli/dir/2013/34/oj/eng"
+              }
+            ],
+            "locators": [
+              "Article 5(2), first subparagraph, point (a)(ii)",
+              "Article 5(2), first subparagraph, point (b)(ii)",
+              "Article 1(4)"
+            ]
+          },
+          "cells": [
+            {
+              "startYear": 2025,
+              "state": "cannot_decide",
+              "reason": "missing_fact",
+              "needs": [
+                {
+                  "factType": "entity.is_public_interest_entity",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "group.is_large_group",
+                  "reason": "missing_fact"
+                }
+              ]
+            },
+            {
+              "startYear": 2026,
+              "state": "cannot_decide",
+              "reason": "missing_fact",
+              "needs": [
+                {
+                  "factType": "entity.is_public_interest_entity",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "group.is_large_group",
+                  "reason": "missing_fact"
+                }
+              ]
+            },
+            {
+              "startYear": 2027,
+              "state": "applies"
+            },
+            {
+              "startYear": 2028,
+              "state": "applies"
+            }
+          ]
+        },
+        {
+          "kind": "duty",
+          "requirement": "CSRD-S-021",
+          "legalBasis": {
+            "sources": [
+              {
+                "id": "SRC-001",
+                "title": "Directive 2013/34/EU — Accounting Directive (host instrument)",
+                "url": "https://eur-lex.europa.eu/eli/dir/2013/34/oj/eng"
+              },
+              {
+                "id": "SRC-002",
+                "title": "Directive (EU) 2022/2464 — CSRD",
+                "url": "https://eur-lex.europa.eu/eli/dir/2022/2464/oj/eng"
+              }
+            ],
+            "locators": [
+              "Article 29a(1)",
+              "Article 29a(8)",
+              "Article 5(2), first subparagraph"
+            ]
+          },
+          "cells": [
+            {
+              "startYear": 2025,
+              "state": "cannot_decide",
+              "reason": "upstream_indeterminate",
+              "needs": [
+                {
+                  "factType": "entity.is_public_interest_entity",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "group.is_large_group",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_includes_all_subsidiaries",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.reporting_parent_country",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_standard",
+                  "reason": "legal_ambiguity"
+                },
+                {
+                  "factType": "parent.assurance_opinion_available",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.taxonomy_information_included",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_public_url",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.exemption_disclosures_in_management_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.article_37_exempt_publishing_consolidated_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.national_publication_conditions_met",
+                  "reason": "national_law_unresolved"
+                },
+                {
+                  "factType": "entity.is_financial_holding_undertaking",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "group.subsidiaries_business_models_independent",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.art_29a_7a_option_exercised",
+                  "reason": "missing_fact"
+                }
+              ]
+            },
+            {
+              "startYear": 2026,
+              "state": "cannot_decide",
+              "reason": "upstream_indeterminate",
+              "needs": [
+                {
+                  "factType": "entity.is_public_interest_entity",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "group.is_large_group",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_includes_all_subsidiaries",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.reporting_parent_country",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_standard",
+                  "reason": "legal_ambiguity"
+                },
+                {
+                  "factType": "parent.assurance_opinion_available",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.taxonomy_information_included",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_public_url",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.exemption_disclosures_in_management_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.article_37_exempt_publishing_consolidated_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.national_publication_conditions_met",
+                  "reason": "national_law_unresolved"
+                },
+                {
+                  "factType": "entity.is_financial_holding_undertaking",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "group.subsidiaries_business_models_independent",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.art_29a_7a_option_exercised",
+                  "reason": "missing_fact"
+                }
+              ]
+            },
+            {
+              "startYear": 2027,
+              "state": "cannot_decide",
+              "reason": "upstream_indeterminate",
+              "needs": [
+                {
+                  "factType": "parent.report_includes_all_subsidiaries",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.reporting_parent_country",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_standard",
+                  "reason": "legal_ambiguity"
+                },
+                {
+                  "factType": "parent.assurance_opinion_available",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.taxonomy_information_included",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_public_url",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.exemption_disclosures_in_management_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.article_37_exempt_publishing_consolidated_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.national_publication_conditions_met",
+                  "reason": "national_law_unresolved"
+                },
+                {
+                  "factType": "entity.is_financial_holding_undertaking",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "group.subsidiaries_business_models_independent",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.art_29a_7a_option_exercised",
+                  "reason": "missing_fact"
+                }
+              ]
+            },
+            {
+              "startYear": 2028,
+              "state": "cannot_decide",
+              "reason": "upstream_indeterminate",
+              "needs": [
+                {
+                  "factType": "parent.report_includes_all_subsidiaries",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.reporting_parent_country",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_standard",
+                  "reason": "legal_ambiguity"
+                },
+                {
+                  "factType": "parent.assurance_opinion_available",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.taxonomy_information_included",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_public_url",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.exemption_disclosures_in_management_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.article_37_exempt_publishing_consolidated_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.national_publication_conditions_met",
+                  "reason": "national_law_unresolved"
+                },
+                {
+                  "factType": "entity.is_financial_holding_undertaking",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "group.subsidiaries_business_models_independent",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.art_29a_7a_option_exercised",
+                  "reason": "missing_fact"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "exemption",
+      "lines": [
+        {
+          "kind": "exemption",
+          "requirement": "CSRD-S-019",
+          "legalBasis": {
+            "sources": [
+              {
+                "id": "SRC-001",
+                "title": "Directive 2013/34/EU — Accounting Directive (host instrument)",
+                "url": "https://eur-lex.europa.eu/eli/dir/2013/34/oj/eng"
+              }
+            ],
+            "locators": [
+              "Article 29a(8)",
+              "Article 29a(9)"
+            ]
+          },
+          "cells": [
+            {
+              "startYear": 2025,
+              "state": "cannot_decide",
+              "reason": "missing_fact",
+              "needs": [
+                {
+                  "factType": "parent.report_includes_all_subsidiaries",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.reporting_parent_country",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_standard",
+                  "reason": "legal_ambiguity"
+                },
+                {
+                  "factType": "parent.assurance_opinion_available",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.taxonomy_information_included",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_public_url",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.exemption_disclosures_in_management_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.article_37_exempt_publishing_consolidated_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.national_publication_conditions_met",
+                  "reason": "national_law_unresolved"
+                }
+              ]
+            },
+            {
+              "startYear": 2026,
+              "state": "cannot_decide",
+              "reason": "missing_fact",
+              "needs": [
+                {
+                  "factType": "parent.report_includes_all_subsidiaries",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.reporting_parent_country",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_standard",
+                  "reason": "legal_ambiguity"
+                },
+                {
+                  "factType": "parent.assurance_opinion_available",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.taxonomy_information_included",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_public_url",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.exemption_disclosures_in_management_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.article_37_exempt_publishing_consolidated_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.national_publication_conditions_met",
+                  "reason": "national_law_unresolved"
+                }
+              ]
+            },
+            {
+              "startYear": 2027,
+              "state": "cannot_decide",
+              "reason": "missing_fact",
+              "needs": [
+                {
+                  "factType": "parent.report_includes_all_subsidiaries",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.reporting_parent_country",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_standard",
+                  "reason": "legal_ambiguity"
+                },
+                {
+                  "factType": "parent.assurance_opinion_available",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.taxonomy_information_included",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_public_url",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.exemption_disclosures_in_management_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.article_37_exempt_publishing_consolidated_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.national_publication_conditions_met",
+                  "reason": "national_law_unresolved"
+                }
+              ]
+            },
+            {
+              "startYear": 2028,
+              "state": "cannot_decide",
+              "reason": "missing_fact",
+              "needs": [
+                {
+                  "factType": "parent.report_includes_all_subsidiaries",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.reporting_parent_country",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_standard",
+                  "reason": "legal_ambiguity"
+                },
+                {
+                  "factType": "parent.assurance_opinion_available",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.taxonomy_information_included",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_public_url",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.exemption_disclosures_in_management_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.article_37_exempt_publishing_consolidated_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.national_publication_conditions_met",
+                  "reason": "national_law_unresolved"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "exemption",
+          "requirement": "CSRD-S-005",
+          "legalBasis": {
+            "sources": [
+              {
+                "id": "SRC-001",
+                "title": "Directive 2013/34/EU — Accounting Directive (host instrument)",
+                "url": "https://eur-lex.europa.eu/eli/dir/2013/34/oj/eng"
+              }
+            ],
+            "locators": [
+              "Article 19a(9)"
+            ]
+          },
+          "cells": [
+            {
+              "startYear": 2025,
+              "state": "cannot_decide",
+              "reason": "missing_fact",
+              "needs": [
+                {
+                  "factType": "parent.reporting_parent_country",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_includes_all_subsidiaries",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_standard",
+                  "reason": "legal_ambiguity"
+                },
+                {
+                  "factType": "parent.report_public_url",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.exemption_disclosures_in_management_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.article_37_exempt_publishing_consolidated_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.national_publication_conditions_met",
+                  "reason": "national_law_unresolved"
+                }
+              ]
+            },
+            {
+              "startYear": 2026,
+              "state": "cannot_decide",
+              "reason": "missing_fact",
+              "needs": [
+                {
+                  "factType": "parent.reporting_parent_country",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_includes_all_subsidiaries",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_standard",
+                  "reason": "legal_ambiguity"
+                },
+                {
+                  "factType": "parent.report_public_url",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.exemption_disclosures_in_management_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.article_37_exempt_publishing_consolidated_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.national_publication_conditions_met",
+                  "reason": "national_law_unresolved"
+                }
+              ]
+            },
+            {
+              "startYear": 2027,
+              "state": "cannot_decide",
+              "reason": "missing_fact",
+              "needs": [
+                {
+                  "factType": "parent.reporting_parent_country",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_includes_all_subsidiaries",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_standard",
+                  "reason": "legal_ambiguity"
+                },
+                {
+                  "factType": "parent.report_public_url",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.exemption_disclosures_in_management_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.article_37_exempt_publishing_consolidated_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.national_publication_conditions_met",
+                  "reason": "national_law_unresolved"
+                }
+              ]
+            },
+            {
+              "startYear": 2028,
+              "state": "cannot_decide",
+              "reason": "missing_fact",
+              "needs": [
+                {
+                  "factType": "parent.reporting_parent_country",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_includes_all_subsidiaries",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_standard",
+                  "reason": "legal_ambiguity"
+                },
+                {
+                  "factType": "parent.report_public_url",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.exemption_disclosures_in_management_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.article_37_exempt_publishing_consolidated_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.national_publication_conditions_met",
+                  "reason": "national_law_unresolved"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "exemption",
+          "requirement": "CSRD-S-006",
+          "legalBasis": {
+            "sources": [
+              {
+                "id": "SRC-001",
+                "title": "Directive 2013/34/EU — Accounting Directive (host instrument)",
+                "url": "https://eur-lex.europa.eu/eli/dir/2013/34/oj/eng"
+              }
+            ],
+            "locators": [
+              "Article 19a(9)"
+            ]
+          },
+          "cells": [
+            {
+              "startYear": 2025,
+              "state": "cannot_decide",
+              "reason": "missing_fact",
+              "needs": [
+                {
+                  "factType": "parent.reporting_parent_country",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_includes_all_subsidiaries",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_standard",
+                  "reason": "legal_ambiguity"
+                },
+                {
+                  "factType": "parent.assurance_opinion_available",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.taxonomy_information_included",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.exemption_disclosures_in_management_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.article_37_exempt_publishing_consolidated_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.national_publication_conditions_met",
+                  "reason": "national_law_unresolved"
+                }
+              ]
+            },
+            {
+              "startYear": 2026,
+              "state": "cannot_decide",
+              "reason": "missing_fact",
+              "needs": [
+                {
+                  "factType": "parent.reporting_parent_country",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_includes_all_subsidiaries",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_standard",
+                  "reason": "legal_ambiguity"
+                },
+                {
+                  "factType": "parent.assurance_opinion_available",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.taxonomy_information_included",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.exemption_disclosures_in_management_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.article_37_exempt_publishing_consolidated_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.national_publication_conditions_met",
+                  "reason": "national_law_unresolved"
+                }
+              ]
+            },
+            {
+              "startYear": 2027,
+              "state": "cannot_decide",
+              "reason": "missing_fact",
+              "needs": [
+                {
+                  "factType": "parent.reporting_parent_country",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_includes_all_subsidiaries",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_standard",
+                  "reason": "legal_ambiguity"
+                },
+                {
+                  "factType": "parent.assurance_opinion_available",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.taxonomy_information_included",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.exemption_disclosures_in_management_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.article_37_exempt_publishing_consolidated_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.national_publication_conditions_met",
+                  "reason": "national_law_unresolved"
+                }
+              ]
+            },
+            {
+              "startYear": 2028,
+              "state": "cannot_decide",
+              "reason": "missing_fact",
+              "needs": [
+                {
+                  "factType": "parent.reporting_parent_country",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_includes_all_subsidiaries",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.report_standard",
+                  "reason": "legal_ambiguity"
+                },
+                {
+                  "factType": "parent.assurance_opinion_available",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "parent.taxonomy_information_included",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.exemption_disclosures_in_management_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.article_37_exempt_publishing_consolidated_report",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "entity.national_publication_conditions_met",
+                  "reason": "national_law_unresolved"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "art_40a_gateway",
+      "lines": [
+        {
+          "kind": "gateway",
+          "requirement": "CSRD-S-008",
+          "legalBasis": {
+            "sources": [
+              {
+                "id": "SRC-001",
+                "title": "Directive 2013/34/EU — Accounting Directive (host instrument)",
+                "url": "https://eur-lex.europa.eu/eli/dir/2013/34/oj/eng"
+              }
+            ],
+            "locators": [
+              "Article 40a"
+            ]
+          },
+          "cells": [
+            {
+              "startYear": 2025,
+              "state": "does_not_apply"
+            },
+            {
+              "startYear": 2026,
+              "state": "does_not_apply"
+            },
+            {
+              "startYear": 2027,
+              "state": "does_not_apply"
+            },
+            {
+              "startYear": 2028,
+              "state": "cannot_decide",
+              "reason": "upstream_indeterminate",
+              "needs": [
+                {
+                  "factType": "group.ultimate_parent_country",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "third_country.eu_turnover_year_1_eur",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "third_country.eu_turnover_year_2_eur",
+                  "reason": "missing_fact"
+                },
+                {
+                  "factType": "third_country.eu_subsidiary_turnover_eur",
+                  "reason": "missing_fact"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "national",
+      "lines": [
+        {
+          "kind": "national",
+          "requirement": "CSRD-S-013",
+          "legalBasis": {
+            "sources": [
+              {
+                "id": "SRC-001",
+                "title": "Directive 2013/34/EU — Accounting Directive (host instrument)",
+                "url": "https://eur-lex.europa.eu/eli/dir/2013/34/oj/eng"
+              }
+            ],
+            "locators": [
+              "Article 53"
+            ]
+          },
+          "cells": [
+            {
+              "startYear": 2025,
+              "state": "requires_review",
+              "reason": "national_law_unresolved",
+              "needs": [
+                {
+                  "factType": "entity.governing_member_state",
+                  "reason": "national_law_unresolved"
+                }
+              ]
+            },
+            {
+              "startYear": 2026,
+              "state": "requires_review",
+              "reason": "national_law_unresolved",
+              "needs": [
+                {
+                  "factType": "entity.governing_member_state",
+                  "reason": "national_law_unresolved"
+                }
+              ]
+            },
+            {
+              "startYear": 2027,
+              "state": "requires_review",
+              "reason": "national_law_unresolved",
+              "needs": [
+                {
+                  "factType": "entity.governing_member_state",
+                  "reason": "national_law_unresolved"
+                }
+              ]
+            },
+            {
+              "startYear": 2028,
+              "state": "requires_review",
+              "reason": "national_law_unresolved",
+              "needs": [
+                {
+                  "factType": "entity.governing_member_state",
+                  "reason": "national_law_unresolved"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
