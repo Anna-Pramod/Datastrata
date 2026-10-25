@@ -1168,6 +1168,23 @@ The route and the old modules are untouched until Task 6.
 
 **Commit message:** "Show the checker's answer as a dated timeline of separate routes, so each route is assessed on its own and no unencoded or unasked route reads as no duty"
 
+*As executed (2026-10-24, uncommitted at hand-off).*
+- **Counts:** engine 84 / 3,320, unchanged; frontend 27 / 907 → 32 / 1,235, from nine new files and no existing file changed. Typecheck exit 0; csrd grep 7.
+- **The question guard** visits 396,565 reachable flows with 158,706 engine runs, in about 48 seconds. That is under the 60-second line, so nothing was trimmed.
+- **Teeth:** the parent re-ran T4a to T4k in its own clone with its own mutations. Each failed on its intended assertion, and each file was restored by sha256. Evidence: `side-session-notes/local_043075c1-…/2026-10-24T2146Z-dp1-task4/`.
+- **The guard reduces its work in two places, and a test proves each one:**
+  - **The Member States as one class.** It is derived from the pack's catalogues, and its premise is checked: no condition reads the country except through a catalogue.
+  - **Engine results remembered** by year and by the facts each requirement reads. A test checks this equals `assess` called directly.
+- **Routine corrections to the text above:**
+  - **The golden's oracle is the composed `EXPECTED_SOURCES`.** `AUDIT_EXPECTED_SOURCES` holds none of S-017 to S-021.
+  - **The draft-flag fixture** is the shared signed, fresh repository fixture.
+  - **A definitive result on a `coverage_gap` line refuses** with `TimelineRefusalError`, as the national line's APPLIES does: the line-kind table says those states are never shown.
+  - **An unanswered C-1 or C-2** selects rows as "Not sure" does.
+  - **A cannot-tell band's line keeps its own requirement's reason:** `missing_fact`, or `upstream_indeterminate` from 2027. `range_crosses_threshold` ranks first among the needs.
+- **For Task 5:**
+  - The national line's cells carry S-013's need on `entity.governing_member_state`, so its next step is the review step keyed by reason (Task 5, "Tests").
+  - The draft row and line labels are held in `check-routes.ts` as `draftLabel`, and are never sent.
+
 ### Task 5: standard wording for every DP1 state (EXP-9)
 
 **Delivers:** EXP-9, EXP-3, APP-11 (the words), KNW-10 (the words).
@@ -1198,7 +1215,11 @@ The route and the old modules are untouched until Task 6.
 - **Orange marks only change events and deadlines.** DP1 has neither, so no state uses it.
 - **The words name no unbuilt capability as available** (A4; the Stage 1a claims test).
 - *Carried from Task 2 (your direction of 2026-10-24), as routine presentation corrections:*
-  - **A known answer is never asked for again.** `nextStep(factType, reason)` is DataStrata's review step for `source_status_unresolved` (R) and `catalogue_unknown`. It asks the visitor nothing, for example "DataStrata reviews this route for your company; nothing more is needed from you here". Only `missing_fact` and `range_crosses_threshold` give a step that asks for an answer. The issuer row's `not_yet_covered` step says the same: the gap is DataStrata's to close.
+  - **A known answer is never asked for again.** `nextStep(factType, reason)` is DataStrata's review step for `source_status_unresolved` (R) and `catalogue_unknown`. It asks the visitor nothing. Only `missing_fact` and `range_crosses_threshold` give a step that asks for an answer. The issuer row's `not_yet_covered` step says the same: the gap is DataStrata's to close.
+  - **Review without a case** (your direction of 2026-10-24; no further review round for this adjustment).
+    - A coverage gap reads as requiring DataStrata review. For example: "Not yet covered: this route requires DataStrata review. Your answers cannot settle it here."
+    - The words never imply that the visitor's answers or case were saved, queued, sent or assigned. DP1 keeps nothing (§1), so they never say "we will review your case", "we'll check", "submitted" or "we'll be in touch".
+    - The same holds for every review step: `catalogue_unknown`, the national line, and §4.4's C-7 line, whose draft "We'll check your parent's group report" is reworded on the same rule.
   - **S-024's caution is not DP1 wording.** Its text, "Never read as 'does not apply'…", is a note to content authors.
     - In DP1 it never stands beside a result: cautions are not sent (CHK-2), and the `issuer` row is shown only for a non-EU company or C-1 "Not sure".
     - The `issuer` row's words come from this module only.
@@ -1207,6 +1228,7 @@ The route and the old modules are untouched until Task 6.
 
 **Tests (red first):**
 - *Carried from Task 2:* **review steps ask nothing.** For every fact type that can appear in `needs`, `nextStep` with R and with `catalogue_unknown` returns the review step. The counterexample in the same test: `nextStep('entity.incorporation_country', 'missing_fact')` asks for the country. No wording entry contains the caution's "Never read as".
+- *Carried from Task 2:* **no implied case.** No state, reason or next-step words claim that anything was saved, queued, sent or assigned. The check uses a declared list of phrases; its positive control is that the scanner flags a planted "We'll review your case".
 - **Every engine reason code has an entry.** The codes are read from the engine's runtime reason schema, not from a list.
 - **Every reachable pair of line kind and state has words and a glyph.** The reachable pairs are read from Task 4's line-kind rules, not from a list.
 - **Every row and line in `CHECK_ROWS` has a label.**
@@ -1214,6 +1236,9 @@ The route and the old modules are untouched until Task 6.
 - **No kind borrows another's meaning.** A `duty` line's `applies` words differ from an `exemption` line's, and the same holds for `does_not_apply`.
 - **Every fact type that can appear in `needs` has a next step.** These are found by walking the conditions of the row requirements in `CHECK_ROWS`, independently of the timeline code.
 - **Every open row state that names no fact has its own next step,** keyed by row and state. That covers the issuer row's `not_yet_covered` (KNW-14: "with its reason and next step") and the national line's `requires_review`.
+  - *Found in Task 4 (2026-10-24):* the national line's cells do name a fact. They carry S-013's need on `entity.governing_member_state` with `national_law_unresolved`, a question the checker moved to onboarding (Q-012).
+  - Its next step is therefore the review step, keyed by that reason (§7: nothing for the customer), and never a question.
+  - The review-step test covers `national_law_unresolved` beside R and `catalogue_unknown`.
 - **Within each line kind, no two states share words or a glyph,** checked as a counterexample against each pair.
 - **No wording contains a placeholder marker** ("TODO", "TBD", "to be published", "lorem").
 - **The Stage 1a claims test** stays green over the new module.
@@ -1225,6 +1250,7 @@ The route and the old modules are untouched until Task 6.
 - **T5d.** The `exemption` kind's `applies` words are set to "Applies". The kind-distinctness test must name the pair.
 - **T5e.** "at EU level" is dropped from the `duty` kind's `does_not_apply` words. The EU-level test must name it.
 - **T5f** (carried from Task 2). `nextStep('entity.incorporation_country', 'catalogue_unknown')` returns the question step. The review-step test must name the fact type and the reason.
+- **T5g** (carried from Task 2). The issuer row's `not_yet_covered` step reads "We'll review your case". The no-implied-case test must name that entry.
 
 **The stop.** The draft wording goes to you as a table: line kind, then state, then words, then glyph, with the row and line labels. Task 6 starts only after your approval, quoted in the evidence.
 
