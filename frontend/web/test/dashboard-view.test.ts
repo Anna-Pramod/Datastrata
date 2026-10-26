@@ -336,9 +336,10 @@ describe('the dashboard sources', () => {
       expect(page().match(/\bpilotRecord\b/g)).toHaveLength(2);
     });
 
-    it('reads process.env once, as the environment handed to the gate, so nothing else of it can be printed', () => {
+    // DP1 Task 7 added the pilot switch, read by name before anything else: while it is off the page is the standard 404.
+    it('reads the pilot switch by name first, and then process.env once, as the environment handed to the gate, so nothing else of it can be printed', () => {
       const reads = [...code(PAGE).matchAll(/process\.env(?:\.\w+|\[|\b)/g)].map((match) => match[0]);
-      expect(reads).toEqual(['process.env']);
+      expect(reads).toEqual(['process.env.DATASTRATA_PILOT_GATE', 'process.env']);
     });
 
     it('renders the three outcomes: the problems for an unconfigured gate, the handler\'s sentence and a link to the access page for a denied one, and the record', () => {

@@ -11,8 +11,22 @@
  * reason this file reads no profile and imports neither the record, the pack
  * nor the filesystem: a defect here can wave a request through to the page,
  * which decides again, but cannot itself disclose a profile, and a test holds
- * its imports to `next/server`, the access module and the public-origin
- * module, which imports nothing.
+ * its imports to `next/server`, the access module, the public-origin module
+ * and the hosting-mode module, the last two importing nothing.
+ *
+ * **Why the pilot switch is read first, and alone while it is off.** The gate
+ * is a pilot's surface and the hosted site is public (DP1 plan, DG-10): unless
+ * a server sets `DATASTRATA_PILOT_GATE=on`, `/dashboard` answers 404 here,
+ * decided before the decision, the cookie, the public origin or any access
+ * variable is read, so a server that never turned the surface on never reaches
+ * the gate's configuration at all. The 404 is plain data like every other
+ * answer (`surfaceOffResponse`): `{"error":"not_found"}` as JSON, private and
+ * varying on the cookie like the rest, and never a cookie. It is answered
+ * directly rather than by a rewrite to the 404 page, because a rewrite needs an
+ * absolute URL, which this file builds only from the configured origin, and
+ * reading that origin is reading configuration the switch exists to leave
+ * unread. The page decides the switch again, as it decides the gate again, and
+ * renders the standard 404 if a request ever reaches it with the switch off.
  *
  * **Why the answer is a pure function of the decision.** `decideResponse` maps
  * the decision, the client's `Accept` header and the configured origin's
@@ -54,13 +68,14 @@
  * **Why the environment is read here, by name.** This runs on the Edge
  * runtime, which does not promise a complete `process.env` object: what a host
  * supplies there can be limited to the variables a file names as
- * `process.env.NAME`. The two access variables and the public origin are read
- * by name for each request and handed to the gate as a record. The values are
- * those the server process holds, its environment as taken when the server
- * starts, so the secret and the origin must be set before the server starts,
- * and a change made in a shell takes effect when the server restarts.
- * `middlewareWith` takes that record and a clock, which is how tests supply
- * both.
+ * `process.env.NAME`. The pilot switch, the two access variables and the
+ * public origin are read by name for each request, the switch first and the
+ * other three only once it is on, and handed to the gate as a record. The
+ * values are those the server process holds, its environment as taken when
+ * the server starts, so the switch, the secret and the origin must be set
+ * before the server starts, and a change made in a shell takes effect when the
+ * server restarts. `middlewareWith` takes that record and a clock, which is how
+ * tests supply both.
  *
  * **Why the matcher is exact.** Next reads `config` without running this
  * module, so it must be a literal. `/pilot-access` and `/api/pilot-access`
@@ -70,11 +85,12 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { ACCESS_REVOKED_BEFORE_ENV, ACCESS_SECRET_ENV, accessDecision, type AccessDecision } from '@/lib/access';
+import { PILOT_GATE_ENV, pilotSurfaceEnabled } from '@/lib/hosting-mode';
 import { PUBLIC_ORIGIN_ENV, readPublicOrigin, type PublicOrigin } from '@/lib/public-origin';
 
 /** An answer as plain data, which is what lets the policy be tested without the Next runtime. */
 export interface ResponsePlan {
-  status: 200 | 303 | 401 | 503;
+  status: 200 | 303 | 401 | 404 | 503;
   /** Where a 303 points: an absolute URL on the configured public origin, handed to `NextResponse.redirect` as it is. */
   location?: string;
   body?: string;
@@ -115,21 +131,32 @@ export function decideResponse(decision: AccessDecision, request: { accept: stri
   }
 }
 
+/** The answer while the pilot surface is off, for every request: 404 and a one-key JSON body, decided from the switch alone. */
+export function surfaceOffResponse(): ResponsePlan {
+  return { status: 404, body: JSON.stringify({ error: 'not_found' }), contentType: 'application/json' };
+}
+
 /**
- * The three variables the gate reads, named in full: the Edge runtime does not
+ * The variables the gate reads, named in full: the Edge runtime does not
  * promise a complete `process.env` object, and a host may supply only the
  * variables a file names as `process.env.NAME`, so `process.env` is never handed
- * on as a whole. A test holds the names here to the access and origin modules'.
+ * on as a whole. The pilot switch is read first, and while it is off nothing
+ * else is: the record then holds the switch alone, and `middlewareWith` answers
+ * 404 from it. A test holds the names here to the switch's, the access
+ * module's and the origin module's.
  */
 function pilotEnvironment(): Record<string, string | undefined> {
+  const surface = { [PILOT_GATE_ENV]: process.env.DATASTRATA_PILOT_GATE };
+  if (!pilotSurfaceEnabled(surface)) return surface;
   return {
+    ...surface,
     [ACCESS_SECRET_ENV]: process.env.DATASTRATA_PILOT_ACCESS_SECRET,
     [ACCESS_REVOKED_BEFORE_ENV]: process.env.DATASTRATA_PILOT_ACCESS_REVOKED_BEFORE,
     [PUBLIC_ORIGIN_ENV]: process.env.DATASTRATA_PUBLIC_ORIGIN,
   };
 }
 
-/** The plan as a Next response. Every response, the pass-through included, is private and varies on the cookie. */
+/** The plan as a Next response. Every response, the pass-through and the surface-off 404 included, is private and varies on the cookie. */
 function toResponse(plan: ResponsePlan): NextResponse {
   let response: NextResponse;
   if (plan.status === 200) {
@@ -149,16 +176,19 @@ function toResponse(plan: ResponsePlan): NextResponse {
 
 /**
  * The middleware over an environment and a clock it is handed, which is how
- * the tests drive it: the decision is the access module's, the origin's verdict
- * is the origin module's, the response is `decideResponse`'s, and nothing here
- * reads the machine it runs on. Of the request, only the `Cookie` and `Accept`
- * headers are read.
+ * the tests drive it: the switch is the hosting-mode module's, the decision is
+ * the access module's, the origin's verdict is the origin module's, the
+ * response is `surfaceOffResponse`'s or `decideResponse`'s, and nothing here
+ * reads the machine it runs on. While the switch is off, it is the one key of
+ * the environment read and nothing of the request is; otherwise, of the
+ * request, only the `Cookie` and `Accept` headers are read.
  */
 export function middlewareWith(
   env: Readonly<Record<string, string | undefined>>,
   now: () => Date,
 ): (request: NextRequest) => Promise<NextResponse> {
   return async (request) => {
+    if (!pilotSurfaceEnabled(env)) return toResponse(surfaceOffResponse());
     const decision = await accessDecision({ env, cookieHeader: request.headers.get('cookie'), now: now() });
     const origin = readPublicOrigin(env[PUBLIC_ORIGIN_ENV]);
     return toResponse(decideResponse(decision, { accept: request.headers.get('accept'), origin }));

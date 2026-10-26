@@ -7,7 +7,6 @@ const LINKS = [
   { href: '/#coverage', label: 'Coverage', key: 'coverage' },
   { href: '/company', label: 'Company', key: 'company' },
   { href: '/contact', label: 'Contact', key: 'contact' },
-  { href: '/login', label: 'Sign in', key: 'login' },
 ] as const;
 
 export function MarketingNav({ current }: { current?: (typeof LINKS)[number]['key'] }) {

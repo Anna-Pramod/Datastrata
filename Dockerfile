@@ -21,6 +21,12 @@
 # is a file mounted read-only into the container and named by
 # DATASTRATA_PILOT_PROFILE; without one, /dashboard renders the synthetic
 # development profile, which the build compiles in.
+#
+# DATASTRATA_PILOT_GATE is the pilot surface's switch, read from the server's
+# environment like the rest. Neither this image nor the host sets it, so
+# /dashboard, /pilot-access, /login and the two /api/pilot-access routes answer
+# 404 and the gate's own variables above are never read. Only a local
+# screen-share sets it, to exactly `on` (frontend/web/README.md, "Pilot access").
 
 # ---------------------------------------------------------------------------
 # Build stage

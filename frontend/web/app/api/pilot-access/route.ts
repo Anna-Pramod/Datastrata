@@ -2,16 +2,18 @@
  * POST /api/pilot-access: the one place the sign-in logic meets the machine it runs on.
  *
  * **Why so little is here.** Next accepts nothing from a route file but its handlers and its segment config, so everything that can
- * be tested lives in `lib/pilot-access-handler.ts`, and this file only chooses the real values to hand it: the two access
- * variables, the public origin, the mode, the clock, a nonce source and a limiter. Each is something a slip here would get wrong
- * with no other test noticing (a secret read from the wrong variable, a clock read once at load, a limiter made for each request
- * and so counting nothing), which is why the route tests drive this exported `POST` itself with synthetic values.
+ * be tested lives in `lib/pilot-access-handler.ts`, and this file only chooses the real values to hand it: the pilot switch, the two
+ * access variables, the public origin, the mode, the clock, a nonce source and a limiter. Each is something a slip here would get
+ * wrong with no other test noticing (a secret read from the wrong variable, a clock read once at load, a limiter made for each
+ * request and so counting nothing), which is why the route tests drive this exported `POST` itself with synthetic values.
  *
- * **Why the environment is read here, by name, for each request.** The two access variables, `DATASTRATA_PUBLIC_ORIGIN` and
- * `NODE_ENV` are read as static `process.env.NAME` reads, as the middleware reads them, and afresh for each request, so the answer
- * is always about the configuration as this process holds it (its environment, taken when the server starts). `process.env` is
- * never handed on as a whole. The origin is read here although this route redirects relatively: the handler refuses sign-in while
- * the origin is unusable, because the gate then refuses every session it could issue.
+ * **Why the environment is read here, by name, for each request.** `DATASTRATA_PILOT_GATE`, the two access variables,
+ * `DATASTRATA_PUBLIC_ORIGIN` and `NODE_ENV` are read as static `process.env.NAME` reads, as the middleware reads them, and afresh for
+ * each request, so the answer is always about the configuration as this process holds it (its environment, taken when the server
+ * starts). `process.env` is never handed on as a whole. The switch has a dependency of its own and the handler calls it first:
+ * unless it is `on`, the route answers 404 and the other variables are never read (DP1 plan, DG-10). The origin is read here although
+ * this route redirects relatively: the handler refuses sign-in while the origin is unusable, because the gate then refuses every
+ * session it could issue.
  *
  * **Why one limiter, made once.** Failed attempts are counted in process memory, which is adequate for the single local process
  * Stage 1a runs and is a stated limitation (design sections 2 and 5): it starts empty whenever the process restarts or the dev
@@ -33,6 +35,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export const POST = accessRoute({
+  pilotSurface: () => process.env.DATASTRATA_PILOT_GATE,
   env: () => ({
     [ACCESS_SECRET_ENV]: process.env.DATASTRATA_PILOT_ACCESS_SECRET,
     [ACCESS_REVOKED_BEFORE_ENV]: process.env.DATASTRATA_PILOT_ACCESS_REVOKED_BEFORE,

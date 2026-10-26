@@ -8,6 +8,13 @@
  * and a mode that the caller hands in, and the two route files only bind the real ones. What is left in them (which variable a
  * value is read from, which clock, which limiter) is small enough to be held by driving the exported `POST` itself.
  *
+ * **Why both routes answer 404 first, before anything else is read, while the pilot surface is off.** The gate is a pilot's surface
+ * and the hosted site is public (DP1 plan, DG-10): unless a server sets `DATASTRATA_PILOT_GATE=on`, sign-in and sign-out answer 404
+ * with `{"error":"not_found"}`, `Cache-Control: no-store` like every other answer here, and never a cookie. The switch is the first
+ * thing each route reads, through a dependency of its own (`pilotSurface`), so that "the switch was read" and "the configuration was
+ * read" are two calls a test can count: while it is off, no configuration, header, body, clock or limiter is touched, and nothing is
+ * logged. With the switch on, everything below is exactly as it was.
+ *
  * **Why one shared limiter key.** Failed attempts are counted under the single key `'local'`, never under a client address. On a
  * loopback server every request arrives from 127.0.0.1, and `X-Forwarded-For` holds whatever the client writes, so a key derived
  * from it would let a guesser escape the limit by changing the header on each attempt. A per-client key needs a trusted proxy that
@@ -92,6 +99,7 @@ import {
   type CookieAttributes,
   type RequestTransport,
 } from '@/lib/access';
+import { PILOT_GATE_ENV, pilotSurfaceEnabled } from '@/lib/hosting-mode';
 import { PUBLIC_ORIGIN_ENV, readPublicOrigin, sameOriginVerdict, type FetchOriginHeaders } from '@/lib/public-origin';
 import { PILOT_ACCESS_BODY_LIMIT, readBodyWithin, withBoundedBody } from '@/lib/request-body';
 
@@ -124,6 +132,8 @@ export interface SignOutOutcome {
 
 /** Everything the access route reads from the machine it runs on, as functions so each is read afresh for each request. */
 export interface AccessRouteDeps {
+  /** `DATASTRATA_PILOT_GATE` as the route reads it, by name, for each request: read first, and alone while the surface is off. */
+  pilotSurface: () => string | undefined;
   env: () => Readonly<Record<string, string | undefined>>;
   now: () => Date;
   limiter: AttemptLimiter;
@@ -132,6 +142,8 @@ export interface AccessRouteDeps {
 }
 
 export interface SignOutRouteDeps {
+  /** `DATASTRATA_PILOT_GATE` as the route reads it, by name, for each request: read first, and alone while the surface is off. */
+  pilotSurface: () => string | undefined;
   /** `DATASTRATA_PUBLIC_ORIGIN` as the route reads it, by name, for each request: the one value of the configuration sign-out reads. */
   publicOrigin: () => string | undefined;
   production: () => boolean;
@@ -284,15 +296,29 @@ function respond(outcome: AccessOutcome, accept: string | null): Response {
   return refuse(outcome.status, accept);
 }
 
+/** Whether the switch a route read says the pilot surface is on; the rule is the hosting-mode module's alone. */
+function surfaceOn(value: string | undefined): boolean {
+  return pilotSurfaceEnabled({ [PILOT_GATE_ENV]: value });
+}
+
+/** The answer of both routes while the pilot surface is off, whatever the request: 404 and `{"error":"not_found"}`, uncacheable, and no cookie. */
+function surfaceOff(): Response {
+  return new Response(JSON.stringify({ error: 'not_found' }), {
+    status: 404,
+    headers: { 'Cache-Control': 'no-store', 'Content-Type': 'application/json' },
+  });
+}
+
 /**
  * The handler for `POST /api/pilot-access` over the values it is handed. The shared limiter key is the only key it uses, and it
  * reads four request headers: `Accept` for how a refusal is delivered, `Origin` and `Sec-Fetch-Site` for where the post came from,
- * and `Content-Type` for the body; the body reader reads `Content-Length` as well, to refuse a body declared too large. The
- * environment is read once, first: an unusable public origin is answered as unconfigured, and then a cross-site post is refused,
- * before the body is touched.
+ * and `Content-Type` for the body; the body reader reads `Content-Length` as well, to refuse a body declared too large. The pilot
+ * switch is read first of all, and while it is off the answer is 404 and nothing else is read. Then the environment is read once:
+ * an unusable public origin is answered as unconfigured, and then a cross-site post is refused, before the body is touched.
  */
 export function accessRoute(deps: AccessRouteDeps): (request: Request) => Promise<Response> {
   return async (request) => {
+    if (!surfaceOn(deps.pilotSurface())) return surfaceOff();
     const accept = request.headers.get('accept');
     const env = deps.env();
     if (!readPublicOrigin(env[PUBLIC_ORIGIN_ENV]).ok) {
@@ -330,9 +356,11 @@ export function accessRoute(deps: AccessRouteDeps): (request: Request) => Promis
  * The handler for `POST /api/pilot-access/sign-out`. It reads the public origin and three request headers, `Origin` and
  * `Sec-Fetch-Site` for where the post came from and `Accept` for how a refusal is delivered, and no secret and no body: it clears
  * the cookie whatever the gate's state for a post from the site, and refuses one from another site without touching the cookie.
+ * The pilot switch is read before any of that, and while it is off the answer is 404 and nothing else is read.
  */
 export function signOutRoute(deps: SignOutRouteDeps): (request: Request) => Response {
   return (request) => {
+    if (!surfaceOn(deps.pilotSurface())) return surfaceOff();
     if (!sameOriginVerdict(fetchOriginHeaders(request), usableOrigin(deps.publicOrigin())).allowed) {
       console.warn('pilot-access: refused (403)');
       return refuse(403, request.headers.get('accept'));

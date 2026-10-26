@@ -72,6 +72,13 @@
  * the site answered 401, not 429. Sign-out is judged against the origin it reads by name; with an unusable one, a browser's
  * `Sec-Fetch-Site: same-origin` still signs out and an `Origin` without it is refused. The verdict itself is tested row by row,
  * directly, in `public-origin.test.ts`.
+ *
+ * The pilot surface is switched on in every case here (DP1 Task 7, DG-10). Both routes, and the page, answer 404 before they read
+ * anything else unless a server sets `DATASTRATA_PILOT_GATE=on`, so the route factories are handed the switch as `on` (the new
+ * `pilotSurface` dependency), the exported routes have it stubbed as `on`, and nothing else about any case changed. The switch itself,
+ * and the 404s, are `hosting-mode.test.ts`'s. The source cases hold the handler and the page to one more import each where they need
+ * it, the hosting-mode module (which imports nothing), the page to Next's `notFound` as well, and each route file to one more read by
+ * name, the switch.
  */
 
 import { readFileSync } from 'node:fs';
@@ -101,6 +108,7 @@ import {
   type AccessOutcome,
   type AccessRouteDeps,
 } from '@/lib/pilot-access-handler';
+import { PILOT_GATE_ENV } from '@/lib/hosting-mode';
 import { PUBLIC_ORIGIN_ENV } from '@/lib/public-origin';
 
 /**
@@ -301,10 +309,10 @@ function claimingToBe(n: number): Record<string, string> {
   };
 }
 
-/** The access route over injected values: the secret in `ENV`, the clock at `NOW`, a recording limiter, a fixed nonce, plain-HTTP mode. */
+/** The access route over injected values: the pilot surface on, the secret in `ENV`, the clock at `NOW`, a recording limiter, a fixed nonce, plain-HTTP mode. */
 function routeWith(overrides: Partial<Omit<AccessRouteDeps, 'limiter'>> = {}) {
   const limiter = new RecordingLimiter();
-  const route = accessRoute({ env: () => ENV, now: () => NOW, limiter, nonce: () => NONCE, production: () => false, ...overrides });
+  const route = accessRoute({ pilotSurface: () => 'on', env: () => ENV, now: () => NOW, limiter, nonce: () => NONCE, production: () => false, ...overrides });
   return { route, limiter };
 }
 
@@ -1176,6 +1184,8 @@ describe('accessRoute', () => {
       ['the 413 for a body too large', () => routeWith().route(streamedPost(SECRET, 4097)), 413],
       ['the 429 for too many attempts', async () => { const { route } = routeWith(); await lockOut(route); return route(formPost(SECRET)); }, 429],
       ['the 503 for an unconfigured gate', () => routeWith({ env: () => CONFIGURED_ORIGIN }).route(formPost(SECRET)), 503],
+      // DP1 Task 7: the right passphrase with the pilot switch unset, so the 404 is the switch's.
+      ['the 404 while the pilot surface is off', () => routeWith({ pilotSurface: () => undefined }).route(formPost(SECRET)), 404],
     ];
 
     it.each(outcomes)('%s is uncacheable', async (_name, run, status) => {
@@ -1264,7 +1274,7 @@ describe('signOutRoute', () => {
    * unset row below) into the configured origin, and that row would pass without testing an unset origin at all.
    */
   const signOutWith = (publicOrigin: string | undefined, production = false) =>
-    signOutRoute({ publicOrigin: () => publicOrigin, production: () => production });
+    signOutRoute({ pilotSurface: () => 'on', publicOrigin: () => publicOrigin, production: () => production });
   const signOut = (production = false) => signOutWith(PUBLIC_ORIGIN, production);
   const post = (url = SIGN_OUT_URL, headers: Record<string, string> = {}) => new Request(url, { method: 'POST', headers });
   const browser = { accept: BROWSER_ACCEPT };
@@ -1381,8 +1391,9 @@ describe('signOutRoute', () => {
 
 describe('the exported routes', () => {
   // The route files bind the real environment, clock, mode and limiter to the factories. Every case calls `setUp` first, which stubs
-  // all four variables the routes read and fakes `Date` alone, so nothing the real environment holds can reach a route; `afterEach`
-  // puts the environment and the clock back. Each case then loads a fresh copy of the module, so every case starts with an empty limiter.
+  // all four variables the routes read, and the pilot switch (as `on`), and fakes `Date` alone, so nothing the real environment holds
+  // can reach a route; `afterEach` puts the environment and the clock back. Each case then loads a fresh copy of the module, so every
+  // case starts with an empty limiter.
   interface Wiring {
     secret: string | null;
     revokedBefore: string | null;
@@ -1392,6 +1403,7 @@ describe('the exported routes', () => {
 
   function setUp(wiring: Partial<Wiring> = {}, now: Date = NOW): void {
     const { secret, revokedBefore, publicOrigin, nodeEnv }: Wiring = { secret: SECRET, revokedBefore: null, publicOrigin: PUBLIC_ORIGIN, nodeEnv: 'test', ...wiring };
+    vi.stubEnv(PILOT_GATE_ENV, 'on');
     vi.stubEnv(ACCESS_SECRET_ENV, secret ?? undefined);
     vi.stubEnv(ACCESS_REVOKED_BEFORE_ENV, revokedBefore ?? undefined);
     vi.stubEnv(PUBLIC_ORIGIN_ENV, publicOrigin ?? undefined);
@@ -1836,6 +1848,7 @@ describe('the sign-in modules', () => {
   const PAGE = '../app/pilot-access/page.tsx';
   const REQUEST_BODY = '../lib/request-body.ts';
   const PUBLIC_ORIGIN_MODULE = '../lib/public-origin.ts';
+  const HOSTING_MODE = '../lib/hosting-mode.ts';
 
   /** The module's code with its comments removed, so prose that names a forbidden module or header is not taken for using it. */
   function code(relative: string): string {
@@ -1849,10 +1862,12 @@ describe('the sign-in modules', () => {
     ...new Set([...code(relative).matchAll(/(?:\bfrom\s+|\bimport\s*\(?\s*|\brequire\s*\(\s*)['"]([^'"]+)['"]/g)].map((match) => match[1])),
   ].sort();
 
-  it('keeps the handler to the access module, the public-origin module and the body reader, the last two importing nothing, so nothing here can reach a profile, the pack or the record', () => {
-    expect(importsOf(HANDLER)).toEqual(['@/lib/access', '@/lib/public-origin', '@/lib/request-body']);
+  // DP1 Task 7 added the hosting-mode module, the pilot switch, to the handler's list, and holds it to importing nothing too.
+  it('keeps the handler to the access module, the hosting-mode module, the public-origin module and the body reader, the last three importing nothing, so nothing here can reach a profile, the pack or the record', () => {
+    expect(importsOf(HANDLER)).toEqual(['@/lib/access', '@/lib/hosting-mode', '@/lib/public-origin', '@/lib/request-body']);
     expect(importsOf(REQUEST_BODY)).toEqual([]);
     expect(importsOf(PUBLIC_ORIGIN_MODULE)).toEqual([]);
+    expect(importsOf(HOSTING_MODE)).toEqual([]);
   });
 
   it('keeps the sign-in route to the access module, the handler and the public-origin module, and the sign-out route to the handler', () => {
@@ -1860,8 +1875,9 @@ describe('the sign-in modules', () => {
     expect(importsOf(SIGN_OUT_ROUTE)).toEqual(['@/lib/pilot-access-handler']);
   });
 
-  it('keeps the page to Next, the site primitives and the handler, so a public page can never reach a profile, the pack or the record', () => {
-    expect(importsOf(PAGE)).toEqual(['@/components/ui/primitives', '@/lib/pilot-access-handler', 'next', 'next/link']);
+  // DP1 Task 7 added two: the hosting-mode module, which imports nothing, and Next's `notFound`, which the page calls while the surface is off.
+  it('keeps the page to Next, the site primitives, the handler and the hosting-mode module, so a public page can never reach a profile, the pack or the record', () => {
+    expect(importsOf(PAGE)).toEqual(['@/components/ui/primitives', '@/lib/hosting-mode', '@/lib/pilot-access-handler', 'next', 'next/link', 'next/navigation']);
   });
 
   it('reads a request header only by the names accept (in sign-in and in sign-out), content-type, origin and sec-fetch-site, and the body reader only content-length and content-type, so no address header can be the limiter key', () => {
@@ -1887,15 +1903,16 @@ describe('the sign-in modules', () => {
     }
   });
 
-  it('reads process.env only as static reads of the two access variables, the public origin and NODE_ENV in the access route, of the public origin and NODE_ENV in the sign-out route, and not at all in the handler, the body reader or the public-origin module', () => {
+  // DP1 Task 7 added the pilot switch to each route file's reads, by name like the others.
+  it('reads process.env only as static reads of the pilot switch, the two access variables, the public origin and NODE_ENV in the access route, of the pilot switch, the public origin and NODE_ENV in the sign-out route, and not at all in the handler, the body reader or the public-origin module', () => {
     const reads = (relative: string) => [...code(relative).matchAll(/process\.env(?:\.\w+|\[|\b)/g)].map((match) => match[0]).sort();
     expect(reads(HANDLER)).toEqual([]);
     expect(reads(REQUEST_BODY)).toEqual([]);
     expect(reads(PUBLIC_ORIGIN_MODULE)).toEqual([]);
     expect(reads(ACCESS_ROUTE)).toEqual(
-      [`process.env.${ACCESS_REVOKED_BEFORE_ENV}`, `process.env.${ACCESS_SECRET_ENV}`, 'process.env.DATASTRATA_PUBLIC_ORIGIN', 'process.env.NODE_ENV'].sort(),
+      ['process.env.DATASTRATA_PILOT_GATE', `process.env.${ACCESS_REVOKED_BEFORE_ENV}`, `process.env.${ACCESS_SECRET_ENV}`, 'process.env.DATASTRATA_PUBLIC_ORIGIN', 'process.env.NODE_ENV'].sort(),
     );
-    expect(reads(SIGN_OUT_ROUTE)).toEqual(['process.env.DATASTRATA_PUBLIC_ORIGIN', 'process.env.NODE_ENV']);
+    expect(reads(SIGN_OUT_ROUTE)).toEqual(['process.env.DATASTRATA_PILOT_GATE', 'process.env.DATASTRATA_PUBLIC_ORIGIN', 'process.env.NODE_ENV']);
   });
 
   describe('the page', () => {

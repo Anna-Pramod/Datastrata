@@ -29,7 +29,6 @@ export function Footer({ packVersion, legalSnapshot }: { packVersion: string; le
             <span className="ds-label">Company</span>
             <Link className="ds-body-sm" href="/company">About us</Link>
             <Link className="ds-body-sm" href="/contact">Contact</Link>
-            <Link className="ds-body-sm" href="/login">Sign in</Link>
           </nav>
           <nav style={{ display: 'flex', flexDirection: 'column', gap: 12 }} aria-label="Coverage">
             <span className="ds-label">Coverage</span>

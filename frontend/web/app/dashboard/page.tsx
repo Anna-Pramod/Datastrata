@@ -31,11 +31,21 @@
  * Dynamic, so the profile file is read per request and nothing about a pilot
  * company is baked into the build. The file's path is read on the server and
  * is never rendered; only the variable's name is.
+ *
+ * Before any of that, the pilot switch (DP1 plan, DG-10): unless a server
+ * sets `DATASTRATA_PILOT_GATE=on`, the page calls `notFound()` as the first
+ * thing it does, so Next renders the standard 404 and the secret, the cookie,
+ * the profile and the pack are never read; and `generateMetadata` gives none
+ * of the page's metadata, so the 404 document says nothing of this page. The
+ * middleware answers 404 for `/dashboard` first; this is the second
+ * enforcement point, as the gate's is. Being dynamic, the page reads the
+ * switch for each request, never at build.
  */
 
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import Link from 'next/link';
+import { notFound } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { Sidebar, Topbar } from '@/components/app/Shell';
 import { CrossSectionChart, type CellState, type ChartRow } from '@/components/app/CrossSectionChart';
@@ -43,6 +53,7 @@ import { CapacityChip, DeadlineChip, EvidenceBar, NeutralChip, StatusChip } from
 import { entityColumns, factRows, requirementStatusRows, statusSummary, type EntityResult } from '@/lib/dashboard';
 import { gatedRecord } from '@/lib/dashboard-view';
 import { historicalEvidenceNotice, S002_R5_DOSSIER } from '@/lib/evidence';
+import { PILOT_GATE_ENV, pilotSurfaceEnabled } from '@/lib/hosting-mode';
 import { packStats } from '@/lib/pack';
 import { accessReasonMessage } from '@/lib/pilot-access-handler';
 import { PILOT_PROFILE_ENV } from '@/lib/profile';
@@ -51,10 +62,27 @@ import { siteCoverage } from '@/lib/site-coverage';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = {
+/** The pilot switch, read by name for each request (DG-10): the page's metadata and its body each ask it before anything else. */
+function surfaceOn(): boolean {
+  return pilotSurfaceEnabled({ [PILOT_GATE_ENV]: process.env.DATASTRATA_PILOT_GATE });
+}
+
+/** The page's metadata while the pilot surface is on. */
+const METADATA: Metadata = {
   title: 'Record · DataStrata',
   description: 'The regulatory record, rendered from a real engine assessment over the configured profile.',
 };
+
+/**
+ * The page's metadata, decided for each request: none while the pilot surface is off, and `METADATA` while it is on. A static
+ * `metadata` export would not do: Next resolves a page's metadata beside its body and streams it into the document even when the body
+ * calls `notFound()`, so the 404 would carry this page's title and description. Off gives `{}` rather than a second `notFound()`: the
+ * body already answers 404 first, and `{}` leaves the document exactly the standard 404's, the root layout's metadata.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  if (!surfaceOn()) return {};
+  return METADATA;
+}
 
 /** The cell for an entity is its reporting-duty determination (CSRD-S-014). */
 const CELL: Record<string, CellState> = {
@@ -108,7 +136,9 @@ function Refusal({
 }
 
 export default async function DashboardPage() {
-  // The gate comes first and is handed the reader, never given a record: nothing below runs the reader for a request it did not allow.
+  // The pilot switch comes first of all: while it is off this is the standard 404, and nothing below is read.
+  if (!surfaceOn()) notFound();
+  // The gate comes next and is handed the reader, never given a record: nothing below runs the reader for a request it did not allow.
   const gate = await gatedRecord(
     { env: process.env, cookieHeader: (await headers()).get('cookie'), now: new Date() },
     { record: pilotRecord },

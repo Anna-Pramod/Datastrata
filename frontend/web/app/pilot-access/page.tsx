@@ -10,33 +10,54 @@
  * everything else, so nothing a visitor writes into a link can appear here as the gate's own words. A reason given twice is
  * ignored rather than guessed at.
  *
- * **Why it reads no secret and no profile.** It is public, so it imports only Next, the site primitives and the handler's sentence
- * function, and a test holds its imports to those. Whether the gate is configured is learned the way a visitor learns it: by
- * being sent back with `unconfigured`.
+ * **Why it reads no secret and no profile.** It is public, so it imports only Next, the site primitives, the pilot switch (which
+ * imports nothing) and the handler's sentence function, and a test holds its imports to those. Whether the gate is configured is
+ * learned the way a visitor learns it: by being sent back with `unconfigured`.
  *
  * **Why it says what a session is.** The two notes state what the gate does and no more: a session lasts twelve hours from the
  * moment the passphrase is accepted, and signing out clears the cookie in this browser only, because the token is stateless and
  * stays valid elsewhere until it expires or access is revoked. The page is rendered for each request and never cached.
+ *
+ * **Why it can be a 404.** The page is part of the pilot surface, which answers only where a server sets
+ * `DATASTRATA_PILOT_GATE=on` (DP1 plan, DG-10). Unless it is `on`, the page calls `notFound()` as the first thing it does, before its
+ * search parameters are read, and Next renders the standard 404. Being rendered for each request, the page reads the switch then.
+ * Its metadata is decided the same way, by `generateMetadata`: none while the switch is off, because Next streams a page's metadata
+ * into the document even when the page calls `notFound()`, and a static export put "Pilot access" and "passphrase" into the 404.
  */
 
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { notFound } from 'next/navigation';
 import { Button, Field, Wordmark } from '@/components/ui/primitives';
+import { PILOT_GATE_ENV, pilotSurfaceEnabled } from '@/lib/hosting-mode';
 import { accessReasonMessage } from '@/lib/pilot-access-handler';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = {
+/** The pilot switch, read by name for each request (DG-10): the page's metadata and its body each ask it before anything else. */
+function surfaceOn(): boolean {
+  return pilotSurfaceEnabled({ [PILOT_GATE_ENV]: process.env.DATASTRATA_PILOT_GATE });
+}
+
+/** The page's metadata while the pilot surface is on. */
+const METADATA: Metadata = {
   title: 'Pilot access · DataStrata',
   description: 'Enter the passphrase for a pilot evaluation.',
   robots: { index: false, follow: false },
 };
+
+/** None while the pilot surface is off, so the 404 says nothing of this page; `METADATA` while it is on. `{}` rather than a second `notFound()`, because the body already answers 404 first. */
+export async function generateMetadata(): Promise<Metadata> {
+  if (!surfaceOn()) return {};
+  return METADATA;
+}
 
 export default async function PilotAccessPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  if (!surfaceOn()) notFound();
   const { reason } = await searchParams;
   const message = accessReasonMessage(typeof reason === 'string' ? reason : undefined);
   return (

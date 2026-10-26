@@ -19,15 +19,15 @@ npm run typecheck
 |---|---|
 | `/` | Landing. Full 5a section order. Every figure read from the live CSRD pack. |
 | `/check` | The free check — 9 questions, 10 for a parent undertaking, then a cited report. Real `assess()` calls. |
-| `/dashboard` | The record, behind the pilot access gate (see Pilot access). Without a valid session the middleware refuses before any page code runs (a browser gets 303 to `/pilot-access` on the configured public origin, a script 401, and every request 503 while the gate or its public origin is not configured), and the page decides again before it reads the profile. Real assessment over the profile `DATASTRATA_PILOT_PROFILE` names, or the synthetic development profile while nothing is configured; a profile that cannot be served is a refusal, never the sample. Dynamic. |
+| `/dashboard` | 404 unless `DATASTRATA_PILOT_GATE=on` (see Pilot access). The record, behind the pilot access gate. Without a valid session the middleware refuses before any page code runs (a browser gets 303 to `/pilot-access` on the configured public origin, a script 401, and every request 503 while the gate or its public origin is not configured), and the page decides again before it reads the profile. Real assessment over the profile `DATASTRATA_PILOT_PROFILE` names, or the synthetic development profile while nothing is configured; a profile that cannot be served is a refusal, never the sample. Dynamic. |
 | `/company` | About us — mission, principles, what we read, team, what's next. |
 | `/contact` | Contact page. The form renders only when `CONTACT_WEBHOOK_URL` is set; no address is published. |
-| `/login` | A plain card: accounts are not live; pilot evaluations use a passphrase at `/pilot-access` (see Pilot access). |
-| `/pilot-access` | The public sign-in page for pilot evaluations: one passphrase field posting to `/api/pilot-access`. A refusal's reason is shown from a fixed set of sentences; the query string is never echoed. Dynamic, `no-store`. |
+| `/login` | 404 unless `DATASTRATA_PILOT_GATE=on` (see Pilot access). A plain card: accounts are not live; pilot evaluations use a passphrase at `/pilot-access`. Nothing links to it. Dynamic. |
+| `/pilot-access` | 404 unless `DATASTRATA_PILOT_GATE=on` (see Pilot access). The sign-in page for pilot evaluations, opened by its address: one passphrase field posting to `/api/pilot-access`. A refusal's reason is shown from a fixed set of sentences; the query string is never echoed. Dynamic, `no-store`. |
 | `/api/check` | POST → the engine. No lookup table, no model call in the path. A body over 8 KiB is answered 413 before it is parsed. |
 | `/api/contact` | POST → `CONTACT_WEBHOOK_URL`. 503 with an honest message when unset. A body over 32 KiB is answered 413 before it is parsed. |
-| `/api/pilot-access` | POST → the passphrase, compared with `DATASTRATA_PILOT_ACCESS_SECRET` in constant time. Accepted: a relative 303 to `/dashboard` with the 12-hour `ds_pilot_access` session cookie (`HttpOnly`, `SameSite=Strict`, `Path=/dashboard`). Refused: 401 (wrong passphrase), 403 (a post from another site), 413 (a body over 4 KiB), 429 (five failures in 15 minutes, one limit shared by everyone) or 503 (the gate is not configured, or `DATASTRATA_PUBLIC_ORIGIN` is unusable), as a one-key JSON body to a script and as a relative 303 to `/pilot-access?reason=…` to a browser. Only a wrong or missing passphrase counts towards the limit. `no-store`. |
-| `/api/pilot-access/sign-out` | POST → clears the session cookie on this browser and sends it to `/pilot-access`; the token itself stays valid until it expires or is revoked. A sign-out from another site is refused with 403 (a relative 303 to `/pilot-access?reason=cross_site` for a browser) and clears nothing. `no-store`. |
+| `/api/pilot-access` | 404 (`{"error":"not_found"}`) unless `DATASTRATA_PILOT_GATE=on`. POST → the passphrase, compared with `DATASTRATA_PILOT_ACCESS_SECRET` in constant time. Accepted: a relative 303 to `/dashboard` with the 12-hour `ds_pilot_access` session cookie (`HttpOnly`, `SameSite=Strict`, `Path=/dashboard`). Refused: 401 (wrong passphrase), 403 (a post from another site), 413 (a body over 4 KiB), 429 (five failures in 15 minutes, one limit shared by everyone) or 503 (the gate is not configured, or `DATASTRATA_PUBLIC_ORIGIN` is unusable), as a one-key JSON body to a script and as a relative 303 to `/pilot-access?reason=…` to a browser. Only a wrong or missing passphrase counts towards the limit. `no-store`. |
+| `/api/pilot-access/sign-out` | 404 (`{"error":"not_found"}`) unless `DATASTRATA_PILOT_GATE=on`. POST → clears the session cookie on this browser and sends it to `/pilot-access`; the token itself stays valid until it expires or is revoked. A sign-out from another site is refused with 403 (a relative 303 to `/pilot-access?reason=cross_site` for a browser) and clears nothing. `no-store`. |
 
 ## The backend really is connected
 
@@ -107,6 +107,8 @@ app/
   tokens.css        the handoff file, verbatim (font vars repointed at next/font)
   globals.css       component layer built on those tokens
   layout.tsx        Archivo / Inter / JetBrains Mono, self-hosted
+  not-found.tsx     the standard 404, in the approved words (also what the pilot surface renders while it is off)
+  error.tsx         the error page, in the approved words; shows nothing of the error (client)
   page.tsx          landing (server)
   check/            the check flow + report
   dashboard/        the record, behind the pilot access gate (server, dynamic)
@@ -119,6 +121,7 @@ components/marketing/ MarketingNav, LiveTrace, CoverageStrip, Sheets, CheckFlow,
 components/app/       Sidebar, Topbar, CrossSectionChart
 middleware.ts         the access gate's first enforcement point, on /dashboard/:path*
 lib/
+  hosting-mode.ts   the pilot surface's switch: on only when DATASTRATA_PILOT_GATE is exactly `on` (imports nothing)
   access.ts         the access gate's pure decision: configuration, session token, cookie, limiter
   pilot-access-handler.ts  the sign-in and sign-out logic behind the two routes, and the access page's sentences
   dashboard-view.ts the dashboard page's own gate, decided before it reads the profile
@@ -195,15 +198,18 @@ dossier for CSRD-S-002 labelled by what it binds (`lib/evidence.ts` compares its
 the current requirement's at request time).
 
 Local start for a screen-shared evaluation, from this workspace directory (`frontend/web`, which
-owns the `dev` script), bound to the loopback interface only:
+owns the `dev` script), bound to the loopback interface only. `DATASTRATA_PILOT_GATE=on` is the
+opt-in that switches the pilot surface on for this server alone (see Pilot access); without it the
+pilot routes answer 404:
 
 ```bash
 cd frontend/web
-DATASTRATA_PUBLIC_ORIGIN=http://localhost:3000 DATASTRATA_PILOT_PROFILE=/absolute/path/to/pilot.json npm run dev -- -H 127.0.0.1 -p 3000
+DATASTRATA_PILOT_GATE=on DATASTRATA_PUBLIC_ORIGIN=http://localhost:3000 DATASTRATA_PILOT_PROFILE=/absolute/path/to/pilot.json npm run dev -- -H 127.0.0.1 -p 3000
 ```
 
-then open `http://localhost:3000/pilot-access`, the address `DATASTRATA_PUBLIC_ORIGIN` names, sign
-in, and stay on that address. A browser without a session that asks for `/dashboard` is sent to
+then open `http://localhost:3000/pilot-access` directly, by its address (the navigation and the
+footer do not link to sign-in), the address `DATASTRATA_PUBLIC_ORIGIN` names, sign in, and stay on
+that address. A browser without a session that asks for `/dashboard` is sent to
 `/pilot-access` on the configured origin, whatever address it used, and the session cookie belongs
 to the host that set it, so open the site at exactly that address. Write `localhost`, not
 `127.0.0.1`: Next rewrites a loopback address to `localhost` in the middleware's redirect, so the
@@ -215,8 +221,19 @@ under Deployment with the same variables in its environment.
 
 ### Pilot access
 
-`/dashboard` is served only to a browser holding a valid access session, issued at `/pilot-access`
-from a passphrase checked on the server. Three variables, all server-side only (never `NEXT_PUBLIC_`):
+**The pilot surface is off unless a server opts in.** `/dashboard`, `/pilot-access`, `/login`,
+`POST /api/pilot-access` and `POST /api/pilot-access/sign-out` answer only where the server's
+environment sets `DATASTRATA_PILOT_GATE` to exactly `on` (`lib/hosting-mode.ts`). Unset, empty, or
+any other value (`ON`, `true`, `1`) is off: each of the five answers 404 before it reads any secret,
+profile, cookie, header or body. `/pilot-access` and `/login` render the standard 404 page;
+`/dashboard` (answered by the middleware) and the two API routes answer `{"error":"not_found"}`.
+The host never sets it, and neither does the container image; only a local
+screen-share does (the local start above). Nothing on the public site links to the surface: the
+navigation and the footer carry no sign-in, so open `/pilot-access` by its address.
+
+With the surface on, `/dashboard` is served only to a browser holding a valid access session, issued
+at `/pilot-access` from a passphrase checked on the server. Three variables, all server-side only
+(never `NEXT_PUBLIC_`):
 
 | Variable | Meaning |
 |---|---|
@@ -224,8 +241,8 @@ from a passphrase checked on the server. Three variables, all server-side only (
 | `DATASTRATA_PILOT_ACCESS_REVOKED_BEFORE` | Optional. An ISO-8601 instant (`YYYY-MM-DDTHH:MM:SSZ`); every session token issued before it is refused. It must not be later than the server's clock, or every request is refused with 503 naming this variable. |
 | `DATASTRATA_PUBLIC_ORIGIN` | The origin browsers use to reach the site, which the gate builds its redirects from: `https://<host>` or `https://<host>:<port>`, or `http://localhost:<port>` on one machine. Write it exactly as a browser writes an origin: lower case, no default port, and no path, trailing slash, query, fragment or user name. Plain `http` is accepted only on `localhost`, and a loopback address (`127.0.0.1`, `[::1]`) is refused, because Next rewrites it to `localhost` in a redirect and the browser would leave the host its cookie belongs to. While it is unset or unusable, every request under `/dashboard` is refused with 503 naming it, and sign-in answers 503. |
 
-All three are read from the server process's environment, so set them before the server starts;
-a change made in the shell takes effect when the server restarts.
+All three, and the switch, are read from the server process's environment, so set them before the
+server starts; a change made in the shell takes effect when the server restarts.
 
 **Why the origin is configured.** The middleware cannot answer with a relative redirect, and the URL
 Next hands it is built from the hostname the server was started with, not the one the browser used:
@@ -266,7 +283,7 @@ revoked-before instant revokes every session issued before it without changing t
 passphrase is entered at `/pilot-access`. `POST /api/pilot-access/sign-out`, the topbar's Sign out,
 clears the session cookie on this browser only; the token itself stays valid until it expires or is
 revoked. The local start above needs `DATASTRATA_PILOT_ACCESS_SECRET` in the same environment as
-`DATASTRATA_PUBLIC_ORIGIN`, or `/dashboard` answers 503.
+`DATASTRATA_PILOT_GATE=on` and `DATASTRATA_PUBLIC_ORIGIN`, or `/dashboard` answers 503.
 
 ## Deployment
 
@@ -323,6 +340,7 @@ none of it is needed to build it:
 
 | Variable | Where it comes from |
 |---|---|
+| `DATASTRATA_PILOT_GATE` | Nowhere: the image and the host never set it, so the pilot surface answers 404. Only a local screen-share sets it, to exactly `on` (see Pilot access). |
 | `DATASTRATA_PILOT_ACCESS_SECRET` | The host's secret store. |
 | `DATASTRATA_PUBLIC_ORIGIN` | The host's configuration: the `https` origin of the one public hostname (see Pilot access). |
 | `DATASTRATA_PILOT_ACCESS_REVOKED_BEFORE` | The host's configuration. Optional. |
@@ -342,7 +360,8 @@ interface.
 
 **Production smoke check.** From the repository root, `node scripts/smoke-production.mjs` (add
 `--keep` to keep the isolated artifact) builds the standalone artifact, which fetches the Google
-fonts. It then starts the server on a free loopback port with synthetic values and prints PASS or
+fonts. It then starts the server on a free loopback port with synthetic values and the pilot switch
+on, and prints PASS or
 FAIL for each check: the routes, the gate and its cookie, the security headers, the body limits,
 the cross-site refusals, and the fail-closed start without `DATASTRATA_PUBLIC_ORIGIN`. It is not
 part of `npm test`. It checks the standalone artifact on this machine, not the image.

@@ -35,8 +35,8 @@
  * `/:path*` (the matcher case); the exported-middleware cases add a clock that
  * is a constant, two variables read under each other's names, and a body that
  * lets everything through. "Never reads the profile" is checked rather than
- * stated: the source's imports are held to `next/server`, the access module
- * and the public-origin module (failure mode 6).
+ * stated: the source's imports are held to `next/server`, the access module,
+ * the public-origin module and the hosting-mode module (failure mode 6).
  *
  * The 503 is the only thing the middleware says to an operator, so it says what
  * is wrong (final review, 2026-10-21): "Pilot access is not configured on this
@@ -69,6 +69,12 @@
  * 401 or 200 once the variable is set. The source cases hold that the module
  * no longer reads the request's URL and reads the variable by name. The
  * validator's own rules are `public-origin.test.ts`'s.
+ *
+ * The pilot surface is switched on in every case here (DP1 Task 7, DG-10). The gate answers only where a server sets
+ * `DATASTRATA_PILOT_GATE=on`, and with any other value, or none, the middleware answers 404 before it reads anything else, so every
+ * environment this file builds carries the switch as `on` (`SURFACE_ON`) and the exported-middleware cases stub it, and nothing else
+ * about any case changed. The switch itself, and the 404, are `hosting-mode.test.ts`'s. The source cases hold the module to one more
+ * import, the hosting-mode module, which imports nothing, and one more read by name, the switch.
  */
 
 import { readFileSync } from 'node:fs';
@@ -84,6 +90,7 @@ import {
   issueAccessToken,
   type AccessDecision,
 } from '@/lib/access';
+import { PILOT_GATE_ENV } from '@/lib/hosting-mode';
 import { PUBLIC_ORIGIN_ENV } from '@/lib/public-origin';
 import { config, decideResponse, middleware, middlewareWith } from '../middleware';
 
@@ -104,13 +111,15 @@ const NOT_CONFIGURED = 'Pilot access is not configured on this server.';
 const PUBLIC_ORIGIN = 'https://gate.example.test';
 /** The variable alone, set to the origin above: what every configured environment here carries beside the secret. */
 const CONFIGURED_ORIGIN = { [PUBLIC_ORIGIN_ENV]: PUBLIC_ORIGIN };
+/** The pilot surface switched on (DP1 Task 7): every environment built here carries it, so each case reaches the gate it is about. */
+const SURFACE_ON = { [PILOT_GATE_ENV]: 'on' };
 /** A request URL as Next builds it for a server on one machine: the hostname it was started with, not the configured origin. */
 const LOCAL_DASHBOARD = 'http://localhost:3000/dashboard';
 
 type Gate = ReturnType<typeof middlewareWith>;
 type DeniedReason = Extract<AccessDecision, { kind: 'denied' }>['reason'];
 
-const env = { [ACCESS_SECRET_ENV]: SECRET, ...CONFIGURED_ORIGIN };
+const env = { ...SURFACE_ON, [ACCESS_SECRET_ENV]: SECRET, ...CONFIGURED_ORIGIN };
 const gate: Gate = middlewareWith(env, () => NOW);
 
 /** The clock and the timers as they are before any case fakes anything, so a case can show what the fake left alone. */
@@ -309,7 +318,7 @@ describe('decideResponse', () => {
 
 describe('middlewareWith', () => {
   it('answers 503 in plain text, and no redirect, when no secret is configured: the first sentence, then the problem naming the secret', async () => {
-    const response = await middlewareWith(CONFIGURED_ORIGIN, () => NOW)(request({ accept: BROWSER_ACCEPT }));
+    const response = await middlewareWith({ ...SURFACE_ON, ...CONFIGURED_ORIGIN }, () => NOW)(request({ accept: BROWSER_ACCEPT }));
     expect(response.status).toBe(503);
     expect(mediaType(response)).toBe('text/plain');
     const body = await response.text();
@@ -326,7 +335,7 @@ describe('middlewareWith', () => {
     expect(usable.status).toBe(200);
     expect(usable.headers.get('x-middleware-next')).toBe('1');
 
-    const shortSecret = await middlewareWith({ ...CONFIGURED_ORIGIN, [ACCESS_SECRET_ENV]: FIFTEEN }, () => NOW)(request(headers));
+    const shortSecret = await middlewareWith({ ...SURFACE_ON, ...CONFIGURED_ORIGIN, [ACCESS_SECRET_ENV]: FIFTEEN }, () => NOW)(request(headers));
     expect(shortSecret.status).toBe(503);
     const shortSecretBody = await shortSecret.text();
     expect(shortSecretBody.startsWith(NOT_CONFIGURED), 'the 503 begins with the first sentence').toBe(true);
@@ -456,7 +465,7 @@ describe('the configured public origin, through middlewareWith', () => {
     ['a script with a valid session', async () => ({ accept: 'application/json', cookie: await cookieFor(SECRET, at(-HOUR_MS)) }), 200],
   ];
   it.each(requests)('answers %s 503 naming DATASTRATA_PUBLIC_ORIGIN while it is not set, private and varying on the cookie, and as the session says once it is', async (_name, headers, configured) => {
-    const unset = await middlewareWith({ [ACCESS_SECRET_ENV]: SECRET }, () => NOW)(request(await headers(), LOCAL_DASHBOARD));
+    const unset = await middlewareWith({ ...SURFACE_ON, [ACCESS_SECRET_ENV]: SECRET }, () => NOW)(request(await headers(), LOCAL_DASHBOARD));
     expect(unset.status).toBe(503);
     expect(mediaType(unset)).toBe('text/plain');
     expect(unset.headers.get('location')).toBeNull();
@@ -487,7 +496,7 @@ describe('the configured public origin, through middlewareWith', () => {
   });
 
   it('puts the origin problem after the access problems when both are unusable: the first sentence, the secret, then the origin', async () => {
-    const response = await middlewareWith({}, () => NOW)(request({ accept: BROWSER_ACCEPT }, LOCAL_DASHBOARD));
+    const response = await middlewareWith({ ...SURFACE_ON }, () => NOW)(request({ accept: BROWSER_ACCEPT }, LOCAL_DASHBOARD));
     expect(response.status).toBe(503);
     expect((await response.text()).split('\n')).toEqual([
       NOT_CONFIGURED,
@@ -500,8 +509,8 @@ describe('the configured public origin, through middlewareWith', () => {
 describe('the exported middleware', () => {
   // The export binds the real environment and the real clock to `middlewareWith`, so these cases give it synthetic values for both:
   // the two access variables and the public origin through `vi.stubEnv` and the clock through a fake `Date`. Every case calls
-  // `setUp` first, which stubs all three variables, so nothing the real environment holds can reach the export; `afterEach` puts
-  // the environment and the clock back.
+  // `setUp` first, which stubs all three variables and the pilot switch (as `on`), so nothing the real environment holds can reach
+  // the export; `afterEach` puts the environment and the clock back.
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.useRealTimers();
@@ -513,6 +522,7 @@ describe('the exported middleware', () => {
    * first.
    */
   function setUp(settings: { secret: string | undefined; revokedBefore?: string; publicOrigin?: string | null }, now: Date = NOW): void {
+    vi.stubEnv(PILOT_GATE_ENV, 'on');
     vi.stubEnv(ACCESS_SECRET_ENV, settings.secret);
     vi.stubEnv(ACCESS_REVOKED_BEFORE_ENV, settings.revokedBefore);
     vi.stubEnv(PUBLIC_ORIGIN_ENV, settings.publicOrigin === undefined ? PUBLIC_ORIGIN : (settings.publicOrigin ?? undefined));
@@ -658,8 +668,8 @@ describe('the 503 for an unusable configuration', () => {
   });
 
   const secretMistakes: [string, Record<string, string | undefined>][] = [
-    ['unset', CONFIGURED_ORIGIN],
-    ['15 characters', { ...CONFIGURED_ORIGIN, [ACCESS_SECRET_ENV]: FIFTEEN }],
+    ['unset', { ...SURFACE_ON, ...CONFIGURED_ORIGIN }],
+    ['15 characters', { ...SURFACE_ON, ...CONFIGURED_ORIGIN, [ACCESS_SECRET_ENV]: FIFTEEN }],
   ];
   it.each(secretMistakes)('names the secret, and not the revocation setting, when the secret is %s and no revocation value is set: the control for the diagnostic above', async (_name, unusable) => {
     const response = await middlewareWith(unusable, () => NOW)(request(sent));
@@ -675,8 +685,8 @@ describe('the 503 for an unusable configuration', () => {
     ['a revocation value that is a word', { ...env, [ACCESS_REVOKED_BEFORE_ENV]: 'soon-7f3a' }, [SECRET, PUBLIC_ORIGIN, 'soon-7f3a']],
     ['a revocation value that is a date alone', { ...env, [ACCESS_REVOKED_BEFORE_ENV]: '2026-10-21' }, [SECRET, PUBLIC_ORIGIN, '2026-10-21']],
     ['a revocation instant later than the request time', { ...env, [ACCESS_REVOKED_BEFORE_ENV]: LATE }, [SECRET, PUBLIC_ORIGIN, LATE]],
-    ['no secret', CONFIGURED_ORIGIN, [PUBLIC_ORIGIN]],
-    ['a 15-character secret', { ...CONFIGURED_ORIGIN, [ACCESS_SECRET_ENV]: FIFTEEN }, [PUBLIC_ORIGIN, FIFTEEN]],
+    ['no secret', { ...SURFACE_ON, ...CONFIGURED_ORIGIN }, [PUBLIC_ORIGIN]],
+    ['a 15-character secret', { ...SURFACE_ON, ...CONFIGURED_ORIGIN, [ACCESS_SECRET_ENV]: FIFTEEN }, [PUBLIC_ORIGIN, FIFTEEN]],
     ['an origin with a path', { ...env, [PUBLIC_ORIGIN_ENV]: 'https://gate-7c41.example.test/p-3e9a' }, [SECRET, 'https://gate-7c41.example.test/p-3e9a']],
     ['an origin over plain http', { ...env, [PUBLIC_ORIGIN_ENV]: 'http://gate-5d2b.example.test' }, [SECRET, 'http://gate-5d2b.example.test']],
   ];
@@ -706,11 +716,13 @@ describe('the 503 for an unusable configuration', () => {
 
 describe('every response the middleware returns', () => {
   const outcomes: [string, () => Promise<Response>, number][] = [
-    ['the 503 for an unconfigured gate', () => middlewareWith(CONFIGURED_ORIGIN, () => NOW)(request({ accept: BROWSER_ACCEPT })), 503],
-    ['the 503 for an unusable public origin', async () => middlewareWith({ [ACCESS_SECRET_ENV]: SECRET }, () => NOW)(request({ accept: BROWSER_ACCEPT, cookie: await cookieFor(SECRET, NOW) })), 503],
+    ['the 503 for an unconfigured gate', () => middlewareWith({ ...SURFACE_ON, ...CONFIGURED_ORIGIN }, () => NOW)(request({ accept: BROWSER_ACCEPT })), 503],
+    ['the 503 for an unusable public origin', async () => middlewareWith({ ...SURFACE_ON, [ACCESS_SECRET_ENV]: SECRET }, () => NOW)(request({ accept: BROWSER_ACCEPT, cookie: await cookieFor(SECRET, NOW) })), 503],
     ['the 303 to the access page', () => gate(request({ accept: BROWSER_ACCEPT })), 303],
     ['the 401 for a script', () => gate(request({ accept: 'application/json' })), 401],
     ['the pass-through of a valid session', async () => gate(request({ accept: BROWSER_ACCEPT, cookie: await cookieFor(SECRET, NOW) })), 200],
+    // DP1 Task 7: a usable gate with no pilot switch in its record, so the 404 is the switch's.
+    ['the 404 while the pilot surface is off', () => middlewareWith({ [ACCESS_SECRET_ENV]: SECRET, ...CONFIGURED_ORIGIN }, () => NOW)(request({ accept: BROWSER_ACCEPT })), 404],
   ];
 
   it.each(outcomes)('%s is private, uncacheable and varies on the cookie', async (_name, run, status) => {
@@ -739,16 +751,17 @@ describe('the middleware module', () => {
     expect(config.matcher).toEqual(['/dashboard/:path*']);
   });
 
-  it('imports only next/server, the access module and the public-origin module, so it can never reach a profile, the pack or the record', () => {
+  // DP1 Task 7 added the hosting-mode module, the pilot switch, to this list; it imports nothing (`hosting-mode.test.ts`).
+  it('imports only next/server, the access module, the public-origin module and the hosting-mode module, so it can never reach a profile, the pack or the record', () => {
     const imported = [...code().matchAll(/(?:\bfrom\s+|\bimport\s*\(?\s*|\brequire\s*\(\s*)['"]([^'"]+)['"]/g)].map((match) => match[1]).sort();
-    expect(imported).toEqual(['@/lib/access', '@/lib/public-origin', 'next/server']);
+    expect(imported).toEqual(['@/lib/access', '@/lib/hosting-mode', '@/lib/public-origin', 'next/server']);
   });
 
   // Which key each read feeds is not visible here, because the set of names is the same either way round; the exported-middleware
-  // cases above hold that, by setting one variable at a time.
-  it('uses process.env only as static reads of the two access variables and the public origin, each once, and never as a whole', () => {
+  // cases above hold that, by setting one variable at a time. DP1 Task 7 added the pilot switch, read by name like the others.
+  it('uses process.env only as static reads of the pilot switch, the two access variables and the public origin, each once, and never as a whole', () => {
     const reads = [...code().matchAll(/process\.env(?:\.\w+|\[|\b)/g)].map((match) => match[0]).sort();
-    expect(reads).toEqual([`process.env.${ACCESS_REVOKED_BEFORE_ENV}`, `process.env.${ACCESS_SECRET_ENV}`, 'process.env.DATASTRATA_PUBLIC_ORIGIN'].sort());
+    expect(reads).toEqual(['process.env.DATASTRATA_PILOT_GATE', `process.env.${ACCESS_REVOKED_BEFORE_ENV}`, `process.env.${ACCESS_SECRET_ENV}`, 'process.env.DATASTRATA_PUBLIC_ORIGIN'].sort());
   });
 
   it('builds no URL from the request: it reads neither the request URL nor nextUrl, which carry the hostname Next was started with', () => {

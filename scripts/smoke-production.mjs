@@ -26,8 +26,11 @@
  *
  * **The server's environment is built, never inherited.** It gets `PATH` and
  * nothing else of the caller's, plus `NODE_ENV`, `HOSTNAME`, `PORT`,
- * `NEXT_TELEMETRY_DISABLED`, a synthetic secret drawn for this run and never
- * printed, and `DATASTRATA_PUBLIC_ORIGIN`. Never a profile, never a webhook.
+ * `NEXT_TELEMETRY_DISABLED`, `DATASTRATA_PILOT_GATE=on`, a synthetic secret
+ * drawn for this run and never printed, and `DATASTRATA_PUBLIC_ORIGIN`. Never a
+ * profile, never a webhook. The pilot switch is on in every start because every
+ * start asks the gate questions: without it the five pilot routes answer 404
+ * (DP1 plan, DG-10), and each gate check here would be asking a closed door.
  * The build, by contrast, inherits the caller's environment. That asymmetry is
  * deliberate: build-time sentinels reach the build and no server, so a scan of
  * `.next` for them proves nothing server-only was inlined, and a `Location` on
@@ -86,6 +89,8 @@ const PUBLIC_ORIGIN = 'https://pilot.example.test';
 const OTHER_SITE = 'https://evil.example';
 const SECRET_ENV = 'DATASTRATA_PILOT_ACCESS_SECRET';
 const ORIGIN_ENV = 'DATASTRATA_PUBLIC_ORIGIN';
+/** The pilot switch (DP1 Task 7): the gate answers only where a server sets it to exactly `on`. */
+const PILOT_GATE_ENV = 'DATASTRATA_PILOT_GATE';
 const COOKIE_NAME = 'ds_pilot_access';
 const COOKIE_PATH = '/dashboard';
 const SESSION_SECONDS = '43200';
@@ -526,7 +531,8 @@ function alive(pid) {
 
 /**
  * Starts `node server.js` in the artifact with an environment built here: `PATH` from the caller and nothing else of its,
- * then the values the image or the host supplies. `origin` undefined leaves `DATASTRATA_PUBLIC_ORIGIN` unset.
+ * then the values the image or the host supplies, and the pilot switch on, because every start here asks the gate questions.
+ * `origin` undefined leaves `DATASTRATA_PUBLIC_ORIGIN` unset.
  */
 async function startServer(name, { serverDir, port, origin, secret }) {
   const env = {
@@ -535,13 +541,14 @@ async function startServer(name, { serverDir, port, origin, secret }) {
     HOSTNAME: '127.0.0.1',
     PORT: String(port),
     NEXT_TELEMETRY_DISABLED: '1',
+    [PILOT_GATE_ENV]: 'on',
     [SECRET_ENV]: secret,
   };
   if (origin !== undefined) env[ORIGIN_ENV] = origin;
   say(`server ${name}: node ${process.version}, \`node server.js\` in ${serverDir}`);
   say(`server ${name}: environment names ${Object.keys(env).join(' ')}`);
   say(
-    `server ${name}: NODE_ENV=production HOSTNAME=127.0.0.1 PORT=${port} NEXT_TELEMETRY_DISABLED=1 ` +
+    `server ${name}: NODE_ENV=production HOSTNAME=127.0.0.1 PORT=${port} NEXT_TELEMETRY_DISABLED=1 ${PILOT_GATE_ENV}=on ` +
       `${ORIGIN_ENV}=${origin ?? '(unset)'} ${SECRET_ENV}=(synthetic, ${secret.length} characters, not printed)`,
   );
   const child = spawn(process.execPath, ['server.js'], { cwd: serverDir, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
