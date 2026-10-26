@@ -1649,6 +1649,48 @@ The route and the old modules are untouched until Task 6.
 
 **Commit message:** "Add a health check that proves the runtime inputs reached the server and a log line that carries no answers, so a hosted fault is seen without anything about a visitor being kept"
 
+*As executed (2026-10-26, uncommitted at hand-off).*
+- **Counts:**
+  - engine 84 / 3,320, unchanged;
+  - frontend 39 / 1,471 → 41 / 1,567: two new test files, `health.test.ts` (78 tests) and `log.test.ts` (18);
+  - the same 41 / 1,567 with `DATASTRATA_PILOT_GATE=on`;
+  - typecheck exit 0; csrd grep 7; `lib/wording.ts` and every golden's sha256 unchanged;
+  - the standalone gate passes, and its build lists `/healthz` as dynamic.
+- **Files: one commit, 8 paths.**
+  - New: `lib/health.ts`, `lib/log.ts`, `app/healthz/route.ts`; tests `health.test.ts` and `log.test.ts`.
+  - Changed:
+    - `app/api/check/route.ts`: the log line only. The old handler body is unchanged, renamed `answer()`, and `POST` logs once in `finally`;
+    - `lib/pack.ts`: `export` added to `packDirOf`, `corpusDirOf` and `verificationDirOf`, so `/healthz` resolves the directories through the reading code's own helpers;
+    - `next.config.mjs`: `'/healthz': verificationTracingGlobs()` beside `/api/check` (below).
+- **Decisions within the task** (the evidence folder's README has the reasons):
+  - **`release` and `deployment`** are `VERCEL_GIT_COMMIT_SHA` (only 40 lowercase hex characters) and `VERCEL_DEPLOYMENT_ID` (only 1 to 64 of `[A-Za-z0-9_-]`), otherwise `unknown`. Both are documented as available at runtime. The deployment ID is not secret: the framework sends it to every browser for skew protection. A test holds the three files to exactly these two reads, file by file.
+  - **The four directories** are `knowledge` (`knowledge/csrd`), `corpus`, `verification` and `monitoring`. They are resolved through `lib/pack.ts`'s helpers and the loader's register convention, never from the tracing globs.
+  - **Three named files are left out of the digests:** `verification/CSRD-S-001.md`, `monitoring/automation-prompt.md` and `corpus/.gitkeep`. No reader opens them and the tracing never ships them, so counting them would make Task 13's check 5 fail for ever. They are named rather than matched by a pattern, so any other new file still changes the digest.
+  - **The digest** is `shasum -a 256`'s line format (`<sha256>  <relative path>`), sorted in code-unit order, then hashed. A clean clone can recompute it with standard tools; a test holds a vector computed that way.
+  - **The fixed check** is `eu-no-group-settled` at the file's date. Every one of its lines can refuse.
+  - **The check route's events:** 200 `check.answered`; 413 `check.too_large`; 400 (schema or hidden answer) `check.malformed`; 503 and a thrown error's 500 `check.refused`, the error rethrown unchanged.
+  - **The plan's log-test request** (`countryOther` "XK") is refused 400 by the schema, since `lib/countries.ts` holds no user-assigned code. It is kept, and answered requests carrying `123456789.01` and "KZ" are added.
+- **Routine corrections, from the parent's review:**
+  - **`/healthz` added to `outputFileTracingIncludes`.** `.next/standalone` copies the union of every route's trace, so the gate could not see that `/healthz`'s own trace held 2 engine files. A host that builds each route's function from its own trace would have shipped `/healthz` without its inputs, and it would have answered 503 for ever. It now lists the same 23 as `/api/check`, by the same call.
+  - **The log tests capture every output channel,** not only standard output, and scan for a header, an address and a query.
+  - **The fixed check refuses on a change to any of its lines.** The parent's mutant that compared only the first route survived round 1.
+- **Teeth:** T8a, T8b and T8c were red on their intended assertions, in the implementer's run and in the parent's.
+  - The parent's mutations differ from the implementer's: a fallback to the plain `loadPack` for T8a; the body in `event` for T8b; and eight extras. Each was re-run on the final bytes, and each file was restored by sha256.
+  - **T8c, the parent's:** the whole ledger member was deleted, and every digest was compared with a shell-only oracle. `/healthz` stayed 200 while `inputs.verification` read 25 files against the fixture repository's 26; restored, all four were equal. In every build, `/healthz`'s own trace equals `/api/check`'s.
+  - An extra build with the register member deleted gave a real 503 from the isolated artifact, with no path and exactly one `health.refused` line.
+- **Production-server checks** (parent-run, local, 127.0.0.1:3248):
+  - `GET /healthz`: 200, `no-store`, `unknown` twice, and the four digests equal the shell oracle;
+  - the host variables are read per request: set at start, not at build, they are reported, and invalid values read `unknown`;
+  - each `/api/check` outcome writes exactly one line. None of the markers sent (values, keys, an `x-forwarded-for` address, user agent, cookie, query) appears anywhere in the server's output;
+  - a damaged version registry gives 503 with no path, stack or variable name.
+- **Found outside Task 8, not changed:**
+  - §4.3, the data-flow record and its draft privacy sentence list the line's fields without the time (`at`), and the record still says "not yet built". This is for Task 10's texts.
+  - Vercel's "Enable access to System Environment Variables" must be on, or `release` and `deployment` read `unknown` (Task 11's host configuration; Task 13's check 5).
+  - `/healthz` hashes about 9 MB of corpus per call (26–50 ms measured). Task 11's firewall rule (DG-15) should cover it as well as `/api/check`.
+  - `/api/check`'s integrity 503 body still carries absolute paths, which is pinned by an existing test; and Next's own error printing on the rethrow path could interpolate a validated answer in three invariant messages. Both are for Codex and Task 13.
+
+  Evidence: `side-session-notes/local_043075c1-…/2026-10-26T1212Z-dp1-task8/` (`README.md`, `parent/`).
+
 ### Task 9: the data-flow record (D5, condition 2) — a document
 
 **Delivers:** DEP-3 (its DP1 condition); the input to PUB-4.
