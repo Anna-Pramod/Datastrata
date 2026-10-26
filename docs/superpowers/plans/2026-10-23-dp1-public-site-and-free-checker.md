@@ -1264,6 +1264,42 @@ The route and the old modules are untouched until Task 6.
 
 **Commit message:** "Give every state the check can show one approved wording and shape, so no result, reason or error reads differently from screen to screen"
 
+*As executed (2026-10-25 and 26, uncommitted at hand-off).*
+- **Counts:** engine 84 / 3,320, unchanged. Frontend 32 / 1,235 → 34 / 1,291, from two new test files. Typecheck exit 0; csrd grep 7; every golden unchanged.
+- **Files:**
+  - `lib/wording.ts` and `test/wording.test.ts` (new);
+  - `test/check-reachable-states.test.ts` (new);
+  - `lib/check-timeline.ts`, extended with the export below. No behaviour changed: every Task 4 test and the golden pass as they were.
+- **The reachable (line kind, state) export,** your instruction of 2026-10-25, is `reachableCellStates(pack, kind)`. It takes the pack because its rule reads it.
+  - It is computed through `stateOf` and `linePolicy` themselves, over the engine results each line's requirement can give the checker.
+  - **The rule:** a requirement cannot be APPLIES when its condition cannot be TRUE while every fact the checker never sets is absent. The settable facts come from `buildCheckProfile` over every reachable flow.
+  - It equals the pairs observed over the 40 cases and the full reachable sweep (396,565 flows, about 24 seconds), in both directions.
+  - `exemption`·`applies` and `gateway`·`applies` are not reached, because S-005, S-006, S-019 and S-008 need facts the checker never sets. They are worded anyway: the line-kind table gives them a meaning.
+- **Teeth:** T5a to T5g as written, plus:
+  - T5h, the export: a state added to `stateOf` makes the wording test name the missing pair;
+  - T5i, the export test's two directions;
+  - T5j, below;
+  - a guard against internal references.
+
+  The parent re-ran each with its own mutations in its own clone. Each failed on its intended assertion, and each file was restored by sha256.
+  Evidence: `side-session-notes/local_043075c1-…/2026-10-25T0808Z-dp1-task5/`.
+- **Routine corrections to the text above:**
+  - **A fact's own absent reason asks.** C-3 answered "Not sure" leaves `entity.legal_form` absent, and the pack's reason for that is `legal_ambiguity`. Read literally, "only `missing_fact` and `range_crosses_threshold` ask" made that step say "Your answers cannot settle it here", which is false.
+    - `nextStep` now gives C-3's step there, as proposal §4.4's C-3 row has it. This is held as data (`absentReason`), checked against the pack in both directions, and has its own teeth check, T5j.
+    - Review reasons still never ask (T5f).
+  - **`legal_ambiguity`'s words** became "This turns on a legal classification that is not settled yet".
+  - **The interface takes the pack:** `reachableCellStates(pack, kind)`.
+  - **A timeout error state is added,** because Task 6 shows one.
+  - **One 503 entry** serves both the integrity refusal and `TimelineRefusalError`.
+  - **The €450m figure** moved from the reason words to the turnover steps, because a headcount band straddles 500 or 1,000.
+  - **Article 40a's applies note** replaces "points to onboarding". Onboarding is not built.
+  - **The stateless and unbuilt-capability rules** reworded §4.4's and §7's drafts: C-7, C-1, C-4 and C-5, `missing_fact`, range, `catalogue_unknown` and `not_yet_effective`. The evidence lists each one.
+- **Your approval (2026-10-26),** quoted in the evidence's `APPROVAL.md`. You approved the wording with Codex's three corrections, each applied exactly:
+  - C-7's step describes the parent report's inclusion as one condition of the exemption;
+  - `not_yet_effective` reads "This rule is adopted but not yet in force. This result does not assess preparation steps.";
+  - the internal reference "(vision, choice 4)" is removed from the threshold label. A test now keeps every visitor-facing entry free of internal references.
+- **For Task 6:** the next-step selection you set on 2026-10-26, carried into Task 6 below.
+
 ### Task 6: the switch — the check route and page move to the new modules
 
 **Delivers:** CHK-1, CHK-2 (rendered), CHK-3, EXP-3, EXP-4, EXP-5, EXP-6, PRF-14, KNW-10.
@@ -1317,6 +1353,18 @@ The route and the old modules are untouched until Task 6.
   - one row per route, with its lines, each line labelled with what it reports (Task 4's line kinds);
   - a reason and a next step in each `cannot_decide` cell (APP-11);
   - the national line, with the country of registration and its note.
+  - *Carried from Task 5 (your direction of 2026-10-26): **the next step.*** A `cannot_decide` cell shows one step (proposal §4.2: "the one step that would settle it").
+    - **The rule.** Take the cell's needs in its order, range first. The step is that of the first need whose fact is set, in this visitor's context, by a question the visitor is shown.
+      - C-4 and C-9 are alternatives for a headcount, and C-5 and C-10 for a turnover.
+      - The step links whichever question of the pair sets that fact for this visitor: C-4 and C-5 for a company's or a group's figure, by group position; C-9 and C-10 for the parent's own.
+    - **Where no need has such a question,** the step is that of the first need whose step asks nothing: a fact the check does not ask, or a review reason.
+    - **A step is never offered for a question the visitor is not shown.**
+    - **Cells that name no fact** take their step from `rowStep` (`not_yet_covered`, `not_checked`).
+    - **The view needs the visitor's answers** to know what is shown, so it is `checkView(timeline, answers)`. The answers stay in the page, as today.
+    - **The parent's sweep at Task 5** ran over every reachable flow. Every one of 4,929,751 `cannot_decide` cells has such a step.
+      - The hidden-C-6 parent gets C-9's headcount step: C-4 at "450 or fewer" or typed 499 or 500, and C-9 "Not sure".
+      - Read literally, "the first need's step" would offer it C-6, which it is not shown.
+  - *Carried from Task 5 (your correction of 2026-10-26):* the threshold in force is worded without any internal reference. Vision choice 4 is cited in the evidence, never on the page.
 - **The offer** "Check the parent company on its own too" asks C-9 and C-10, posts again, and replaces the result.
   - *Carried from Task 3:* the offer appears only where `visibleQuestions` lists C-9 and C-10, so never for a fund.
   - `countryOther` is sent as the upper-case ISO code; the schema refuses lower case.
@@ -1334,6 +1382,10 @@ The route and the old modules are untouched until Task 6.
 - **`checkView`,** for a fixture in every line kind and every reachable state: each cell's words are those of its own line kind and state.
   - Counterexample: no cell shows another state's words.
   - Counterexample: no cell shows the same state's words from another kind. A `duty` line never shows exemption words.
+  - *Carried from Task 5:* **the next step**, by the rule in "The result" above. The fixtures include the hidden-C-6 case: an EU parent with C-4 "450 or fewer" and C-9 "Not sure".
+    - Its `parent_own` cells show C-9's headcount step, never C-6's.
+    - Counterexample: an individual company's headcount step links C-4, and a parent's own links C-9.
+    - Over the reachable sweep, no cell's step offers a question the visitor is not shown.
 - **The render** (`react-dom/server`, with no new dependency): every path in `SENT_FIELDS` that a fixture populates appears in the rendered markup. This is CHK-2's "rendered or not sent", tested against the declared list from Task 4.
 - **The labels.** The preliminary and draft labels and the hypothetical heading are present, with a counterexample: a signed, fresh fixture renders no draft label.
 - **The errors.** Each of the six error states renders its own words and none of the others'.
@@ -1348,6 +1400,7 @@ The route and the old modules are untouched until Task 6.
 - **T6d.** The draft label is shown unconditionally. The signed-fixture counterexample must fail (failure mode 5).
 - **T6e, the agreement gate keeps its teeth.** Its existing teeth is re-run in the clean clone after the switch: the ledger untraced must make agreement fail while liveness passes (`deployment-agreement.mjs`).
 - **T6f, the refusal.** The route catches `IntegrityFailureError` and returns a 200 marked draft. The 503 test must fail.
+- **T6g** (carried from Task 5). `checkView` takes the first need's step whatever the visitor is shown. The hidden-C-6 case must fail, naming the `parent_own` cell and C-6.
 
 **Checked in a browser on a local server** started from the clean clone (§1, Servers), at 320, 375 and 1280 pixels:
 - keyboard-only completion of every visitor path of §4.5;
