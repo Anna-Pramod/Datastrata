@@ -20,7 +20,15 @@
  *   replaces the result it follows and never sits beside it (EXP-6); focus
  *   moves to the result's heading, or to the error, when either appears;
  * - a request that takes longer than `CHECK_TIMEOUT_MS` is abandoned and says
- *   so in the timeout's own words.
+ *   so in the timeout's own words;
+ * - a request is sent, timed and settled by `lib/check-request.ts`, never here,
+ *   and only the current request's ending is applied (Codex's review of Task 6,
+ *   finding 3). A restart, any navigation, any change to an answer or a typed
+ *   figure, and a newer submission supersede the request in flight: it is
+ *   aborted, and its ending changes nothing here, neither the answers, the
+ *   outcome, the screen, the loading state nor the focus. So every handler
+ *   below that does one of those calls `requests.supersede()` first, and the
+ *   outcome is set only inside the callback `submit` hands the module.
  *
  * Nothing is stored: the answers live in this component's memory and in the
  * one request body, and nowhere else (plan §1).
@@ -42,11 +50,10 @@ import {
   type CheckQuestion,
   type QuestionId,
 } from '@/lib/check-answers';
-import type { CheckTimeline as Timeline } from '@/lib/check-timeline';
-import { CHECK_TIMEOUT_MS, checkView, errorStateFor, requestBody, type CheckOutcome } from '@/lib/check-view';
-import type { ErrorState } from '@/lib/wording';
+import { checkRequests, type CheckSettlement } from '@/lib/check-request';
+import { checkView } from '@/lib/check-view';
 
-type Outcome = { kind: 'result'; timeline: Timeline; answers: CheckerAnswers } | { kind: 'error'; state: ErrorState; answers: CheckerAnswers };
+type Outcome = CheckSettlement;
 type Screen = { kind: 'question'; id: QuestionId } | { kind: 'outcome' };
 
 const TYPED = 'typed';
@@ -92,6 +99,8 @@ export function CheckFlow({ plannedRegimes }: { plannedRegimes: string[] }) {
   const [screen, setScreen] = useState<Screen>({ kind: 'question', id: 'C-1' });
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [running, setRunning] = useState(false);
+  /** This page's requests: the module owns the loading state and applies only the current request's ending. */
+  const [requests] = useState(() => checkRequests(setRunning));
   const moved = useRef(false);
   const questionRef = useRef<HTMLHeadingElement>(null);
   const resultRef = useRef<HTMLHeadingElement>(null);
@@ -105,48 +114,36 @@ export function CheckFlow({ plannedRegimes }: { plannedRegimes: string[] }) {
     else errorRef.current?.focus();
   }, [screen, outcome]);
 
-  const go = (next: Screen) => {
+  // Leaving the page abandons a request in flight, so its fetch is aborted and its ending reaches no flow that is gone.
+  useEffect(() => () => requests.supersede(), [requests]);
+
+  /** Shows a screen and lets focus follow it. Only `go`, `restart`, `back` and a settled request call it. */
+  const show = (next: Screen) => {
     moved.current = true;
     setScreen(next);
   };
 
+  /** Any navigation leaves the check a request in flight was sent for, so it supersedes that request first. */
+  const go = (next: Screen) => {
+    requests.supersede();
+    show(next);
+  };
+
   const restart = () => {
+    requests.supersede();
     setAnswers({});
     setTyped({});
     setOutcome(null);
-    go({ kind: 'question', id: 'C-1' });
+    show({ kind: 'question', id: 'C-1' });
   };
 
-  async function submit(current: CheckerAnswers) {
-    const body = requestBody(current);
-    setRunning(true);
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), CHECK_TIMEOUT_MS);
-    let next: Outcome;
-    const failed = (failure: CheckOutcome): Outcome => ({ kind: 'error', state: errorStateFor(failure), answers: body });
-    try {
-      const response = await fetch('/api/check', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
-      if (!response.ok) {
-        next = failed({ kind: 'status', status: response.status });
-      } else {
-        const timeline = (await response.json()) as Timeline;
-        // A 200 that is not a timeline is the server's own failure, never a result.
-        next = Array.isArray(timeline?.routes) ? { kind: 'result', timeline, answers: body } : failed({ kind: 'status', status: 500 });
-      }
-    } catch {
-      next = failed(controller.signal.aborted ? { kind: 'timeout' } : { kind: 'network' });
-    } finally {
-      clearTimeout(timer);
-      setRunning(false);
-    }
-    setAnswers(body);
-    setOutcome(next);
-    go({ kind: 'outcome' });
+  /** Sends the answers through the request lifecycle. The callback runs only for the current request's ending (finding 3). */
+  function submit(current: CheckerAnswers) {
+    requests.start(current, (settled) => {
+      setAnswers(settled.answers);
+      setOutcome(settled);
+      show({ kind: 'outcome' });
+    });
   }
 
   if (screen.kind === 'outcome' && outcome !== null) {
@@ -164,7 +161,7 @@ export function CheckFlow({ plannedRegimes }: { plannedRegimes: string[] }) {
             </Button>
           ) : null}
           {outcome.kind === 'error' ? (
-            <Button onClick={() => void submit(outcome.answers)} loading={running}>
+            <Button onClick={() => submit(outcome.answers)} loading={running}>
               Try again
             </Button>
           ) : null}
@@ -210,6 +207,7 @@ export function CheckFlow({ plannedRegimes }: { plannedRegimes: string[] }) {
   const hintId = `${id}-hint`;
 
   const choose = (value: string) => {
+    requests.supersede();
     if (value === TYPED) {
       const text = typed[id] ?? '';
       setTyped((t) => ({ ...t, [id]: text }));
@@ -232,12 +230,13 @@ export function CheckFlow({ plannedRegimes }: { plannedRegimes: string[] }) {
     event.preventDefault();
     if (!answered || running) return;
     if (following !== undefined) go({ kind: 'question', id: following });
-    else void submit(answers);
+    else submit(answers);
   };
 
   const back = () => {
+    requests.supersede();
     if (at > 0) {
-      go({ kind: 'question', id: sequence[at - 1]! });
+      show({ kind: 'question', id: sequence[at - 1]! });
     } else if (OFFER.includes(id) && outcome !== null) {
       // Leaving the offer unposted: its answers go with it, so C-9 and C-10 are only ever sent together, as Task 4's sweep poses them.
       setAnswers(outcome.answers);
@@ -246,7 +245,7 @@ export function CheckFlow({ plannedRegimes }: { plannedRegimes: string[] }) {
         for (const pair of OFFER) delete rest[pair];
         return rest;
       });
-      go({ kind: 'outcome' });
+      show({ kind: 'outcome' });
     }
   };
 
@@ -292,6 +291,7 @@ export function CheckFlow({ plannedRegimes }: { plannedRegimes: string[] }) {
                     className="ds-input"
                     value={answers.countryOther ?? ''}
                     onChange={(e) => {
+                      requests.supersede();
                       const code = e.target.value === '' ? undefined : e.target.value.toUpperCase();
                       setAnswers((a) => ({ ...a, countryOther: code }));
                     }}
@@ -329,6 +329,7 @@ export function CheckFlow({ plannedRegimes }: { plannedRegimes: string[] }) {
                 value={typed[id] ?? ''}
                 aria-invalid={(typed[id] ?? '') !== '' && typeof value !== 'object'}
                 onChange={(e) => {
+                  requests.supersede();
                   const text = e.target.value;
                   setTyped((t) => ({ ...t, [id]: text }));
                   setAnswers((a) => ({ ...a, [question.field]: typedAnswer(text, question.field, a) }) as CheckerAnswers);

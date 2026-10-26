@@ -28,7 +28,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import { realpathSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { IntegrityFailureError } from '@datastrata/engine';
 import type { Condition, KnowledgePack } from '@datastrata/engine';
 import { buildFixtureRepository } from './fixture-repository';
@@ -76,9 +76,22 @@ const ANSWERS: CheckerAnswers = {
   pie: 'no',
 };
 
-/** The integrity refusal's body, as the route has always sent it (status-truth boundary §6: refuse, never downgrade). */
+/** The integrity refusal's sentence, as the route has always sent it (status-truth boundary §6: refuse, never downgrade). */
 const INTEGRITY_REFUSAL =
   'The verification record for this pack is damaged, so the check is unavailable. No assessment is produced from an unverifiable record.';
+
+/** The timeline refusal's sentence, as the route has sent it since Task 6. */
+const TIMELINE_REFUSAL = 'A line of this check would have to show a state its kind cannot, so the check is refused and no assessment is produced.';
+
+/**
+ * Every diagnostic a public refusal body must not carry (Codex's review of Task 6, finding 1): a path separator, the pinned file's
+ * name, any requirement id, and the fixture's own paths in both spellings. Returned as the needles found, so a failure names what
+ * leaked.
+ */
+function diagnosticsIn(text: string, paths: readonly string[]): string[] {
+  const needles = [sep, '/', '\\', 'verification-result.json', 'CSRD-S-', ...paths, ...paths.map((path) => realpathSync(path))];
+  return [...new Set(needles)].filter((needle) => text.includes(needle));
+}
 
 /** Runs `fn` as a process whose working directory is `dir`, and puts it back. */
 async function inRepository<T>(dir: string, fn: () => T | Promise<T>): Promise<T> {
@@ -97,7 +110,11 @@ function statusOf(pack: KnowledgePack, requirementId: string) {
   return { derivedStatus: requirement.derivedStatus, statusReasons: requirement.statusReasons };
 }
 
-async function check(post: typeof POST = POST): Promise<{ status: number; body: Record<string, unknown> }> {
+/**
+ * One check through the route. `meta` is everything public about the response besides its body: the status text and every
+ * header, as `name: value` lines (the review's T4), so a refusal's diagnostic can be looked for there too.
+ */
+async function check(post: typeof POST = POST): Promise<{ status: number; body: Record<string, unknown>; meta: string }> {
   const response = await post(
     new Request('http://localhost/api/check', {
       method: 'POST',
@@ -105,8 +122,12 @@ async function check(post: typeof POST = POST): Promise<{ status: number; body: 
       body: JSON.stringify(ANSWERS),
     }),
   );
-  return { status: response.status, body: (await response.json()) as Record<string, unknown> };
+  const meta = [`status text: ${response.statusText}`, ...[...response.headers].map(([name, value]) => `${name}: ${value}`)].join('\n');
+  return { status: response.status, body: (await response.json()) as Record<string, unknown>, meta };
 }
+
+/** The diagnostics in a response's status text and headers: as `diagnosticsIn`, less the separators, which a content type carries. */
+const diagnosticsInMeta = (meta: string, paths: readonly string[]): string[] => diagnosticsIn(meta, paths).filter((needle) => needle !== '/' && needle !== '\\' && needle !== sep);
 
 describe('the resolver, over a repository that actually holds verification state', () => {
   it('reports a fresh governing signature as ratified, with no reasons', () => {
@@ -284,7 +305,7 @@ describe('the route refuses rather than downgrades', () => {
   it('produces no status payload when the verification record is damaged, and its body is the refusal’s, unchanged', async () => {
     const fixture = buildFixtureRepository({ omitResults: true });
 
-    const { status, body } = await inRepository(fixture.repoRoot, check);
+    const { status, body, meta } = await inRepository(fixture.repoRoot, check);
 
     // The absence of a status is asserted before the status code, and the
     // ordering is deliberate. A route that catches the integrity failure and
@@ -301,11 +322,28 @@ describe('the route refuses rather than downgrades', () => {
     expect(String(body['error'])).toContain('damaged');
     expect(Object.keys(body)).toEqual(['error', 'refusals']);
     expect(body['error']).toBe(INTEGRITY_REFUSAL);
-    // Each refusal as `code: detail`, here the one pinned result that is gone, named by its path.
-    const refusals = body['refusals'] as string[];
-    expect(refusals).toHaveLength(1);
-    expect(refusals[0]).toMatch(/^invalid_result: /);
-    expect(refusals[0]).toContain(join('CSRD-S-001', 'verification-result.json'));
+    // Each refusal as its code alone, in order (Codex's review of Task 6, finding 1), here the one pinned result that is gone:
+    // never its detail, which names the deployment's absolute path to that result.
+    expect(body).toEqual({ error: INTEGRITY_REFUSAL, refusals: ['invalid_result'] });
+    const leaked = diagnosticsIn(JSON.stringify(body), [fixture.repoRoot, fixture.engineRoot]);
+    expect(leaked, `the public refusal body carries a diagnostic: ${leaked.join(', ')}`).toEqual([]);
+    // Nor do the status text and headers; the control is that the scan reads the headers that are there.
+    expect(meta).toContain('content-type: application/json');
+    const metaLeaked = diagnosticsInMeta(meta, [fixture.repoRoot, fixture.engineRoot]);
+    expect(metaLeaked, `the refusal's status text or headers carry a diagnostic: ${metaLeaked.join(', ')}`).toEqual([]);
+    // The positive control, for this fixture: the error the route refused on does carry the absolute path in its detail, and the
+    // same scan finds it there, so a body without it shows the route left it out. (The resolver test above, "raises an integrity
+    // failure, naming the path", is the same control over its own fixture.)
+    let thrown: unknown;
+    try {
+      loadVerifiedCsrdPack(fixture.engineRoot);
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(IntegrityFailureError);
+    const detail = (thrown as IntegrityFailureError).refusals[0]?.detail ?? '';
+    expect(detail).toContain(join(fixture.engineRoot, 'verification', 'csrd', 'CSRD-S-001', 'verification-result.json'));
+    expect(diagnosticsIn(detail, [fixture.engineRoot])).toEqual(expect.arrayContaining(['/', 'verification-result.json', 'CSRD-S-', fixture.engineRoot]));
   });
 
   it('produces one when it can, so the refusal above is a decision and not a ceiling', async () => {
@@ -328,17 +366,79 @@ describe('the route refuses rather than downgrades', () => {
       refusing.requirements.find((r) => r.id === 'CSRD-S-013')!.condition = { op: 'in_catalogue', fact: 'entity.incorporation_country', catalogue: 'eu_member_states' } as Condition;
       return { ...actual, csrdPack: () => refusing };
     });
+    // A witness on the real timeline builder, calling it through unchanged, so the test holds the very error the route refused on.
+    const thrown: unknown[] = [];
+    vi.doMock('@/lib/check-timeline', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('@/lib/check-timeline')>();
+      return {
+        ...actual,
+        buildCheckTimeline: (...args: Parameters<typeof actual.buildCheckTimeline>) => {
+          try {
+            return actual.buildCheckTimeline(...args);
+          } catch (error) {
+            thrown.push(error);
+            throw error;
+          }
+        },
+      };
+    });
     try {
       const { POST: refusingPost } = await import('@/app/api/check/route');
-      const { status, body } = await check(refusingPost);
+      const { TimelineRefusalError } = await import('@/lib/check-timeline');
+      const { status, body, meta } = await check(refusingPost);
       expect(body).not.toHaveProperty('content');
       expect(body).not.toHaveProperty('routes');
       expect(status).toBe(503);
       expect(Object.keys(body)).toEqual(['error', 'refusal']);
-      expect(String(body['refusal'])).toContain('CSRD-S-013');
+      expect(meta).toContain('content-type: application/json');
+      const metaLeaked = ['CSRD-S-013', 'reads APPLIES', 'TimelineRefusalError', 'invent a label'].filter((mark) => meta.includes(mark));
+      expect(metaLeaked, `the refusal's status text or headers carry the message: ${metaLeaked.join(', ')}`).toEqual([]);
+      // One fixed code (Codex's review of Task 6, finding 1), never the error's message, which names a requirement, a line kind, a
+      // year and a result.
+      expect(body).toEqual({ error: TIMELINE_REFUSAL, refusal: 'line_state_refused' });
+      expect(JSON.stringify(body)).not.toContain('CSRD-S-013');
+      // The positive control: the error the route refused on names the requirement, so a body without it shows the route left it out.
+      expect(thrown).toHaveLength(1);
+      expect(thrown[0]).toBeInstanceOf(TimelineRefusalError);
+      expect((thrown[0] as Error).message).toContain('CSRD-S-013');
     } finally {
       vi.doUnmock('@/lib/pack');
+      vi.doUnmock('@/lib/check-timeline');
       vi.resetModules();
     }
+  });
+
+  it('builds each body from constants and a closed, exported set of codes, whatever a refusal holds', async () => {
+    // Imported here rather than at the top, so the rest of this file runs, and reports, without the module.
+    const bodies = await import('@/lib/check-refusals');
+    // The set and the sentences, written here from the engine's `RefusalCode` and the route as they stand, never read back.
+    expect([...bodies.INTEGRITY_REFUSAL_CODES]).toEqual([
+      'mismatch',
+      'open_question',
+      'evidence_failed',
+      'unresolved_gap',
+      'invalid_result',
+      'candidate_inconsistent',
+      'integrity_failure',
+      'red_suite',
+      'unpromoted_pipeline',
+      'undesignated_evidence',
+      'unsupported_proposition',
+    ]);
+    expect(bodies.TIMELINE_REFUSAL_CODE).toBe('line_state_refused');
+    expect([bodies.INTEGRITY_REFUSAL, bodies.TIMELINE_REFUSAL]).toEqual([INTEGRITY_REFUSAL, TIMELINE_REFUSAL]);
+
+    // Called directly with what the route never sends it (failure mode 4): two refusals in order, details carrying a path and a
+    // requirement, and a code outside the set, which reads as the integrity failure it is rather than as itself.
+    const body = bodies.integrityRefusalBody(
+      new IntegrityFailureError([
+        { code: 'unresolved_gap', detail: 'CSRD-S-002 pinned by entry e-1 but absent from the corpus at /srv/release/backend/engine/corpus' },
+        { code: 'invalid_result', detail: '/srv/release/backend/engine/verification/csrd/CSRD-S-001/verification-result.json is not valid JSON' },
+        { code: '/srv/release: not a code' as never, detail: 'x' },
+      ]),
+    );
+    expect(body).toEqual({ error: INTEGRITY_REFUSAL, refusals: ['unresolved_gap', 'invalid_result', 'integrity_failure'] });
+    expect(diagnosticsIn(JSON.stringify(body), [])).toEqual([]);
+    expect(bodies.timelineRefusalBody()).toEqual({ error: TIMELINE_REFUSAL, refusal: 'line_state_refused' });
   });
 });

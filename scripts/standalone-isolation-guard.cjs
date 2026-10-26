@@ -31,6 +31,16 @@
  *
  * The guard is itself proved to fire, by a positive control in
  * `scripts/test-standalone.mjs`, before it is trusted to stay silent.
+ *
+ * **It witnesses itself.** Each violation is written to standard error by the
+ * guard, before it is thrown, and the gate reads that line. Until Codex's
+ * review of Task 6 the gate read the line Next printed when `/api/check`
+ * rethrew the error; the route now contains every unexpected error (a 500 with
+ * a fixed body, nothing printed), so the framework never sees it. A guard whose
+ * firing is visible only when the application lets its error escape would fall
+ * silent over any `catch` between the read and the framework, which is failure
+ * mode 7 again. Written here, a violation is seen whatever the application does
+ * with the error.
  */
 
 'use strict';
@@ -77,6 +87,12 @@ if (forbiddenRoots.length > 0) {
         'request answered with a repository reachable is not deployment evidence.',
     );
     err.name = 'IsolationViolationError';
+    // The witness (see "It witnesses itself" above). A failed write must not replace the violation.
+    try {
+      process.stderr.write(`${err.message}\n`);
+    } catch {
+      /* the throw below still refuses the read */
+    }
     throw err;
   };
 

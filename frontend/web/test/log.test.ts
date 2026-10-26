@@ -10,6 +10,12 @@
  * the line is empty    of every value and every answer key the visitor sent, on the 200 path and on each refusal
  * ```
  *
+ * Since Codex's review of Task 6, the route also keeps an unexpected error to itself (finding 2): it answers 500 with a fixed body
+ * and rethrows nothing, so the framework prints nothing. The tests plant an error carrying an absolute path, an answer value and
+ * an error name in five places in the handler, and a thrown string and a thrown plain object besides, and require the fixed
+ * body, the one line, and none of the error's marks in the response or on any channel; each with its control, that the planted
+ * value was really thrown.
+ *
  * The plan's own request (a typed turnover of 123456789.01 and `countryOther` "XK") is refused 400 by the schema, because
  * `lib/countries.ts` holds no user-assigned code. It is kept, and two answered requests carry the same distinctive values the
  * schema accepts. They are two because no single request can carry both: a typed turnover is asked only of an EU company (C-5),
@@ -21,11 +27,14 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { existsSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { format } from 'node:util';
 import type { Condition } from '@datastrata/engine';
 import { buildCheckTimeline } from '@/lib/check-timeline';
 import { checkerAnswersSchema } from '@/lib/check-answers';
-import { csrdPack } from '@/lib/pack';
+import { csrdPack, engineRoot } from '@/lib/pack';
 import { healthReport } from '@/lib/health';
 import { LOG_EVENTS, logEvent, type LogEvent } from '@/lib/log';
 import { POST } from '@/app/api/check/route';
@@ -55,6 +64,36 @@ const HIDDEN_TURNOVER = { ...OTHER_COUNTRY, turnover: { exact: TURNOVER } };
 
 /** A German company with no group, every question answered, as the other check tests use. */
 const ANSWERS = { country: 'DE', group: 'none', organisation: 'private_limited', employees: 'over_1100', turnover: 'over_500m', pie: 'no' };
+
+/** The route's three bodies without an assessment, written here from the brief and the route as they stand (Codex's review of Task 6). */
+const INTEGRITY_BODY = {
+  error: 'The verification record for this pack is damaged, so the check is unavailable. No assessment is produced from an unverifiable record.',
+  refusals: ['invalid_result'],
+};
+const TIMELINE_BODY = { error: 'A line of this check would have to show a state its kind cannot, so the check is refused and no assessment is produced.', refusal: 'line_state_refused' };
+const UNEXPECTED_BODY = { error: 'The check could not be completed, so no assessment was produced.' };
+
+/**
+ * A planted unexpected error whose message carries what a real one could: an absolute path (as `engineRoot()`'s does), an answer
+ * value (as `no band ${answer}` would) and an error name. `MARKS` are the needles: none may reach the body or any channel.
+ */
+const PLANTED_PATH = '/srv/datastrata-release/backend/engine/knowledge/csrd/pack.json';
+const PLANTED_NAME = 'PlantedIntegrityError';
+const plantedError = (): Error => {
+  const error = new Error(`${PLANTED_NAME}: no band ${TURNOVER} for the pack at ${PLANTED_PATH}`);
+  error.name = PLANTED_NAME;
+  return error;
+};
+const MARKS = [PLANTED_NAME, PLANTED_PATH, '/srv/datastrata-release', 'pack.json', '123456789.01', '123456789', 'no band', 'Error', '    at '];
+
+/** The marks found in `text`, so a failure names what leaked. */
+const marksIn = (text: string, extra: readonly string[] = []): string[] => [...MARKS, ...extra].filter((mark) => text.includes(mark));
+
+/**
+ * Everything public about a response besides its body: the status text and every header, as `name: value` lines (the review's
+ * T4). A refusal's diagnostic must not reach these either.
+ */
+const metaOf = (response: Response): string => [`status text: ${response.statusText}`, ...[...response.headers].map(([name, value]) => `${name}: ${value}`)].join('\n');
 
 function post(body: string): Request {
   return new Request(CHECK_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body });
@@ -286,6 +325,13 @@ describe('POST /api/check writes one line and no answer', () => {
     const fixture = buildFixtureRepository({ omitResults: true });
     const response = await inRepository(fixture.repoRoot, () => POST(post(JSON.stringify(ANSWERS))));
     expect(response.status).toBe(503);
+    // The body is the refusal's codes alone (Codex's review of Task 6, finding 1); `public-resolver-seam.test.ts` holds its control.
+    expect(await response.json()).toEqual(INTEGRITY_BODY);
+    // Nor do the status text and headers carry the detail; the control is that the scan reads the headers that are there.
+    const meta = metaOf(response);
+    expect(meta).toContain('content-type: application/json');
+    const metaLeaks = [fixture.repoRoot, realpathSync(fixture.repoRoot), 'verification-result.json', 'CSRD-S-', 'no verification result'].filter((mark) => meta.includes(mark));
+    expect(metaLeaks, `the 503's status text or headers carry the detail: ${metaLeaks.join(', ')}`).toEqual([]);
     const { raw, parsed } = theLine();
     expect(parsed).toMatchObject({ event: 'check.refused', route: '/api/check', status: 503 });
     expect(raw).not.toContain(fixture.repoRoot);
@@ -306,7 +352,14 @@ describe('POST /api/check writes one line and no answer', () => {
       const { POST: refusingPost } = await import('@/app/api/check/route');
       const response = await refusingPost(post(JSON.stringify(ANSWERS)));
       expect(response.status).toBe(503);
-      expect(Object.keys((await response.json()) as object)).toEqual(['error', 'refusal']);
+      const body = (await response.json()) as object;
+      expect(Object.keys(body)).toEqual(['error', 'refusal']);
+      // One fixed code (finding 1); `public-resolver-seam.test.ts` holds its control, the thrown error naming CSRD-S-013.
+      expect(body).toEqual(TIMELINE_BODY);
+      const meta = metaOf(response);
+      expect(meta).toContain('content-type: application/json');
+      const metaLeaks = ['CSRD-S-013', 'reads APPLIES', 'TimelineRefusalError', 'invent a label'].filter((mark) => meta.includes(mark));
+      expect(metaLeaks, `the 503's status text or headers carry the message: ${metaLeaks.join(', ')}`).toEqual([]);
       expect(theLine().parsed).toMatchObject({ event: 'check.refused', route: '/api/check', status: 503 });
       expect(elsewhere(), 'nothing written on any other channel').toEqual([]);
     } finally {
@@ -315,29 +368,158 @@ describe('POST /api/check writes one line and no answer', () => {
     }
   });
 
-  it('logs any other error as check.refused with the 500 Next then sends, once, and rethrows the error unchanged', async () => {
-    const planted = new Error('a failure no refusal names');
+  it('answers any other error 500 with a fixed body and logs it as check.refused, once, letting nothing of the error reach the body or any channel', async () => {
+    const planted = plantedError();
+    const thrower = vi.fn(() => {
+      throw planted;
+    });
     vi.resetModules();
     vi.doMock('@/lib/pack', async (importOriginal) => {
       const actual = await importOriginal<typeof import('@/lib/pack')>();
-      return {
-        ...actual,
-        csrdPack: () => {
-          throw planted;
-        },
-      };
+      return { ...actual, csrdPack: thrower };
     });
     try {
       const { POST: throwingPost } = await import('@/app/api/check/route');
-      await expect(throwingPost(post(JSON.stringify(ANSWERS)))).rejects.toBe(planted);
-      const { raw, parsed } = theLine();
-      expect(parsed).toMatchObject({ event: 'check.refused', route: '/api/check', status: 500 });
-      expect(raw).not.toContain(planted.message);
-      // What the route itself writes before the error leaves it is the line alone; Next prints the error later, outside the handler.
-      expect(elsewhere(), 'nothing written on any other channel').toEqual([]);
+      // The call resolves: nothing is rethrown, so the framework has nothing to print (Codex's review of Task 6, finding 2).
+      const response = await throwingPost(post(JSON.stringify(ANSWERS)));
+      // The positive control: the planted error was thrown inside the handler, and its message carries every mark.
+      expect(thrower.mock.results).toEqual([{ type: 'throw', value: planted }]);
+      expect(marksIn(`${planted.name}\n${planted.message}\n${planted.stack ?? ''}`)).toEqual(MARKS);
+      await expectContained(response, [planted.message]);
     } finally {
       vi.doUnmock('@/lib/pack');
       vi.resetModules();
     }
   });
+
+  /**
+   * The containment covers the whole handler, not one call: an unexpected error raised while the body is read, while the
+   * hidden-answer check runs, while the pack is found, or while the timeline is built is answered the same way. Two of these
+   * raise a real error with no mock at all: a request body whose stream fails, and `engineRoot()` under a working directory
+   * holding no engine.
+   */
+  describe('wherever the handler raises it', () => {
+    it('while the body is read: a request body whose stream fails partway', async () => {
+      const planted = plantedError();
+      let pulls = 0;
+      const body = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          pulls += 1;
+          if (pulls === 1) controller.enqueue(new TextEncoder().encode('{"country":"DE",'));
+          else controller.error(planted);
+        },
+      });
+      const request = new Request(CHECK_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body, duplex: 'half' } as RequestInit);
+      const response = await POST(request);
+      // The positive control: the stream was read into its failure, so the error reached the handler's read.
+      expect(pulls).toBe(2);
+      await expectContained(response, [planted.message]);
+    });
+
+    it('while the hidden-answer check runs', async () => {
+      const planted = plantedError();
+      const thrower = vi.fn(() => {
+        throw planted;
+      });
+      vi.resetModules();
+      vi.doMock('@/lib/check-view', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/lib/check-view')>()), answeredHiddenQuestions: thrower }));
+      try {
+        const { POST: throwingPost } = await import('@/app/api/check/route');
+        const response = await throwingPost(post(JSON.stringify(ANSWERS)));
+        expect(thrower.mock.results).toEqual([{ type: 'throw', value: planted }]);
+        await expectContained(response, [planted.message]);
+      } finally {
+        vi.doUnmock('@/lib/check-view');
+        vi.resetModules();
+      }
+    });
+
+    it('while the pack is found: engineRoot() under a working directory with no engine, a plain Error naming absolute paths', async () => {
+      const nowhere = mkdtempSync(join(tmpdir(), 'check-no-engine-'));
+      try {
+        // The positive control: the probe's own error names the absolute paths it looked at.
+        const probe = await inRepository(nowhere, () => {
+          try {
+            engineRoot();
+            return 'found';
+          } catch (error) {
+            return String(error);
+          }
+        });
+        expect(probe).toContain(realpathSync(nowhere));
+        expect(probe).toContain('CSRD knowledge pack not found');
+
+        const response = await inRepository(nowhere, () => POST(post(JSON.stringify(ANSWERS))));
+        await expectContained(response, [nowhere, realpathSync(nowhere), 'CSRD knowledge pack not found', 'backend']);
+      } finally {
+        rmSync(nowhere, { recursive: true, force: true });
+      }
+      expect(existsSync(nowhere), 'the test removes the directory it made').toBe(false);
+    });
+
+    it.each([
+      ['a thrown string', (): unknown => `${PLANTED_NAME}: no band ${TURNOVER} for the pack at ${PLANTED_PATH}`],
+      ['a thrown plain object', (): unknown => ({ name: PLANTED_NAME, message: `no band ${TURNOVER}`, path: PLANTED_PATH })],
+    ])('a thrown value that is not an Error, from inside the handler: %s', async (_name, value) => {
+      const planted = value();
+      const thrower = vi.fn(() => {
+        throw planted;
+      });
+      vi.resetModules();
+      vi.doMock('@/lib/pack', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/lib/pack')>()), csrdPack: thrower }));
+      try {
+        const { POST: throwingPost } = await import('@/app/api/check/route');
+        const response = await throwingPost(post(JSON.stringify(ANSWERS)));
+        // The positive control: this value, not an Error, was thrown inside the handler, and it carries a path and an answer.
+        expect(thrower.mock.results).toEqual([{ type: 'throw', value: planted }]);
+        expect(planted instanceof Error).toBe(false);
+        const text = typeof planted === 'string' ? planted : JSON.stringify(planted);
+        expect(marksIn(text)).toEqual(expect.arrayContaining([PLANTED_NAME, PLANTED_PATH, '123456789.01']));
+        await expectContained(response, [text]);
+      } finally {
+        vi.doUnmock('@/lib/pack');
+        vi.resetModules();
+      }
+    });
+
+    it('while the timeline is built: a TypeError from inside the engine', async () => {
+      const planted = new TypeError(`Cannot read properties of undefined (reading 'band') at ${PLANTED_PATH} for ${TURNOVER}`);
+      const thrower = vi.fn(() => {
+        throw planted;
+      });
+      vi.resetModules();
+      vi.doMock('@/lib/check-timeline', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/lib/check-timeline')>()), buildCheckTimeline: thrower }));
+      try {
+        const { POST: throwingPost } = await import('@/app/api/check/route');
+        const response = await throwingPost(post(JSON.stringify(ANSWERS)));
+        expect(thrower.mock.results).toEqual([{ type: 'throw', value: planted }]);
+        await expectContained(response, [planted.message, 'TypeError', 'Cannot read properties']);
+      } finally {
+        vi.doUnmock('@/lib/check-timeline');
+        vi.resetModules();
+      }
+    });
+  });
 });
+
+/**
+ * The containment, asserted the same way wherever the error was raised: 500 with exactly the fixed body; exactly one line,
+ * `check.refused`, 500; nothing on any other channel; and none of the error's marks, or `extra`, in the body, the status text,
+ * the headers or on any channel.
+ */
+async function expectContained(response: Response, extra: readonly string[]): Promise<void> {
+  expect(response.status).toBe(500);
+  const text = await response.text();
+  expect(marksIn(text, extra), `the 500 body carries the error: ${marksIn(text, extra).join(', ')}`).toEqual([]);
+  expect(JSON.parse(text)).toEqual(UNEXPECTED_BODY);
+  // Nor its status text or headers (the review's T4); the control is that the scan reads the headers that are there.
+  const meta = metaOf(response);
+  expect(meta).toContain('content-type: application/json');
+  expect(marksIn(meta, extra), `the 500's status text or headers carry the error: ${marksIn(meta, extra).join(', ')}`).toEqual([]);
+  const { parsed } = theLine();
+  expect(Object.keys(parsed)).toEqual(KEYS);
+  expect(parsed).toMatchObject({ event: 'check.refused', route: '/api/check', status: 500 });
+  expect(elsewhere(), 'nothing written on any other channel').toEqual([]);
+  const found = marksIn(everything(), extra);
+  expect(found, `a channel carries the error: ${found.join(', ')}`).toEqual([]);
+}
