@@ -1495,6 +1495,24 @@ The route and the old modules are untouched until Task 6.
 - **T7b.** `/api/pilot-access` ignores the switch. Its 404 test must fail, and only its.
 - **T7c.** The comparison is made case-insensitive. The `ON` case must fail.
 
+*Carried from Task 6 (your direction of 2026-10-26): two phone-width fixes, a bounded addition to this task.*
+- **Delivers:** EXP-4, in part (the home page and `/company` at phone width).
+- **The defects,** found in Task 6's browser checks (`side-session-notes/local_043075c1-…/2026-10-26T0616Z-dp1-task6/parent/BROWSER-CHECKS.md`, §2) and present before Task 6:
+  - the home page `/` is 427 px wide at 320 and 431 at 375. The coverage section's status chips, which are `ds-chip` with `white-space: nowrap` and rendered through `components/marketing/CoverageStrip.tsx`, extend past the edge;
+  - `/company` is 321 px wide at 320.
+- **The fix is to the underlying layout** of the elements that overflow, found by measuring them: for example, a row that wraps or stacks at narrow widths, or a cell that may shrink.
+  - **No redesign:** the same content, order, words, typography and colours.
+  - **No overflow clipping:** no `overflow: hidden`, `clip` or `overflow-x` on `html`, `body`, a page wrapper or a section, and no width crop such as `max-width: 100vw`, used to hide what overflows.
+- **Files:** only those that lay out the overflowing elements. Expected: `CoverageStrip.tsx` and/or `app/globals.css`, plus whatever `/company`'s measurement names. Any other file needs a reason in the report.
+- **Verification:**
+  - Both pages, in a browser, on a local server the task starts from its clean clone (§1, Servers), at 320, 375 and 1280 px.
+  - The check is `document.documentElement.scrollWidth` ≤ the **target width**. Not `innerWidth`: Task 6 found it widens under the browser's phone emulation, so `scrollWidth <= innerWidth` misses overflow.
+  - Record, for each page and width, the widest element's right edge.
+  - Positive control: a 900 px element, planted temporarily, is reported.
+- **T7d.** The fix is reverted in a temporary copy. The width check must report `/` at 320 and 375, and `/company` at 320.
+- **Separate from the gate.** It is handed over as its own commit within Task 7, with no separate approval: "Let the home page's coverage chips and the company page fit a phone screen, so no public page scrolls sideways at 320 or 375 pixels".
+- **Task 13's check 6 is unchanged.** It still checks every page at 320, 375 and 1280 px on the host.
+
 **Baseline:** Task 6's finishing count.
 
 **Commit message:** "Keep the passphrase pilot gate off unless a server switches it on, so the hosted site exposes no sign-in that has not had its independent review"
@@ -1766,7 +1784,7 @@ Each check is recorded verbatim in `PRE-EXPOSURE-EVIDENCE.md`, with its positive
 4. **The checker's goldens** pass against the preview's `/api/check`. Positive control: one expectation flipped in a temporary copy is reported.
 5. **`/healthz` agreement:** `release` equals the commit, and every `inputs` digest equals the one computed in the clean clone at that commit.
 6. **The browser checks,** at 320, 375 and 1280 pixels, on every page and on a check down each visitor path:
-   - no horizontal scrolling;
+   - no horizontal scrolling: `document.documentElement.scrollWidth` ≤ the target width, with a planted 900 px element as the positive control. *Carried from Task 6:* not `innerWidth`, which widens under phone emulation;
    - requests only to the preview's origin (Task 9's teeth, with its positive control);
    - cookies as Task 9's record (§9) expects for the authentication method the check uses, recorded with the result:
      - none with the bypass header alone;
