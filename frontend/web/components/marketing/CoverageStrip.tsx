@@ -61,6 +61,7 @@ export function CoverageTable() {
       {entries.map((r, i) => (
         <div
           key={r.id}
+          className="ds-coverage-row"
           style={{
             borderTop: i === 0 ? '1px solid var(--ds-ink)' : '1px solid var(--ds-hairline-1)',
             padding: '20px 0', display: 'grid',

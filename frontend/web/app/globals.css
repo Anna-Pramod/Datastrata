@@ -113,6 +113,14 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   color: var(--ds-oxide); border-bottom: 1px solid rgba(169,59,42,.4); padding: 0 0 2px;
 }
 .ds-btn-link:hover { border-bottom-color: var(--ds-oxide); }
+/* On a phone a button's label may wrap rather than run past its box: the
+   call to action "Check what applies to you - free" is 300px on one line, and
+   a 320px screen's content box is 278px. A label that fits keeps its one line,
+   so only a button that would overflow changes, and nothing changes above
+   480px (DP1 Task 7, EXP-4). */
+@media (max-width: 480px) {
+  .ds-btn { white-space: normal; text-align: center; }
+}
 
 /* ---------------------------------------------------------------- input */
 
@@ -211,6 +219,15 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 @media (max-width: 900px) {
   .ds-contact-grid { grid-template-columns: 1fr !important; }
   .ds-company-grid { grid-template-columns: 1fr !important; }
+}
+/* A coverage row (CoverageStrip.tsx) is three columns on a wide screen: the
+   regime, what it decides, its status. The status chip never wraps, and on a
+   phone the three no longer fit side by side (at 320px the columns and gaps
+   take about 360px of a 278px box), so below 760px each row stacks: the
+   regime, the sentence, then the chip at its own width (DP1 Task 7, EXP-4). */
+@media (max-width: 760px) {
+  .ds-coverage-row { grid-template-columns: 1fr !important; }
+  .ds-coverage-row > .ds-chip { justify-self: start; }
 }
 
 /* ---------------------------------------------------------------- app shell responsive */

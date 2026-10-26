@@ -110,7 +110,7 @@ export default function CompanyPage() {
         <section className="ds-gutter ds-section" style={{ borderTop: '1px solid var(--ds-hairline-1)' }}>
           <p className="ds-label" style={{ marginBottom: 18 }}>04 · WHO</p>
           <h2 className="ds-h2" style={{ maxWidth: '20ch', marginBottom: 36 }}>Two people, both accountable.</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 24, maxWidth: 900 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(300px, 100%), 1fr))', gap: 24, maxWidth: 900 }}>
             {TEAM.map((person, i) => (
               <div key={i} className="ds-card" style={{ padding: 24 }}>
                 <p className="ds-mono" style={{ fontSize: 11, letterSpacing: '0.14em', color: 'var(--ds-oxide)', textTransform: 'uppercase', marginBottom: 12 }}>
