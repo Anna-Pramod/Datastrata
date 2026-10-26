@@ -54,13 +54,41 @@ import { IntegrityFailureError } from '@datastrata/engine';
 import { checkerAnswersSchema, type CheckerAnswers } from '@/lib/check-answers';
 import { buildCheckTimeline, TimelineRefusalError } from '@/lib/check-timeline';
 import { answeredHiddenQuestions } from '@/lib/check-view';
+import { logEvent, type LogEventName } from '@/lib/log';
 import { csrdPack } from '@/lib/pack';
 import { CHECK_BODY_LIMIT, readBodyWithin, withBoundedBody } from '@/lib/request-body';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: Request) {
+/**
+ * The handler, with exactly one log line per request (DP1 plan, Task 8).
+ *
+ * The line is written in `finally`, so every path writes it once: each answer `answer` gives, and a thrown error, which is logged
+ * as `check.refused` with the 500 Next then sends and rethrown unchanged. It is made from the status and the duration alone:
+ * nothing from the request reaches `logEvent`, so no answer, header, query or address can (§1, "Logs carry no answers").
+ */
+export async function POST(request: Request): Promise<Response> {
+  const started = performance.now();
+  let status = 500;
+  try {
+    const response = await answer(request);
+    status = response.status;
+    return response;
+  } finally {
+    logEvent({ event: eventFor(status), route: '/api/check', status, ms: performance.now() - started });
+  }
+}
+
+/** The event each status is logged as: a 503 refusal and the 500 of a thrown error are both refusals. */
+function eventFor(status: number): LogEventName {
+  if (status === 200) return 'check.answered';
+  if (status === 413) return 'check.too_large';
+  if (status === 400) return 'check.malformed';
+  return 'check.refused';
+}
+
+async function answer(request: Request) {
   const body = await readBodyWithin(request, CHECK_BODY_LIMIT);
   if (!body.ok) {
     return NextResponse.json({ error: 'Request body too large.' }, { status: 413, headers: { 'Cache-Control': 'no-store' } });

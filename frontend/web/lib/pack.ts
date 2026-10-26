@@ -126,9 +126,9 @@ export function engineRoot(): string {
 }
 
 /** The four conventional locations, all derived from the one root. */
-const packDirOf = (root: string): string => join(root, 'knowledge', PACK_ID);
-const corpusDirOf = (root: string): string => join(root, 'corpus');
-const verificationDirOf = (root: string): string => join(root, 'verification');
+export const packDirOf = (root: string): string => join(root, 'knowledge', PACK_ID);
+export const corpusDirOf = (root: string): string => join(root, 'corpus');
+export const verificationDirOf = (root: string): string => join(root, 'verification');
 const resultPathOf = (root: string, packId: string, requirementId: string): string =>
   join(verificationDirOf(root), packId, requirementId, 'verification-result.json');
 

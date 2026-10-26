@@ -26,9 +26,18 @@ const nextConfig = {
   // with the reason each member is load-bearing — and this is only where the
   // declaration is spent. A glob added here instead of there would be a second
   // closure, and on the first disagreement the narrower one becomes the real one.
+  //
+  // `/healthz` spends the same declaration, called again: it loads the same pack
+  // and digests the same directories `/api/check` reads, so it needs exactly that
+  // closure. `.next/standalone` copies the union of every route's trace, which hid
+  // the need locally; a host may instead build each route's function from that
+  // route's own trace, and `/healthz` would then answer from nothing. Two lists
+  // would let the two routes ship different closures; one projection, spent
+  // twice, cannot.
   outputFileTracingRoot: repoRoot,
   outputFileTracingIncludes: {
     '/api/check': verificationTracingGlobs(),
+    '/healthz': verificationTracingGlobs(),
   },
   // Next otherwise adds `X-Powered-By: Next.js` to every page it renders. It serves
   // no reader and tells a prober which framework's advisories to try.
