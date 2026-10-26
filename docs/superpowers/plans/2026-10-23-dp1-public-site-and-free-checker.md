@@ -1517,6 +1517,83 @@ The route and the old modules are untouched until Task 6.
 
 **Commit message:** "Keep the passphrase pilot gate off unless a server switches it on, so the hosted site exposes no sign-in that has not had its independent review"
 
+*As executed (2026-10-26, uncommitted at hand-off).*
+- **Counts:**
+  - engine 84 / 3,320, unchanged;
+  - frontend 36 / 1,350 → 39 / 1,471: three new test files (`hosting-mode.test.ts`, 90 tests; `error-pages.test.ts`, 15; `public-navigation.test.ts`, 14) and two rows in existing tables;
+  - the same 39 / 1,471 with `DATASTRATA_PILOT_GATE=on` in the calling environment, so no test depends on it either way;
+  - typecheck exit 0; csrd grep 7; `lib/wording.ts` and every golden's sha256 unchanged;
+  - the standalone gate passes, and its build lists `/login` as dynamic.
+- **Files: two commits.**
+  - **The gate, 21 paths.**
+    - New: `lib/hosting-mode.ts`, `app/not-found.tsx` and `app/error.tsx`; tests `hosting-mode.test.ts`, `error-pages.test.ts` and `public-navigation.test.ts`.
+    - Changed: `middleware.ts`, `lib/pilot-access-handler.ts`, the two route files, the three pages, `MarketingNav.tsx`, `Footer.tsx`, `middleware.test.ts`, `pilot-access-route.test.ts`, `dashboard-view.test.ts`, `scripts/smoke-production.mjs`, `frontend/web/README.md` and the `Dockerfile` (comments only).
+  - **The width fixes, 3 paths:** `app/globals.css`, `components/marketing/CoverageStrip.tsx` and `app/company/page.tsx`.
+- **The switch.**
+  - `pilotSurfaceEnabled(env)` is true only for exactly `on`. The module imports nothing and reads no environment; each caller reads `process.env.DATASTRATA_PILOT_GATE` by name, first.
+  - **Pages:** each of the three calls `notFound()` before anything else.
+  - **Handlers:** each answers 404 `{"error":"not_found"}` with `no-store` through a `pilotSurface` dependency of its own, read before the configuration, a header or the body.
+  - **The middleware** answers 404 itself, with the same body, `private, no-store` and `Vary: Cookie`, decided before the decision, the cookie or the origin is read.
+    - *Why directly:* a rewrite to the 404 page needs an absolute URL. The existing B3 test forbids building one from the request, and reading the origin would read configuration the switch exists to leave unread.
+    - The matcher is unchanged.
+  - **`/login` is now `force-dynamic`.** Without it, Next prerenders the page at build, and a server started with the switch on still answered 404 (shown on a control build).
+  - **Other methods:** `GET` and the other unexported methods to the two API paths get Next's own 405, and `OPTIONS` gets 204. The surface's code is not reached.
+- **Your direction of 2026-10-26, before committing.**
+  - **"Sign in" is removed** from the desktop navigation, the mobile menu and the footer. The footer's removal is brought forward from Task 10, and nothing else of Task 10 is.
+  - **Direct access is kept.** With the switch on, `/pilot-access` and `/login` are opened by their address. Nothing on the public site links to them.
+  - **`public-navigation.test.ts`** renders the navigation and the footer, and holds:
+    - their exact links;
+    - no link into the pilot surface;
+    - no "sign in", "log in" or "login" wording;
+    - no disabled or `aria-disabled` control;
+    - and, by a source scan, that no public page or marketing component names a pilot path.
+  - **The README and the `Dockerfile` comment** explain the local opt-in, `DATASTRATA_PILOT_GATE=on` for a screen-share only. Neither the image nor the host sets it, and the `Dockerfile` changes only comment lines.
+- **The source-shape tests,** each still an exact equality, gained only what the code requires:
+  - the middleware's imports gained `@/lib/hosting-mode`, and its reads `DATASTRATA_PILOT_GATE`;
+  - the handler's imports gained `@/lib/hosting-mode`;
+  - `/pilot-access`'s imports gained it and `next/navigation`;
+  - each route file's reads gained the switch;
+  - the dashboard page's reads now list the switch first.
+
+  A new assertion holds `hosting-mode.ts` to no imports. An independent audit found no test or assertion deleted or weakened, and that every existing gate case still runs with the switch on.
+- **Routine corrections:**
+  - **F1, found in the parent's production-build check.** The three pages' static `metadata` reached their 404 responses: Next streamed "Sign in · DataStrata" and "Pilot evaluations use a passphrase, entered at /pilot-access." into the `/login` 404, and the tab took that title. Each page now has `generateMetadata()`, which returns `{}` while the switch is off and the unchanged metadata while it is on. On the rebuilt server, no 404 carries a pilot or sign-in word.
+  - **Four test additions from the audit:** the surface-off 404 in the middleware's and the handler's "every response" header tables, a stale comment, and a live "on" count beside every "off" zero.
+  - **The 375 px content box** is 325.5 px, not "about 333" as the parent first estimated.
+- **The width fixes.**
+  - **The coverage rows** stack below 760 px, through a `ds-coverage-row` class, and the chip keeps its own width.
+  - **The team grid's** minimum is `min(300px, 100%)`.
+  - **A `.ds-btn` label** may wrap at 480 px or narrower. Only a button wider than its box changes.
+  - **Measured by the parent:** `/` 427 → 320 at 320 and 431 → 375 at 375; `/company` 321 → 320 at 320. Both pages at 1280 are unchanged, and a planted element is reported at every width. No overflow is clipped.
+- **Teeth:**
+  - T7a to T7c were red on their intended assertions, in the implementer's run and in the parent's.
+  - The parent's mutations differ from the implementer's:
+    - a nullish default for T7a;
+    - T7b both where the route file binds the switch and where the handler reads it, each failing only `/api/pilot-access`'s tests;
+    - a pattern for T7c;
+    - five extras:
+      - the middleware ignoring the switch;
+      - the dashboard page ignoring it;
+      - `/login`'s metadata ignoring it;
+      - a sign-in link in the mobile menu alone;
+      - a greyed-out, `aria-disabled` sign-in with no link in the footer.
+  - Every file was restored by sha256.
+  - **T7d:** with the width fix reverted in a copy, the parent's check reported `/` at 320 (427) and 375 (431), and `/company` at 320 (321).
+- **Browser and production-build checks** (parent-run, local, on 127.0.0.1:3227):
+  - **The width check** at 320, 375 and 1280.
+  - **The five routes and the 404s, switch unset:** every route 404, no `Set-Cookie`, no page metadata.
+  - **The same build with the switch on:** `/login` and `/pilot-access` answer 200, `/dashboard`'s gate behaves as before, and a correct sign-in sets `ds_pilot_access`.
+  - **The error page,** on a planted throwing page: only the approved words, and no message, path, variable name or stack.
+  - **Public navigation,** switch off and on:
+    - `/`, `/check`, `/company`, `/contact` and the 404 carry no link into the pilot surface, no sign-in wording and no disabled sign-in;
+    - at 1280, the navigation is Product, How it works, Coverage, Company, Contact and "Check what applies →";
+    - at 375 and 320 the open mobile menu has the same links, and both pages still fit with the menu open.
+- **Found outside Task 7, not changed:**
+  - **`scripts/smoke-production.mjs`** starts every server with the switch on, so it never sees the surface off. Task 13's hosted checks run with it unset.
+  - **The root `README.md` and `frontend/README.md`** still describe a "login shell". They give no pilot start command.
+
+  Evidence: `side-session-notes/local_043075c1-…/2026-10-26T0802Z-dp1-task7/` (`parent/BROWSER-CHECKS.md`, `parent/AUDIT-no-weakening.md`).
+
 ### Task 8: `/healthz` and structured logs (PLT-6, its DP1 part)
 
 **Delivers:** PLT-6, for DP1's scope.
@@ -1647,7 +1724,7 @@ This wording is a draft for counsel. The record's §13 gives the full draft, and
   - It names the mailbox provider under the DG-4 option chosen, including the existing address's provider under option A.
   - It states the request-log retention that matches the host's Observability Plus setting as Task 11 records it.
 - **The terms** are as Appendix A §A.4: information only, not legal advice; for businesses; liability drafted with counsel.
-- **The footer** on every page links to the imprint, the privacy notice, the cookies section, the terms and the pricing page. It drops the link to `/login`.
+- **The footer** on every page links to the imprint, the privacy notice, the cookies section, the terms and the pricing page. It drops the link to `/login`. *(Done in Task 7, by your direction of 2026-10-26: the footer's and the navigation's links to `/login` are removed, and `public-navigation.test.ts` holds both free of sign-in. Task 10 adds the footer's new links.)*
 - **The About page** shows your names, roles and biographies, the entity and the location (DG-18). With them filled in, no fallback text can render.
 - **The pricing page** says pricing is by conversation and gives the imprint's contacts. It shows no plan and no price (PUB-5).
 - **The contact page.** Its unconfigured text points to the imprint's contacts instead of saying contact details are unpublished. The form logic is unchanged.
