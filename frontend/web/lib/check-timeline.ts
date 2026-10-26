@@ -38,10 +38,11 @@
  * the pack is never caught here, so the route can refuse exactly as today.
  */
 
-import { assess } from '@datastrata/engine';
+import { assess, cmpRange } from '@datastrata/engine';
 import type {
   AssessmentContext,
   AssessmentResult,
+  Condition,
   Determination,
   FactNeed,
   KnowledgePack,
@@ -49,7 +50,7 @@ import type {
   ReasonCode,
   Truth,
 } from '@datastrata/engine';
-import { conditionSchema } from '../../../backend/engine/src/knowledge/schema';
+import { conditionSchema, reasonSchema, truthSchema } from '../../../backend/engine/src/knowledge/schema';
 import { sourceById } from '@/lib/pack';
 import {
   buildCheckProfile,
@@ -68,6 +69,7 @@ import {
   CHECK_ROWS,
   countrySide,
   groupPosition,
+  LINE_KINDS,
   shownRows,
   type CheckLineSpec,
   type LineKind,
@@ -1009,7 +1011,7 @@ interface Step {
  * checked against `visibleQuestions` as a whole; a flow that fails is counted,
  * not used.
  */
-function* reachableFlows(ctx: GuardContext, countries: readonly CheckerAnswers[], rejected: { count: number }): Generator<{ answers: CheckerAnswers; visible: ReturnType<typeof visibleQuestions> }> {
+export function* reachableFlows(ctx: GuardContext, countries: readonly CheckerAnswers[], rejected: { count: number }): Generator<{ answers: CheckerAnswers; visible: ReturnType<typeof visibleQuestions> }> {
   const figures = guardFigureAnswers(ctx.pack);
   const steps: Step[] = [
     { question: 'C-2', answers: optionIds('C-2').map((group) => ({ group }) as CheckerAnswers) },
@@ -1040,7 +1042,7 @@ function* reachableFlows(ctx: GuardContext, countries: readonly CheckerAnswers[]
 }
 
 /** C-1's answers: one Member State per class (`countryClasses`), every listed and every typed non-EU country, and "Not sure". */
-function guardCountries(pack: KnowledgePack): CheckerAnswers[] {
+export function guardCountries(pack: KnowledgePack): CheckerAnswers[] {
   const representatives = countryClasses(pack).eu.map((codes) => codes[0]!);
   return [
     ...representatives.map((country) => ({ country }) as CheckerAnswers),
@@ -1148,4 +1150,229 @@ export function questionGuardReport(pack: KnowledgePack): QuestionGuardReport {
 /** The question guard's problems (plan Task 4): pure over a pack object. */
 export function questionGuardProblems(pack: KnowledgePack): string[] {
   return questionGuardReport(pack).problems;
+}
+
+// ---------------------------------------------------------------------------
+// The reachable (line kind, state) pairs, for Task 5's words
+// ---------------------------------------------------------------------------
+
+const settableByPack = new WeakMap<KnowledgePack, ReadonlySet<string>>();
+
+/**
+ * Every fact type the checker's answers can write: `buildCheckProfile`, the
+ * one place an answer becomes a fact, over every reachable flow of Task 4's
+ * enumeration. A fact type outside this set is absent from every profile the
+ * checker builds. Pure over a pack object; remembered per pack.
+ */
+export function checkerFactTypes(pack: KnowledgePack): ReadonlySet<string> {
+  const cached = settableByPack.get(pack);
+  if (cached !== undefined) return cached;
+  const facts = new Set<string>();
+  for (const { answers } of reachableFlows(guardContext(pack), guardCountries(pack), { count: 0 })) {
+    for (const fact of buildCheckProfile(answers).facts) facts.add(fact.factType);
+  }
+  settableByPack.set(pack, facts);
+  return facts;
+}
+
+/** A set of engine results, one bit each. */
+const CAN_APPLY = 1;
+const CAN_NOT_APPLY = 2;
+const CAN_BE_OPEN = 4;
+const EVERY_RESULT = CAN_APPLY | CAN_NOT_APPLY | CAN_BE_OPEN;
+const BIT: Record<Truth, number> = { APPLIES: CAN_APPLY, DOES_NOT_APPLY: CAN_NOT_APPLY, INDETERMINATE: CAN_BE_OPEN };
+
+/**
+ * The results each requirement's condition can take over the checker's
+ * profiles: an over-approximation, built operator by operator from how the
+ * engine evaluates each one (`condition/evaluate.ts`), in which a fact the
+ * checker never writes is absent and every other fact may hold anything.
+ */
+function resultAnalysis(pack: KnowledgePack): (requirementId: string) => number {
+  const byId = new Map(pack.requirements.map((r) => [r.id, r]));
+  const memo = new Map<string, number>();
+  const inFlight = new Set<string>();
+  /** A leaf that reads one fact: anything if the checker can write it; INDETERMINATE if absent, which every such operator gives. */
+  const readsFact = (factType: string): number => (checkerFactTypes(pack).has(factType) ? EVERY_RESULT : CAN_BE_OPEN);
+
+  const ofCondition = (condition: Condition): number => {
+    switch (condition.op) {
+      case 'all': {
+        // FALSE if any child is; TRUE if all are; else INDETERMINATE (Kleene).
+        const children = condition.of.map(ofCondition);
+        let out = 0;
+        if (children.some((c) => c & CAN_NOT_APPLY)) out |= CAN_NOT_APPLY;
+        if (children.every((c) => c & CAN_APPLY)) out |= CAN_APPLY;
+        if (children.every((c) => c & (CAN_APPLY | CAN_BE_OPEN)) && children.some((c) => c & CAN_BE_OPEN)) out |= CAN_BE_OPEN;
+        return out;
+      }
+      case 'any': {
+        const children = condition.of.map(ofCondition);
+        let out = 0;
+        if (children.some((c) => c & CAN_APPLY)) out |= CAN_APPLY;
+        if (children.every((c) => c & CAN_NOT_APPLY)) out |= CAN_NOT_APPLY;
+        if (children.every((c) => c & (CAN_NOT_APPLY | CAN_BE_OPEN)) && children.some((c) => c & CAN_BE_OPEN)) out |= CAN_BE_OPEN;
+        return out;
+      }
+      case 'not': {
+        const child = ofCondition(condition.of);
+        return (child & CAN_BE_OPEN) | (child & CAN_APPLY ? CAN_NOT_APPLY : 0) | (child & CAN_NOT_APPLY ? CAN_APPLY : 0);
+      }
+      case 'cmp':
+      case 'eq':
+      case 'in_set':
+      case 'in_catalogue':
+      case 'prefix_in':
+      case 'exists':
+      case 'count_cmp':
+        return readsFact(condition.fact);
+      case 'year_diff_lt':
+        return readsFact(condition.fromFact);
+      case 'quantifier_any': {
+        // FALSE over no descendants; otherwise whatever its children can be.
+        const where = ofCondition(condition.where);
+        return CAN_NOT_APPLY | (where & (CAN_APPLY | CAN_BE_OPEN));
+      }
+      case 'sum_cmp':
+        // With the fact absent everywhere: the empty sum over no descendants, or a partial sum of 0 that is INDETERMINATE unless 0 already decides.
+        return checkerFactTypes(pack).has(condition.fact) ? EVERY_RESULT : CAN_BE_OPEN | BIT[cmpRange({ min: 0, max: 0 }, condition.cmp, condition.value)];
+      case 'fy_starts_on_or_after':
+      case 'fy_start_year_in':
+        return CAN_APPLY | CAN_NOT_APPLY;
+      case 'requirement_ref': {
+        // INDETERMINATE stays INDETERMINATE (and a reference with no scope to resolve against is INDETERMINATE too); a definite result is compared with `expect`.
+        const target = ofRequirement(condition.requirement);
+        let out = CAN_BE_OPEN;
+        if (condition.expect !== 'INDETERMINATE' && target & BIT[condition.expect]) out |= CAN_APPLY;
+        if (target & (CAN_APPLY | CAN_NOT_APPLY) & ~BIT[condition.expect]) out |= CAN_NOT_APPLY;
+        return out;
+      }
+      case 'pack_flag': {
+        const flag = pack.packFlags[condition.flag];
+        return flag === undefined ? CAN_BE_OPEN : flag ? CAN_APPLY : CAN_NOT_APPLY;
+      }
+      default:
+        throw new Error(`the restriction rule does not know the condition operator '${String((condition as { op: unknown }).op)}', so it cannot say what that condition can give`);
+    }
+  };
+
+  const ofRequirement = (id: string): number => {
+    const hit = memo.get(id);
+    if (hit !== undefined) return hit;
+    if (inFlight.has(id)) throw new Error(`cyclic requirement_ref involving ${id}`);
+    const requirement = byId.get(id);
+    if (requirement === undefined) throw new Error(`no requirement ${id}`);
+    inFlight.add(id);
+    try {
+      let out = 0;
+      if (requirement.kind === 'selection') {
+        // The first case that is TRUE selects (APPLIES); one that is INDETERMINATE blocks; past every FALSE, the default or DOES_NOT_APPLY.
+        let reached = true;
+        for (const selection of requirement.cases ?? []) {
+          if (!reached) break;
+          const when = ofCondition(selection.when);
+          out |= when & (CAN_APPLY | CAN_BE_OPEN);
+          reached = (when & CAN_NOT_APPLY) !== 0;
+        }
+        if (reached) out |= requirement.defaultValue !== undefined ? CAN_APPLY : CAN_NOT_APPLY;
+      } else {
+        if (requirement.condition === undefined) throw new Error(`${id} has no condition`);
+        out = ofCondition(requirement.condition);
+      }
+      memo.set(id, out);
+      return out;
+    } finally {
+      inFlight.delete(id);
+    }
+  };
+  return ofRequirement;
+}
+
+const analysisByPack = new WeakMap<KnowledgePack, (requirementId: string) => number>();
+
+/**
+ * The engine results a requirement can give the checker, in the engine's
+ * order. **The rule:** a requirement cannot be APPLIES when its condition
+ * cannot be TRUE while every fact the checker never sets is absent. It
+ * restricts APPLIES only; DOES_NOT_APPLY and INDETERMINATE are always kept.
+ *
+ * **Why it is sound.** The checker's facts come only from `buildCheckProfile`
+ * (`checkerFactTypes`), so a fact type outside that set is absent from every
+ * profile it builds. The engine evaluates every operator that reads a fact
+ * (`cmp`, `eq`, `in_set`, `in_catalogue`, `prefix_in`, `exists`, `count_cmp`,
+ * `year_diff_lt`) to INDETERMINATE when the fact is absent, and `sum_cmp` and
+ * `quantifier_any` to what an empty or all-missing range gives. Every other
+ * fact is allowed every result, the period tests both truths, a reference
+ * follows its requirement, and `all`, `any` and `not` combine their children
+ * by Kleene logic as if independent. Each step can only add results the
+ * engine could not give, never remove one it could, so a result absent from
+ * the analysis is a result no checker profile reaches. An operator the rule
+ * does not know is refused, never read as unable to apply.
+ */
+export function reachableResults(pack: KnowledgePack, requirementId: string): readonly Truth[] {
+  let analysis = analysisByPack.get(pack);
+  if (analysis === undefined) {
+    analysis = resultAnalysis(pack);
+    analysisByPack.set(pack, analysis);
+  }
+  const possible = analysis(requirementId);
+  return truthSchema.options.filter((result) => result !== 'APPLIES' || (possible & CAN_APPLY) !== 0);
+}
+
+/**
+ * The kinds of line `linePolicy` can leave unevaluated, found by calling it
+ * under the conditions that drive it: each group position, C-9 and C-10
+ * answered or not, and C-7 asked or not, over the lines `shownRows` gives.
+ */
+function kindsLeftUnchecked(): Set<LineKind> {
+  const kinds = new Set<LineKind>();
+  const ownFigures = [{}, { parentOwnEmployees: optionIds('C-9')[0], parentOwnTurnover: optionIds('C-10')[0] }] as CheckerAnswers[];
+  for (const group of optionIds('C-2')) {
+    for (const figures of ownFigures) {
+      const answers = { group, ...figures } as CheckerAnswers;
+      for (const c7Asked of [false, true]) {
+        for (const { row, lines } of shownRows(answers)) {
+          for (const line of lines) if (linePolicy(row.id, line, answers, c7Asked) !== 'evaluate') kinds.add(line.kind);
+        }
+      }
+    }
+  }
+  return kinds;
+}
+
+const cellStatesByPack = new WeakMap<KnowledgePack, ReadonlyMap<LineKind, readonly CellState[]>>();
+
+/**
+ * The states a line of `kind` can show, in `CELL_STATES` order: Task 5 reads
+ * its reachable (kind, state) pairs here. Computed from the code that makes
+ * cells, never listed: `stateOf` itself over every result each of the kind's
+ * line requirements can give the checker (`reachableResults`) and every reason
+ * (and none), with a `TimelineRefusalError` adding nothing; and `not_checked`
+ * exactly where `linePolicy` can leave a line of the kind unevaluated.
+ */
+export function reachableCellStates(pack: KnowledgePack, kind: LineKind): readonly CellState[] {
+  let byKind = cellStatesByPack.get(pack);
+  if (byKind === undefined) {
+    const found = new Map<LineKind, Set<CellState>>(LINE_KINDS.map((k) => [k, new Set<CellState>()]));
+    const reasons: (ReasonCode | undefined)[] = [...reasonSchema.options, undefined];
+    for (const row of CHECK_ROWS) {
+      for (const line of row.lines) {
+        for (const result of reachableResults(pack, line.requirement)) {
+          for (const reason of reasons) {
+            for (const year of CHECK_START_YEARS) {
+              try {
+                found.get(line.kind)!.add(stateOf(line.kind, line.requirement, year, { result, reason, needs: [] }));
+              } catch (error) {
+                if (!(error instanceof TimelineRefusalError)) throw error;
+              }
+            }
+          }
+        }
+      }
+    }
+    for (const unchecked of kindsLeftUnchecked()) found.get(unchecked)!.add('not_checked');
+    byKind = new Map(LINE_KINDS.map((k) => [k, CELL_STATES.filter((state) => found.get(k)!.has(state))]));
+    cellStatesByPack.set(pack, byKind);
+  }
+  return byKind.get(kind) ?? [];
 }
