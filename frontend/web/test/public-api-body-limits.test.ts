@@ -17,8 +17,8 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { buildCheckResponse } from '@/lib/checkResponse';
-import type { CheckerAnswers } from '@/lib/checker';
+import { buildCheckTimeline } from '@/lib/check-timeline';
+import type { CheckerAnswers } from '@/lib/check-answers';
 import { csrdPack } from '@/lib/pack';
 import { POST as check } from '@/app/api/check/route';
 import { POST as contact } from '@/app/api/contact/route';
@@ -37,18 +37,17 @@ const CONTACT_TOO_LARGE = '{"ok":false,"message":"Your message is too long."}';
 const CONTACT_UNCONFIGURED = '{"ok":false,"message":"This form is not connected to an inbox yet, so nothing was sent."}';
 const CONTACT_MALFORMED = '{"ok":false,"message":"Please check the form and try again."}';
 const CHECK_MALFORMED = '{"error":"Malformed check answers."}';
+/** An answer to a question the other answers do not show (DP1 Task 6): refused, never silently dropped. */
+const CHECK_HIDDEN_C8 = '{"error":"An answer was given to a question these answers do not show.","questions":["C-8"]}';
 
-/** A German entity over both thresholds, as the other check tests use. */
+/** A German company with no group over both thresholds, as the other check tests use: every question it is shown, answered. */
 const ANSWERS: CheckerAnswers = {
   country: 'DE',
-  legalForm: 'private_limited_company',
-  financialYear: '2027',
-  groupPosition: 'standalone',
-  turnover: 'gt600',
-  employees: 'gt1500',
-  reportedFy2024: 'no',
-  governingChoice: 'same',
-  exclusion: 'no',
+  group: 'none',
+  organisation: 'private_limited',
+  employees: 'over_1100',
+  turnover: 'over_500m',
+  pie: 'no',
 };
 
 const MESSAGE = { name: 'Ada', email: 'ada@example.test', company: 'Example Ltd', message: `A message of more than ten characters. ${MARKER}` };
@@ -123,7 +122,7 @@ afterEach(() => {
 });
 
 describe('POST /api/check', () => {
-  const assessed = () => JSON.parse(JSON.stringify(buildCheckResponse(csrdPack(), ANSWERS, ASSESSMENT_DATE))) as unknown;
+  const assessed = (answers: CheckerAnswers = ANSWERS) => JSON.parse(JSON.stringify(buildCheckTimeline(csrdPack(), answers, ASSESSMENT_DATE))) as unknown;
 
   it('answers a body that declares more than 8192 bytes with 413, no-store and the fixed body, without reading it', async () => {
     const { request, record } = declared(CHECK_URL, paddedJson(ANSWERS, 8193));
@@ -158,15 +157,27 @@ describe('POST /api/check', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual(assessed());
 
-    for (const body of ['{"country":', '{"exclusion":"perhaps"}', '']) {
+    // A truncated body, a key the check no longer asks (the strict schema refuses it), an answer outside its question's options, and nothing.
+    for (const body of ['{"country":', '{"exclusion":"perhaps"}', '{"pie":"perhaps"}', '']) {
       const refused = await check(streamed(CHECK_URL, body));
       expect(refused.status, body).toBe(400);
       expect(await refused.text(), body).toBe(CHECK_MALFORMED);
     }
   });
 
+  it('refuses an answer to a question the other answers do not show, C-8 sent for a German company, with 400; the same answer from a US company is assessed', async () => {
+    const refused = await check(streamed(CHECK_URL, JSON.stringify({ ...ANSWERS, euTurnover: 'both' })));
+    expect(refused.status).toBe(400);
+    expect(await refused.text()).toBe(CHECK_HIDDEN_C8);
+    // The positive control: C-8 is shown to a company outside the EU, so its answer is assessed, not refused.
+    const us: CheckerAnswers = { country: 'US', group: 'none', euTurnover: 'both' };
+    const answered = await check(streamed(CHECK_URL, JSON.stringify(us)));
+    expect(answered.status).toBe(200);
+    expect(await answered.json()).toEqual(assessed(us));
+  });
+
   it('puts nothing that was submitted into a 413, on either path', async () => {
-    const answers = { ...ANSWERS, legalForm: MARKER };
+    const answers = { ...ANSWERS, organisation: MARKER };
     const responses = [await check(streamed(CHECK_URL, paddedJson(answers, 9000))), await check(declared(CHECK_URL, paddedJson(answers, 9000)).request)];
     // What is scanned is a 413: a route that answered something else would make the silence below say nothing about a refusal.
     expect(responses.map((response) => response.status)).toEqual([413, 413]);

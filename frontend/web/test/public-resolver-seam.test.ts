@@ -30,10 +30,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { IntegrityFailureError } from '@datastrata/engine';
-import type { KnowledgePack } from '@datastrata/engine';
+import type { Condition, KnowledgePack } from '@datastrata/engine';
 import { buildFixtureRepository } from './fixture-repository';
-import type { CheckerAnswers } from '@/lib/checker';
-import type { CheckResponse } from '@/lib/checkResponse';
+import type { CheckerAnswers } from '@/lib/check-answers';
+import type { CheckTimeline } from '@/lib/check-timeline';
 
 /**
  * Every `loadPack` the site performs, recorded.
@@ -62,19 +62,23 @@ vi.mock('@datastrata/engine', async (importOriginal) => {
 const { csrdPack, loadVerifiedCsrdPack, packStats } = await import('@/lib/pack');
 const { POST } = await import('@/app/api/check/route');
 
-/** A German entity over both thresholds — the widest slice the check reaches. */
+/**
+ * A German company with no group over both thresholds, every question it is
+ * shown answered: an ordinary undertaking, not an investment fund (C-3), so it
+ * is in scope, which is the scenario.
+ */
 const ANSWERS: CheckerAnswers = {
   country: 'DE',
-  legalForm: 'private_limited_company',
-  financialYear: '2027',
-  groupPosition: 'standalone',
-  turnover: 'gt600',
-  employees: 'gt1500',
-  reportedFy2024: 'no',
-  governingChoice: 'same',
-  // Q-039: not excluded by Article 1(4), stated — an in-scope undertaking is the scenario.
-  exclusion: 'no',
+  group: 'none',
+  organisation: 'private_limited',
+  employees: 'over_1100',
+  turnover: 'over_500m',
+  pie: 'no',
 };
+
+/** The integrity refusal's body, as the route has always sent it (status-truth boundary §6: refuse, never downgrade). */
+const INTEGRITY_REFUSAL =
+  'The verification record for this pack is damaged, so the check is unavailable. No assessment is produced from an unverifiable record.';
 
 /** Runs `fn` as a process whose working directory is `dir`, and puts it back. */
 async function inRepository<T>(dir: string, fn: () => T | Promise<T>): Promise<T> {
@@ -93,8 +97,8 @@ function statusOf(pack: KnowledgePack, requirementId: string) {
   return { derivedStatus: requirement.derivedStatus, statusReasons: requirement.statusReasons };
 }
 
-async function check(): Promise<{ status: number; body: Record<string, unknown> }> {
-  const response = await POST(
+async function check(post: typeof POST = POST): Promise<{ status: number; body: Record<string, unknown> }> {
+  const response = await post(
     new Request('http://localhost/api/check', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -251,7 +255,7 @@ describe('one resolver, one code path, both surfaces', () => {
     // holding its own resolver — even one differing in a single comparison —
     // reports these two facts inconsistently within one deployment.
     expect(response.status).toBe(200);
-    expect((response.body as unknown as CheckResponse).containsDraftContent).toBe(false);
+    expect((response.body as unknown as CheckTimeline).content.draft).toBe(false);
 
     // And there was one load, so there is one resolver and one pack.
     expect(witness.loadPackCalls).toHaveLength(1);
@@ -269,12 +273,15 @@ describe('one resolver, one code path, both surfaces', () => {
 
 /**
  * Design §6. The refusal and its positive control are in the same block on
- * purpose: "the response carries no `containsDraftContent`" is a negative
- * observation, and on its own it is satisfied by a route that never produces
- * one at all.
+ * purpose: "the response carries no draft flag" is a negative observation, and
+ * on its own it is satisfied by a route that never produces one at all.
+ *
+ * The timeline (DP1 Task 6) carries its status as `content.draft` and its
+ * assessment as `routes`; the payload before it carried `containsDraftContent`,
+ * `determinations` and `counts`. A refusal carries none of either.
  */
 describe('the route refuses rather than downgrades', () => {
-  it('produces no status payload when the verification record is damaged', async () => {
+  it('produces no status payload when the verification record is damaged, and its body is the refusal’s, unchanged', async () => {
     const fixture = buildFixtureRepository({ omitResults: true });
 
     const { status, body } = await inRepository(fixture.repoRoot, check);
@@ -285,11 +292,20 @@ describe('the route refuses rather than downgrades', () => {
     // asserting the code first makes such a run fail on "expected 200 to be
     // 503", which names the symptom rather than the property. The claim under
     // test is that no status was produced, so that is what has to go red.
+    expect(body).not.toHaveProperty('content');
+    expect(body).not.toHaveProperty('routes');
     expect(body).not.toHaveProperty('containsDraftContent');
     expect(body).not.toHaveProperty('determinations');
     expect(body).not.toHaveProperty('counts');
     expect(status).toBe(503);
     expect(String(body['error'])).toContain('damaged');
+    expect(Object.keys(body)).toEqual(['error', 'refusals']);
+    expect(body['error']).toBe(INTEGRITY_REFUSAL);
+    // Each refusal as `code: detail`, here the one pinned result that is gone, named by its path.
+    const refusals = body['refusals'] as string[];
+    expect(refusals).toHaveLength(1);
+    expect(refusals[0]).toMatch(/^invalid_result: /);
+    expect(refusals[0]).toContain(join('CSRD-S-001', 'verification-result.json'));
   });
 
   it('produces one when it can, so the refusal above is a decision and not a ceiling', async () => {
@@ -298,7 +314,31 @@ describe('the route refuses rather than downgrades', () => {
     const { status, body } = await inRepository(fixture.repoRoot, check);
 
     expect(status).toBe(200);
-    expect(body).toHaveProperty('containsDraftContent');
-    expect((body as unknown as CheckResponse).determinations.length).toBeGreaterThanOrEqual(1);
+    expect(body).toHaveProperty('content');
+    expect((body as unknown as CheckTimeline).content.draft).toBe(false);
+    expect((body as unknown as CheckTimeline).routes.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('refuses with 503 and no status when a line would have to show a state its kind cannot (TimelineRefusalError), never inventing a label', async () => {
+    // The national line reading APPLIES, as Task 4's contract test provokes it: an in-memory pack copy, handed to the route as the pack.
+    vi.resetModules();
+    vi.doMock('@/lib/pack', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('@/lib/pack')>();
+      const refusing = structuredClone(actual.csrdPack());
+      refusing.requirements.find((r) => r.id === 'CSRD-S-013')!.condition = { op: 'in_catalogue', fact: 'entity.incorporation_country', catalogue: 'eu_member_states' } as Condition;
+      return { ...actual, csrdPack: () => refusing };
+    });
+    try {
+      const { POST: refusingPost } = await import('@/app/api/check/route');
+      const { status, body } = await check(refusingPost);
+      expect(body).not.toHaveProperty('content');
+      expect(body).not.toHaveProperty('routes');
+      expect(status).toBe(503);
+      expect(Object.keys(body)).toEqual(['error', 'refusal']);
+      expect(String(body['refusal'])).toContain('CSRD-S-013');
+    } finally {
+      vi.doUnmock('@/lib/pack');
+      vi.resetModules();
+    }
   });
 });

@@ -13,7 +13,7 @@ import { Footer } from '@/components/marketing/Footer';
 import { LiveTrace } from '@/components/marketing/LiveTrace';
 import { CoverageStrip, CoverageTable } from '@/components/marketing/CoverageStrip';
 import { SheetApplicability, SheetChange, SheetSchedule, StrataSection } from '@/components/marketing/Sheets';
-import { CHECK_QUESTION_COUNT } from '@/lib/checker';
+import { checkQuestionCount } from '@/lib/check-view';
 import { answerable, planned } from '@/lib/coverage';
 import { packStats, traceSeries } from '@/lib/pack';
 import { siteCoverage } from '@/lib/site-coverage';
@@ -48,6 +48,8 @@ export default function Page() {
   const series = traceSeries();
   const coverage = siteCoverage();
   const plannedCopy = plannedSentence(planned(coverage).map((r) => r.short));
+  // The fewest and the most questions a visitor answers, read from the question model (proposal §4.5), never written here.
+  const questions = checkQuestionCount();
 
   return (
     <>
@@ -69,7 +71,7 @@ export default function Page() {
           <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap', marginBottom: 56 }}>
             <Link className="ds-btn ds-btn-primary" href="/check">Check what applies to you - free</Link>
             <span className="ds-mono ds-faint" style={{ fontSize: 11.5, letterSpacing: '0.06em' }}>
-              {CHECK_QUESTION_COUNT.standard} QUESTIONS, {CHECK_QUESTION_COUNT.parent} FOR A PARENT UNDERTAKING · CITED RESULT
+              {questions.fewest} TO {questions.most} QUESTIONS · CITED RESULT
             </span>
           </div>
 
@@ -243,7 +245,7 @@ export default function Page() {
               Check what applies →
             </Link>
             <span className="ds-mono ds-faint" style={{ fontSize: 11.5, letterSpacing: '0.06em' }}>
-              {CHECK_QUESTION_COUNT.standard} QUESTIONS, {CHECK_QUESTION_COUNT.parent} FOR A PARENT UNDERTAKING · CITED RESULT
+              {questions.fewest} TO {questions.most} QUESTIONS · CITED RESULT
             </span>
           </div>
         </section>

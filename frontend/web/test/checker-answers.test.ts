@@ -58,7 +58,7 @@ const str = (value: string): FactValue => ({ kind: 'string', value });
 
 /** The 27 Member States, as §4.1 lists them under "EU Member States". */
 const EU_CODES = ['AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE'] as const;
-/** The 14 non-EU countries today's checker lists (`lib/checker.ts`, NON_EU_COUNTRIES), which the plan keeps. */
+/** The 14 non-EU countries the checker before DP1 listed (`lib/checker.ts`, NON_EU_COUNTRIES, deleted in Task 6), which the plan keeps. */
 const LISTED_NON_EU = ['GB', 'US', 'CH', 'NO', 'IN', 'CN', 'JP', 'TR', 'BR', 'CA', 'AU', 'ZA', 'KR', 'AE'] as const;
 
 const GROUPS = ['none', 'parent', 'owned', 'both', 'not_sure'] as const;
@@ -760,7 +760,8 @@ describe('the question model (§4.1)', () => {
   const C6 =
     'Is your company a public-interest entity? That means its shares or bonds are admitted to trading on an EU regulated market (growth markets and other multilateral trading facilities do not count), it is a bank or an insurer, or its country has designated it a public-interest entity. Your auditor will know.';
   const C4_HINT = 'The average for the year, as your accounts state it';
-  const C5_HINT = "Revenue after rebates and VAT; banks and insurers, we'll confirm the right figure later";
+  // The user's direction of 2026-10-26: the hint promises no follow-up (DP1 keeps nothing); curly single quotes as given.
+  const C5_HINT = 'Revenue after rebates and VAT. Banks and insurers: if you are unsure which figure to use, choose ‘Not sure’.';
   const NOT_SURE_OPTION = { id: 'not_sure', label: 'Not sure' };
   const YES_NO_OPTIONS = [{ id: 'yes', label: 'Yes' }, { id: 'no', label: 'No' }, NOT_SURE_OPTION];
   const HEADCOUNT_OPTIONS = [

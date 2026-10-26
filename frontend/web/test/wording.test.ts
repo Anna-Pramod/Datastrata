@@ -26,7 +26,7 @@ import { describe, expect, it } from 'vitest';
 import type { KnowledgePack } from '@datastrata/engine';
 import { reasonSchema } from '../../../backend/engine/src/knowledge/schema';
 import { csrdPack } from '@/lib/pack';
-import { checkerAnswersSchema } from '@/lib/check-answers';
+import { CHECK_QUESTIONS, checkerAnswersSchema } from '@/lib/check-answers';
 import { CHECK_ROWS, LINE_KINDS, type LineKind } from '@/lib/check-routes';
 import { buildCheckTimeline, checkerFactTypes, reachableCellStates, type CellState } from '@/lib/check-timeline';
 import { COVERAGE_WORDS } from '@/lib/coverage';
@@ -145,6 +145,20 @@ const IMPLIED_CASE = [
   'follow up',
   'we have received',
   'received your',
+  // A promised follow-up (the user's direction of 2026-10-26, after C-5's hint read "we'll confirm the right figure later"):
+  // DP1 keeps nothing, so nothing is confirmed, told or sent afterwards. Phrases only: "later" alone stays valid ("Try again later").
+  "we'll confirm",
+  'we will confirm',
+  "we'll let you know",
+  'we will let you know',
+  "we'll get back",
+  'we will get back',
+  "we'll update you",
+  'we will update you',
+  'confirm later',
+  'figure later',
+  'later on',
+  'at a later',
 ];
 
 /** Capabilities DP1 does not have (A4): DP2's onboarding, uploads, accounts and the rest. */
@@ -352,6 +366,71 @@ describe('no implied case (carried from Task 2; DP1 keeps nothing)', () => {
   it('the scan covers every kind of entry: states, rows, lines, reasons, steps, labels and errors', () => {
     const kinds = new Set(wordingEntries(DP1_WORDING).map((e) => e.entry.split(' ')[0]));
     expect([...kinds].sort()).toEqual(['error', 'fact-step', 'label', 'line', 'reason', 'reason-step', 'row', 'row-step', 'state']);
+  });
+});
+
+/**
+ * Every text a question shows the visitor (the user's direction of 2026-10-26:
+ * the question hints go through the same check): each wording variant, the
+ * hint, each option's label and hint, and the typed-figure label.
+ */
+function questionTexts(): { entry: string; text: string }[] {
+  return CHECK_QUESTIONS.flatMap((q) => [
+    ...Object.entries(q.wording).map(([variant, text]) => ({ entry: `${q.id} wording ${variant}`, text })),
+    ...(q.hint === undefined ? [] : [{ entry: `${q.id} hint`, text: q.hint }]),
+    ...q.options.flatMap((o) => [{ entry: `${q.id} option ${o.id}`, text: o.label }, ...(o.hint === undefined ? [] : [{ entry: `${q.id} option ${o.id} hint`, text: o.hint }])]),
+    ...(q.typed === undefined ? [] : [{ entry: `${q.id} typed`, text: q.typed.label }]),
+  ]);
+}
+
+/**
+ * The implied-case problems of texts outside the wording module, found by the
+ * same `wordingProblems` and `wordingEntries` that scan the module: each text is
+ * placed in an otherwise empty wording object, as a step's words, so no second
+ * matcher is written here (failure mode 1).
+ */
+function impliedCaseIn(texts: { entry: string; text: string }[]): string[] {
+  const empty: Wording = {
+    states: {},
+    rows: {} as Wording['rows'],
+    lines: {} as Wording['lines'],
+    reasons: {} as Wording['reasons'],
+    factSteps: Object.fromEntries(texts.map((t) => [t.entry, { missing: { words: t.text, asks: [] } }])),
+    reasonSteps: {} as Wording['reasonSteps'],
+    rowSteps: {},
+    labels: { preliminary: '', draft: '', columnHeading: '', startYear: '', threshold: {} as Wording['labels']['threshold'], national: { country: '', notSure: '', unanswered: '' } },
+    errors: {} as Wording['errors'],
+  };
+  return wordingProblems(empty, INPUTS)
+    .filter((p) => p.check === 'implied-case')
+    .map((p) => `${p.entry.replace(/^fact-step /, '').replace(/ missing$/, '')}: ${p.detail}`);
+}
+
+describe('no promised follow-up, in the questions too (the user’s direction, 2026-10-26)', () => {
+  const NEW_HINT = 'Revenue after rebates and VAT. Banks and insurers: if you are unsure which figure to use, choose ‘Not sure’.';
+  const OLD_HINT = "Revenue after rebates and VAT; banks and insurers, we'll confirm the right figure later";
+
+  it('the scan reads every question: each wording variant, hint, option and typed label, C-5’s and C-10’s new hint among them', () => {
+    const texts = questionTexts();
+    const ids = new Set(texts.map((t) => t.entry.split(' ')[0]));
+    expect([...ids].sort()).toEqual(CHECK_QUESTIONS.map((q) => q.id).sort());
+    expect(texts.filter((t) => t.text === NEW_HINT).map((t) => t.entry)).toEqual(['C-5 hint', 'C-10 hint']);
+  });
+
+  it('no question text promises a follow-up or implies a kept case', () => {
+    expect(impliedCaseIn(questionTexts())).toEqual([]);
+  });
+
+  it('positive control: the old C-5 hint is flagged, by the promise and by the deferral', () => {
+    expect(impliedCaseIn([{ entry: 'C-5 hint before 2026-10-26', text: OLD_HINT }])).toEqual([
+      'C-5 hint before 2026-10-26: contains "we\'ll confirm"',
+      'C-5 hint before 2026-10-26: contains "figure later"',
+    ]);
+  });
+
+  it('counterexample: "later" alone is no promise, so the errors’ "Try again later" is not flagged', () => {
+    expect(wordingEntries(DP1_WORDING).filter((e) => e.text.includes('Try again later')).map((e) => e.entry)).toEqual(['error refused', 'error server_error']);
+    expect(problemsOf('implied-case')).toEqual([]);
   });
 });
 

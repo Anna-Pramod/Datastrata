@@ -26,6 +26,15 @@
  * from, which a test below shows; Tasks 1 and 2 used the composed table for the
  * same reason.
  *
+ * **The oracle moved here from the provenance-era golden** (DG-8, part 3; DP1
+ * Task 6), whose forward comparison is retired because its fixed answers can no
+ * longer be posed. Only what this file did not already hold was moved, and it
+ * runs on the live timeline: every line requirement of `CHECK_ROWS` cites
+ * exactly its expected sources, no locator carries a source identity, and E-1's
+ * correction and E-2's addition reach the surface, each named on its own. Two
+ * of those requirements (CSRD-S-007, CSRD-S-024) are shown only to a company
+ * outside the EU, so a US company's timeline is read beside the golden's.
+ *
  * This test never writes, and holds no path that regenerates the artefact.
  */
 
@@ -34,8 +43,15 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { csrdPack } from '@/lib/pack';
 import { checkerAnswersSchema, visibleQuestions, type CheckerAnswers } from '@/lib/check-answers';
+import { CHECK_ROWS } from '@/lib/check-routes';
 import { buildCheckTimeline, type CheckTimeline } from '@/lib/check-timeline';
-import { AUDIT_EXPECTED_SOURCES, EXPECTED_SOURCES } from '../../../backend/engine/test/audit-expected-provenance';
+import {
+  AUDIT_EXPECTED_SOURCES,
+  AUDIT_EXPECTED_UNIVERSE,
+  E1_CORRECTED_CASE,
+  E2_ADDED_CASE,
+  EXPECTED_SOURCES,
+} from '../../../backend/engine/test/audit-expected-provenance';
 
 const GOLDEN = fileURLToPath(new URL('./golden/checker-timeline-public-golden.json', import.meta.url));
 const CASES = fileURLToPath(new URL('./checker-cases.json', import.meta.url));
@@ -129,5 +145,59 @@ describe('what the golden shows, against independent oracles', () => {
       const expected = requirement.provenance.flatMap((entry) => entry.locators.map((l) => (l.kind === 'whole_document' ? WHOLE_DOCUMENT : l.text)));
       expect(line.legalBasis.locators, line.requirement).toEqual(expected);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Moved from the provenance-era golden (DG-8, part 3): what this file did not hold
+// ---------------------------------------------------------------------------
+
+describe('the audit’s expected sources on the live timeline, moved from the provenance-era golden', () => {
+  /** A US company with no group, whose group passes Article 40a's turnover test: the rows only a company outside the EU is shown. */
+  const US: CheckerAnswers = { country: 'US', group: 'none', euTurnover: 'both' };
+  const lines = () => [payload(), buildCheckTimeline(csrdPack(), US, FIXED_DATE)].flatMap((t) => t.routes.flatMap((r) => r.lines.map((l) => ({ row: r.id, ...l }))));
+  const lineFor = (row: string, requirement: string) => {
+    const found = lines().find((l) => l.row === row && l.requirement === requirement);
+    if (found === undefined) throw new Error(`no ${row} ${requirement} line`);
+    return found;
+  };
+
+  it('the two timelines between them carry every line requirement of CHECK_ROWS, and each line cites exactly the sources its requirement is expected to cite', () => {
+    const carried = new Set(lines().map((l) => l.requirement));
+    expect([...new Set(CHECK_ROWS.flatMap((r) => r.lines.map((l) => l.requirement)))].filter((id) => !carried.has(id))).toEqual([]);
+    for (const line of lines()) {
+      expect(line.legalBasis.sources.map((s) => s.id), `${line.row} ${line.requirement}`).toEqual([...EXPECTED_SOURCES[line.requirement]!]);
+    }
+  });
+
+  it('shows a customer no source identity in place of an address', () => {
+    const everyLocator = lines().flatMap((l) => l.legalBasis.locators);
+    expect(everyLocator.length).toBeGreaterThan(0);
+    for (const locator of everyLocator) expect(locator, locator).not.toMatch(/SRC-\d{3}/);
+    for (const sourceId of AUDIT_EXPECTED_UNIVERSE) expect(everyLocator.some((l) => l.includes(sourceId))).toBe(false);
+  });
+
+  it('E-1’s correction reaches the customer surface, named on its own: the Article 40a group test reads does_not_apply before 2028, citing the CSRD beside the host directive', () => {
+    // QD-4 E-1 (DG-6, 2026-10-23): the Article 40a group gate starts with financial years beginning on or after 1 January 2028 (CSRD Art 5(2), second subparagraph).
+    const line = lineFor('art_40a', E1_CORRECTED_CASE.requirementId);
+    expect(line.cells.filter((c) => c.startYear < 2028)).toEqual([2025, 2026, 2027].map((startYear) => ({ startYear, state: 'does_not_apply' })));
+    expect(line.legalBasis.sources.map((s) => s.id)).toEqual([...E1_CORRECTED_CASE.sources]);
+    expect(line.legalBasis.sources[1]!.title).toContain('2022/2464');
+    expect(line.legalBasis.locators).toContain(E1_CORRECTED_CASE.locator);
+    // The audit's own entry is not rewritten by the correction.
+    expect(AUDIT_EXPECTED_SOURCES[E1_CORRECTED_CASE.requirementId]).toEqual([...E1_CORRECTED_CASE.auditSources]);
+  });
+
+  it('E-2’s addition reaches the customer surface, named on its own: the issuer route reads not yet covered, never does not apply, citing the CSRD with both provisions', () => {
+    // QD-4 E-2 (DG-7, option A, 2026-10-23): the third-country issuer route (CSRD Art 2 and Art 5(2), third subparagraph) is not encoded (KNW-14).
+    const line = lineFor('issuer', E2_ADDED_CASE.requirementId);
+    // Each cell whole: rule R's reason (DG-7, option A), and no `needs` key at all, since a known coverage gap is DataStrata's to close and asks the visitor nothing (Task 2).
+    expect(line.cells).toEqual([2025, 2026, 2027, 2028].map((startYear) => ({ startYear, state: 'not_yet_covered', reason: 'source_status_unresolved' })));
+    expect(line.cells.every((c) => !Object.hasOwn(c, 'needs'))).toBe(true);
+    expect(line.legalBasis.sources.map((s) => s.id)).toEqual([...E2_ADDED_CASE.sources]);
+    expect(line.legalBasis.sources[0]!.title).toContain('2022/2464');
+    expect(line.legalBasis.locators).toEqual([...E2_ADDED_CASE.locators]);
+    // An addition, not a correction: the audit holds no entry for it.
+    expect(AUDIT_EXPECTED_SOURCES[E2_ADDED_CASE.requirementId]).toBeUndefined();
   });
 });

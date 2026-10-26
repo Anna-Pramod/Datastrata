@@ -59,6 +59,8 @@ import {
   repoRoot,
   requestFromArtifact,
   step,
+  timelineLines,
+  timelineSummary,
 } from './standalone-harness.mjs';
 
 let isolationDir;
@@ -186,39 +188,37 @@ try {
   }
 
   // Liveness, asserted against the answer rather than the status code. A 200 whose
-  // body carries no determinations and no citations would mean the traced knowledge
-  // never arrived, which is the failure this gate exists to catch.
+  // body carries no timeline lines and no citations would mean the traced knowledge
+  // never arrived, which is the failure this gate exists to catch. (The check answers
+  // with the start-year timeline since DP1 Task 6: routes of lines, each line one
+  // requirement with its legal basis; before, a list of determinations.)
   const body = run.body;
   if (!body || body.pack?.id !== 'csrd') {
     fail('The isolated artifact answered 200 without a CSRD pack identity.', run.text);
   }
-  if (!Array.isArray(body.determinations) || body.determinations.length === 0) {
-    fail('The isolated artifact produced no determinations; the knowledge pack did not load.', run.text);
+  const lines = timelineLines(body);
+  if (lines.length === 0) {
+    fail('The isolated artifact produced no timeline lines; the knowledge pack did not load.', run.text);
   }
-  if (!body.determinations.some((d) => Array.isArray(d.sources) && d.sources.length > 0)) {
-    fail('No determination carries a citation; the traced knowledge is incomplete.', run.text);
+  if (!lines.some((line) => Array.isArray(line.legalBasis?.sources) && line.legalBasis.sources.length > 0)) {
+    fail('No timeline line carries a citation; the traced knowledge is incomplete.', run.text);
   }
 
-  note(
-    `200 · pack ${body.pack.id}@${body.pack.version} · ` +
-      `${body.determinations.length} determinations · ` +
-      `${body.counts.applies} applies / ${body.counts.doesNotApply} does not apply / ` +
-      `${body.counts.indeterminate} indeterminate`,
-  );
+  note(`200 · pack ${body.pack.id}@${body.pack.version} · ${timelineSummary(body)}`);
 
   // The scope guard, asserted rather than trusted. The real repository holds no
   // signature and must not quietly acquire one: if this ever reads false, something
   // signed has reached the shipping repository while the operational signing gate —
   // which needs B2's real result producer first — is still closed.
-  if (body.containsDraftContent !== true) {
+  if (body.content?.draft !== true) {
     fail(
-      'The real repository answered containsDraftContent=false. Its ledger is supposed to be ' +
+      'The real repository answered content.draft=false. Its ledger is supposed to be ' +
         'empty: the operational signing gate is closed, and B2 has supplied neither a real ' +
         'result producer nor a real signed verification record.',
       run.text,
     );
   }
-  note('containsDraftContent true — the real ledger is still empty, as the closed signing gate requires');
+  note('content.draft true — the real ledger is still empty, as the closed signing gate requires');
   console.log('\n✓ The standalone artifact serves /api/check in isolation from the repository.');
 
   releaseIsolation(isolationDir, false);
@@ -258,7 +258,7 @@ try {
       // The positive control the whole gate turns on (design §7, items 1 and 3).
       // "The site never over-claims" is otherwise satisfied by a site that can
       // never claim anything at all.
-      if (isolated.containsDraftContent !== false) {
+      if (isolated.content?.draft !== false) {
         fail(
           'The isolated artifact still reports draft content over a fully signed fixture: it ' +
             'resolved no signature from its own traced verification state.',
@@ -287,7 +287,7 @@ try {
       }
     },
     verifyIsolated: ({ isolated }) => {
-      if (isolated.containsDraftContent !== true) {
+      if (isolated.content?.draft !== true) {
         fail('Drifted verification state did not reach the artifact as draft content.');
       }
     },

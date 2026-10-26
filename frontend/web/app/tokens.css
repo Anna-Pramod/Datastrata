@@ -37,7 +37,7 @@
   --ds-success: var(--ds-text-nav); /* "you are current" is stated in neutral ink, never green */
 
   /* ---- focus / elevation ---- */
-  --ds-ring-focus: 0 0 0 3px rgba(169, 59, 42, 0.22);
+  --ds-ring-focus: 0 0 0 2px var(--ds-paper), 0 0 0 4px var(--ds-oxide); /* two-tone, so it holds 3:1 on light ground and on oxide (WCAG 1.4.11) */
   --ds-ring-error: 0 0 0 3px rgba(169, 59, 42, 0.18);
   --ds-shadow-none: none;                              /* default: the system is flat */
   --ds-shadow-popover: 0 10px 30px rgba(20, 24, 29, 0.16); /* ONLY floating popovers/menus */

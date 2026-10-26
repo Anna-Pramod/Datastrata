@@ -2,11 +2,12 @@
  * The same four stages, at the surface a customer actually reads.
  *
  * Spec §7.2, §1. The over-claim `deriveStatus(governing, [])` propagated to
- * three places, and two of them are here: `containsDraftContent`, which draws
- * the prototype banner, and the site's headline counts in `lib/pack.ts`. The
- * engine's `test/status-truth-boundary.test.ts` proves the boundary at the
- * loader and the `minStatus` floor; this file proves the same fixture survives
- * the projection into the payload the route hands back.
+ * three places, and two of them are here: the check's draft flag, which draws
+ * the "Draft · evaluation only" label (`content.draft` in the timeline since DP1
+ * Task 6; `containsDraftContent` before it), and the site's headline counts in
+ * `lib/pack.ts`. The engine's `test/status-truth-boundary.test.ts` proves the
+ * boundary at the loader and the `minStatus` floor; this file proves the same
+ * fixture survives the projection into the payload the route hands back.
  *
  * ```
  * 1. signed + fresh fixture           -> ratified count 24, no draft banner
@@ -20,7 +21,7 @@
  * only honest way to put a fixture ledger behind it is to intercept the
  * `loadPack` it calls and reset the module between stages. No production file
  * changes; the seam is the module boundary, and `packStats()` and
- * `buildCheckResponse()` run exactly as shipped.
+ * `buildCheckTimeline()` run exactly as shipped.
  *
  * That arrangement checks itself in a way worth stating: if the interception
  * silently stopped working, stages 1 and 4 would fail because nothing would
@@ -28,21 +29,22 @@
  * and 4 would fail because they would be reading stage 1's pack. Neither can
  * pass by accident.
  *
- * **`counts` is here as the counterexample, not as a second positive claim.**
- * The applies / does-not-apply / indeterminate counts are taken at the default
+ * **The routes are here as the counterexample, not as a second positive claim.**
+ * Every route's cells (the timeline's applies, does-not-apply and cannot-decide,
+ * where the payload before it carried counts of each) are taken at the default
  * `draft` floor, so they must be *identical* in all four stages: the boundary
  * changes what the site may call verified, and must not change which
  * requirements a customer is assessed against. A run in which those moved would
  * be a regression the public golden also catches, and asserting the invariant
- * beside the varying ones is what stops "the counts followed the sequence" from
+ * beside the varying ones is what stops "the cells followed the sequence" from
  * being a claim no output could contradict.
  */
 
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { entryId, signingEntrySchema, type SigningEntry, type UnsignedLedgerEntry } from '../../../backend/engine/src/verification/ledger';
 import { deriveStaleness, type CurrentState } from '../../../backend/engine/src/verification/staleness';
-import type { CheckerAnswers } from '@/lib/checker';
-import type { CheckResponse } from '@/lib/checkResponse';
+import type { CheckerAnswers } from '@/lib/check-answers';
+import type { CheckTimeline } from '@/lib/check-timeline';
 
 /**
  * The site's own `LoadPackOptions`, read off `loadPack` itself rather than
@@ -142,18 +144,18 @@ const LEDGER = await writeLedger();
 const resolverOver = (world: CurrentState) =>
   ({ entry }: { entry: SigningEntry }) => ({ checked: true as const, reasons: deriveStaleness(entry, world) });
 
-/** A German entity over both thresholds — the widest slice the check reaches. */
+/**
+ * A German company with no group over both thresholds, every question it is
+ * shown answered: an ordinary undertaking, not an investment fund (C-3), so it
+ * is in scope, which is the scenario.
+ */
 const ANSWERS: CheckerAnswers = {
   country: 'DE',
-  legalForm: 'private_limited_company',
-  financialYear: '2027',
-  groupPosition: 'standalone',
-  turnover: 'gt600',
-  employees: 'gt1500',
-  reportedFy2024: 'no',
-  governingChoice: 'same',
-  // Q-039: not excluded by Article 1(4), stated — an in-scope undertaking is the scenario.
-  exclusion: 'no',
+  group: 'none',
+  organisation: 'private_limited',
+  employees: 'over_1100',
+  turnover: 'over_500m',
+  pie: 'no',
 };
 
 const FIXED_DATE = '2026-07-26';
@@ -167,8 +169,8 @@ async function publicSurface(options: PackOptions) {
   stage.options = options;
   vi.resetModules();
   const { packStats, csrdPack } = await import('@/lib/pack');
-  const { buildCheckResponse } = await import('@/lib/checkResponse');
-  const response = buildCheckResponse(csrdPack(), ANSWERS, FIXED_DATE);
+  const { buildCheckTimeline } = await import('@/lib/check-timeline');
+  const response = buildCheckTimeline(csrdPack(), ANSWERS, FIXED_DATE);
   return { stats: packStats(), response };
 }
 
@@ -188,39 +190,42 @@ const unchecked = () => ({ ledgerPath: LEDGER });
  * assertion those stages exist to make. Sourcing it independently is what keeps
  * every red output in the sequence attributable to the stage that produced it.
  */
-let invariantCounts: CheckResponse['counts'];
+let invariantRoutes: CheckTimeline['routes'];
 
 beforeAll(async () => {
-  invariantCounts = (await publicSurface({})).response.counts;
+  invariantRoutes = (await publicSurface({})).response.routes;
 });
+
+/** Every cell's state, for the assertion that some route is assessed as applying. */
+const statesOf = (timeline: CheckTimeline): string[] => timeline.routes.flatMap((r) => r.lines.flatMap((l) => l.cells.map((c) => c.state)));
 
 describe('the customer-facing surface, through the four stages', () => {
   it('stage 1 — an evaluated, current signature reads ratified and clears the banner', async () => {
     const { stats, response } = await publicSurface(fresh());
 
     expect(stats.ratified).toBe(24);
-    expect(response.containsDraftContent).toBe(false);
+    expect(response.content.draft).toBe(false);
 
-    expect(response.counts).toEqual(invariantCounts);
-    expect(response.counts.applies).toBeGreaterThanOrEqual(1);
-    expect(response.determinations.length).toBeGreaterThanOrEqual(1);
+    expect(response.routes).toEqual(invariantRoutes);
+    expect(statesOf(response).filter((state) => state === 'applies').length).toBeGreaterThanOrEqual(1);
+    expect(response.routes.length).toBeGreaterThanOrEqual(1);
   });
 
   it('stage 2 — drift between the pinned and current result takes the count to zero', async () => {
     const { stats, response } = await publicSurface(drifted());
 
     expect(stats.ratified).toBe(0);
-    expect(response.containsDraftContent).toBe(true);
-    // The determinations a customer is assessed against must not move with it.
-    expect(response.counts).toEqual(invariantCounts);
+    expect(response.content.draft).toBe(true);
+    // The cells a customer is assessed against must not move with it.
+    expect(response.routes).toEqual(invariantRoutes);
   });
 
   it('stage 3 — an unevaluated signature reads exactly as a stale one does', async () => {
     const { stats, response } = await publicSurface(unchecked());
 
     expect(stats.ratified).toBe(0);
-    expect(response.containsDraftContent).toBe(true);
-    expect(response.counts).toEqual(invariantCounts);
+    expect(response.content.draft).toBe(true);
+    expect(response.routes).toEqual(invariantRoutes);
   });
 
   it('stage 4 — restoring the record restores the count and clears the banner again', async () => {
@@ -232,7 +237,7 @@ describe('the customer-facing surface, through the four stages', () => {
     world.resultSha256 = HASH('2');
     const stale = await publicSurface({ ledgerPath: LEDGER, freshnessResolver: resolverOver(world) });
     expect(stale.stats.ratified).toBe(0);
-    expect(stale.response.containsDraftContent).toBe(true);
+    expect(stale.response.content.draft).toBe(true);
 
     world.resultSha256 = pinned.resultSha256;
     expect(world).toEqual(pinned);
@@ -242,8 +247,8 @@ describe('the customer-facing surface, through the four stages', () => {
       freshnessResolver: resolverOver(world),
     });
     expect(stats.ratified).toBe(24);
-    expect(response.containsDraftContent).toBe(false);
-    expect(response.counts).toEqual(invariantCounts);
+    expect(response.content.draft).toBe(false);
+    expect(response.routes).toEqual(invariantRoutes);
   });
 });
 
@@ -271,7 +276,7 @@ describe('what the site does with no resolver anywhere', () => {
     const { stats, response } = await publicSurface({});
 
     expect(stats.ratified).toBe(0);
-    expect(response.containsDraftContent).toBe(true);
+    expect(response.content.draft).toBe(true);
     // Twenty-four since E-2 (QD-4, DG-7, 2026-10-23) added CSRD-S-024.
     expect(stats.requirements).toBe(24);
   });

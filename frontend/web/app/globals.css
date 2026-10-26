@@ -256,3 +256,49 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
    sideways on a phone. `contain: content` clips the paint to this box while
    leaving the internal scroll working. */
 .ds-scroll-x { overflow-x: auto; contain: content; }
+
+/* ---------------------------------------------------------------- the check (DP1 Task 6)
+   A question's answers are native radios, each a labelled block that wraps at
+   any width; a fieldset's default `min-inline-size: min-content` would widen
+   the page at 320px, so it is reset. The result is a table with row and column
+   headers; below 760px each line's cells stack under the line, each carrying
+   its own start year, so no phone width scrolls sideways (EXP-4).
+   Small text a visitor needs on these screens (metadata, group labels, hints,
+   field labels) keeps its typography but takes the muted ink, 7.3:1 on white,
+   where the shared ghost and faint inks fall below 4.5:1 (WCAG 1.4.3). */
+.ds-check-meta { color: var(--ds-text-muted); }
+.ds-question { border: 0; padding: 0; margin: 0; min-width: 0; }
+.ds-choices { display: flex; flex-wrap: wrap; gap: 10px; }
+.ds-choice {
+  display: flex; gap: 10px; align-items: flex-start; min-width: 0; max-width: 100%;
+  border: 1px solid var(--ds-hairline-2); background: var(--ds-paper); padding: 12px 14px; cursor: pointer;
+}
+.ds-choice:has(input:checked) { border-color: var(--ds-oxide); background: var(--ds-oxide-wash); }
+.ds-choice:focus-within { box-shadow: var(--ds-ring-focus); }
+.ds-choice input { accent-color: var(--ds-oxide); margin-top: 3px; flex: none; }
+
+.ds-timeline { overflow-wrap: anywhere; }
+.ds-timeline-draft {
+  display: inline-block; border: 1px solid var(--ds-oxide); background: var(--ds-oxide-wash);
+  padding: 8px 12px; font-family: var(--ds-font-mono); font-size: 12px; letter-spacing: .06em;
+}
+.ds-timeline-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.ds-timeline-table th, .ds-timeline-table td { text-align: left; vertical-align: top; padding: 12px 10px; border-top: 1px solid var(--ds-hairline-1); }
+.ds-timeline-table thead th { border-top: none; font-family: var(--ds-font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--ds-text-muted); font-weight: 500; }
+.ds-timeline-route { border-top: 1px solid var(--ds-ink) !important; padding-top: 22px !important; font-family: var(--ds-font-display); font-size: 17px; }
+.ds-timeline-line { width: 28%; font-weight: 600; font-size: 14.5px; }
+.ds-timeline-year { display: none; }
+.ds-timeline-state { display: block; font-weight: 600; font-size: 14px; }
+.ds-timeline-glyph { font-family: var(--ds-font-mono); margin-right: 2px; }
+.ds-timeline-note, .ds-timeline-basis, .ds-timeline-reason, .ds-timeline-step {
+  display: block; margin-top: 6px; font-family: var(--ds-font-ui); font-size: 13px; line-height: 1.5; font-weight: 400; color: var(--ds-text-muted);
+}
+.ds-timeline-basis a { display: block; color: var(--ds-oxide); }
+.ds-timeline-ask { display: block; margin-top: 6px; text-align: left; white-space: normal; text-transform: none; letter-spacing: 0; font-size: 12px; }
+@media (max-width: 760px) {
+  .ds-timeline-table, .ds-timeline-table tbody, .ds-timeline-table tr, .ds-timeline-table th, .ds-timeline-table td { display: block; width: auto; }
+  .ds-timeline-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
+  .ds-timeline-line { width: auto; padding-bottom: 4px; }
+  .ds-timeline-table td { border-top: none; border-left: 2px solid var(--ds-hairline-2); padding: 8px 0 8px 14px; margin-bottom: 6px; }
+  .ds-timeline-year { display: block; margin-bottom: 4px; font-family: var(--ds-font-mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--ds-text-muted); }
+}

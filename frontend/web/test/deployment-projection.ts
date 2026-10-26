@@ -16,8 +16,9 @@
  * where the runtime files came from: the traced artifact, or the repository.
  *
  * **Nothing here re-implements anything.** It calls `engineRoot()`,
- * `loadVerifiedCsrdPack()` and `buildCheckResponse()` exactly as the site does,
- * discovering the repository through the shipped `process.cwd()` probe. A
+ * `loadVerifiedCsrdPack()`, `checkerAnswersSchema` and `buildCheckTimeline()`
+ * exactly as the site does (the timeline since DP1 Task 6), discovering the
+ * repository through the shipped `process.cwd()` probe. A
  * comparator that computed statuses its own way would be a second definition of
  * the answer, and it would agree with the artifact's systematic errors —
  * TEST-EVIDENCE-STANDARD failure mode 1, inside the check meant to catch them.
@@ -34,8 +35,8 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { IntegrityFailureError } from '@datastrata/engine';
 import type { DerivedStatus, KnowledgePack, StatusReason } from '@datastrata/engine';
 import { engineRoot, loadVerifiedCsrdPack } from '@/lib/pack';
-import { buildCheckResponse, type CheckResponse } from '@/lib/checkResponse';
-import type { CheckerAnswers } from '@/lib/checker';
+import { checkerAnswersSchema } from '@/lib/check-answers';
+import { buildCheckTimeline, type CheckTimeline } from '@/lib/check-timeline';
 import { installVerificationState, type FixtureOptions } from './fixture-repository';
 
 /**
@@ -58,7 +59,7 @@ export interface RequirementStatusProjection {
 export interface SourceRun {
   engineRoot: string;
   projection: RequirementStatusProjection[];
-  answer: CheckResponse | null;
+  answer: CheckTimeline | null;
   refusals: string[] | null;
 }
 
@@ -88,7 +89,8 @@ if (mode === 'install') {
   if (answersPath === undefined || assessedAt === undefined || outPath === undefined) {
     throw new Error('usage: deployment-projection.ts project <answers.json> <assessedAt> <out.json>');
   }
-  const answers = JSON.parse(readFileSync(answersPath, 'utf8')) as CheckerAnswers;
+  // Parsed by the route's own schema, as the route parses the body it is sent.
+  const answers = checkerAnswersSchema.parse(JSON.parse(readFileSync(answersPath, 'utf8')));
   const root = engineRoot();
 
   let run: SourceRun;
@@ -101,7 +103,7 @@ if (mode === 'install') {
       // artifact reported. The route derives it from the clock, so a source run
       // that read its own clock could disagree with the artifact for no reason
       // but the moment each happened to run — a red gate naming nothing.
-      answer: buildCheckResponse(pack, answers, assessedAt),
+      answer: buildCheckTimeline(pack, answers, assessedAt),
       refusals: null,
     };
   } catch (error) {

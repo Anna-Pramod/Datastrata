@@ -46,16 +46,19 @@
  * plain sentence, that a record built from a company's own profile is available to
  * pilot evaluations by arrangement.
  *
- * The second block pins the number the copy prints: `CHECK_QUESTION_COUNT` is
- * derived from the check's step list, and the list's length must depend on
- * parenthood alone, never on which variant the last step takes.
+ * The second block pins the number the copy prints. It is derived from
+ * `visibleQuestions` over proposal §4.5's visitor types, the fewest and the most
+ * questions any visitor answers, with the optional pair a parent may add, and
+ * each visitor type's range must be the one §4.5's "Total" column states (DP1
+ * plan, Task 6; the count was nine and ten while the check had a fixed step list).
  */
 
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { CHECK_QUESTION_COUNT, checkSteps, type CheckerAnswers } from '@/lib/checker';
+import { CHECK_QUESTIONS, visibleQuestions, type CheckerAnswers, type QuestionId } from '@/lib/check-answers';
+import { checkQuestionCount } from '@/lib/check-view';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const SCANNED_DIRS = ['app', 'components', 'lib'] as const;
@@ -152,22 +155,68 @@ describe('claims guard', () => {
   });
 });
 
-describe('CHECK_QUESTION_COUNT', () => {
-  it('is 9 questions, 10 for a parent undertaking', () => {
-    expect(CHECK_QUESTION_COUNT).toEqual({ standard: 9, parent: 10 });
+describe('the question count the copy prints', () => {
+  const field = (id: QuestionId) => CHECK_QUESTIONS.find((q) => q.id === id)!.field;
+
+  /**
+   * Every way through the questions from a visitor type's C-1 and C-2: each shown,
+   * not-optional question answered with each of its options, in the order shown.
+   * Gives each complete flow's count of required questions and of optional ones.
+   */
+  function flowCounts(start: CheckerAnswers): { required: number[]; optional: number[] } {
+    const required: number[] = [];
+    const optional: number[] = [];
+    const walk = (answers: CheckerAnswers): void => {
+      const visible = visibleQuestions(answers);
+      const next = visible.find((q) => !q.optional && answers[field(q.id)] === undefined);
+      if (next === undefined) {
+        required.push(visible.filter((q) => !q.optional).length);
+        optional.push(visible.filter((q) => q.optional).length);
+        return;
+      }
+      for (const option of CHECK_QUESTIONS.find((q) => q.id === next.id)!.options) walk({ ...answers, [field(next.id)]: option.id } as CheckerAnswers);
+    };
+    walk(start);
+    return { required, optional };
+  }
+
+  const GROUPS = CHECK_QUESTIONS.find((q) => q.id === 'C-2')!.options.map((o) => o.id) as NonNullable<CheckerAnswers['group']>[];
+
+  /** §4.5, "How many questions each visitor answers": the "Total" column without the optional questions, and the optional C-9 and C-10. The table is the oracle. */
+  const SECTION_4_5: [string, CheckerAnswers[], [number, number], number][] = [
+    ['EU company, no group', [{ country: 'DE', group: 'none' }], [5, 6], 0],
+    ['EU parent', [{ country: 'DE', group: 'parent' }], [5, 6], 2],
+    ['EU subsidiary', [{ country: 'DE', group: 'owned' }], [5, 7], 0],
+    ['EU intermediate parent', [{ country: 'DE', group: 'both' }], [5, 7], 2],
+    ['EU, group position "Not sure"', [{ country: 'DE', group: 'not_sure' }], [5, 6], 0],
+    ['Non-EU company or group', GROUPS.flatMap((group) => [{ country: 'US', group }, { country: 'other', countryOther: 'AR', group }] as CheckerAnswers[]), [3, 3], 0],
+    ['Country "Not sure"', GROUPS.map((group) => ({ country: 'not_sure', group }) as CheckerAnswers), [2, 2], 0],
+  ];
+
+  it('is 2 to 7 questions, and 2 more for a parent company on its own', () => {
+    expect(checkQuestionCount()).toEqual({ fewest: 2, most: 7, optional: 2 });
   });
 
-  it('is the step list length, which turns on parenthood alone and not on the last step variant', () => {
-    const countries = ['DE', 'GB', undefined];
-    const nonParents: CheckerAnswers['groupPosition'][] = ['standalone', 'subsidiary', undefined];
-    const parents: CheckerAnswers['groupPosition'][] = ['parent', 'parent_and_subsidiary'];
-    for (const country of countries) {
-      for (const groupPosition of nonParents) {
-        expect(checkSteps({ country, groupPosition }).length, `${country} ${groupPosition}`).toBe(CHECK_QUESTION_COUNT.standard);
-      }
-      for (const groupPosition of parents) {
-        expect(checkSteps({ country, groupPosition }).length, `${country} ${groupPosition}`).toBe(CHECK_QUESTION_COUNT.parent);
-      }
+  it('is visibleQuestions’ range over §4.5’s visitor types, and each type’s range is the one §4.5 states', () => {
+    const all = { required: [] as number[], optional: [] as number[] };
+    for (const [visitor, starts, total, optional] of SECTION_4_5) {
+      const counts = starts.map(flowCounts);
+      const required = counts.flatMap((c) => c.required);
+      const optionals = counts.flatMap((c) => c.optional);
+      all.required.push(...required);
+      all.optional.push(...optionals);
+      expect([visitor, Math.min(...required), Math.max(...required), Math.max(...optionals)]).toEqual([visitor, ...total, optional]);
+    }
+    expect(checkQuestionCount()).toEqual({ fewest: Math.min(...all.required), most: Math.max(...all.required), optional: Math.max(...all.optional) });
+  });
+
+  it('the pages that state a count read it from checkQuestionCount, and write no number of questions themselves', () => {
+    const literal = /\b\d+\s+(questions|QUESTIONS)\b|\b\d+\s+for a parent/i;
+    // Positive control: the pattern sees a written count.
+    expect(['9 QUESTIONS', '10 for a parent undertaking', 'Eight questions'].map((t) => literal.test(t))).toEqual([true, true, false]);
+    for (const page of ['app/page.tsx', 'app/check/page.tsx']) {
+      const source = readFileSync(join(ROOT, page), 'utf8');
+      expect([page, source.includes('checkQuestionCount()'), literal.test(source)]).toEqual([page, true, false]);
     }
   });
 });

@@ -71,6 +71,8 @@ import {
   isolateArtifact,
   releaseIsolation,
   repoRoot,
+  timelineLines,
+  timelineSummary,
 } from './standalone-harness.mjs';
 
 // ---------------------------------------------------------------------------
@@ -397,8 +399,9 @@ function sessionToken(r) {
 
 /**
  * Phase 1's judgement of the check's answer (`scripts/test-standalone.mjs`), condition for condition: a CSRD pack identity,
- * at least one determination, at least one citation, and draft content declared, because the real ledger is empty. Phase 1
- * keeps it inline rather than exporting it, so it is restated here; a change to one is a change to make in the other.
+ * at least one timeline line, at least one citation, and draft content declared, because the real ledger is empty. Phase 1
+ * keeps it inline rather than exporting it, so it is restated here; a change to one is a change to make in the other. (The
+ * check answers with the start-year timeline since DP1 Task 6; before, a list of determinations.)
  */
 function checkAnswerProblems(r) {
   const problems = statusIs(r, 200);
@@ -409,9 +412,10 @@ function checkAnswerProblems(r) {
     return [...problems, 'body is not JSON'];
   }
   if (!body || body.pack?.id !== 'csrd') problems.push('no CSRD pack identity');
-  if (!Array.isArray(body?.determinations) || body.determinations.length === 0) problems.push('no determinations: the knowledge pack did not load');
-  else if (!body.determinations.some((d) => Array.isArray(d.sources) && d.sources.length > 0)) problems.push('no determination carries a citation');
-  if (body?.containsDraftContent !== true) problems.push('containsDraftContent is not true over a repository whose ledger is empty');
+  const lines = timelineLines(body);
+  if (lines.length === 0) problems.push('no timeline lines: the knowledge pack did not load');
+  else if (!lines.some((line) => Array.isArray(line.legalBasis?.sources) && line.legalBasis.sources.length > 0)) problems.push('no timeline line carries a citation');
+  if (body?.content?.draft !== true) problems.push('content.draft is not true over a repository whose ledger is empty');
   return problems;
 }
 
@@ -750,7 +754,7 @@ async function hostedStart(serverDir) {
         let detail = [];
         try {
           const b = JSON.parse(r.body);
-          detail = [`pack ${b.pack?.id}@${b.pack?.version} · ${b.determinations?.length} determinations · ${b.counts?.applies} applies / ${b.counts?.doesNotApply} does not apply / ${b.counts?.indeterminate} indeterminate · containsDraftContent ${b.containsDraftContent}`];
+          detail = [`pack ${b.pack?.id}@${b.pack?.version} · ${timelineSummary(b)} · content.draft ${b.content?.draft}`];
         } catch {
           /* the problem list says so */
         }

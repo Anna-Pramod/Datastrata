@@ -42,25 +42,43 @@ export const repoRoot = resolve(scriptDir, '..');
 export const guardPath = join(scriptDir, 'standalone-isolation-guard.cjs');
 
 /**
- * The widest slice the public check can reach — a German entity over both
- * thresholds, answering every question. Declared once and spent by every caller,
- * including the source-side comparator, which is handed this exact object as
- * JSON: two request bodies that drifted apart would make the agreement half
- * compare answers to different questions and call the difference a deployment
- * defect.
+ * The widest slice the public check can reach — a German intermediate parent
+ * whose figures show C-6, answered "Not sure", with C-9 and C-10 answered: the
+ * timeline golden's answers (DP1 Task 4), every question it is shown answered,
+ * in the answers the check has asked since DP1 Task 6. Declared once and spent
+ * by every caller, including the source-side comparator, which is handed this
+ * exact object as JSON: two request bodies that drifted apart would make the
+ * agreement half compare answers to different questions and call the
+ * difference a deployment defect.
  */
 export const CHECK_REQUEST_BODY = {
   country: 'DE',
-  legalForm: 'private_limited_company',
-  financialYear: '2027',
-  groupPosition: 'standalone',
-  turnover: 'gt600',
-  employees: 'gt1500',
-  reportedFy2024: 'no',
-  governingChoice: 'same',
-  // Q-039: not excluded by Article 1(4), stated — "answering every question" now includes this one.
-  exclusion: 'no',
+  group: 'both',
+  organisation: 'private_limited',
+  employees: 'over_1100',
+  turnover: 'over_500m',
+  pie: 'not_sure',
+  parentReport: 'yes',
+  parentOwnEmployees: 'over_900_up_to_1100',
+  parentOwnTurnover: 'over_500m',
 };
+
+/**
+ * The lines of a check answer: since DP1 Task 6 the check answers with the
+ * start-year timeline, routes of lines, each line one requirement with its
+ * legal basis and four cells. Empty for anything that is not a timeline.
+ */
+export function timelineLines(body) {
+  return Array.isArray(body?.routes) ? body.routes.flatMap((route) => (Array.isArray(route.lines) ? route.lines : [])) : [];
+}
+
+/** The answer in one line for the gate's notes: its routes, its lines, and its cells by state. */
+export function timelineSummary(body) {
+  const lines = timelineLines(body);
+  const states = new Map();
+  for (const line of lines) for (const cell of line.cells ?? []) states.set(cell.state, (states.get(cell.state) ?? 0) + 1);
+  return `${Array.isArray(body?.routes) ? body.routes.length : 0} routes · ${lines.length} lines · ${[...states].map(([state, n]) => `${n} ${state}`).join(' / ')}`;
+}
 
 /** Carries the detail — usually the server's own output — alongside the verdict. */
 export class StandaloneFailure extends Error {

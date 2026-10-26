@@ -361,7 +361,7 @@ const YES_NO_OPTIONS: readonly AnswerOption[] = [{ id: 'yes', label: 'Yes' }, { 
 const bandOptions = (bands: readonly Band[]): AnswerOption[] => [...bands.map((b) => ({ id: b.id, label: b.label })), NOT_SURE_OPTION];
 
 const C4_HINT = 'The average for the year, as your accounts state it';
-const C5_HINT = "Revenue after rebates and VAT; banks and insurers, we'll confirm the right figure later";
+const C5_HINT = 'Revenue after rebates and VAT. Banks and insurers: if you are unsure which figure to use, choose ‘Not sure’.';
 const C6 =
   'Is your company a public-interest entity? That means its shares or bonds are admitted to trading on an EU regulated market (growth markets and other multilateral trading facilities do not count), it is a bank or an insurer, or its country has designated it a public-interest entity. Your auditor will know.';
 const HEADCOUNT_TYPED = { measure: 'headcount', label: 'Type the number' } as const;

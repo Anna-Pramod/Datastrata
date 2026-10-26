@@ -77,6 +77,8 @@ import {
   repoRoot,
   requestFromArtifact,
   step,
+  timelineLines,
+  timelineSummary,
 } from './standalone-harness.mjs';
 
 /** Paths never worth carrying into a build repository, and one that is unsafe to. */
@@ -130,19 +132,27 @@ function runProjector(buildRepo, args) {
   return result.stdout ?? '';
 }
 
-/** The three fields the plan names, and nothing else, so a disagreement reads as a diff. */
+/**
+ * The answer's status-bearing fields, and nothing else, so a disagreement reads
+ * as a diff. Since DP1 Task 6 the answer is the start-year timeline: the pack,
+ * the draft flag and threshold (`content`, where `containsDraftContent` was),
+ * the country, and for every route each line's kind and requirement and each
+ * cell's start year, state and reason (where the determination list carried a
+ * result and a reason per requirement).
+ */
 function canonicalAnswer(answer) {
   if (answer === null || answer === undefined) return null;
   return {
     pack: answer.pack,
-    containsDraftContent: answer.containsDraftContent,
-    counts: answer.counts,
-    headline: answer.headline,
-    nationalLawResolved: answer.nationalLawResolved,
-    determinations: (answer.determinations ?? []).map((d) => ({
-      requirementId: d.id,
-      result: d.result,
-      reason: d.reason ?? null,
+    content: answer.content,
+    country: answer.country ?? null,
+    routes: (answer.routes ?? []).map((route) => ({
+      id: route.id,
+      lines: (route.lines ?? []).map((line) => ({
+        kind: line.kind,
+        requirement: line.requirement,
+        cells: (line.cells ?? []).map((cell) => ({ startYear: cell.startYear, state: cell.state, reason: cell.reason ?? null })),
+      })),
     })),
   };
 }
@@ -229,7 +239,7 @@ function tracedVerificationState(buildRepo, standaloneDir) {
  *
  * ```
  * ledger absent from the artifact
- *   -> liveness  200, determinations, citations   PASSES
+ *   -> liveness  200, timeline lines, citations   PASSES
  *   -> agreement source says ratified, artifact says draft   FAILS
  * ```
  *
@@ -279,22 +289,22 @@ async function proveAgreementBites({ webDir, standaloneDir, forbiddenRoots, sour
         run.log || run.text,
       );
     }
-    if (!Array.isArray(run.body?.determinations) || run.body.determinations.length === 0) {
-      fail('LIVENESS returned 200 without determinations under the missing ledger.', run.text);
+    if (timelineLines(run.body).length === 0) {
+      fail('LIVENESS returned 200 without timeline lines under the missing ledger.', run.text);
     }
-    note(`✓ liveness still PASSES — 200 · ${run.body.determinations.length} determinations`);
+    note(`✓ liveness still PASSES — 200 · ${timelineSummary(run.body)}`);
 
-    if (run.body.containsDraftContent === source.containsDraftContent) {
+    if (run.body.content?.draft === source.content.draft) {
       fail(
         'AGREEMENT still passes with the ledger gone. The two halves are then not ' +
           'distinguishable and the agreement assertion cannot detect a silently-degrading ' +
           'member. Stop and report rather than adjusting the assertion.',
-        `both sides report containsDraftContent=${String(source.containsDraftContent)}`,
+        `both sides report content.draft=${String(source.content.draft)}`,
       );
     }
     note(
-      `✓ agreement would FAIL — source ${String(source.containsDraftContent)} vs artifact ` +
-        `${String(run.body.containsDraftContent)}; liveness saw none of it`,
+      `✓ agreement would FAIL — source content.draft ${String(source.content.draft)} vs artifact ` +
+        `${String(run.body.content?.draft)}; liveness saw none of it`,
     );
   } finally {
     releaseIsolation(isolationDir, false);
@@ -394,7 +404,7 @@ export async function runAgreement({
 
     // ---- verdict 1: liveness ------------------------------------------------
     // Asserted against the answer rather than the status code. A 200 whose body
-    // carries no determinations and no citations would mean the traced knowledge
+    // carries no timeline lines and no citations would mean the traced knowledge
     // never arrived, which is the failure this half exists to catch.
     if (run.status !== 200) {
       fail(
@@ -407,18 +417,14 @@ export async function runAgreement({
     if (!body || body.pack?.id !== 'csrd') {
       fail(`LIVENESS FAILED — ${label}. 200 without a CSRD pack identity.`, run.text);
     }
-    if (!Array.isArray(body.determinations) || body.determinations.length === 0) {
-      fail(`LIVENESS FAILED — ${label}. No determinations; the knowledge pack did not load.`, run.text);
+    const lines = timelineLines(body);
+    if (lines.length === 0) {
+      fail(`LIVENESS FAILED — ${label}. No timeline lines; the knowledge pack did not load.`, run.text);
     }
-    if (!body.determinations.some((d) => Array.isArray(d.sources) && d.sources.length > 0)) {
-      fail(`LIVENESS FAILED — ${label}. No determination carries a citation.`, run.text);
+    if (!lines.some((line) => Array.isArray(line.legalBasis?.sources) && line.legalBasis.sources.length > 0)) {
+      fail(`LIVENESS FAILED — ${label}. No timeline line carries a citation.`, run.text);
     }
-    note(
-      `✓ LIVENESS — 200 · pack ${body.pack.id}@${body.pack.version} · ` +
-        `${body.determinations.length} determinations · ` +
-        `${body.counts.applies} applies / ${body.counts.doesNotApply} does not apply / ` +
-        `${body.counts.indeterminate} indeterminate`,
-    );
+    note(`✓ LIVENESS — 200 · pack ${body.pack.id}@${body.pack.version} · ${timelineSummary(body)}`);
 
     step('Source run: the same repository, read through the shipped path');
     const assessedAt = body.assessedAt ?? new Date().toISOString().slice(0, 10);
@@ -434,8 +440,8 @@ export async function runAgreement({
     step(`Canonical status projection — ${label}`);
     console.log('  source, per requirement (derivedStatus · statusReasons):');
     for (const line of summariseProjection(sourceRun.projection)) console.log(`    ${line}`);
-    console.log(`  isolated : containsDraftContent ${String(isolated?.containsDraftContent)}`);
-    console.log(`  source   : containsDraftContent ${String(source?.containsDraftContent)}`);
+    console.log(`  isolated : content.draft ${String(isolated?.content?.draft)}`);
+    console.log(`  source   : content.draft ${String(source?.content?.draft)}`);
 
     // ---- verdict 2: the fixture proves something ----------------------------
     // Over the source run alone, so an untraced member cannot make it pass by
@@ -456,22 +462,33 @@ export async function runAgreement({
     note('✓ AGREEMENT — the isolated artifact and the source repository produce one projection');
 
     // The pack-wide observable tied back to the per-requirement projection, folded
-    // here rather than taken from either answer. `containsDraftContent` is the only
+    // here rather than taken from either answer. `content.draft` is the only
     // verification-derived field the deployed surface carries, and without this tie
     // the comparison would be a comparison of one opaque boolean.
+    //
+    // The timeline sends no determination list (CHK-2), so the fold runs over the
+    // requirements every start year's run determines: all the pack holds, since the
+    // flag is any determination's draft status (engine `evaluate.ts`), which is what
+    // the payload before the timeline listed as its determinations. Every requirement
+    // the artifact shows on a line must be among them.
     const draftIds = new Set(
       sourceRun.projection.filter((p) => p.derivedStatus === 'draft').map((p) => p.requirementId),
     );
-    const inScope = isolated.determinations.map((d) => d.requirementId);
+    const inScope = sourceRun.projection.map((p) => p.requirementId);
+    const shown = [...new Set(timelineLines(isolated).map((line) => line.requirement))];
+    const unprojected = shown.filter((id) => !inScope.includes(id));
+    if (unprojected.length > 0) {
+      fail(`The artifact shows lines for requirements the source projection does not hold: ${unprojected.join(', ')}.`);
+    }
     const expectedDraft = inScope.some((id) => draftIds.has(id));
-    if (isolated.containsDraftContent !== expectedDraft) {
+    if (isolated.content?.draft !== expectedDraft) {
       fail(
-        `The artifact's containsDraftContent is ${String(isolated.containsDraftContent)}, but folding ` +
-          `the per-requirement projection over its ${inScope.length} in-scope requirements gives ` +
+        `The artifact's content.draft is ${String(isolated.content?.draft)}, but folding ` +
+          `the per-requirement projection over its ${inScope.length} determined requirements gives ` +
           `${String(expectedDraft)}. The pack-wide flag and the per-requirement statuses disagree.`,
       );
     }
-    note(`  folded from the per-requirement projection over ${inScope.length} in-scope requirements: ${String(expectedDraft)}`);
+    note(`  folded from the per-requirement projection over ${inScope.length} determined requirements (${shown.length} of them on a line): ${String(expectedDraft)}`);
 
     if (verifyIsolated !== undefined) verifyIsolated({ label, isolated, sourceRun, run });
 

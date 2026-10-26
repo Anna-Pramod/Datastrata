@@ -4,7 +4,7 @@
  * Spec §7.1 requires two recorded levels, because the engine golden cannot see
  * the frontend: the reason copy a customer reads, the four-question cut, the
  * dedupe to one determination per requirement, the applies/does-not-apply
- * counts, and the citation titles all live in `checkResponse.ts` and `pack.ts`.
+ * counts, and the citation titles all lived in `checkResponse.ts` and `pack.ts`.
  * A change confined to those files moves what a customer reads while leaving
  * `AssessmentResult` untouched, so only this golden reports it.
  *
@@ -14,8 +14,8 @@
  * rather than a canonicalised form — key order is part of the bytes the route
  * hands back, and the standard here is byte-identity, not logical equivalence.
  *
- * The date is a literal. `buildCheckResponse` takes the assessment date as an
- * argument precisely so this can be pinned; the route computes it as a **UTC**
+ * The date is a literal. `buildCheckResponse` took the assessment date as an
+ * argument precisely so this could be pinned; the route computes it as a **UTC**
  * day while the machine running the tests may be on a different local one, so a
  * golden keyed to an ambient date would go red once a day for no reason.
  *
@@ -52,8 +52,34 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import type { CheckResponse } from '@/lib/checkResponse';
-import type { CheckerAnswers } from '@/lib/checker';
+
+/**
+ * The answers and the payload as this generation recorded them. Their modules,
+ * `lib/checker.ts` and `lib/checkResponse.ts`, were deleted when the check moved
+ * to the start-year timeline (DP1 Task 6), so the shapes this file reads are
+ * written out here, as the record holds them; only the fields read below.
+ */
+interface RecordedAnswers {
+  country: string;
+  legalForm: string;
+  financialYear: string;
+  groupPosition: string;
+  turnover: string;
+  employees: string;
+  reportedFy2024: string;
+  governingChoice: string;
+}
+
+interface RecordedPayload {
+  assessedAt: string;
+  financialYear: { start: string; end: string };
+  containsDraftContent: boolean;
+  headline: string;
+  counts: { applies: number; doesNotApply: number; indeterminate: number };
+  determinations: { reasonCopy?: string; sources: unknown[] }[];
+  obligations: unknown[];
+  nextQuestions: unknown[];
+}
 
 const ARTIFACT = fileURLToPath(new URL('./golden/migration-public-golden.json', import.meta.url));
 
@@ -64,7 +90,7 @@ const ARTIFACT = fileURLToPath(new URL('./golden/migration-public-golden.json', 
  * public check never collects `readiness.*` facts, so its gap list is
  * legitimately empty and the engine golden is what covers that path.
  */
-const FIXED_ANSWERS: CheckerAnswers = {
+const FIXED_ANSWERS: RecordedAnswers = {
   country: 'DE',
   legalForm: 'private_limited_company',
   financialYear: '2027',
@@ -107,7 +133,7 @@ describe('public migration golden — the historical generation, preserved', () 
   });
 
   it('captures a substantial payload, so agreement means something', () => {
-    const recorded = JSON.parse(readArtifact()) as CheckResponse;
+    const recorded = JSON.parse(readArtifact()) as RecordedPayload;
     expect(recorded.determinations.length).toBeGreaterThanOrEqual(1);
     expect(recorded.obligations.length).toBeGreaterThanOrEqual(1);
     expect(recorded.nextQuestions.length).toBeGreaterThanOrEqual(1);
@@ -120,7 +146,7 @@ describe('public migration golden — the historical generation, preserved', () 
   });
 
   it('is a capture of fixed inputs, not of the day it ran', () => {
-    const recorded = JSON.parse(readArtifact()) as CheckResponse;
+    const recorded = JSON.parse(readArtifact()) as RecordedPayload;
     expect(recorded.assessedAt).toBe(FIXED_DATE);
     expect(recorded.assessedAt).not.toBe(new Date().toISOString().slice(0, 10));
     expect(recorded.financialYear).toEqual({ start: '2027-01-01', end: '2027-12-31' });
