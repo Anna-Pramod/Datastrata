@@ -1411,6 +1411,56 @@ The route and the old modules are untouched until Task 6.
 
 **Commit message:** "Move the free check to the timeline in one step, so a visitor sees each route's result, its reason and its next step at once, labelled preliminary and draft, and nothing still speaks the old answers"
 
+*As executed (2026-10-26, uncommitted at hand-off).*
+- **Counts:**
+  - engine 84 / 3,320, unchanged;
+  - frontend 34 / 1,291 → 36 / 1,350, from two new test files plus 12 tests in existing files;
+  - typecheck exit 0; csrd grep 7; every golden's sha256 unchanged;
+  - the standalone gate (`npm run test:standalone`) passes: liveness, agreement on both fixtures, and T6e's teeth.
+- **Files: 29 paths.**
+  - **New:** `lib/check-view.ts`, `components/marketing/CheckTimeline.tsx`, `test/check-view.test.ts` and `test/check-timeline-render.test.ts`.
+  - **Deleted:** `lib/checker.ts` and `lib/checkResponse.ts`.
+  - **Changed:**
+    - the route, `CheckFlow.tsx`, and the two pages (the derived question count);
+    - `lib/check-answers.ts` (the C-5 and C-10 hint);
+    - `app/globals.css` and `app/tokens.css`;
+    - `vitest.config.ts`: `esbuild: { jsx: 'automatic' }` for the render test, a configuration change, not a dependency;
+    - 11 test files and the four standalone scripts, each re-expressed with its meaning kept.
+- **The next step,** carried from Task 5, is `checkView(timeline, answers)`.
+  - "Sets in this visitor's context" is read from `buildCheckProfile`: a definite answer changes the fact's value, compared with "Not sure".
+  - The sweep over Task 4's enumeration covers 396,565 flows and 4,929,751 `cannot_decide` cells. Every cell has a step; none offers a hidden question. The hidden-C-6 parent gets C-9's headcount step.
+  - A row's own step that would offer a hidden question is not offered: a parent whose country is "Not sure" sees its own lines "Not checked" with no step, while the same result's country step asks C-1.
+- **Your direction of 2026-10-26.**
+  - The C-5 and C-10 hint now reads "Revenue after rebates and VAT. Banks and insurers: if you are unsure which figure to use, choose ‘Not sure’." This is routine copy cleanup. Proposal §4.1 still holds the old hint; this note records the change.
+  - Question hints and wordings are now in the no-promised-follow-up scan (`wording.test.ts`). Its positive control is the old hint, "we'll confirm the right figure later".
+- **The retirement** (DG-8, part 3).
+  - `provenance-public-golden.test.ts` pins its artefact (`f0ff1dcd…`) and shows why its answers can no longer be posed.
+  - Its oracles moved to `checker-timeline-public-golden.test.ts` where a line carries them.
+  - Two stay on the recorded artefact, because no timeline line carries them: S-004's corrected case, and the sources of requirements that have no line.
+  - The migration artefacts are unchanged.
+- **No test or assertion was deleted or weakened.** An independent audit found six assertions re-expressed more loosely than before (W1 to W4, H1 and H2). Each was pinned again exactly, with literals, and shown red when changed.
+- **Routine corrections:**
+  - **The width check's measure.** Under the browser's phone emulation (below 768 px), the plan's `scrollWidth <= innerWidth` failed its own positive control: a planted 900 px element widened `innerWidth` to 921. The check compares `scrollWidth` with the target width itself, and the control is then caught.
+  - **The WCAG 2.2 AA review** found two contrast failures, both corrected:
+    - the focus ring, `--ds-ring-focus`, site-wide: about 1.4:1 → 6.28:1 (1.4.11);
+    - the check screens' small text, from the ghost or faint inks to `--ds-text-muted` (`.ds-check-meta`): 2.76–3.81:1 → 7.32:1 (1.4.3). The shared `.ds-micro`, `.ds-label` and `.ds-caption` rules and their ink tokens are unchanged.
+  - **The request:** a 15-second timeout. A hidden answer is refused 400 with `{error, questions}`. `TimelineRefusalError` gives 503 with `{error, refusal}`. The integrity 503's body is unchanged.
+  - **Navigation words** that are not state wording stay in the flow: Back, Next, Run the check, Change your answers, Try again, Run another check, "QUESTION n / m", "ANSWER THIS QUESTION TO CONTINUE".
+- **Found outside Task 6, not changed:**
+  - the home page `/` is 427 px wide at 320 and 431 at 375: the coverage section's status chips overflow;
+  - `/company` is 321 px wide at 320.
+
+  EXP-4 applies to the public site, so these belong in Task 13's acceptance at the latest.
+- **Teeth:** T6a to T6g were red on their intended assertions, in the implementer's run and in the parent's.
+  - The parent used its own mutations for T6a, T6c, T6d and T6g, ran them in its own clone, and re-ran them on the final bytes.
+  - Each file was restored by sha256. T6e ran inside the standalone gate.
+- **Browser checks** (local, parent-run, on 127.0.0.1:3217):
+  - keyboard-only completion of all seven §4.5 visitor paths, with both offers. Each path ran at one width (paths 2 to 5 at 1280, path 6 at 320, path 7 at 375, path 1 at 1024), plus a step link followed by keyboard at 320;
+  - the width check on every result shape at 320, 375 and 1280 px;
+  - the WCAG 2.2 AA checklist.
+
+  Evidence: `side-session-notes/local_043075c1-…/2026-10-26T0616Z-dp1-task6/` (`parent/BROWSER-CHECKS.md`).
+
 ### Task 7: the pilot surface off on the host; error pages
 
 **Delivers:** ACC-9 (unchanged, off on the host), EXP-6, EXP-9.
