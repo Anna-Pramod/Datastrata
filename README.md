@@ -62,3 +62,8 @@ open frontend/prototypes/app-modern.dc.html    # any modern browser
 3. **Unconfirmed facts are invisible.** Extraction proposes; a human confirms before a fact can affect an answer.
 4. **Everything cites.** Every determination carries its derivation trace and official sources.
 5. **Versions, not overwrites.** History is appended so the defence file survives.
+
+## Credits
+
+- [Anna Pramod](https://github.com/Anna-Pramod)
+- [Vivin Nair](https://github.com/VivinrNair)
